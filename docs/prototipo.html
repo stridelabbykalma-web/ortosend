@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ortosend — Plantillas a medida</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#17262E; --ink2:#4A5A63; --mut:#8A968D;
+  --teal:#0E6E5C; --teal-d:#0A5245; --teal-l:#E4F1EC;
+  --paper:#F6F4EF; --card:#FFFFFF; --line:#E4E0D6;
+  --amber:#B97324; --amber-l:#FBEFDD; --red:#B3372F; --red-l:#F9E7E5;
+  --blue:#1E5FA8; --blue-l:#E7EFF9; --green:#2E7D32; --green-l:#E6F2E6;
+  --r:10px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Inter',system-ui,sans-serif;background:var(--paper);color:var(--ink);font-size:15px;line-height:1.55}
+h1,h2,h3,.disp{font-family:'Sora',sans-serif}
+a{color:var(--teal);text-decoration:none}
+button{font-family:'Inter',sans-serif;font-size:14px;cursor:pointer;border:1px solid var(--line);background:#fff;color:var(--ink);border-radius:var(--r);padding:9px 16px}
+button:hover{border-color:var(--teal)}
+button.pri{background:var(--teal);border-color:var(--teal);color:#fff;font-weight:600}
+button.pri:hover{background:var(--teal-d)}
+button.warn{background:var(--amber-l);border-color:var(--amber);color:var(--amber)}
+button.dang{background:var(--red-l);border-color:var(--red);color:var(--red)}
+button:disabled{opacity:.45;cursor:not-allowed}
+input,select,textarea{font-family:'Inter',sans-serif;font-size:14px;padding:9px 12px;border:1px solid var(--line);border-radius:var(--r);background:#fff;width:100%;color:var(--ink)}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--teal-l);border-color:var(--teal)}
+label{font-size:13px;font-weight:500;color:var(--ink2);display:block;margin:12px 0 5px}
+.wrap{max-width:1080px;margin:0 auto;padding:0 20px}
+.nav{background:#fff;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:50}
+.nav .wrap{display:flex;align-items:center;justify-content:space-between;height:58px}
+.logo{font-family:'Sora';font-weight:700;font-size:19px;color:var(--ink)}
+.logo b{color:var(--teal);font-weight:700}
+.nav .links{display:flex;gap:18px;align-items:center;font-size:14px;flex-wrap:wrap}
+.nav .links a{color:var(--ink2)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px}
+.grid{display:grid;gap:14px}
+.g2{grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+.g3{grid-template-columns:repeat(auto-fit,minmax(190px,1fr))}
+.g4{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+.pill{display:inline-block;font-size:12px;font-weight:600;padding:3px 10px;border-radius:99px;background:var(--teal-l);color:var(--teal-d)}
+.pill.a{background:var(--amber-l);color:var(--amber)}
+.pill.r{background:var(--red-l);color:var(--red)}
+.pill.b{background:var(--blue-l);color:var(--blue)}
+.pill.g{background:var(--green-l);color:var(--green)}
+.pill.n{background:#EEECE5;color:var(--ink2)}
+.muted{color:var(--ink2);font-size:13px}
+.tiny{color:var(--mut);font-size:12px}
+.sp{height:18px}.sp2{height:34px}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.between{justify-content:space-between}
+.hero{padding:56px 0 40px;text-align:center}
+.hero h1{font-size:34px;line-height:1.2;margin-bottom:12px}
+.hero p{max-width:520px;margin:0 auto 20px;color:var(--ink2)}
+.price{display:inline-flex;align-items:baseline;gap:8px;background:var(--teal-l);border-radius:12px;padding:10px 20px;margin-bottom:22px}
+.price b{font-family:'Sora';font-size:26px;color:var(--teal-d)}
+.steps{display:flex;align-items:flex-start;gap:0;margin:10px 0 4px;overflow-x:auto;padding:16px 0 4px}
+.step{flex:1;min-width:78px;text-align:center;position:relative}
+.step .dot{width:26px;height:26px;border-radius:50% 50% 50% 4px;background:#EAE7DE;border:2px solid var(--line);margin:0 auto 7px;transform:rotate(-45deg)}
+.step:nth-child(even) .dot{border-radius:50% 50% 4px 50%;margin-top:10px}
+.step.done .dot{background:var(--teal);border-color:var(--teal)}
+.step.cur .dot{background:#fff;border-color:var(--teal);box-shadow:0 0 0 4px var(--teal-l)}
+.step .lb{font-size:11.5px;color:var(--mut);line-height:1.3}
+.step.done .lb,.step.cur .lb{color:var(--teal-d);font-weight:600}
+.step:not(:last-child):after{content:'';position:absolute;top:12px;left:calc(50% + 16px);width:calc(100% - 32px);border-top:2px dotted var(--line)}
+.step.done:not(:last-child):after{border-color:var(--teal)}
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+th{text-align:left;font-size:12px;color:var(--mut);font-weight:600;padding:8px 10px;border-bottom:1px solid var(--line)}
+td{padding:10px;border-bottom:1px solid var(--line)}
+tr.click{cursor:pointer}tr.click:hover{background:var(--paper)}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:18px;overflow-x:auto}
+.tabs button{border:none;background:none;border-radius:8px 8px 0 0;padding:10px 14px;color:var(--ink2);white-space:nowrap}
+.tabs button.on{color:var(--teal-d);font-weight:600;box-shadow:inset 0 -2px 0 var(--teal)}
+.note{background:var(--blue-l);border-radius:var(--r);padding:10px 14px;font-size:13px;color:var(--blue)}
+.note.a{background:var(--amber-l);color:var(--amber)}
+.note.g{background:var(--green-l);color:var(--green)}
+.note.r{background:var(--red-l);color:var(--red)}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:14px}
+.kpi .v{font-family:'Sora';font-size:22px;font-weight:600}
+.kpi .l{font-size:12px;color:var(--mut)}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;align-items:start}
+.col{background:#EFEDE6;border-radius:var(--r);padding:8px}
+.col h4{font-size:12px;color:var(--ink2);padding:2px 4px 8px}
+.tcard{background:#fff;border:1px solid var(--line);border-radius:8px;padding:9px;margin-bottom:7px;cursor:pointer;font-size:13px}
+.tcard:hover{border-color:var(--teal)}
+.tcard .tiny{margin-top:2px}
+.checkline{display:flex;align-items:center;gap:9px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;margin-bottom:7px;font-size:13.5px}
+.checkline.ok{background:var(--green-l);border-color:#BFDCC0;color:var(--green)}
+.slotbtn{border:1px solid var(--line);border-radius:8px;padding:8px 6px;font-size:13px;text-align:center}
+.slotbtn.sel{background:var(--teal);color:#fff;border-color:var(--teal)}
+.footer{border-top:1px solid var(--line);margin-top:60px;padding:26px 0;color:var(--mut);font-size:12.5px}
+.modalbg{position:fixed;inset:0;background:rgba(23,38,46,.45);display:flex;align-items:center;justify-content:center;z-index:100;padding:20px}
+.modal{background:#fff;border-radius:14px;max-width:640px;width:100%;max-height:88vh;overflow:auto;padding:24px}
+.badge-demo{position:fixed;bottom:12px;right:12px;background:var(--ink);color:#fff;font-size:11px;padding:5px 10px;border-radius:99px;opacity:.75;z-index:60}
+@media(max-width:640px){.hero h1{font-size:26px}.nav .links{gap:10px;font-size:13px}}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div class="badge-demo">Prototipo Ortosend · datos simulados</div>
+<script>
+/* ============ ALMACENAMIENTO ============ */
+let DB=null;
+const DEFAULT_DB=()=>({
+ users:[
+  {email:'admin@ortosend.com',pass:'ortosend',role:'admin',name:'Administración Ortosend'},
+  {email:'clinica@ortosend.com',pass:'ortosend',role:'admin_clinica',name:'Admin Clínica Girona',clinicId:'c1'},
+  {email:'profesionalreceta@ortosend.com',pass:'ortosend',role:'profesional',prescriber:true,name:'Dra. Laia Serra (podóloga, col. 1234)',clinicId:'c1',colegiado:'COL-1234',titulacion:'Podología'},
+  {email:'profesionalnoreceta@ortosend.com',pass:'ortosend',role:'profesional',prescriber:false,name:'Marc Vidal (técnico)',clinicId:'c1',titulacion:'Fisioterapia'},
+  {email:'recetador@ortosend.com',pass:'ortosend',role:'recetador',prescriber:true,name:'Dr. Toni Bosch (podólogo, col. 5678)',colegiado:'COL-5678',titulacion:'Podología'},
+  {email:'taller@ortosend.com',pass:'ortosend',role:'taller',name:'Taller Ortosend'}
+ ],
+ clinics:[
+  {id:'c1',name:'Clínica Girona Centre',town:'Girona',cp:'17001',address:'C/ Nou 12, Girona',prescriber:true,active:true,slots:['Lun 10:00','Lun 12:30','Mié 09:30','Jue 16:00','Vie 11:00']},
+  {id:'c2',name:'Centre Podològic Cassà',town:'Cassà de la Selva',cp:'17244',address:'Av. Pau Casals 3, Cassà',prescriber:false,active:true,slots:['Mar 10:00','Mar 17:30','Jue 10:30','Vie 09:00','Vie 12:00']},
+  {id:'c3',name:'Clínica Llagostera Salut',town:'Llagostera',cp:'17240',address:'C/ Major 45, Llagostera',prescriber:false,active:true,slots:['Lun 09:00','Mié 11:00','Mié 17:00','Jue 12:30','Vie 10:00']}
+ ],
+ cases:[],applications:[],waitlist:[],incidents:[],seq:1041,activity:[]
+});
+async function loadDB(){
+ try{const r=await window.storage.get('ortosend-db'); DB=JSON.parse(r.value);}
+ catch(e){DB=DEFAULT_DB(); await seedDemo(); await saveDB();}
+}
+async function saveDB(){try{await window.storage.set('ortosend-db',JSON.stringify(DB));}catch(e){console.error('No se pudo guardar',e);}}
+async function resetDB(){DB=DEFAULT_DB();await seedDemo();await saveDB();location.hash='#/';render();}
+async function seedDemo(){
+ // Caso demo en cola central (clínica sin prescriptor) para el recetador
+ DB.cases.push(mkCase({id:'1039',patient:{name:'Pere Vidal',phone:'600111222',email:'pere@demo.com',birth:'1980-04-12'},clinicId:'c2',state:4,
+  capture:fullCapture('Dolor en talón derecho al levantarse, 3 meses. Trabaja 8h de pie.'),
+  history:[ev('Cita reservada (Flujo A)'),ev('Estudio completado por la clínica'),ev('Enviado a la cola central de prescripción')]}));
+ // Caso demo del cliente ya en taller
+ DB.cases.push(mkCase({id:'1024',patient:{name:'Jordi Ferrer',phone:'600333444',email:'jordi@demo.com',birth:'1975-09-02'},clinicId:'c1',state:8,phase:'confeccion',lot:'L-08',
+  capture:fullCapture('Metatarsalgia bilateral, corredor habitual.'),
+  prescription:{by:'Dra. Laia Serra (col. 1234)',date:new Date().toISOString(),diag:'Metatarsalgia mecánica bilateral',pauta:'Plantilla semirrígida con descarga retrocapital. Sin alza.',uso:'Adaptación progresiva 2-3 semanas. Apto para correr desde la semana 3.'},
+  paid:true,delivery:'domicilio',
+  history:[ev('Estudio completado'),ev('Prescrito por Dra. Serra'),ev('Pago recibido (simulado)'),ev('Aceptado por el taller'),ev('Diseño terminado'),ev('En fabricación — confección')]}));
+ // Usuario cliente demo
+ DB.users.push({email:'jordi@demo.com',pass:'ortosend',role:'cliente',name:'Jordi Ferrer',phone:'600333444'});
+}
+function ev(t){return {t,at:new Date().toISOString(),by:SES?SES.name:'sistema'}}
+function mkCase(o){return Object.assign({id:String(DB.seq++),state:1,capture:{},history:[],createdAt:new Date().toISOString(),assignedTo:null,openBy:null,incidents:[]},o)}
+function fullCapture(motivo){return {cuestionario:{motivo,dolor:'7/10',actividad:'Activo'},exploracion:{tobillo:'Limitada rodilla extendida (gastrocnemios)',dismetria:'No',alza:'No'},escaneoL:true,escaneoR:true,videos:[1,1,1,1,1,1,1],baroEst:2,baroDin:true,baroFile:true}}
+/* ============ SESIÓN Y ESTADOS ============ */
+let SES=null; let Q='';
+function setSes(u){SES=u;}
+function logout(){releaseAllBy(SES&&SES.email);saveDB();SES=null;location.hash='#/';render()}
+const STATES={1:'Cita reservada',2:'Estudio en curso',3:'Estudio completo',4:'En prescripción',5:'Pendiente de pago',6:'Entrada taller',7:'Diseño',8:'Fabricación',9:'Control de calidad',10:'Enviado',11:'Entregado / cerrado',R:'Devuelto a clínica',N:'No prescrito',C:'En valoración (contacto)'};
+const STCOLOR={1:'b',2:'a',3:'b',4:'a',5:'a',6:'n',7:'b',8:'b',9:'a',10:'g',11:'g',R:'r',N:'r',C:'a'};
+function stpill(s){return `<span class="pill ${STCOLOR[s]||'n'}">${STATES[s]||s}</span>`}
+function clinic(id){return DB.clinics.find(c=>c.id===id)}
+function fmtd(iso){return new Date(iso).toLocaleDateString('es-ES',{day:'numeric',month:'short'})}
+function releaseAllBy(email){if(!DB)return;DB.cases.forEach(c=>{if(c.openBy===email)c.openBy=null})}
+function pushEv(c,t){c.history.push(ev(t))}
+/* ============ ROUTER ============ */
+window.addEventListener('hashchange',render);
+window.addEventListener('load',async()=>{await loadDB();render();});
+function nav(){
+ const pub=`<a href="#/como">Cómo funciona</a><a href="#/buscar">Buscar clínica</a><a href="#/clinicas">Para clínicas</a>`;
+ const who=SES?`<span class="tiny">${SES.name.split('(')[0]}</span><button onclick="logout()">Salir</button>`:`<a href="#/login"><button>Acceder</button></a>`;
+ const panel=SES?`<a href="#/panel"><button class="pri">Mi panel</button></a>`:'';
+ return `<div class="nav"><div class="wrap"><a href="#/" class="logo">orto<b>send</b></a><div class="links">${SES?'':pub}${panel}${who}</div></div></div>`;
+}
+function render(){
+ const h=location.hash||'#/'; const app=document.getElementById('app');
+ if(!DB){app.innerHTML='Cargando…';return}
+ let v='';
+ if(h==='#/') v=vHome();
+ else if(h==='#/como') v=vComo();
+ else if(h==='#/buscar') v=vBuscar();
+ else if(h.startsWith('#/reserva/')) v=vReserva(h.split('/')[2]);
+ else if(h==='#/clinicas') v=vParaClinicas();
+ else if(h==='#/login') v=vLogin();
+ else if(h==='#/panel') v=vPanel();
+ else if(h.startsWith('#/caso/')) v=vCaso(h.split('/')[2]);
+ else v=vHome();
+ app.innerHTML=nav()+v+`<div class="footer"><div class="wrap row between"><span>© 2026 Ortosend · Prototipo funcional</span><span><a onclick="resetDB()" style="cursor:pointer">Reiniciar datos de demo</a></span></div></div>`;
+}
+/* ============ WEB PÚBLICA ============ */
+function vHome(){
+ return `<div class="wrap"><div class="hero">
+ <h1>Plantillas a medida, sin sorpresas</h1>
+ <p>Estudio completo de la pisada en una clínica cerca de ti — escáner 3D, análisis de la marcha y baropodometría. Solo pagas si un profesional colegiado prescribe tu tratamiento.</p>
+ <div class="price"><b>199,99 €</b><span class="muted">precio único, todo incluido</span></div>
+ <div class="row" style="max-width:460px;margin:0 auto;justify-content:center">
+   <input id="hcp" placeholder="Tu código postal o población" style="flex:1;min-width:200px">
+   <button class="pri" onclick="doSearch()">Buscar clínica</button>
+ </div>
+ <div class="tiny" style="margin-top:10px">Te mostramos las clínicas asociadas en un radio de 50 km · Recibe tus plantillas en 5 días laborables desde el pago</div>
+ </div>
+ <div class="grid g4">
+  ${[['1. Reserva tu cita','Gratis y sin compromiso, en la clínica que elijas.'],['2. Estudio completo','Escaneo 3D, vídeos de marcha y presiones plantares.'],['3. Prescripción y pago','Un profesional colegiado valida tu caso. Solo entonces pagas, online y de forma segura.'],['4. Recibe tus plantillas','En 5 días laborables, en casa o en tu clínica. Revisión anual incluida.']].map(x=>`<div class="card"><b style="font-family:Sora;font-size:14px">${x[0]}</b><div class="muted" style="margin-top:6px">${x[1]}</div></div>`).join('')}
+ </div>
+ <div class="sp2"></div>
+ <div class="card row between"><div><b style="font-family:Sora">¿Tienes una clínica?</b><div class="muted">Únete a la red Ortosend: te cedemos el equipamiento y te enviamos pacientes.</div></div><a href="#/clinicas"><button>Asóciate</button></a></div>
+ </div>`;
+}
+function vComo(){
+ return `<div class="wrap"><div class="sp2"></div><h2>Cómo funciona Ortosend</h2><div class="sp"></div>
+ <div class="grid g2">
+ <div class="card"><b>El estudio</b><p class="muted" style="margin-top:6px">En tu clínica asociada te hacen un estudio completo: escaneo 3D de ambos pies, cuestionario y exploración física, vídeos de tu marcha desde tres ángulos y análisis de presiones plantares. Dura unos 45 minutos. Trae tu calzado habitual.</p></div>
+ <div class="card"><b>La prescripción</b><p class="muted" style="margin-top:6px">Un podólogo o médico colegiado — de tu clínica o de nuestro equipo — valora tu estudio y firma tu prescripción, explicando qué necesitas y por qué. Si necesita aclarar algo, te llamará. Y si no está indicado el tratamiento, te lo diremos con la misma claridad: no pagas nada.</p></div>
+ <div class="card"><b>El pago</b><p class="muted" style="margin-top:6px">Solo con la prescripción firmada recibes el enlace de pago: 199,99 €, con tarjeta o Bizum, siempre a través de Ortosend. Nunca pagarás nada en la clínica. El enlace es válido 30 días.</p></div>
+ <div class="card"><b>Tus plantillas</b><p class="muted" style="margin-top:6px">Fabricamos el molde a partir de tu escaneo 3D y confeccionamos tus plantillas a mano. En 5 días laborables las recibes en casa o en tu clínica. Incluyen guía de adaptación (2-3 semanas de uso progresivo) y revisión anual.</p></div>
+ </div></div>`;
+}
+function doSearch(){
+ const q=(document.getElementById('hcp').value||'').trim().toLowerCase();
+ Q=q; location.hash='#/buscar'; setTimeout(render,0);
+}
+function vBuscar(){
+ const q=(Q||'').toLowerCase();
+ let res=DB.clinics.filter(c=>c.active);
+ if(q) res=res.filter(c=>c.cp.startsWith(q.slice(0,2))||c.town.toLowerCase().includes(q)||c.cp===q);
+ const none=q&&res.length===0;
+ return `<div class="wrap"><div class="sp2"></div><h2>Clínicas asociadas cerca de ti</h2>
+ <div class="row" style="margin:14px 0"><input id="hcp" value="${q}" placeholder="Código postal o población" style="max-width:280px"><button class="pri" onclick="doSearch()">Buscar</button><button onclick="Q='1';location.hash='#/buscar';render()">Usar mi ubicación (simulado)</button></div>
+ ${none?`<div class="card"><b>Aún no llegamos a tu zona</b><p class="muted" style="margin:8px 0">Déjanos tu contacto y te avisaremos cuando haya una clínica asociada cerca.</p><div class="row"><input id="wl" placeholder="Tu móvil o email" style="max-width:260px"><button class="pri" onclick="addWait('${q}')">Avisadme</button></div></div>`:''}
+ <div class="grid g3" style="margin-top:10px">${res.map(c=>`<div class="card"><b style="font-family:Sora">${c.name}</b><div class="muted">${c.address}</div><div class="tiny" style="margin:6px 0">${c.prescriber?'Prescriptor en la propia clínica':'Prescripción por el equipo Ortosend'}</div><a href="#/reserva/${c.id}"><button class="pri" style="width:100%">Reservar cita gratis</button></a></div>`).join('')}</div>
+ <div class="sp"></div><div class="note">Mapa interactivo con las clínicas: en el prototipo se muestra como lista. En la versión final irá con mapa (Leaflet/Google) y radio de 50 km real.</div></div>`;
+}
+function addWait(zone){const v=document.getElementById('wl').value;if(!v)return alert('Escribe un contacto');DB.waitlist.push({zone,contact:v,at:new Date().toISOString()});saveDB();alert('Apuntado. Te avisaremos.');}
+/* ---- Reserva Flujo A ---- */
+let RSV={};
+function vReserva(cid){
+ const c=clinic(cid); if(!c) return '<div class="wrap"><p>Clínica no encontrada</p></div>';
+ RSV.clinicId=cid;
+ return `<div class="wrap" style="max-width:640px"><div class="sp2"></div>
+ <h2>Reserva tu cita — ${c.name}</h2><div class="muted">${c.address} · La cita y el estudio son gratuitos. Solo pagarás si un profesional prescribe tu tratamiento.</div><div class="sp"></div>
+ <div class="card"><b>1. Elige tu hora</b><div class="grid g4" style="margin-top:10px">${c.slots.map((s,i)=>`<div class="slotbtn ${RSV.slot===s?'sel':''}" onclick="RSV.slot='${s}';render()">${s}</div>`).join('')}</div>
+ ${c.slots.length===0?'<div class="note a" style="margin-top:8px">Esta clínica no tiene huecos publicados ahora mismo.</div>':''}</div>
+ <div class="sp"></div>
+ <div class="card"><b>2. Tus datos</b>
+ <label>Nombre y apellidos</label><input id="rn" value="${RSV.name||''}">
+ <div class="grid g2"><div><label>Móvil (será tu vía de contacto por WhatsApp)</label><input id="rp" value="${RSV.phone||''}"></div><div><label>Email</label><input id="re" value="${RSV.email||''}"></div></div>
+ <div class="grid g2"><div><label>Fecha de nacimiento</label><input id="rb" type="date"></div><div><label>Motivo (opcional)</label><select id="rm"><option>Dolor</option><option>Deporte</option><option>Prevención / revisión</option><option>Renovación de plantillas</option></select></div></div>
+ <label>Crea tu contraseña (para seguir tu tratamiento en tu panel)</label><input id="rw" type="password">
+ <label style="display:flex;gap:8px;align-items:flex-start;font-weight:400"><input type="checkbox" id="rc1" style="width:auto;margin-top:3px"> Consiento el tratamiento de mis datos de salud para la prestación del servicio (RGPD).</label>
+ <label style="display:flex;gap:8px;align-items:flex-start;font-weight:400"><input type="checkbox" id="rc2" style="width:auto;margin-top:3px"> Acepto recibir comunicaciones del servicio por WhatsApp.</label>
+ </div><div class="sp"></div>
+ <button class="pri" style="width:100%" onclick="confirmReserva()">Confirmar reserva gratuita</button>
+ <div class="sp2"></div></div>`;
+}
+async function confirmReserva(){
+ const n=rv('rn'),p=rv('rp'),e=rv('re'),w=rv('rw');
+ if(!RSV.slot) return alert('Elige una hora');
+ if(!n||!p||!e||!w) return alert('Completa nombre, móvil, email y contraseña');
+ if(!document.getElementById('rc1').checked) return alert('El consentimiento RGPD es necesario');
+ const c=mkCase({patient:{name:n,phone:p,email:e,birth:rv('rb'),motivo:rv('rm')},clinicId:RSV.clinicId,state:1,slot:RSV.slot});
+ pushEv(c,'Cita reservada online (Flujo A) — '+RSV.slot);
+ DB.cases.push(c);
+ DB.users.push({email:e,pass:w,role:'cliente',name:n,phone:p});
+ await saveDB();
+ alert('[WhatsApp simulado → '+p+']\\nCita confirmada en '+clinic(RSV.clinicId).name+' ('+RSV.slot+'). Trae tu calzado habitual. Reserva gratuita: solo pagarás si un profesional prescribe tu tratamiento.');
+ setSes(DB.users[DB.users.length-1]); RSV={}; location.hash='#/panel';
+}
+function rv(id){const el=document.getElementById(id);return el?el.value.trim():''}
+function vParaClinicas(){
+ return `<div class="wrap" style="max-width:620px"><div class="sp2"></div><h2>Únete a la red Ortosend</h2>
+ <p class="muted" style="margin:8px 0 16px">Te cedemos el equipamiento (escáner 3D, plataforma de presiones), formamos a tu equipo y te enviamos pacientes de tu zona. Tú haces el estudio; nosotros fabricamos, cobramos al paciente y te liquidamos mensualmente. Tu clínica nunca cobra al paciente.</p>
+ <div class="card"><label>Nombre de la clínica</label><input id="an"><label>Población y código postal</label><input id="at"><label>Persona de contacto y teléfono</label><input id="ac"><label>¿Tenéis podólogo o médico que pueda prescribir?</label><select id="ap"><option>Sí</option><option>No</option></select><label>Comentarios</label><textarea id="ao" rows="3"></textarea><div class="sp"></div><button class="pri" onclick="sendApp()">Enviar solicitud</button></div></div>`;
+}
+async function sendApp(){
+ const n=rv('an');if(!n)return alert('Falta el nombre');
+ DB.applications.push({name:n,town:rv('at'),contact:rv('ac'),prescriber:rv('ap'),notes:rv('ao'),status:'recibida',at:new Date().toISOString()});
+ await saveDB();alert('Solicitud recibida. Nuestro equipo la revisará y te contactará.');location.hash='#/';
+}
+/* ============ LOGIN ============ */
+function vLogin(){
+ return `<div class="wrap" style="max-width:400px"><div class="sp2"></div><h2>Acceder</h2><div class="sp"></div>
+ <div class="card"><label>Email o móvil</label><input id="le"><label>Contraseña</label><input id="lw" type="password"><div class="sp"></div><button class="pri" style="width:100%" onclick="doLogin()">Entrar</button></div>
+ <div class="tiny" style="margin-top:12px">Cuentas de demo: admin@ · clinica@ · profesionalreceta@ · profesionalnoreceta@ · recetador@ · taller@ (ortosend.com, contraseña «ortosend») y cliente jordi@demo.com.</div></div>`;
+}
+function doLogin(){
+ const e=rv('le').toLowerCase(),w=rv('lw');
+ const u=DB.users.find(u=>(u.email.toLowerCase()===e||u.phone===e)&&u.pass===w);
+ if(!u)return alert('Credenciales incorrectas');
+ setSes(u);location.hash='#/panel';
+}
+/* ============ PANELES ============ */
+function vPanel(){
+ if(!SES) {location.hash='#/login';return vLogin();}
+ if(SES.role==='cliente') return pCliente();
+ if(SES.role==='admin_clinica'||SES.role==='profesional') return pClinica();
+ if(SES.role==='recetador') return pRecetador();
+ if(SES.role==='taller') return pTaller();
+ if(SES.role==='admin') return pAdmin();
+ return '<div class="wrap">Rol desconocido</div>';
+}
+let TAB={};
+function tabs(key,list){
+ TAB[key]=TAB[key]||list[0][0];
+ return `<div class="tabs">${list.map(t=>`<button class="${TAB[key]===t[0]?'on':''}" onclick="TAB['${key}']='${t[0]}';render()">${t[1]}</button>`).join('')}</div>`;
+}
+/* ---------- PANEL CLIENTE ---------- */
+function pCliente(){
+ const mine=DB.cases.filter(c=>c.patient.email===SES.email||c.patient.phone===SES.phone);
+ if(mine.length===0) return `<div class="wrap"><div class="sp2"></div><div class="card"><b>Aún no tienes ningún tratamiento</b><p class="muted" style="margin-top:6px">Reserva tu primera cita en una clínica asociada.</p><a href="#/buscar"><button class="pri" style="margin-top:10px">Buscar clínica</button></a></div></div>`;
+ return `<div class="wrap"><div class="sp2"></div><h2>Hola, ${SES.name.split(' ')[0]}</h2><div class="sp"></div>${mine.map(c=>clienteCard(c)).join('<div class="sp"></div>')}</div>`;
+}
+function clienteCard(c){
+ const cl=clinic(c.clinicId);
+ const stepsDef=[[1,'Cita'],[3,'Estudio'],[5,'Prescripción'],[6,'Pago'],[8,'Fabricación'],[10,'Envío'],[11,'Entrega']];
+ const sNum=(c.state==='R'||c.state==='C')?4:(c.state==='N'?5:c.state);
+ const stepsHtml=`<div class="steps">${stepsDef.map(s=>{const st=(sNum>s[0])?'done':((sNum===s[0]||([...stepsDef].reverse().find(x=>x[0]<=sNum)||[0])[0]===s[0])?'cur':'');return `<div class="step ${st}"><div class="dot"></div><div class="lb">${s[1]}</div></div>`}).join('')}</div>`;
+ let body='';
+ if(c.state===1) body=`<b>Tu cita: ${c.slot||''}</b><div class="muted">${cl.name} · ${cl.address}. Trae tu calzado habitual y ropa cómoda.</div><div class="row" style="margin-top:10px"><button onclick="alert('Reprogramación: en la versión final, aquí eliges otro hueco.')">Reprogramar</button><button class="dang" onclick="alert('Cancelación registrada (simulada).')">Cancelar</button></div>`;
+ else if(c.state<=4&&c.state>=2) body=`<b>Tu estudio está completo</b><div class="muted">Nuestro equipo lo está valorando. Te avisaremos por WhatsApp en un máximo de 48 h laborables.</div>`;
+ else if(c.state==='C') body=`<b>Un profesional quiere hablar contigo</b><div class="muted">El podólogo que valora tu caso te llamará para aclarar un par de cuestiones antes de la prescripción.</div>`;
+ else if(c.state==='R') body=`<b>Necesitamos repetir una prueba</b><div class="muted">Tu clínica te contactará para una cita breve. Sin coste para ti.</div>`;
+ else if(c.state==='N') body=`<b>Tu valoración está completa</b><div class="muted">Nuestro equipo ha estudiado tu caso y el tratamiento con plantillas no está indicado. No se te cobrará nada. ${c.noReason?('Recomendación: '+c.noReason):''}</div>`;
+ else if(c.state===5) body=`<b>Tu prescripción está lista</b><div class="muted">Firmada por ${c.prescription.by}. Revisa el documento y completa el pago para iniciar la fabricación. Enlace válido 30 días.</div>
+   <div class="row" style="margin-top:10px"><button onclick="showRx('${c.id}')">Ver prescripción (pide contraseña)</button></div>
+   <div class="card" style="margin-top:12px;background:var(--paper)"><b>Pago — 199,99 €</b><label>¿Dónde quieres recibirlas?</label><select id="dv${c.id}"><option value="domicilio">Envío a mi domicilio</option><option value="clinica">Recogida en mi clínica (${cl.name})</option></select><div class="sp"></div><button class="pri" style="width:100%" onclick="pay('${c.id}')">Pagar 199,99 € con tarjeta o Bizum (simulado)</button></div>`;
+ else if(c.state>=6&&c.state<=9) body=`<b>Tus plantillas se están fabricando</b><div class="muted">Mecanizamos el molde a partir de tu escaneo 3D y las confeccionamos a mano. Entrega estimada: 5 días laborables desde tu pago.</div><div class="row" style="margin-top:10px"><button onclick="showRx('${c.id}')">Ver mi prescripción</button></div>`;
+ else if(c.state===10) body=`<b>¡En camino!</b><div class="muted">${c.delivery==='clinica'?('Enviadas a tu clínica ('+cl.name+'). Te avisarán para recogerlas.'):('Seguimiento: '+(c.tracking||'—')+'.')}</div>`;
+ else if(c.state===11) body=`<b>Entregadas — guía de adaptación</b><div class="muted">Uso progresivo 2-3 semanas, con calzado cerrado. Ajuste casero: el material es termofusible (truco del secador según tu manual). Vida útil orientativa: 2-4 años / ~800 km. Tu revisión anual queda programada — te avisaremos.</div><div class="row" style="margin-top:10px"><button onclick="showRx('${c.id}')">Mis documentos</button></div>`;
+ return `<div class="card"><div class="row between"><b style="font-family:Sora">Tratamiento #${c.id}</b>${stpill(c.state)}</div>${stepsHtml}${body}<div class="tiny" style="margin-top:12px">¿Dudas? Escríbenos por WhatsApp (canal principal de Ortosend).</div></div>`;
+}
+async function pay(id){
+ const c=DB.cases.find(x=>x.id===id); c.delivery=document.getElementById('dv'+id).value;
+ c.paid=true;c.state=6;pushEv(c,'Pago 199,99 € recibido (Stripe simulado). Entrega: '+c.delivery);
+ await saveDB();alert('[WhatsApp simulado]\\nPago recibido. Empezamos a fabricar tus plantillas. Las recibirás en 5 días laborables.');render();
+}
+function showRx(id){
+ const c=DB.cases.find(x=>x.id===id);
+ const w=prompt('Por seguridad, confirma tu contraseña para ver el documento clínico:');
+ if(w!==SES.pass) return alert('Contraseña incorrecta');
+ if(!c.prescription) return alert('Aún no hay prescripción');
+ modal(`<h3>Prescripción — caso #${c.id}</h3><div class="tiny">Documento clínico firmado electrónicamente · se conserva 5 años</div><div class="sp"></div>
+ <p><b>Paciente:</b> ${c.patient.name} · <b>Clínica del estudio:</b> ${clinic(c.clinicId).name}</p>
+ <p><b>Prescriptor:</b> ${c.prescription.by}</p>
+ <p><b>Diagnóstico / indicación:</b> ${c.prescription.diag}</p>
+ <p><b>Pauta de fabricación:</b> ${c.prescription.pauta}</p>
+ <p><b>Pauta de uso:</b> ${c.prescription.uso}</p>
+ <p class="tiny">Firmado: ${fmtd(c.prescription.date)} · ${c.prescription.by}</p>`);
+}
+function modal(html){
+ const d=document.createElement('div');d.className='modalbg';d.onclick=e=>{if(e.target===d)d.remove()};
+ d.innerHTML=`<div class="modal">${html}<div class="sp"></div><button onclick="this.closest('.modalbg').remove()">Cerrar</button></div>`;
+ document.body.appendChild(d);
+}
+/* ---------- PANEL CLÍNICA ---------- */
+function pClinica(){
+ const cl=clinic(SES.clinicId);
+ const list=[['agenda','Agenda'],['casos','Mis casos'],['disp','Disponibilidad']];
+ if(SES.prescriber) list.splice(2,0,['rx','Prescripciones']);
+ if(SES.role==='admin_clinica') list.push(['prof','Profesionales'],['liq','Liquidaciones']);
+ const t=TAB['cl']||list[0][0];
+ let body='';
+ const cases=DB.cases.filter(c=>c.clinicId===SES.clinicId);
+ if(t==='agenda'){
+  const ag=cases.filter(c=>c.state===1||c.state===2||c.state==='R');
+  body=`<div class="row between"><h3>Citas y estudios pendientes</h3><button class="pri" onclick="newCaseB()">+ Nuevo caso (Flujo B)</button></div><div class="sp"></div>
+  <div class="card">${ag.length?`<table><tr><th>Caso</th><th>Paciente</th><th>Cita</th><th>Estado</th><th></th></tr>${ag.map(c=>`<tr class="click" onclick="location.hash='#/caso/${c.id}'"><td>#${c.id}</td><td>${c.patient.name}</td><td>${c.slot||'Flujo B'}</td><td>${stpill(c.state)}</td><td><button>${c.state==='R'?'Repetir prueba':'Abrir estudio'}</button></td></tr>`).join('')}</table>`:'<div class="muted">Sin citas pendientes. Los pacientes que reserven online aparecerán aquí.</div>'}</div>`;
+ }
+ if(t==='casos'){
+  body=`<h3>Todos los casos de la clínica</h3><div class="sp"></div><div class="card"><table><tr><th>Caso</th><th>Paciente</th><th>Creado</th><th>Estado</th></tr>${cases.map(c=>`<tr class="click" onclick="location.hash='#/caso/${c.id}'"><td>#${c.id}</td><td>${c.patient.name}</td><td>${fmtd(c.createdAt)}</td><td>${stpill(c.state)}</td></tr>`).join('')||''}</table>${cases.length?'':'<div class="muted">Sin casos todavía.</div>'}</div>
+  <div class="note" style="margin-top:12px">Recuerda: la clínica nunca cobra al paciente ni envía enlaces de pago. Todo pago se gestiona desde Ortosend.</div>`;
+ }
+ if(t==='rx'){
+  const q=cases.filter(c=>c.state===4||c.state==='C');
+  body=`<h3>Casos pendientes de tu prescripción</h3><div class="sp"></div><div class="card">${q.length?`<table><tr><th>Caso</th><th>Paciente</th><th>Estado</th><th></th></tr>${q.map(c=>`<tr class="click" onclick="location.hash='#/caso/${c.id}'"><td>#${c.id}</td><td>${c.patient.name}</td><td>${stpill(c.state)}</td><td><button class="pri">Valorar</button></td></tr>`).join('')}</table>`:'<div class="muted">Nada pendiente de prescribir.</div>'}</div>`;
+ }
+ if(t==='disp'){
+  body=`<h3>Huecos publicados en la web</h3><div class="muted">Franjas que tu clínica destina a reservas online (Flujo A). Máximo 5 activos.</div><div class="sp"></div>
+  <div class="card"><div class="grid g4">${cl.slots.map((s,i)=>`<div class="slotbtn">${s} <a onclick="delSlot(${i})" style="color:var(--red);cursor:pointer">×</a></div>`).join('')}</div><div class="row" style="margin-top:12px"><input id="ns" placeholder="Ej.: Mar 11:30" style="max-width:180px"><button onclick="addSlot()" ${cl.slots.length>=5?'disabled':''}>Añadir hueco</button></div></div>`;
+ }
+ if(t==='prof'){
+  const pros=DB.users.filter(u=>u.clinicId===SES.clinicId&&(u.role==='profesional'||u.role==='admin_clinica'));
+  body=`<h3>Profesionales de la clínica</h3><div class="muted">Las cuentas las crea Ortosend tras validar la ficha (colegiación incluida si prescribe). Desde aquí solo se solicita el alta.</div><div class="sp"></div>
+  <div class="card"><table><tr><th>Nombre</th><th>Rol</th><th>Formación</th></tr>${pros.map(u=>`<tr><td>${u.name}</td><td>${u.role==='admin_clinica'?'Admin clínica':(u.prescriber?'Prescriptor':'Técnico')}</td><td><span class="pill g">5/5 módulos</span></td></tr>`).join('')}</table>
+  <div class="sp"></div><button onclick="alert('Formulario de solicitud de alta: ficha completa del profesional + documentación. Ortosend valida y crea la cuenta.')">Solicitar alta de profesional</button></div>`;
+ }
+ if(t==='liq'){
+  body=`<h3>Liquidaciones mensuales</h3><div class="sp"></div><div class="card"><div class="muted">Aquí verás la compensación mensual por los estudios realizados y podrás subir tu factura. Los importes están pendientes de definir por Ortosend, por lo que esta sección se activará más adelante.</div></div>`;
+ }
+ return `<div class="wrap"><div class="sp2"></div><div class="row between"><h2>${cl.name}</h2><span class="pill ${cl.prescriber?'g':'b'}">${cl.prescriber?'Con prescriptor propio':'Prescripción central Ortosend'}</span></div><div class="sp"></div>${tabs('cl',list)}${body}</div>`;
+}
+async function addSlot(){const cl=clinic(SES.clinicId);const v=rv('ns');if(!v)return;cl.slots.push(v);await saveDB();render();}
+async function delSlot(i){const cl=clinic(SES.clinicId);cl.slots.splice(i,1);await saveDB();render();}
+async function newCaseB(){
+ const n=prompt('Nombre y apellidos del paciente:');if(!n)return;
+ const p=prompt('Móvil del paciente (se le enviará la invitación de cuenta):');if(!p)return;
+ const e=prompt('Email del paciente:')||'';
+ const c=mkCase({patient:{name:n,phone:p,email:e},clinicId:SES.clinicId,state:2});
+ pushEv(c,'Caso creado en clínica (Flujo B) por '+SES.name);
+ DB.users.push({email:e||('tel'+p),pass:'invitado',role:'cliente',name:n,phone:p,invited:true});
+ await saveDB();
+ alert('[WhatsApp simulado → '+p+']\\nBienvenido/a a Ortosend. '+clinic(SES.clinicId).name+' ha iniciado tu estudio. Activa tu cuenta con este enlace (72 h): [enlace de invitación]. Contraseña provisional de la demo: «invitado».');
+ location.hash='#/caso/'+c.id;
+}
+/* ---------- PANEL RECETADOR ORTOSEND ---------- */
+function pRecetador(){
+ const queue=DB.cases.filter(c=>c.state===4&&!clinic(c.clinicId).prescriber&&(!c.openBy||c.openBy===SES.email)).sort((a,b)=>a.createdAt<b.createdAt?-1:1);
+ const mineOpen=DB.cases.find(c=>c.openBy===SES.email);
+ const contact=DB.cases.filter(c=>c.state==='C'&&c.assignedTo===SES.email);
+ return `<div class="wrap"><div class="sp2"></div><h2>Cola central de prescripción</h2>
+ <div class="grid g3" style="margin:14px 0"><div class="kpi"><div class="v">${queue.length}</div><div class="l">Casos en cola</div></div><div class="kpi"><div class="v">48 h</div><div class="l">Compromiso de respuesta</div></div><div class="kpi"><div class="v">${contact.length}</div><div class="l">Pendientes de contacto</div></div></div>
+ ${mineOpen?`<div class="note a">Tienes el caso #${mineOpen.id} abierto (asociado a ti hasta cerrarlo o cerrar sesión). <a href="#/caso/${mineOpen.id}">Continuar</a></div>`:
+ `<button class="pri" ${queue.length?'':'disabled'} onclick="nextRx()">Siguiente caso (el más antiguo)</button>`}
+ ${contact.length?`<div class="sp"></div><div class="card"><b>Tus casos en contacto con el paciente</b><table><tr><th>Caso</th><th>Paciente</th><th>Tel.</th><th></th></tr>${contact.map(c=>`<tr class="click" onclick="location.hash='#/caso/${c.id}'"><td>#${c.id}</td><td>${c.patient.name}</td><td>${c.patient.phone}</td><td><button>Retomar</button></td></tr>`).join('')}</table></div>`:''}
+ <div class="sp"></div><div class="tiny">El reparto es automático por antigüedad: al abrir un caso queda asociado a ti y desaparece de la cola del resto. Si cierras sesión sin terminarlo, vuelve al principio de la cola con tus notas guardadas.</div></div>`;
+}
+async function nextRx(){
+ const q=DB.cases.filter(c=>c.state===4&&!clinic(c.clinicId).prescriber&&!c.openBy).sort((a,b)=>a.createdAt<b.createdAt?-1:1);
+ if(!q.length)return;
+ q[0].openBy=SES.email;await saveDB();location.hash='#/caso/'+q[0].id;
+}
+/* ---------- PANEL TALLER ---------- */
+function pTaller(){
+ const phases=[[6,'Entrada'],[7,'Diseño'],[8,'Fabricación'],[9,'Calidad'],[10,'Envío']];
+ const inc=DB.incidents.filter(i=>!i.closed);
+ const active=DB.cases.filter(c=>c.state>=6&&c.state<=10);
+ const mineOpen=DB.cases.find(c=>c.openBy===SES.email);
+ return `<div class="wrap"><div class="sp2"></div><div class="row between"><h2>Taller · Producción</h2><div class="row"><span class="tiny">${active.length} casos activos</span>${inc.length?`<span class="pill a">${inc.length} incidencias</span>`:''}</div></div>
+ <div class="sp"></div>
+ ${mineOpen?`<div class="note a">Tienes el caso #${mineOpen.id} abierto. <a href="#/caso/${mineOpen.id}">Continuar</a></div>`:`<button class="pri" onclick="nextTaller()">Siguiente caso (el más antiguo pendiente)</button>`}
+ <div class="sp"></div>
+ <div class="cols">${phases.map(p=>{
+  const cs=DB.cases.filter(c=>c.state===p[0]);
+  return `<div class="col"><h4>${p[1]} · ${cs.length}</h4>${cs.map(c=>`<div class="tcard" onclick="location.hash='#/caso/${c.id}'"><b>#${c.id}</b> ${c.patient.name.split(' ')[0]}<div class="tiny">${c.state===8?((c.phase==='mecanizado'?'Mecanizado CNC':'Confección a mano')+(c.lot?' · '+c.lot:'')):(c.openBy?('Abierto: '+c.openBy.split('@')[0]):'En cola')}</div></div>`).join('')||'<div class="tiny" style="padding:4px">—</div>'}</div>`}).join('')}</div>
+ ${inc.length?`<div class="sp"></div><div class="note a"><b>Incidencias abiertas:</b> ${inc.map(i=>'#'+i.caseId+' ('+i.type+')').join(' · ')}</div>`:''}
+ <div class="sp"></div><div class="tiny">Vista de supervisión. El trabajo diario entra por «Siguiente caso»; el tablero muestra la carga por fase. Casos con más de 2 días en taller se marcarán en ámbar (compromiso: entrega en 5 días laborables desde el pago).</div></div>`;
+}
+async function nextTaller(){
+ const q=DB.cases.filter(c=>c.state>=6&&c.state<=10&&!c.openBy).sort((a,b)=>(a.state-b.state)||(a.createdAt<b.createdAt?-1:1));
+ if(!q.length)return alert('No hay casos pendientes');
+ q[0].openBy=SES.email;await saveDB();location.hash='#/caso/'+q[0].id;
+}
+/* ---------- PANEL ADMIN ORTOSEND ---------- */
+function pAdmin(){
+ const list=[['res','Resumen'],['sol','Solicitudes'],['cli','Clínicas'],['usr','Profesionales'],['cas','Casos'],['esp','Lista de espera']];
+ const t=TAB['ad']||'res';
+ let body='';
+ if(t==='res'){
+  const s5=DB.cases.filter(c=>c.state===5).length, s4=DB.cases.filter(c=>c.state===4||c.state==='C').length, tw=DB.cases.filter(c=>c.state>=6&&c.state<=10).length, done=DB.cases.filter(c=>c.state===11).length;
+  body=`<div class="grid g4"><div class="kpi"><div class="v">${DB.cases.length}</div><div class="l">Casos totales</div></div><div class="kpi"><div class="v">${s4}</div><div class="l">En prescripción</div></div><div class="kpi"><div class="v">${s5}</div><div class="l">Pendientes de pago</div></div><div class="kpi"><div class="v">${tw}</div><div class="l">En taller</div></div><div class="kpi"><div class="v">${done}</div><div class="l">Entregados</div></div><div class="kpi"><div class="v">${DB.clinics.filter(c=>c.active).length}</div><div class="l">Clínicas activas</div></div><div class="kpi"><div class="v">${DB.applications.filter(a=>a.status==='recibida').length}</div><div class="l">Solicitudes nuevas</div></div><div class="kpi"><div class="v">${DB.waitlist.length}</div><div class="l">Lista de espera</div></div></div>
+  <div class="sp"></div><div class="note">Automatizaciones activas (simuladas): recordatorio de cita 24 h · secuencia de pago días 0/3/7/15/30 · aviso de envío · seguimiento de adaptación día 20 · recordatorio de revisión anual.</div>`;
+ }
+ if(t==='sol'){
+  body=`<h3>Solicitudes de clínicas</h3><div class="sp"></div><div class="card">${DB.applications.length?`<table><tr><th>Clínica</th><th>Zona</th><th>Prescriptor</th><th>Estado</th><th></th></tr>${DB.applications.map((a,i)=>`<tr><td>${a.name}</td><td>${a.town}</td><td>${a.prescriber}</td><td><span class="pill ${a.status==='recibida'?'a':(a.status==='aprobada'?'g':'r')}">${a.status}</span></td><td class="row"><button onclick="appSet(${i},'aprobada')">Aprobar</button><button class="dang" onclick="appSet(${i},'rechazada')">Rechazar</button></td></tr>`).join('')}</table>`:'<div class="muted">Sin solicitudes. Llegan desde «Para clínicas» en la web.</div>'}</div>
+  <div class="tiny" style="margin-top:10px">Tras aprobar: contrato + cesión de equipamiento + creación de cuentas + formación obligatoria → activación y aparición en el mapa.</div>`;
+ }
+ if(t==='cli'){
+  body=`<h3>Red de clínicas</h3><div class="sp"></div><div class="card"><table><tr><th>Clínica</th><th>Zona</th><th>Prescriptor</th><th>Equipo cedido</th><th>Estado</th><th></th></tr>${DB.clinics.map(c=>`<tr><td>${c.name}</td><td>${c.town} (${c.cp})</td><td>${c.prescriber?'Sí':'No'}</td><td class="tiny">Inspire 2 #INV-${c.id.toUpperCase()} · Podisense #PS-${c.id.toUpperCase()}</td><td>${c.active?'<span class="pill g">Activa</span>':'<span class="pill r">Suspendida</span>'}</td><td><button onclick="togCl('${c.id}')">${c.active?'Suspender':'Activar'}</button></td></tr>`).join('')}</table></div>`;
+ }
+ if(t==='usr'){
+  body=`<h3>Profesionales y cuentas</h3><div class="sp"></div><div class="card"><table><tr><th>Nombre</th><th>Email</th><th>Rol</th><th>Clínica</th></tr>${DB.users.filter(u=>u.role!=='cliente').map(u=>`<tr><td>${u.name}</td><td class="tiny">${u.email}</td><td>${u.role}${u.prescriber?' · prescriptor':''}</td><td>${u.clinicId?clinic(u.clinicId).name:'Ortosend'}</td></tr>`).join('')}</table><div class="sp"></div><button onclick="alert('Alta de profesional: ficha completa + verificación de colegiación si prescribe → creación de cuenta → formación (5 módulos) → acceso.')">+ Crear cuenta de profesional</button></div>`;
+ }
+ if(t==='cas'){
+  body=`<h3>Todos los casos</h3><div class="sp"></div><div class="card"><table><tr><th>Caso</th><th>Paciente</th><th>Clínica</th><th>Creado</th><th>Estado</th></tr>${DB.cases.map(c=>`<tr class="click" onclick="location.hash='#/caso/${c.id}'"><td>#${c.id}</td><td>${c.patient.name}</td><td>${clinic(c.clinicId).name}</td><td>${fmtd(c.createdAt)}</td><td>${stpill(c.state)}</td></tr>`).join('')}</table></div>`;
+ }
+ if(t==='esp'){
+  body=`<h3>Lista de espera por zonas sin clínica</h3><div class="muted">Oro para decidir dónde captar la próxima clínica.</div><div class="sp"></div><div class="card">${DB.waitlist.length?`<table><tr><th>Zona buscada</th><th>Contacto</th><th>Fecha</th></tr>${DB.waitlist.map(w=>`<tr><td>${w.zone}</td><td>${w.contact}</td><td>${fmtd(w.at)}</td></tr>`).join('')}</table>`:'<div class="muted">Vacía. Se llena cuando alguien busca una zona sin cobertura y deja su contacto.</div>'}</div>`;
+ }
+ return `<div class="wrap"><div class="sp2"></div><h2>Administración Ortosend</h2><div class="sp"></div>${tabs('ad',[['res','Resumen'],['sol','Solicitudes'],['cli','Clínicas'],['usr','Profesionales'],['cas','Casos'],['esp','Lista de espera']])}${body}</div>`;
+}
+async function appSet(i,s){DB.applications[i].status=s;await saveDB();render();}
+async function togCl(id){const c=clinic(id);c.active=!c.active;await saveDB();render();}
+/* ============ FICHA DE CASO (todas las vistas por rol) ============ */
+function vCaso(id){
+ const c=DB.cases.find(x=>x.id===id);
+ if(!c) return '<div class="wrap"><p>Caso no encontrado</p></div>';
+ if(!SES) {location.hash='#/login';return vLogin();}
+ const isClinicStaff=(SES.role==='admin_clinica'||SES.role==='profesional')&&SES.clinicId===c.clinicId;
+ const isClinicRx=isClinicStaff&&SES.prescriber&&(c.state===4||c.state==='C')&&clinic(c.clinicId).prescriber;
+ const isCentralRx=SES.role==='recetador'&&(c.state===4||c.state==='C');
+ let inner='';
+ if(isClinicStaff&&(c.state===1||c.state===2||c.state==='R')) inner=wizard(c);
+ else if(isClinicRx||isCentralRx) inner=rxView(c);
+ else if(SES.role==='taller'&&c.state>=6&&c.state<=10) inner=tallerView(c);
+ else inner=expediente(c,true)+historial(c);
+ return `<div class="wrap"><div class="sp2"></div><div class="row between"><h2>Caso #${c.id} — ${c.patient.name}</h2>${stpill(c.state)}</div><div class="tiny">${clinic(c.clinicId).name} · creado ${fmtd(c.createdAt)}</div><div class="sp"></div>${inner}<div class="sp2"></div><a href="#/panel">← Volver al panel</a></div>`;
+}
+function expediente(c,full){
+ const cp=c.capture||{};
+ return `<div class="card"><b style="font-family:Sora">Expediente del estudio</b>
+ <div class="grid g2" style="margin-top:10px">
+ <div><div class="tiny">CUESTIONARIO CLÍNICO</div><div class="muted">${cp.cuestionario?('Motivo: '+cp.cuestionario.motivo+'<br>Dolor: '+(cp.cuestionario.dolor||'—')+' · Actividad: '+(cp.cuestionario.actividad||'—')):'Pendiente'}</div></div>
+ <div><div class="tiny">EXPLORACIÓN FÍSICA</div><div class="muted">${cp.exploracion?('Tobillo: '+cp.exploracion.tobillo+'<br>Dismetría: '+cp.exploracion.dismetria+(cp.exploracion.alza&&cp.exploracion.alza!=='No'?' · <b>Alza: '+cp.exploracion.alza+'</b>':'')):'Pendiente'}</div></div>
+ <div><div class="tiny">ESCANEO 3D</div><div class="muted">${cp.escaneoL&&cp.escaneoR?'Ambos pies ✓ (visor 3D en versión final)':'Pendiente'}</div></div>
+ <div><div class="tiny">VÍDEOS (7)</div><div class="muted">${(cp.videos||[]).filter(Boolean).length}/7 confirmados por el servidor</div></div>
+ <div><div class="tiny">BAROPODOMETRÍA</div><div class="muted">${cp.baroFile?'Estática 2/2 · Dinámica ✓ · Informe adjunto':'Pendiente'}</div></div>
+ <div><div class="tiny">PACIENTE</div><div class="muted">${c.patient.phone} · ${c.patient.email||'—'}</div></div>
+ </div>
+ ${c.prescription?`<div class="sp"></div><div class="note g"><b>Prescripción firmada</b> por ${c.prescription.by} · ${c.prescription.diag} · Pauta: ${c.prescription.pauta}</div>`:''}
+ ${c.rxDraft?`<div class="note a" style="margin-top:8px"><b>Borrador de valoración guardado:</b> ${c.rxDraft}</div>`:''}
+ </div>`;
+}
+function historial(c){
+ return `<div class="sp"></div><div class="card"><b>Historial</b><table style="margin-top:8px">${c.history.map(h=>`<tr><td class="tiny" style="width:90px">${fmtd(h.at)}</td><td>${h.t}</td><td class="tiny">${h.by}</td></tr>`).join('')}</table></div>`;
+}
+/* ---- ASISTENTE DE CAPTURA (clínica) ---- */
+function wizard(c){
+ c.capture=c.capture||{};const cp=c.capture;
+ if(c.state==='R'){
+  return `<div class="note r"><b>Caso devuelto:</b> ${c.repeatReason||'repetir prueba indicada'}. Solo se muestra la prueba a repetir.</div><div class="sp"></div>
+  <div class="card"><b>Repetir: ${c.repeatWhat||'prueba'}</b><div class="sp"></div><button class="pri" onclick="fixRepeat('${c.id}')">Grabar de nuevo y reenviar (simulado)</button></div>`;
+ }
+ const vids=['Marcha lateral dcha. — descalzo','Marcha lateral dcha. — calzado','Marcha lateral izq. — descalzo','Marcha lateral izq. — calzado','Marcha posterior — descalzo','Marcha posterior — calzado','Heel rise test — descalzo'];
+ cp.videos=cp.videos||[0,0,0,0,0,0,0];
+ const done={q:!!cp.cuestionario,e:!!cp.exploracion,s:cp.escaneoL&&cp.escaneoR,v:cp.videos.every(Boolean),b:!!cp.baroFile};
+ const all=done.q&&done.e&&done.s&&done.v&&done.b;
+ return `<div class="note">Asistente de captura · borrador con guardado continuo — puedes completar cada paso desde el PC o el móvil, nada se pierde.</div><div class="sp"></div>
+ <div class="grid g2">
+ <div class="card"><b>1 · Cuestionario clínico ${done.q?'<span class="pill g">✓</span>':''}</b>
+  ${done.q?`<div class="muted" style="margin-top:6px">${cp.cuestionario.motivo}</div>`:`
+  <label>Motivo de consulta</label><input id="wq1" placeholder="Ej.: dolor en talón derecho al levantarse, 3 meses">
+  <div class="grid g2"><div><label>Dolor (0-10)</label><input id="wq2" placeholder="7/10"></div><div><label>Actividad</label><select id="wq3"><option>Sedentario</option><option>Activo</option><option>Deportista habitual</option><option>Competición</option></select></div></div>
+  <div class="sp"></div><button class="pri" onclick="wSave('${c.id}','q')">Guardar cuestionario</button>`}</div>
+ <div class="card"><b>2 · Exploración física ${done.e?'<span class="pill g">✓</span>':''}</b>
+  ${done.e?`<div class="muted" style="margin-top:6px">Tobillo: ${cp.exploracion.tobillo} · Dismetría: ${cp.exploracion.dismetria}${cp.exploracion.alza!=='No'?' · Alza: '+cp.exploracion.alza:''}</div>`:`
+  <label>Flexión dorsal de tobillo</label><select id="we1"><option>Normal</option><option>Limitada rodilla extendida (gastrocnemios)</option><option>Limitada también con rodilla flexionada (sóleo)</option></select>
+  <div class="grid g2"><div><label>Dismetría</label><select id="we2" onchange="render&&0"><option>No</option><option>Sí — izq. más corta</option><option>Sí — dcha. más corta</option></select></div><div><label>Alza (mm, si procede)</label><input id="we3" placeholder="No"></div></div>
+  <div class="sp"></div><button class="pri" onclick="wSave('${c.id}','e')">Guardar exploración</button>`}</div>
+ <div class="card"><b>3 · Escaneo 3D ${done.s?'<span class="pill g">✓</span>':''}</b>
+  <div class="checkline ${cp.escaneoL?'ok':''}">${cp.escaneoL?'✓':'○'} Pie izquierdo ${cp.escaneoL?'':`<button style="margin-left:auto" onclick="wScan('${c.id}','L')">Capturar (Revopoint)</button>`}</div>
+  <div class="checkline ${cp.escaneoR?'ok':''}">${cp.escaneoR?'✓':'○'} Pie derecho ${cp.escaneoR?'':`<button style="margin-left:auto" onclick="wScan('${c.id}','R')">Capturar (Revopoint)</button>`}</div>
+  <div class="tiny">Siempre ambos pies. En la versión final: subida del archivo del escáner con validación.</div></div>
+ <div class="card"><b>4 · Vídeos — modo captura guiado ${done.v?'<span class="pill g">✓</span>':''}</b>
+  ${vids.map((v,i)=>`<div class="checkline ${cp.videos[i]?'ok':''}">${cp.videos[i]?'✓':'○'} ${v} ${cp.videos[i]?'':`<button style="margin-left:auto" onclick="wVid('${c.id}',${i})">● Grabar</button>`}</div>`).join('')}
+  <div class="tiny">La app graba con la cámara del móvil en el trípode: silueta de encuadre, corte automático, subida en segundo plano. Aquí, simulado con un clic.</div></div>
+ <div class="card"><b>5 · Baropodometría (Podisense GO) ${done.b?'<span class="pill g">✓</span>':''}</b>
+  <div class="checkline ${cp.baroEst>=2?'ok':''}">${cp.baroEst>=2?'✓':'○'} Estática: ${cp.baroEst||0}/2 capturas (10 s) ${cp.baroEst>=2?'':`<button style="margin-left:auto" onclick="wBaro('${c.id}','e')">Capturar</button>`}</div>
+  <div class="checkline ${cp.baroDin?'ok':''}">${cp.baroDin?'✓':'○'} Dinámica: 3 pasos válidos ${cp.baroDin?'':`<button style="margin-left:auto" onclick="wBaro('${c.id}','d')">Capturar</button>`}</div>
+  <div class="checkline ${cp.baroFile?'ok':''}">${cp.baroFile?'✓':'○'} Informe del dashboard Podisense adjunto ${cp.baroFile?'':`<button style="margin-left:auto" onclick="wBaro('${c.id}','f')">Adjuntar archivo</button>`}</div></div>
+ <div class="card"><b>6 · Revisión y envío</b>
+  ${[['Cuestionario',done.q],['Exploración',done.e],['Escaneo 3D (2)',done.s],['Vídeos 7/7',done.v],['Baropodometría',done.b]].map(x=>`<div class="checkline ${x[1]?'ok':''}">${x[1]?'✓':'○'} ${x[0]}</div>`).join('')}
+  ${all?`<button class="pri" style="width:100%" onclick="wSend('${c.id}')">Enviar caso a prescripción</button>`:`<div class="tiny">El botón de envío aparece con todos los ítems en verde (checklist obligatoria del protocolo).</div>`}</div>
+ </div>`;
+}
+async function wSave(id,k){const c=DB.cases.find(x=>x.id===id);
+ if(k==='q'){if(!rv('wq1'))return alert('Falta el motivo');c.capture.cuestionario={motivo:rv('wq1'),dolor:rv('wq2'),actividad:rv('wq3')};}
+ if(k==='e'){c.capture.exploracion={tobillo:rv('we1'),dismetria:rv('we2'),alza:rv('we3')||'No'};}
+ c.state=Math.max(c.state,2);await saveDB();render();}
+async function wScan(id,f){const c=DB.cases.find(x=>x.id===id);c.capture['escaneo'+f]=true;c.state=Math.max(c.state,2);await saveDB();render();}
+async function wVid(id,i){const c=DB.cases.find(x=>x.id===id);c.capture.videos=c.capture.videos||[0,0,0,0,0,0,0];c.capture.videos[i]=1;c.state=Math.max(c.state,2);await saveDB();render();}
+async function wBaro(id,k){const c=DB.cases.find(x=>x.id===id);if(k==='e')c.capture.baroEst=(c.capture.baroEst||0)+1;if(k==='d')c.capture.baroDin=true;if(k==='f')c.capture.baroFile=true;c.state=Math.max(c.state,2);await saveDB();render();}
+async function wSend(id){const c=DB.cases.find(x=>x.id===id);
+ c.state=4;const hasRx=clinic(c.clinicId).prescriber;
+ pushEv(c,'Estudio completo. Enviado a '+(hasRx?'prescriptor de la clínica':'cola central Ortosend'));
+ await saveDB();
+ alert('[WhatsApp simulado → '+c.patient.phone+']\\nTu estudio está completo y en valoración por '+(hasRx?'el prescriptor de tu clínica':'el equipo de Ortosend')+'. Te avisaremos en un máximo de 48 h laborables.');
+ location.hash='#/panel';}
+async function fixRepeat(id){const c=DB.cases.find(x=>x.id===id);c.state=4;pushEv(c,'Prueba repetida y reenviada');await saveDB();alert('Reenviado a prescripción.');location.hash='#/panel';}
+/* ---- VISTA DE PRESCRIPCIÓN (prescriptor clínica o recetador central) ---- */
+function rxView(c){
+ return expediente(c)+`<div class="sp"></div>
+ <div class="card"><b style="font-family:Sora">Valoración y prescripción</b>
+ <label>Valoración clínica (hallazgos relevantes)</label><textarea id="x0" rows="2" placeholder="Qué observas en la marcha, presiones, exploración…">${c.rxDraft||''}</textarea>
+ <label>Diagnóstico / indicación</label><div class="row"><select id="x1" style="max-width:280px"><option>Fascitis plantar</option><option>Pie plano flexible</option><option>Metatarsalgia</option><option>Pie cavo</option><option>Dismetría</option><option>Otro (detallar)</option></select><input id="x1b" placeholder="Matiz o detalle" style="flex:1;min-width:160px"></div>
+ <label>Pauta de fabricación (orden de trabajo para el taller)</label><textarea id="x2" rows="2" placeholder="Tipo de plantilla, correcciones, cuñas, descargas, alza en mm…"></textarea>
+ <label>Pauta de uso para el paciente</label><textarea id="x3" rows="2">Adaptación progresiva 2-3 semanas, con calzado cerrado. Revisión anual incluida.</textarea>
+ <div class="sp"></div>
+ <div class="row"><button class="pri" onclick="doRx('${c.id}')">Firmar y prescribir</button>
+ <button onclick="doContact('${c.id}')">Contactar con el paciente</button>
+ <button class="warn" onclick="doRepeat('${c.id}')">Pedir repetición de prueba</button>
+ <button class="dang" onclick="doNo('${c.id}')">No prescribir</button>
+ <button onclick="doDraft('${c.id}')">Guardar borrador y soltar caso</button></div>
+ <div class="tiny" style="margin-top:10px">La firma queda registrada con tu identidad y colegiación (${SES.colegiado||'—'}). El paciente recibirá la prescripción en su panel y el enlace de pago (30 días).</div></div>`+historial(c);
+}
+async function doRx(id){
+ const c=DB.cases.find(x=>x.id===id);
+ const pauta=rv('x2');if(!pauta)return alert('La pauta de fabricación es obligatoria: es la orden de trabajo del taller');
+ c.prescription={by:SES.name,colegiado:SES.colegiado,date:new Date().toISOString(),val:rv('x0'),diag:rv('x1')+(rv('x1b')?' — '+rv('x1b'):''),pauta,uso:rv('x3')};
+ c.state=5;c.openBy=null;c.rxDraft=null;pushEv(c,'Prescripción firmada por '+SES.name);
+ await saveDB();
+ alert('[WhatsApp simulado → '+c.patient.phone+']\\nTu prescripción está lista, firmada por '+SES.name.split('(')[0]+'. Entra en tu panel para verla y completar el pago (199,99 €, válido 30 días).');
+ location.hash='#/panel';
+}
+async function doContact(id){
+ const c=DB.cases.find(x=>x.id===id);
+ const note=prompt('Nota del contacto (obligatoria, quedará en el caso). Se enviará al paciente la propuesta de llamada:');
+ if(!note)return;
+ c.state='C';c.assignedTo=SES.email;c.openBy=null;pushEv(c,'Contacto con el paciente solicitado: '+note);
+ await saveDB();
+ alert('[WhatsApp simulado → '+c.patient.phone+']\\nHola '+c.patient.name.split(' ')[0]+', soy '+SES.name.split('(')[0]+', del equipo de Ortosend. Estoy valorando tu estudio y me gustaría hacerte unas preguntas. Elige un hueco para una llamada breve: [enlace agenda].\\n\\nEl caso queda asignado a ti hasta resolverlo.');
+ location.hash='#/panel';
+}
+async function doRepeat(id){
+ const c=DB.cases.find(x=>x.id===id);
+ const what=prompt('¿Qué prueba hay que repetir? (ej.: vídeo marcha posterior descalzo)');if(!what)return;
+ const why=prompt('Motivo (lo verá la clínica):')||'';
+ c.state='R';c.repeatWhat=what;c.repeatReason=why;c.openBy=null;pushEv(c,'Devuelto a clínica — repetir: '+what+' ('+why+')');
+ await saveDB();
+ alert('[WhatsApp simulado → paciente]\\nNecesitamos completar una prueba de tu estudio; tu clínica te contactará para una cita breve, sin coste.\\n\\n[Aviso a la clínica] Caso #'+id+' devuelto: repetir '+what+'.');
+ location.hash='#/panel';
+}
+async function doNo(id){
+ const c=DB.cases.find(x=>x.id===id);
+ const reason=prompt('Recomendación para el paciente (se le comunicará con cuidado):')||'';
+ c.state='N';c.noReason=reason;c.openBy=null;pushEv(c,'No prescrito. '+reason);
+ await saveDB();
+ alert('[WhatsApp simulado → '+c.patient.phone+']\\nHemos valorado tu estudio con detalle y en tu caso el tratamiento con plantillas no está indicado, así que no se te cobrará nada. '+(reason?('Nuestra recomendación: '+reason):'')+' Gracias por confiar en Ortosend.');
+ location.hash='#/panel';
+}
+async function doDraft(id){
+ const c=DB.cases.find(x=>x.id===id);c.rxDraft=rv('x0');c.openBy=null;pushEv(c,'Borrador guardado; caso devuelto a la cola (conserva antigüedad)');
+ await saveDB();location.hash='#/panel';
+}
+/* ---- VISTA DE TRABAJO DEL TALLER ---- */
+function tallerView(c){
+ let zone='';
+ if(c.state===6) zone=`<b>Aceptación técnica (entrada)</b>
+  <div class="checkline ok">✓ Prescripción firmada adjunta (${c.prescription?c.prescription.by:'—'})</div>
+  <div class="checkline ok">✓ Pago confirmado — 199,99 €</div>
+  <div class="checkline">○ ¿El escaneo abre correctamente y tiene resolución suficiente? (ambos pies)</div>
+  <div class="row" style="margin-top:10px"><button class="pri" onclick="tGo('${c.id}',7,'Aceptado por el taller. Etiquetas de molde (I/D) y hoja de trabajo impresas')">Aceptar → a diseño (imprime etiquetas + hoja)</button><button class="warn" onclick="tInc('${c.id}','captura inválida')">Incidencia de captura → devolver a clínica</button></div>`;
+ if(c.state===7) zone=`<b>Diseño</b>
+  <div class="muted">Diseña sobre el escaneo 3D siguiendo la pauta de la prescripción. Adjunta el archivo CAD al terminar (queda archivado para reposiciones y revisión anual).</div>
+  <div class="sp"></div><div class="row"><button onclick="alert('Adjuntado diseño_${c.id}.stl (simulado)')">Adjuntar archivo CAD</button><button onclick="hojaTrabajo('${c.id}')">Ver hoja de trabajo</button></div>
+  <div class="sp"></div><button class="pri" onclick="tGo('${c.id}',8,'Diseño terminado — a mecanizado CNC');DB.cases.find(x=>x.id==='${c.id}').phase='mecanizado'">Diseño terminado → fabricación</button>`;
+ if(c.state===8) zone=`<b>Fabricación — ${c.phase==='mecanizado'?'Mecanizado CNC del molde':'Confección a mano'}</b>
+  ${c.phase==='mecanizado'?`<label>Lote de mecanizado</label><input id="tl" value="${c.lot||'L-09'}" style="max-width:140px">
+  <div class="tiny" style="margin:6px 0">Los moldes se agrupan en tandas de CNC para aprovechar material y preparación de máquina.</div>
+  <button class="pri" onclick="tPhase('${c.id}')">Molde mecanizado → confección a mano</button>`:
+  `<div class="muted">Trabajo artesanal sobre el molde según la hoja de trabajo. Registra el material para trazabilidad.</div>
+  <label>Material / lote de material</label><input id="tm" value="${c.material||''}" placeholder="Ej.: EVA-45 lote M-2211" style="max-width:240px">
+  <div class="sp"></div><div class="row"><button onclick="hojaTrabajo('${c.id}')">Hoja de trabajo</button><button class="pri" onclick="tGo('${c.id}',9,'Confección terminada — a control de calidad')">Terminado → calidad</button></div>`}`;
+ if(c.state===9) zone=`<b>Control de calidad</b>
+  ${['Medidas conformes al diseño','Acabados y pulido','Marcado I/D correcto','Etiquetado del par','Foto del par adjunta (obligatoria)'].map(x=>`<div class="checkline">○ ${x}</div>`).join('')}
+  <div class="row" style="margin-top:10px"><button onclick="alert('Foto del par adjuntada (simulada)')">Adjuntar foto</button><button class="pri" onclick="tGo('${c.id}',10,'Calidad superada — preparado para envío')">Calidad OK → envío</button><button class="warn" onclick="tInc('${c.id}','rehacer por defecto')">No pasa → rehacer</button></div>`;
+ if(c.state===10) zone=`<b>Envío</b>
+  <div class="muted">Destino: ${c.delivery==='clinica'?('Recogida en clínica — '+clinic(c.clinicId).name+' ('+clinic(c.clinicId).address+')'):('Domicilio del paciente')}</div>
+  <div class="row" style="margin-top:10px"><button onclick="tShip('${c.id}')">Generar etiqueta + marcar enviado</button><button class="pri" onclick="tGo('${c.id}',11,'Entrega confirmada. Inicia periodo de adaptación (seguimiento día 20) y queda programada la revisión anual')">Confirmar entrega</button></div>
+  ${c.tracking?`<div class="tiny" style="margin-top:8px">Seguimiento: ${c.tracking}</div>`:''}`;
+ return `<div class="note a">Caso asociado a ti hasta completar la fase, soltarlo o cerrar sesión. <a onclick="tRelease('${c.id}')" style="cursor:pointer">Soltar caso</a></div><div class="sp"></div>
+ <div class="grid g2"><div>${expediente(c)}</div><div class="card">${zone}</div></div>${historial(c)}`;
+}
+async function tGo(id,st,msg){const c=DB.cases.find(x=>x.id===id);c.state=st;c.openBy=null;if(document.getElementById('tl'))c.lot=rv('tl');if(document.getElementById('tm'))c.material=rv('tm');pushEv(c,msg);await saveDB();
+ if(st===11)alert('[WhatsApp simulado → paciente]\\n¡Entregadas! Recuerda: adaptación progresiva 2-3 semanas. Te preguntaremos qué tal en unos días.');
+ location.hash='#/panel';}
+async function tPhase(id){const c=DB.cases.find(x=>x.id===id);c.phase='confeccion';c.lot=rv('tl');pushEv(c,'Molde mecanizado ('+c.lot+') — pasa a confección');await saveDB();render();}
+async function tShip(id){const c=DB.cases.find(x=>x.id===id);c.tracking='TRK-'+id+'-ES';pushEv(c,'Enviado — seguimiento '+c.tracking);await saveDB();
+ alert('[WhatsApp simulado → paciente]\\n'+(c.delivery==='clinica'?'Tus plantillas van de camino a tu clínica; te avisarán para recogerlas.':'Tus plantillas están en camino. Seguimiento: '+c.tracking));render();}
+async function tRelease(id){const c=DB.cases.find(x=>x.id===id);c.openBy=null;pushEv(c,'Caso soltado a la cola');await saveDB();location.hash='#/panel';}
+async function tInc(id,type){const c=DB.cases.find(x=>x.id===id);
+ const note=prompt('Motivo de la incidencia:')||type;
+ DB.incidents.push({caseId:id,type,note,at:new Date().toISOString(),closed:false});
+ if(type==='captura inválida'){c.state='R';c.repeatWhat='captura (ver incidencia)';c.repeatReason=note;pushEv(c,'Incidencia de captura — devuelto a clínica sin coste para el cliente');}
+ else{c.state=7;pushEv(c,'Incidencia: '+note+' — vuelve a diseño/fabricación con prioridad');}
+ c.openBy=null;await saveDB();alert('Incidencia registrada, vinculada al caso #'+id);location.hash='#/panel';}
+function hojaTrabajo(id){
+ const c=DB.cases.find(x=>x.id===id);const p=c.prescription||{};const alza=(c.capture.exploracion||{}).alza;
+ modal(`<h3>Hoja de trabajo — caso #${c.id}</h3><div class="tiny">Acompaña físicamente al par por el taller · QR al caso · 2 etiquetas de molde (I / D)</div><hr style="border:none;border-top:1px solid var(--line);margin:12px 0">
+ <p><b>Paciente:</b> ${c.patient.name} · <b>Clínica:</b> ${clinic(c.clinicId).name}</p>
+ <p><b>El problema:</b> ${p.diag||'—'}. ${p.val||''}</p>
+ <p><b>Modificaciones a ejecutar:</b><br>${p.pauta||'—'}${alza&&alza!=='No'?'<br><b>ALZA: '+alza+'</b>':''}</p>
+ <p class="tiny">Prescripción firmada por ${p.by||'—'} · Fases: mecanizado CNC → confección a mano → calidad → envío</p>`);
+}
+</script>
+</body>
+</html>

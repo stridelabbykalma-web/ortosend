@@ -1,0 +1,62 @@
+// Utilidades sobre casos: eventos, notificaciones simuladas, reparto y liberación.
+import { prisma } from "./db";
+import { OPEN_CASE_TIMEOUT_MIN } from "./states";
+
+export async function pushEvent(caseId: string, text: string, actor: string) {
+  await prisma.caseEvent.create({ data: { caseId, text, actor } });
+}
+
+// Canal WhatsApp (simulado): encola el aviso — solo texto + enlace, nunca contenido clínico.
+export async function notify(toPhone: string, template: string, payload: Record<string, unknown> = {}) {
+  await prisma.notification.create({ data: { toPhone, template, payload: payload as object } });
+}
+
+export async function audit(userId: string, action: string, target: string) {
+  await prisma.auditLog.create({ data: { userId, action, target } });
+}
+
+// Libera casos abiertos por un usuario (al cerrar sesión).
+export async function releaseAllBy(userId: string) {
+  await prisma.case.updateMany({ where: { openBy: userId }, data: { openBy: null, openAt: null } });
+}
+
+// Liberación perezosa por inactividad (45 min): se ejecuta antes de leer colas.
+export async function releaseStale() {
+  const cutoff = new Date(Date.now() - OPEN_CASE_TIMEOUT_MIN * 60 * 1000);
+  await prisma.case.updateMany({
+    where: { openBy: { not: null }, openAt: { lt: cutoff } },
+    data: { openBy: null, openAt: null },
+  });
+}
+
+// Checklist bloqueante del estudio: todo en verde o no hay envío.
+export type Checklist = {
+  cuestionario: boolean;
+  exploracion: boolean;
+  escaneos: boolean;
+  videos: number; // confirmados de 7
+  baro: boolean;
+  completa: boolean;
+};
+
+export function checklistOf(capture: {
+  questionnaire: unknown;
+  physicalExam: unknown;
+  media: { kind: string; confirmedAt: Date | null }[];
+} | null): Checklist {
+  const media = capture?.media.filter((m) => m.confirmedAt) ?? [];
+  const has = (k: string) => media.some((m) => m.kind === k);
+  const videos = media.filter((m) => m.kind.startsWith("video_")).length;
+  const cuestionario = !!capture?.questionnaire;
+  const exploracion = !!capture?.physicalExam;
+  const escaneos = has("scan_L") && has("scan_R");
+  const baro = has("baro_est_1") && has("baro_est_2") && has("baro_din") && has("baro_informe");
+  return {
+    cuestionario,
+    exploracion,
+    escaneos,
+    videos,
+    baro,
+    completa: cuestionario && exploracion && escaneos && videos >= 7 && baro,
+  };
+}

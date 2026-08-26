@@ -1,0 +1,343 @@
+// ============================================================
+// ORTOSEND — Modelo de datos completo (PostgreSQL + Prisma)
+// Refleja todo el diseño funcional acordado. RGPD: datos de
+// salud, retención 5 años, registro de accesos (AuditLog).
+// ============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------- Usuarios y roles ----------
+enum Role {
+  ADMIN            // Administración Ortosend
+  ADMIN_CLINICA
+  PROFESIONAL      // de clínica (prescriptor o técnico según profile.canPrescribe)
+  RECETADOR        // prescriptor central de Ortosend
+  TALLER
+  CLIENTE
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String?  @unique
+  phone        String?  @unique
+  passwordHash String?              // null hasta activar cuenta (invitación Flujo B)
+  role         Role
+  name         String
+  active       Boolean  @default(true)
+  invitedAt    DateTime?            // invitación enviada (Flujo B)
+  activatedAt  DateTime?
+  clinicId     String?
+  clinic       Clinic?  @relation(fields: [clinicId], references: [id])
+  professional ProfessionalProfile?
+  patients     Patient[]            // un titular puede gestionar varios pacientes (hijos)
+  createdAt    DateTime @default(now())
+  auditLogs    AuditLog[]
+}
+
+// Ficha obligatoria del profesional (las cuentas las crea Ortosend)
+model ProfessionalProfile {
+  id            String  @id @default(cuid())
+  userId        String  @unique
+  user          User    @relation(fields: [userId], references: [id])
+  dni           String
+  degree        String            // titulación
+  canPrescribe  Boolean @default(false) // solo podólogos y médicos, verificados
+  collegiateNum String?           // nº colegiado (obligatorio si canPrescribe)
+  college       String?           // colegio profesional y provincia
+  docsUrl       String?           // título / certificado colegiación
+  verifiedAt    DateTime?         // verificación de colegiación por Ortosend
+  training      TrainingRecord[]
+}
+
+// Formación obligatoria: sin 5/5 no hay acceso al panel
+model TrainingRecord {
+  id             String   @id @default(cuid())
+  professionalId String
+  professional   ProfessionalProfile @relation(fields: [professionalId], references: [id])
+  module         String   // M1 sistema, M2 escáner, M3 Podisense, M4 vídeos, M5 reciclaje anual
+  completedAt    DateTime
+  expiresAt      DateTime?  // reciclaje anual
+}
+
+// ---------- Clínicas ----------
+enum ClinicStatus {
+  SOLICITUD
+  REVISION
+  APROBADA
+  FORMACION
+  ACTIVA
+  SUSPENDIDA
+  BAJA
+}
+
+model Clinic {
+  id           String       @id @default(cuid())
+  name         String
+  cif          String?
+  address      String
+  town         String
+  postalCode   String
+  lat          Float?       // posición en el mapa
+  lng          Float?
+  status       ClinicStatus @default(SOLICITUD)
+  hasPrescriber Boolean     @default(false) // si no: casos → cola central
+  contractUrl  String?
+  users        User[]
+  slots        Slot[]
+  cases        Case[]
+  equipment    Equipment[]
+  settlements  Settlement[]
+  createdAt    DateTime     @default(now())
+}
+
+// Huecos publicados en la web (Flujo A) — máx. 5 activos por clínica
+model Slot {
+  id        String   @id @default(cuid())
+  clinicId  String
+  clinic    Clinic   @relation(fields: [clinicId], references: [id])
+  startsAt  DateTime
+  holdUntil DateTime?          // bloqueo 15 min durante la reserva
+  caseId    String?  @unique   // consumido por una reserva
+}
+
+// Equipamiento en cesión (inventario Ortosend)
+model Equipment {
+  id        String   @id @default(cuid())
+  clinicId  String?
+  clinic    Clinic?  @relation(fields: [clinicId], references: [id])
+  type      String   // "Revopoint Inspire 2" | "Podisense GO" | "Tablet" | "Trípode"
+  serial    String   @unique
+  deliveredAt DateTime?
+  returnedAt  DateTime?
+}
+
+// ---------- Pacientes y casos ----------
+model Patient {
+  id        String  @id @default(cuid())
+  ownerId   String            // titular (User CLIENTE); menores: titular = adulto
+  owner     User    @relation(fields: [ownerId], references: [id])
+  name      String
+  birthDate DateTime?
+  dni       String?
+  isMinor   Boolean @default(false)
+  consents  Json               // RGPD: salud, WhatsApp — con fecha y versión de texto
+  cases     Case[]
+}
+
+// Los 11 estados + excepciones. La numeración acordada:
+// 1 Cita reservada · 2 Estudio en curso · 3 Estudio completo/enviado ·
+// 4 En prescripción · 5 Prescrito, pendiente de pago · 6 Pagado/entrada taller ·
+// 7 Diseño · 8 Fabricación (mecanizado CNC → confección a mano) ·
+// 9 Control de calidad · 10 Enviado · 11 Entregado/cerrado (seguimiento + revisión anual)
+enum CaseState {
+  CITA_RESERVADA
+  ESTUDIO_EN_CURSO
+  ESTUDIO_COMPLETO
+  EN_PRESCRIPCION
+  EN_CONTACTO          // prescriptor quiere hablar con el paciente
+  PENDIENTE_PAGO       // enlace válido 30 días; caducidad blanda reactivable hasta 6 meses
+  ENTRADA_TALLER
+  DISENO
+  FABRICACION
+  CALIDAD
+  ENVIADO
+  ENTREGADO
+  CERRADO
+  DEVUELTO_CLINICA     // repetir prueba (sin coste para el cliente)
+  NO_PRESCRITO         // cliente no paga, clínica no cobra
+  NO_CONVERTIDO        // enlace de pago caducado
+}
+
+enum FabPhase {
+  MECANIZADO
+  CONFECCION
+}
+enum Delivery {
+  DOMICILIO
+  CLINICA
+}
+
+model Case {
+  id           String    @id @default(cuid())
+  number       Int       @unique @default(autoincrement())
+  patientId    String
+  patient      Patient   @relation(fields: [patientId], references: [id])
+  clinicId     String
+  clinic       Clinic    @relation(fields: [clinicId], references: [id])
+  state        CaseState @default(CITA_RESERVADA)
+  flow         String    // "A" (web) | "B" (clínica)
+  appointmentAt DateTime?
+  // Reparto automático: al abrir, queda asociado; se libera al terminar,
+  // cerrar sesión o por inactividad (45 min)
+  openBy       String?
+  openAt       DateTime?
+  assignedTo   String?   // asignación pegajosa tras contacto con el paciente
+  capture      Capture?
+  prescription Prescription?
+  payment      Payment?
+  shipment     Shipment?
+  delivery     Delivery?
+  fabPhase     FabPhase?
+  lot          String?   // lote de mecanizado CNC
+  material     String?   // trazabilidad: lote de material en confección
+  designFileUrl String?  // CAD archivado (reposiciones / revisión anual)
+  rxDraft      String?   // borrador de valoración guardado al soltar el caso
+  qcPhotoUrl   String?   // foto obligatoria del par en calidad
+  payLinkExpiresAt DateTime? // 30 días; recordatorios días 0/3/7/15
+  incidents    Incident[]
+  events       CaseEvent[]
+  annualReviewAt DateTime? // revisión anual programada al cerrar
+  createdAt    DateTime  @default(now())
+}
+
+// Captura del estudio (asistente multi-dispositivo, guardado continuo)
+model Capture {
+  id        String  @id @default(cuid())
+  caseId    String  @unique
+  case      Case    @relation(fields: [caseId], references: [id])
+  questionnaire Json?   // cuestionario clínico (paso 2 del protocolo)
+  physicalExam  Json?   // exploración: tobillo/Silfverskiöld, hallux, dismetría, ALZA mm…
+  media     MediaAsset[]
+  baroFileUrl String?   // informe del dashboard Podisense (vía 2; vía 1 = API Fresco)
+  completedAt DateTime? // checklist superada → envío
+}
+
+// Vídeos (7: 6 de marcha + heel rise) y escaneos (2) — subida resiliente por fragmentos
+model MediaAsset {
+  id        String  @id @default(cuid())
+  captureId String
+  capture   Capture @relation(fields: [captureId], references: [id])
+  kind      String  // scan_L | scan_R | video_lat_dcha_descalzo | ... | video_heel_rise | baro
+  url       String
+  sizeBytes Int?
+  confirmedAt DateTime? // check verde SOLO cuando el servidor confirma
+}
+
+// Documento clínico firmado — sin prescripción no se fabrica
+model Prescription {
+  id           String   @id @default(cuid())
+  caseId       String   @unique
+  case         Case     @relation(fields: [caseId], references: [id])
+  prescriberId String              // User con canPrescribe verificado
+  prescriberName String
+  collegiateNum String
+  assessment   String              // valoración clínica
+  diagnosis    String
+  fabricationOrder String          // pauta de fabricación (→ hoja de trabajo)
+  usageGuidelines  String          // pauta de uso para el paciente
+  contactNotes String?             // notas de llamadas al paciente
+  pdfUrl       String?             // PDF firmado, inmutable, retención 5 años
+  signedAt     DateTime @default(now())
+}
+
+// Pago siempre vía Ortosend (Stripe: tarjeta/Bizum). Sin pago no se fabrica.
+model Payment {
+  id        String   @id @default(cuid())
+  caseId    String   @unique
+  case      Case     @relation(fields: [caseId], references: [id])
+  amountCents Int    @default(19999)
+  provider  String   @default("stripe")
+  providerId String?           // payment_intent
+  method    String?            // card | bizum
+  paidAt    DateTime?
+  invoiceUrl String?
+}
+
+model Shipment {
+  id        String   @id @default(cuid())
+  caseId    String   @unique
+  case      Case     @relation(fields: [caseId], references: [id])
+  carrier   String?
+  tracking  String?
+  toClinic  Boolean  @default(false) // recogida en clínica
+  shippedAt DateTime?
+  deliveredAt DateTime?
+}
+
+enum IncidentType {
+  CAPTURA_INVALIDA
+  REHACER_DEFECTO
+  AJUSTE_POST_ENTREGA
+  GARANTIA
+}
+
+model Incident {
+  id       String @id @default(cuid())
+  caseId   String
+  case     Case   @relation(fields: [caseId], references: [id])
+  type     IncidentType
+  reason   String
+  resolution String?
+  openedBy String
+  closedAt DateTime?
+  createdAt DateTime @default(now())
+}
+
+// Historial completo del caso (quién, qué, cuándo)
+model CaseEvent {
+  id      String   @id @default(cuid())
+  caseId  String
+  case    Case     @relation(fields: [caseId], references: [id])
+  text    String
+  actor   String
+  at      DateTime @default(now())
+}
+
+// ---------- Captación y operaciones ----------
+model ClinicApplication {
+  id        String   @id @default(cuid())
+  name      String
+  town      String
+  contact   String
+  hasPrescriber Boolean
+  notes     String?
+  status    String   @default("recibida") // recibida | revision | aprobada | rechazada
+  createdAt DateTime @default(now())
+}
+
+model WaitlistEntry {   // zonas sin cobertura — dónde captar la próxima clínica
+  id      String   @id @default(cuid())
+  zone    String
+  contact String
+  createdAt DateTime @default(now())
+}
+
+// Liquidación mensual a clínicas contra factura (importes pendientes de definir)
+model Settlement {
+  id        String  @id @default(cuid())
+  clinicId  String
+  clinic    Clinic  @relation(fields: [clinicId], references: [id])
+  period    String  // "2026-08"
+  amountCents Int?
+  invoiceUrl String?
+  paidAt    DateTime?
+}
+
+// Cola de mensajes WhatsApp (canal principal) — solo avisos + enlace,
+// NUNCA contenido clínico. Email como respaldo.
+model Notification {
+  id       String   @id @default(cuid())
+  toPhone  String
+  template String   // cita_confirmada | recordatorio_24h | estudio_completo | rx_lista_pago |
+                    // pago_d3 | pago_d7 | pago_d15 | enviado | entregado | adaptacion_d20 | revision_anual …
+  payload  Json
+  sentAt   DateTime?
+  createdAt DateTime @default(now())
+}
+
+// Registro de accesos a datos de salud (obligación RGPD)
+model AuditLog {
+  id      String   @id @default(cuid())
+  userId  String
+  user    User     @relation(fields: [userId], references: [id])
+  action  String   // p.ej. "case.view", "prescription.download"
+  target  String
+  at      DateTime @default(now())
+}
