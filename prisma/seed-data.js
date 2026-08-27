@@ -73,6 +73,8 @@ async function seedDemo(prisma) {
       address: "C/ Major 45, Llagostera",
       town: "Llagostera",
       postalCode: "17240",
+      lat: 41.8296,
+      lng: 2.8931,
       status: "ACTIVA",
       hasPrescriber: false,
       slots: { create: [1, 2].map((d) => ({ startsAt: inDays(d + 2, 11) })) },
