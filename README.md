@@ -91,12 +91,26 @@ Cuentas de demo (contraseña `ortosend123`):
 - Recordatorio de cita 24 h, seguimiento de adaptación d20 y revisión anual como cron real.
 - Onboarding completo de clínicas (contrato, cesión de equipamiento, formación bloqueante).
 
-## Despliegue recomendado
+## Despliegue en Vercel + Neon (sin terminal, ~5 min)
 
-- **Hosting**: Vercel (dominio ortosend.com) con `CRON_SECRET` y cron diario a `/api/cron`.
-- **Base de datos**: Neon o Supabase (PostgreSQL gestionado, región UE por RGPD).
-- **Media**: Cloudflare R2 · **Pagos**: Stripe con Bizum · **WhatsApp**: 360dialog/Twilio
-  (iniciar la verificación de Meta cuanto antes).
+El repo ya está preparado: `vercel-build` aplica las migraciones en cada deploy,
+`vercel.json` programa el cron diario y `/api/seed` carga los datos de demo.
+
+1. **Neon** — entra en [neon.tech](https://neon.tech) (cuenta gratis, región UE),
+   crea un proyecto «ortosend» y copia la **connection string** (`postgresql://…`).
+2. **Vercel** — entra en [vercel.com](https://vercel.com) con tu GitHub, «Add New →
+   Project», importa `stridelabbykalma-web/ortosend` y elige la rama a desplegar.
+3. En **Environment Variables** añade:
+   - `DATABASE_URL` → la cadena de Neon
+   - `AUTH_SECRET` → un texto largo aleatorio
+4. **Deploy**. Al terminar tendrás una URL `https://….vercel.app`.
+5. Visita **`https://tu-url/api/seed`** una vez: carga clínicas, cuentas de demo y
+   dos casos (solo funciona con la base de datos vacía; después queda inerte).
+   Ya puedes entrar en `/login` con las cuentas de demo.
+
+Producción real más adelante: dominio ortosend.com, `CRON_SECRET`, Cloudflare R2
+para media, Stripe con Bizum y WhatsApp Business API (iniciar la verificación de
+Meta cuanto antes).
 
 ## Requisitos legales a preparar en paralelo
 

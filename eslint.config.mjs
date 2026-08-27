@@ -14,6 +14,7 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     // Script CJS de seed (se ejecuta con node, fuera del bundle):
     "prisma/seed.js",
+    "prisma/seed-data.js",
   ]),
 ]);
 
