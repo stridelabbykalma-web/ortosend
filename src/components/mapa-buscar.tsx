@@ -48,9 +48,11 @@ export function MapaBuscar({
         fadeAnimation: false,
         markerZoomAnimation: false,
       });
-      L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      // Esri World Street Map: sin API key y sin bloqueo a apps en *.vercel.app
+      // (OSM y CARTO bloquean/exigen clave). Ojo al orden {z}/{y}/{x} de Esri.
+      L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}", {
         maxZoom: 19,
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+        attribution: "Powered by Esri — Esri, HERE, Garmin | © OpenStreetMap contributors",
       }).addTo(map);
       layersRef.current = L.layerGroup().addTo(map);
       mapRef.current = map;
