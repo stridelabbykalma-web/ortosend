@@ -1,6 +1,7 @@
 "use client";
 
-// Mapa del buscador (Leaflet + OpenStreetMap): clínicas, punto buscado y radio de 50 km.
+// Mapa del buscador (Leaflet): clínicas asociadas, punto buscado y radio de 50 km.
+// Teselas de CARTO (Voyager) con atribución OSM — fiables para uso en aplicaciones.
 import { useEffect, useRef } from "react";
 import "leaflet/dist/leaflet.css";
 
@@ -23,6 +24,8 @@ export function MapaBuscar({
   radiusKm: number;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  // Clave estable: solo se reconstruye el mapa cuando cambian de verdad los datos.
+  const dataKey = JSON.stringify([clinics.map((c) => [c.id, c.lat, c.lng]), center?.lat, center?.lng, radiusKm]);
 
   useEffect(() => {
     let disposed = false;
@@ -31,9 +34,11 @@ export function MapaBuscar({
       const L = (await import("leaflet")).default;
       if (disposed || !ref.current) return;
       map = L.map(ref.current, { scrollWheelZoom: false });
-      L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        maxZoom: 18,
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+      L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
+        maxZoom: 19,
+        subdomains: "abcd",
+        attribution:
+          '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
       }).addTo(map);
 
       const bounds = L.latLngBounds([]);
@@ -76,12 +81,16 @@ export function MapaBuscar({
       } else {
         map.setView([41.98, 2.82], 9); // Girona por defecto
       }
+      // El contenedor puede montarse durante un cambio de layout: recalcula el tamaño.
+      setTimeout(() => map?.invalidateSize(), 150);
+      setTimeout(() => map?.invalidateSize(), 600);
     })();
     return () => {
       disposed = true;
       map?.remove();
     };
-  }, [clinics, center, radiusKm]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dataKey]);
 
   return (
     <div
@@ -92,6 +101,7 @@ export function MapaBuscar({
         border: "1px solid var(--line)",
         overflow: "hidden",
         zIndex: 0,
+        background: "#e8e6df",
       }}
     />
   );

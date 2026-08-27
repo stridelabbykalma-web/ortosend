@@ -25,7 +25,7 @@ export default function Home() {
           <b>{PRICE_LABEL}</b>
           <span className="muted">precio único, todo incluido</span>
         </div>
-        <BuscadorVivo />
+        <BuscadorVivo showAllInitially />
       </div>
       <div className="grid g4">
         {PASOS.map(([t, d]) => (
