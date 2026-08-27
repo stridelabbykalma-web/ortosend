@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { PRICE_LABEL } from "@/lib/format";
+import { BuscadorVivo } from "@/components/buscador-vivo";
 
 const PASOS: [string, string][] = [
   ["1. Reserva tu cita", "Gratis y sin compromiso, en la clínica que elijas."],
@@ -24,16 +25,7 @@ export default function Home() {
           <b>{PRICE_LABEL}</b>
           <span className="muted">precio único, todo incluido</span>
         </div>
-        <form className="row" style={{ maxWidth: 460, margin: "0 auto", justifyContent: "center" }} action="/buscar">
-          <input name="q" placeholder="Tu código postal o población" style={{ flex: 1, minWidth: 200 }} />
-          <button type="submit" className="pri">
-            Buscar clínica
-          </button>
-        </form>
-        <div className="tiny" style={{ marginTop: 10 }}>
-          Te mostramos las clínicas asociadas en un radio de 50 km · Recibe tus plantillas en 5 días
-          laborables desde el pago
-        </div>
+        <BuscadorVivo />
       </div>
       <div className="grid g4">
         {PASOS.map(([t, d]) => (

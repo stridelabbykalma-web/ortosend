@@ -7,15 +7,6 @@ import { prisma } from "@/lib/db";
 import { createSession, hashPassword } from "@/lib/auth";
 import { notify, pushEvent } from "@/lib/cases";
 
-// Lista de espera: zonas sin cobertura — dónde captar la próxima clínica.
-export async function waitlistAction(formData: FormData) {
-  const zone = String(formData.get("zone") ?? "").trim();
-  const contact = String(formData.get("contact") ?? "").trim();
-  if (!contact) redirect(`/buscar?q=${encodeURIComponent(zone)}&error=` + encodeURIComponent("Escribe un contacto"));
-  await prisma.waitlistEntry.create({ data: { zone: zone || "sin especificar", contact } });
-  redirect(`/buscar?q=${encodeURIComponent(zone)}&ok=` + encodeURIComponent("Apuntado. Te avisaremos cuando haya una clínica en tu zona."));
-}
-
 const reservaSchema = z.object({
   clinicId: z.string().min(1),
   slotId: z.string().min(1, "Elige una hora"),
