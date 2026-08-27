@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* Leaflet + Tailwind: el preflight no debe redimensionar las teselas del mapa */
+.leaflet-container img { max-width: none !important; max-height: none !important; }
+
 /* Sistema visual del prototipo Ortosend (especificación de diseño) */
 :root {
   --ink: #17262e;

@@ -57,7 +57,7 @@ export function BuscadorVivo({ initialQuery = "" }: { initialQuery?: string }) {
               scroll: false,
             }),
           () => setGeoDenied(true),
-          { timeout: 10000 }
+          { timeout: 10000, maximumAge: 300000 }
         );
       } else {
         setGeoDenied(true);
@@ -146,20 +146,21 @@ export function BuscadorVivo({ initialQuery = "" }: { initialQuery?: string }) {
           : "Te mostramos las clínicas asociadas en un radio de 50 km · Recibe tus plantillas en 5 días laborables desde el pago"}
       </div>
 
-      {searched && data && (
-        <div ref={resultsRef} style={{ marginTop: 26, textAlign: "left" }}>
-          {data.center && (
-            <div className="tiny" style={{ marginBottom: 8 }}>
-              Clínicas a menos de {data.radiusKm} km de {data.center.label?.split(",")[0] ?? "tu búsqueda"}:
-            </div>
-          )}
-          {data.mode === "texto" && (
-            <div className="tiny" style={{ marginBottom: 8 }}>
-              No hemos podido situar «{q}» en el mapa; mostramos coincidencias por nombre o código postal.
-            </div>
-          )}
-          <MapaBuscar clinics={pins} center={data.center} radiusKm={data.radiusKm} />
-          <div className="sp" />
+      <div ref={resultsRef} style={{ marginTop: 26, textAlign: "left" }}>
+        {searched && data?.center && (
+          <div className="tiny" style={{ marginBottom: 8 }}>
+            Clínicas a menos de {data.radiusKm} km de {data.center.label?.split(",")[0] ?? "tu búsqueda"}:
+          </div>
+        )}
+        {searched && data?.mode === "texto" && (
+          <div className="tiny" style={{ marginBottom: 8 }}>
+            No hemos podido situar «{q}» en el mapa; mostramos coincidencias por nombre o código postal.
+          </div>
+        )}
+        <MapaBuscar clinics={pins} center={data?.center ?? null} radiusKm={data?.radiusKm ?? 50} />
+        <div className="sp" />
+        {searched && data && (
+          <>
           {none && (
             <div className="card">
               <b>Aún no llegamos a tu zona</b>
@@ -201,7 +202,7 @@ export function BuscadorVivo({ initialQuery = "" }: { initialQuery?: string }) {
             </div>
           )}
           <div className="grid g3" style={{ marginTop: 10 }}>
-            {data.results.map((c) => (
+            {data!.results.map((c) => (
               <div className="card" key={c.id}>
                 <b style={{ fontFamily: "var(--font-sora)" }}>{c.name}</b>
                 <div className="muted">{c.address}</div>
@@ -215,8 +216,9 @@ export function BuscadorVivo({ initialQuery = "" }: { initialQuery?: string }) {
               </div>
             ))}
           </div>
-        </div>
-      )}
+          </>
+        )}
+      </div>
     </div>
   );
 }
