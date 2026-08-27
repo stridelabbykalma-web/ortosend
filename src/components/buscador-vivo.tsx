@@ -96,17 +96,48 @@ export function BuscadorVivo({ initialQuery = "" }: { initialQuery?: string }) {
           if (q.trim()) void search(`q=${encodeURIComponent(q.trim())}`);
         }}
       >
-        <input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="Tu código postal o población"
-          style={{ flex: 1, minWidth: 200 }}
-        />
+        <div style={{ position: "relative", flex: 1, minWidth: 200 }}>
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Tu código postal o población"
+            style={{ width: "100%", paddingRight: 40 }}
+          />
+          <button
+            type="button"
+            onClick={useLocation}
+            disabled={busy}
+            title="Buscar cerca de mi ubicación"
+            aria-label="Usar mi ubicación"
+            style={{
+              position: "absolute",
+              right: 6,
+              top: "50%",
+              transform: "translateY(-50%)",
+              width: 30,
+              height: 30,
+              padding: 0,
+              border: "none",
+              background: "transparent",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+            }}
+          >
+            {/* Icono de diana (localizarme) */}
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--teal)" strokeWidth="2" strokeLinecap="round">
+              <circle cx="12" cy="12" r="6" />
+              <circle cx="12" cy="12" r="1.5" fill="var(--teal)" stroke="none" />
+              <line x1="12" y1="2" x2="12" y2="5" />
+              <line x1="12" y1="19" x2="12" y2="22" />
+              <line x1="2" y1="12" x2="5" y2="12" />
+              <line x1="19" y1="12" x2="22" y2="12" />
+            </svg>
+          </button>
+        </div>
         <button type="submit" className="pri" disabled={busy}>
           {busy ? "Buscando…" : "Buscar clínica"}
-        </button>
-        <button type="button" onClick={useLocation} disabled={busy} title="Buscar cerca de mi ubicación">
-          📍 Mi ubicación
         </button>
       </form>
       <div className="tiny" style={{ marginTop: 10, textAlign: "center" }}>
