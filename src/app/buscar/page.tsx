@@ -17,7 +17,7 @@ export default async function BuscarPage({
       <h2 style={{ textAlign: "center" }}>Clínicas asociadas cerca de ti</h2>
       <div className="sp" />
       <Flash error={error} ok={ok} />
-      <BuscadorVivo initialQuery={q} showAllInitially />
+      <BuscadorVivo initialQuery={q} />
       <div className="sp2" />
     </div>
   );

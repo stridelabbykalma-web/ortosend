@@ -14,19 +14,14 @@ type SearchResponse = {
   results: (Result & { lat: number | null; lng: number | null })[];
 };
 
-export function BuscadorVivo({
-  initialQuery = "",
-  showAllInitially = false,
-}: {
-  initialQuery?: string;
-  showAllInitially?: boolean;
-}) {
+export function BuscadorVivo({ initialQuery = "" }: { initialQuery?: string }) {
   const [q, setQ] = useState(initialQuery);
   const [data, setData] = useState<SearchResponse | null>(null);
   const [busy, setBusy] = useState(false);
   const [searched, setSearched] = useState(false);
   const [wlContact, setWlContact] = useState("");
   const [wlDone, setWlDone] = useState(false);
+  const [geoDenied, setGeoDenied] = useState(false);
   const resultsRef = useRef<HTMLDivElement>(null);
 
   async function search(params: string, opts: { scroll?: boolean } = {}) {
@@ -51,13 +46,28 @@ export function BuscadorVivo({
   // Si llega con búsqueda inicial (p. ej. /buscar?q=...), la lanza al cargar.
   useEffect(() => {
     const t = setTimeout(() => {
-      if (initialQuery) void search(`q=${encodeURIComponent(initialQuery)}`, { scroll: false });
-      else if (showAllInitially) void search("", { scroll: false });
+      if (initialQuery) {
+        void search(`q=${encodeURIComponent(initialQuery)}`, { scroll: false });
+      } else if (navigator.geolocation) {
+        // Petición de ubicación automática al entrar. Si acepta → cercanas;
+        // si deniega → nada hasta que busque por población o CP.
+        navigator.geolocation.getCurrentPosition(
+          (pos) =>
+            void search(`lat=${pos.coords.latitude.toFixed(5)}&lng=${pos.coords.longitude.toFixed(5)}`, {
+              scroll: false,
+            }),
+          () => setGeoDenied(true),
+          { timeout: 10000 }
+        );
+      } else {
+        setGeoDenied(true);
+      }
     }, 0);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Reintento manual (p. ej. denegó el permiso al entrar y luego quiere darlo).
   function useLocation() {
     if (!navigator.geolocation) return alert("Tu navegador no permite la geolocalización");
     setBusy(true);
@@ -65,7 +75,9 @@ export function BuscadorVivo({
       (pos) => void search(`lat=${pos.coords.latitude.toFixed(5)}&lng=${pos.coords.longitude.toFixed(5)}`),
       () => {
         setBusy(false);
-        alert("No se pudo obtener tu ubicación. Busca por población o código postal.");
+        alert(
+          "No hay acceso a tu ubicación. Si lo denegaste, actívalo en el candado de la barra de direcciones y vuelve a intentarlo — o busca por población o código postal."
+        );
       },
       { timeout: 10000 }
     );
@@ -93,13 +105,14 @@ export function BuscadorVivo({
         <button type="submit" className="pri" disabled={busy}>
           {busy ? "Buscando…" : "Buscar clínica"}
         </button>
-        <button type="button" onClick={useLocation} disabled={busy}>
-          Usar mi ubicación
+        <button type="button" onClick={useLocation} disabled={busy} title="Buscar cerca de mi ubicación">
+          📍 Mi ubicación
         </button>
       </form>
       <div className="tiny" style={{ marginTop: 10, textAlign: "center" }}>
-        Te mostramos las clínicas asociadas en un radio de 50 km · Recibe tus plantillas en 5 días
-        laborables desde el pago
+        {geoDenied && !searched
+          ? "Sin acceso a tu ubicación — escribe tu población o código postal para ver las clínicas cercanas."
+          : "Te mostramos las clínicas asociadas en un radio de 50 km · Recibe tus plantillas en 5 días laborables desde el pago"}
       </div>
 
       {searched && data && (
