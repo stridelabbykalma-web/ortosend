@@ -23,7 +23,9 @@ asociadas. Stack: **Next.js (App Router, server actions) + PostgreSQL (Prisma)**
 **Panel clínica**
 - Agenda (citas Flujo A + casos Flujo B), disponibilidad (máx. 5 huecos), profesionales y
   formación 5/5, liquidaciones (placeholder).
-- **Asistente de captura** de 6 pasos con guardado continuo: cuestionario, exploración física,
+- **Asistente de captura** de 6 pasos con guardado continuo: cuestionario clínico completo
+  (motivo/dolor, actividad y datos físicos, calzado, antecedentes y tratamientos previos —
+  visible entero en el expediente que llega al prescriptor), exploración física,
   escaneo 3D (2), vídeos (7: 6 de marcha + heel rise), baropodometría (2 estáticas + dinámica +
   informe) y **checklist bloqueante** — sin todo en verde no hay envío.
 

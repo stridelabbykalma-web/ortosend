@@ -1,5 +1,6 @@
 import type { Capture, Case, MediaAsset, Patient, Prescription, User } from "@prisma/client";
 import { checklistOf } from "@/lib/cases";
+import { questionnaireLines, type Questionnaire } from "@/lib/questionnaire";
 
 type CaseFull = Case & {
   patient: Patient & { owner: User };
@@ -10,27 +11,28 @@ type CaseFull = Case & {
 // Expediente del estudio: lo que ve cualquier rol clínico/taller sobre la captura.
 export function Expediente({ kase }: { kase: CaseFull }) {
   const cp = kase.capture;
-  const q = cp?.questionnaire as { motivo?: string; dolor?: string; actividad?: string } | null;
+  const q = cp?.questionnaire as Questionnaire | null;
   const e = cp?.physicalExam as { tobillo?: string; hallux?: string; dismetria?: string; alza?: string } | null;
   const cl = checklistOf(cp);
+  const qLines = questionnaireLines(q);
   return (
     <div className="card">
       <b style={{ fontFamily: "var(--font-sora)" }}>Expediente del estudio</b>
-      <div className="grid g2" style={{ marginTop: 10 }}>
-        <div>
-          <div className="tiny">CUESTIONARIO CLÍNICO</div>
-          <div className="muted">
-            {q ? (
-              <>
-                Motivo: {q.motivo}
-                <br />
-                Dolor: {q.dolor || "—"} · Actividad: {q.actividad || "—"}
-              </>
-            ) : (
-              "Pendiente"
-            )}
+      <div style={{ marginTop: 10 }}>
+        <div className="tiny">CUESTIONARIO CLÍNICO</div>
+        {qLines.length ? (
+          <div className="grid g2" style={{ gap: "2px 14px", marginTop: 4 }}>
+            {qLines.map(([label, value]) => (
+              <div className="muted" key={label}>
+                <span style={{ fontWeight: 600 }}>{label}:</span> {value}
+              </div>
+            ))}
           </div>
-        </div>
+        ) : (
+          <div className="muted">Pendiente</div>
+        )}
+      </div>
+      <div className="grid g2" style={{ marginTop: 14 }}>
         <div>
           <div className="tiny">EXPLORACIÓN FÍSICA</div>
           <div className="muted">

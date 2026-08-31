@@ -1,6 +1,21 @@
 import type { Capture, Case, Incident, MediaAsset } from "@prisma/client";
 import { checklistOf } from "@/lib/cases";
 import { BARO_KINDS, VIDEO_KINDS } from "@/lib/format";
+import {
+  ACTIVIDAD_OPTS,
+  ANTECEDENTES_OPTS,
+  CALZADO_OPTS,
+  DESGASTE_OPTS,
+  EVOLUCION_OPTS,
+  HORAS_PIE_OPTS,
+  LADO_OPTS,
+  MOMENTO_OPTS,
+  PLANTILLAS_OPTS,
+  TRATAMIENTOS_OPTS,
+  ZONA_OPTS,
+  dolorLabel,
+  type Questionnaire,
+} from "@/lib/questionnaire";
 import { CheckLine } from "@/components/ui";
 import {
   markMediaAction,
@@ -17,7 +32,7 @@ type CaseWithCapture = Case & {
 // Asistente de captura de la clínica: 6 pasos con guardado continuo y checklist bloqueante.
 export function Wizard({ kase }: { kase: CaseWithCapture }) {
   const cp = kase.capture;
-  const q = cp?.questionnaire as { motivo?: string; dolor?: string; actividad?: string } | null;
+  const q = cp?.questionnaire as Questionnaire | null;
   const e = cp?.physicalExam as { tobillo?: string; dismetria?: string; alza?: string } | null;
   const media = cp?.media.filter((m) => m.confirmedAt) ?? [];
   const has = (k: string) => media.some((m) => m.kind === k);
@@ -48,40 +63,187 @@ export function Wizard({ kase }: { kase: CaseWithCapture }) {
         </div>
       )}
       <div className="sp" />
-      <div className="grid g2">
-        <div className="card">
-          <b>1 · Cuestionario clínico {cl.cuestionario && <span className="pill g">✓</span>}</b>
-          {cl.cuestionario ? (
-            <div className="muted" style={{ marginTop: 6 }}>
-              {q?.motivo}
+      <div className="card">
+        <b>1 · Cuestionario clínico {cl.cuestionario && <span className="pill g">✓</span>}</b>
+        {cl.cuestionario ? (
+          <div className="muted" style={{ marginTop: 6 }}>
+            {q?.motivo}
+            {q?.dolor ? ` · Dolor ${dolorLabel(q)}` : ""}
+            {q?.evolucion ? ` · ${q.evolucion}` : ""}
+            {q?.actividad ? ` · ${q.actividad}` : ""}
+            <div className="tiny" style={{ marginTop: 4 }}>
+              Cuestionario completo visible en el expediente del caso.
             </div>
-          ) : (
-            <form action={saveQuestionnaireAction}>
-              <input type="hidden" name="caseId" value={kase.id} />
-              <label>Motivo de consulta</label>
-              <input name="motivo" placeholder="Ej.: dolor en talón derecho al levantarse, 3 meses" required />
-              <div className="grid g2">
-                <div>
-                  <label>Dolor (0-10)</label>
-                  <input name="dolor" placeholder="7/10" />
-                </div>
-                <div>
-                  <label>Actividad</label>
-                  <select name="actividad" defaultValue="Activo">
-                    <option>Sedentario</option>
-                    <option>Activo</option>
-                    <option>Deportista habitual</option>
-                    <option>Competición</option>
-                  </select>
-                </div>
+          </div>
+        ) : (
+          <form action={saveQuestionnaireAction}>
+            <input type="hidden" name="caseId" value={kase.id} />
+
+            <div className="tiny" style={{ marginTop: 12 }}>MOTIVO DE CONSULTA Y DOLOR</div>
+            <label>Motivo de consulta *</label>
+            <input
+              name="motivo"
+              placeholder="Ej.: dolor en talón derecho al levantarse, 3 meses"
+              required
+            />
+            <div className="grid g3">
+              <div>
+                <label>Tiempo de evolución</label>
+                <select name="evolucion" defaultValue="1-3 meses">
+                  {EVOLUCION_OPTS.map((o) => (
+                    <option key={o}>{o}</option>
+                  ))}
+                </select>
               </div>
-              <div className="sp" />
-              <button type="submit" className="pri">
-                Guardar cuestionario
-              </button>
-            </form>
-          )}
-        </div>
+              <div>
+                <label>Intensidad del dolor (0-10) *</label>
+                <select name="dolor" defaultValue="5">
+                  {Array.from({ length: 11 }, (_, i) => (
+                    <option key={i} value={i}>
+                      {i}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label>Lado afectado</label>
+                <select name="lado" defaultValue="Ambos">
+                  {LADO_OPTS.map((o) => (
+                    <option key={o}>{o}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <label>Zonas de dolor (marca todas las que apliquen)</label>
+            <div className="grid g3">
+              {ZONA_OPTS.map((o) => (
+                <label className="chk" key={o}>
+                  <input type="checkbox" name="zonas" value={o} /> {o}
+                </label>
+              ))}
+            </div>
+            <label>¿Cuándo aparece el dolor?</label>
+            <div className="grid g3">
+              {MOMENTO_OPTS.map((o) => (
+                <label className="chk" key={o}>
+                  <input type="checkbox" name="momentos" value={o} /> {o}
+                </label>
+              ))}
+            </div>
+
+            <div className="tiny" style={{ marginTop: 16 }}>ACTIVIDAD Y DATOS FÍSICOS</div>
+            <div className="grid g2">
+              <div>
+                <label>Nivel de actividad</label>
+                <select name="actividad" defaultValue="Activo">
+                  {ACTIVIDAD_OPTS.map((o) => (
+                    <option key={o}>{o}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label>Deporte principal y frecuencia</label>
+                <input name="deporte" placeholder="Ej.: running, 3 días/semana" />
+              </div>
+              <div>
+                <label>Horas de pie al día</label>
+                <select name="horasPie" defaultValue="4-8 h">
+                  {HORAS_PIE_OPTS.map((o) => (
+                    <option key={o}>{o}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label>Profesión / ocupación</label>
+                <input name="profesion" placeholder="Ej.: camarero, oficina…" />
+              </div>
+            </div>
+            <div className="grid g3">
+              <div>
+                <label>Peso (kg)</label>
+                <input name="peso" type="number" min={20} max={250} step="0.1" placeholder="78" />
+              </div>
+              <div>
+                <label>Altura (cm)</label>
+                <input name="altura" type="number" min={100} max={230} placeholder="175" />
+              </div>
+              <div>
+                <label>Talla de calzado (EU)</label>
+                <input name="tallaCalzado" type="number" min={30} max={52} step="0.5" placeholder="42" />
+              </div>
+            </div>
+
+            <div className="tiny" style={{ marginTop: 16 }}>CALZADO Y PLANTILLAS</div>
+            <label>Calzado habitual (marca todos los que apliquen)</label>
+            <div className="grid g3">
+              {CALZADO_OPTS.map((o) => (
+                <label className="chk" key={o}>
+                  <input type="checkbox" name="calzado" value={o} /> {o}
+                </label>
+              ))}
+            </div>
+            <div className="grid g2">
+              <div>
+                <label>Desgaste del calzado</label>
+                <select name="desgaste" defaultValue="Normal / simétrico">
+                  {DESGASTE_OPTS.map((o) => (
+                    <option key={o}>{o}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label>¿Ha usado plantillas antes?</label>
+                <select name="plantillasPrevias" defaultValue="No, nunca">
+                  {PLANTILLAS_OPTS.map((o) => (
+                    <option key={o}>{o}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="tiny" style={{ marginTop: 16 }}>ANTECEDENTES Y TRATAMIENTOS</div>
+            <label>Antecedentes relevantes</label>
+            <div className="grid g3">
+              {ANTECEDENTES_OPTS.map((o) => (
+                <label className="chk" key={o}>
+                  <input type="checkbox" name="antecedentes" value={o} /> {o}
+                </label>
+              ))}
+            </div>
+            <div className="grid g2">
+              <div>
+                <label>Detalle de antecedentes (lesión, cirugía, año…)</label>
+                <input name="antecedentesDetalle" placeholder="Ej.: esguince tobillo dcho. 2023" />
+              </div>
+              <div>
+                <label>Medicación habitual relevante</label>
+                <input name="medicacion" placeholder="Ej.: anticoagulantes, corticoides…" />
+              </div>
+            </div>
+            <label>Tratamientos previos para este problema</label>
+            <div className="grid g3">
+              {TRATAMIENTOS_OPTS.map((o) => (
+                <label className="chk" key={o}>
+                  <input type="checkbox" name="tratamientosPrevios" value={o} /> {o}
+                </label>
+              ))}
+            </div>
+
+            <label>Observaciones del profesional</label>
+            <textarea
+              name="observaciones"
+              rows={2}
+              placeholder="Cualquier dato relevante para la valoración que no encaje arriba"
+            />
+            <div className="sp" />
+            <button type="submit" className="pri">
+              Guardar cuestionario
+            </button>
+          </form>
+        )}
+      </div>
+      <div className="sp" />
+      <div className="grid g2">
         <div className="card">
           <b>2 · Exploración física {cl.exploracion && <span className="pill g">✓</span>}</b>
           {cl.exploracion ? (

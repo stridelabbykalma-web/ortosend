@@ -6,6 +6,7 @@ import { prisma } from "@/lib/db";
 import { requireRole, createInviteToken } from "@/lib/auth";
 import { checklistOf, notify, pushEvent } from "@/lib/cases";
 import { VIDEO_KINDS, BARO_KINDS } from "@/lib/format";
+import type { Questionnaire } from "@/lib/questionnaire";
 import type { User } from "@prisma/client";
 
 const MAX_SLOTS = 5;
@@ -104,20 +105,48 @@ async function captureFor(caseId: string, u: User) {
 export async function saveQuestionnaireAction(formData: FormData) {
   const u = await requireClinicStaff();
   const caseId = String(formData.get("caseId"));
-  const motivo = String(formData.get("motivo") ?? "").trim();
-  if (!motivo) fail(`/caso/${caseId}`, "Falta el motivo de consulta");
+  const back = `/caso/${caseId}`;
+  const str = (k: string) => String(formData.get(k) ?? "").trim();
+  const list = (k: string) => formData.getAll(k).map((v) => String(v).trim()).filter(Boolean);
+
+  const motivo = str("motivo");
+  if (!motivo) fail(back, "Falta el motivo de consulta");
+  const dolor = str("dolor");
+  if (dolor === "") fail(back, "Indica la intensidad del dolor (0-10)");
+  const lado = str("lado");
+  if (lado !== "Sin dolor localizado" && list("zonas").length === 0)
+    fail(back, "Marca al menos una zona de dolor (o elige «Sin dolor localizado»)");
+
+  const questionnaire: Questionnaire = {
+    v: 2,
+    motivo,
+    evolucion: str("evolucion"),
+    lado,
+    zonas: list("zonas"),
+    dolor,
+    momentos: list("momentos"),
+    actividad: str("actividad"),
+    deporte: str("deporte"),
+    horasPie: str("horasPie"),
+    profesion: str("profesion"),
+    peso: str("peso"),
+    altura: str("altura"),
+    tallaCalzado: str("tallaCalzado"),
+    calzado: list("calzado"),
+    desgaste: str("desgaste"),
+    plantillasPrevias: str("plantillasPrevias"),
+    antecedentes: list("antecedentes"),
+    antecedentesDetalle: str("antecedentesDetalle"),
+    medicacion: str("medicacion"),
+    tratamientosPrevios: list("tratamientosPrevios"),
+    observaciones: str("observaciones"),
+  };
   const { capture } = await captureFor(caseId, u);
   await prisma.capture.update({
     where: { id: capture.id },
-    data: {
-      questionnaire: {
-        motivo,
-        dolor: String(formData.get("dolor") ?? ""),
-        actividad: String(formData.get("actividad") ?? ""),
-      },
-    },
+    data: { questionnaire },
   });
-  redirect(`/caso/${caseId}`);
+  redirect(back);
 }
 
 export async function saveExamAction(formData: FormData) {
