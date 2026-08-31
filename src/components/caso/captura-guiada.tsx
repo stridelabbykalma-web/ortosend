@@ -66,58 +66,45 @@ type Slide =
   | { t: "file"; kind: string; title: string; grupo: string; help: string }
   | { t: "envio"; title: string; grupo: string };
 
-const CHECKS_LATERAL = (calzado: boolean) => [
-  calzado ? "El paciente lleva su calzado habitual" : "El paciente va descalzo",
-  "Se ve el cuerpo entero de perfil, como en la figura",
-  "Cámara en trípode a la altura de la cadera; pasillo de 4-5 m libre",
-  "Camina a ritmo natural, sin posar",
-];
-const CHECKS_POST = (calzado: boolean) => [
-  calzado ? "El paciente lleva su calzado habitual" : "El paciente va descalzo",
-  "Se ve el cuerpo entero de espaldas, centrado en la línea",
-  "Cámara en trípode a la altura de la cadera",
-  "Camina a ritmo natural, sin posar",
-];
-
 const VIDEO_META: Record<string, { overlay: OverlayKind; checks: string[]; help: string }> = {
-  video_lat_dcha_descalzo: {
-    overlay: "marcha_lat_dcha",
-    checks: CHECKS_LATERAL(false),
-    help: "El paciente camina de derecha a izquierda del encuadre; graba 2-3 pasadas completas.",
-  },
-  video_lat_dcha_calzado: {
-    overlay: "marcha_lat_dcha",
-    checks: CHECKS_LATERAL(true),
-    help: "Misma pasada lateral derecha, ahora con su calzado habitual.",
-  },
-  video_lat_izq_descalzo: {
-    overlay: "marcha_lat_izq",
-    checks: CHECKS_LATERAL(false),
-    help: "El paciente camina de izquierda a derecha del encuadre; graba 2-3 pasadas completas.",
-  },
-  video_lat_izq_calzado: {
-    overlay: "marcha_lat_izq",
-    checks: CHECKS_LATERAL(true),
-    help: "Misma pasada lateral izquierda, ahora con su calzado habitual.",
-  },
-  video_post_descalzo: {
+  video_posterior: {
     overlay: "marcha_post",
-    checks: CHECKS_POST(false),
-    help: "El paciente se aleja y vuelve hacia la cámara por la línea central; fíjate en el retropié.",
-  },
-  video_post_calzado: {
-    overlay: "marcha_post",
-    checks: CHECKS_POST(true),
-    help: "Misma pasada posterior, ahora con su calzado habitual: se valora el desgaste en dinámica.",
-  },
-  video_heel_rise: {
-    overlay: "heel_rise",
     checks: [
-      "Paciente de espaldas, descalzo, con apoyo ligero de los dedos en la pared",
-      "Ambos talones bien visibles, como en la figura",
-      "Elevaciones a ritmo constante (una cada 2 segundos)",
+      "El paciente va descalzo",
+      "Se ve el cuerpo entero de espaldas, centrado en la línea",
+      "Cámara en trípode a la altura de la cadera; pasillo de 4-5 m libre",
+      "Camina a ritmo natural, sin posar",
     ],
-    help: "Graba las elevaciones de talones (bipodal y monopodal si es posible): valora el tibial posterior.",
+    help: "El paciente se aleja de la cámara caminando por la línea central: se valora el retropié (valgo/varo) y el apoyo desde atrás.",
+  },
+  video_anterior: {
+    overlay: "marcha_ant",
+    checks: [
+      "El paciente va descalzo",
+      "Se ve el cuerpo entero de frente, centrado en el encuadre",
+      "Cámara en trípode a la altura de la cadera",
+      "Camina hacia la cámara a ritmo natural",
+    ],
+    help: "El paciente camina de frente hacia la cámara: se valora el antepié, el ángulo de paso y el alineamiento desde delante.",
+  },
+  video_lateral: {
+    overlay: "marcha_lat",
+    checks: [
+      "El paciente va descalzo",
+      "Se ve el cuerpo entero de perfil, como en la figura",
+      "Cámara en trípode a la altura de la cadera; pasillo de 4-5 m libre",
+      "Camina a ritmo natural, sin posar (2-3 pasadas)",
+    ],
+    help: "El paciente cruza el encuadre de lado: se valora el ciclo completo de la marcha (contacto, apoyo medio y despegue) de perfil.",
+  },
+  video_general: {
+    overlay: "marcha_general",
+    checks: [
+      "Cámara alejada (4-6 m): el cuerpo entero con aire alrededor, como en la figura",
+      "Plano abierto y estable: no acerques ni sigas rodillas o pies",
+      "El paciente camina varios ciclos completos, ida y vuelta",
+    ],
+    help: "Plano general del caminar: una toma abierta del conjunto (postura, braceo, ritmo, compensaciones). No es un plano de detalle de rodillas ni pies — eso ya lo cubren los otros vídeos.",
   },
 };
 
@@ -175,8 +162,8 @@ function buildSlides(): Slide[] {
     }),
     {
       t: "media",
-      kind: "baro_est_1",
-      title: "Baropodometría estática — captura 1",
+      kind: "baro_est",
+      title: "Baropodometría estática",
       grupo: "Baropodometría",
       overlay: "baro_estatica",
       mode: "foto",
@@ -185,35 +172,22 @@ function buildSlides(): Slide[] {
         "Paciente quieto, mirando al frente, brazos relajados",
         "Captura de 10 segundos sin apoyos externos",
       ],
-      help: "Primera captura estática de presiones (Podisense GO), 10 segundos.",
+      help: "Captura estática de presiones con el Podisense: reparto de cargas y superficie de apoyo en bipedestación.",
     },
     {
       t: "media",
-      kind: "baro_est_2",
-      title: "Baropodometría estática — captura 2",
-      grupo: "Baropodometría",
-      overlay: "baro_estatica",
-      mode: "foto",
-      checks: [
-        "Ambos pies dentro de la plataforma, como en la figura",
-        "Paciente quieto, mirando al frente, brazos relajados",
-        "Captura de 10 segundos sin apoyos externos",
-      ],
-      help: "Segunda captura estática para comprobar la repetibilidad del apoyo.",
-    },
-    {
-      t: "media",
-      kind: "baro_din",
-      title: "Baropodometría dinámica",
+      kind: "baro_din_multi",
+      title: "Baropodometría dinámica múltiple",
       grupo: "Baropodometría",
       overlay: "baro_dinamica",
       mode: "video",
       checks: [
-        "El paciente cruza la plataforma andando con naturalidad",
+        "Modo «dinámica múltiple» activado en el Podisense",
+        "El paciente cruza la plataforma andando con naturalidad, varias pasadas seguidas",
         "El pie contacta completo dentro de la zona marcada",
-        "Hay al menos 3 pasos válidos registrados",
+        "Hay pasos válidos suficientes de cada pie registrados",
       ],
-      help: "Pasadas caminando sobre la plataforma hasta registrar 3 pasos válidos de cada pie.",
+      help: "Registro dinámico múltiple: varias pasadas consecutivas sobre la plataforma para promediar el patrón de presiones de cada pie durante la marcha.",
     },
     {
       t: "file",
@@ -697,8 +671,10 @@ export function CapturaGuiada({ kase, paso }: { kase: CaseWithCapture; paso?: nu
             <CheckLine ok={cl.cuestionario}>Cuestionario clínico (5 pantallas)</CheckLine>
             <CheckLine ok={cl.exploracion}>Exploración biomecánica y tests (4 pantallas)</CheckLine>
             <CheckLine ok={cl.escaneos}>Escaneo 3D de ambos pies</CheckLine>
-            <CheckLine ok={cl.videos >= 7}>Vídeos de marcha {cl.videos}/7</CheckLine>
-            <CheckLine ok={cl.baro}>Baropodometría (2 estáticas + dinámica + informe)</CheckLine>
+            <CheckLine ok={cl.videos >= VIDEO_KINDS.length}>
+              Vídeos de marcha {cl.videos}/{VIDEO_KINDS.length} (atrás, frente, lado y plano general)
+            </CheckLine>
+            <CheckLine ok={cl.baro}>Baropodometría (estática + dinámica múltiple + informe)</CheckLine>
             {cl.completa ? (
               <form action={sendCaseAction}>
                 <input type="hidden" name="caseId" value={kase.id} />

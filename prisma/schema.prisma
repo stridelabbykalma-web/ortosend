@@ -214,7 +214,7 @@ model MediaAsset {
   id        String  @id @default(cuid())
   captureId String
   capture   Capture @relation(fields: [captureId], references: [id])
-  kind      String  // scan_L | scan_R | video_lat_dcha_descalzo | ... | video_heel_rise | baro
+  kind      String  // scan_L | scan_R | video_posterior|anterior|lateral|general | baro_est | baro_din_multi | baro_informe
   url       String
   sizeBytes Int?
   confirmedAt DateTime? // check verde SOLO cuando el servidor confirma

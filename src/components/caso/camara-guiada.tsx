@@ -7,10 +7,10 @@ import { useEffect, useRef, useState } from "react";
 import { markMediaAction } from "@/app/panel/clinica-actions";
 
 export type OverlayKind =
-  | "marcha_lat_dcha"
-  | "marcha_lat_izq"
   | "marcha_post"
-  | "heel_rise"
+  | "marcha_ant"
+  | "marcha_lat"
+  | "marcha_general"
   | "pie_izq"
   | "pie_dcho"
   | "baro_estatica"
@@ -23,13 +23,19 @@ function Overlay({ kind }: { kind: OverlayKind }) {
   const common = { fill: "none", strokeWidth: 3, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
 
   // Figura humana de perfil, a mitad de zancada (marcha lateral)
-  const lateral = (flip: boolean) => (
-    <g stroke={zone} {...common} transform={flip ? "translate(300,0) scale(-1,1)" : undefined}>
+  const figuraLateral = (
+    <>
       <circle cx={150} cy={70} r={22} />
       <path d="M150 92 L146 200" />
       <path d="M146 130 L110 175 M146 130 L185 168" />
       <path d="M146 200 L105 280 L92 345 M146 200 L185 270 L210 340" />
       <path d="M92 345 L70 352 M210 340 L235 345" />
+    </>
+  );
+
+  const lateral = (
+    <g stroke={zone} {...common}>
+      {figuraLateral}
     </g>
   );
 
@@ -42,21 +48,38 @@ function Overlay({ kind }: { kind: OverlayKind }) {
       <path d="M150 190 L128 275 L126 345 M150 190 L172 275 L174 345" />
       <path d="M114 350 L138 350 M162 350 L186 350" />
       <path d="M150 20 L150 45 M150 375 L150 395" stroke={guide} strokeDasharray="6 7" strokeWidth={2} />
+      <text x={150} y={388} textAnchor="middle" fill={guide} fontSize={12} stroke="none">
+        el paciente se aleja de la cámara
+      </text>
     </g>
   );
 
-  // De espaldas, de puntillas: talones elevados (heel rise)
-  const heelRise = (
+  // Figura de frente, caminando hacia la cámara (marcha anterior)
+  const anterior = (
     <g stroke={zone} {...common}>
-      <circle cx={150} cy={60} r={20} />
-      <path d="M150 80 L150 185" />
-      <path d="M112 112 L150 95 L188 112 M112 112 L96 60 M188 112 L204 60" />
-      <path d="M150 185 L131 268 L129 322 M150 185 L169 268 L171 322" />
-      <path d="M121 322 L137 322 M163 322 L179 322" />
-      <path d="M100 345 L200 345" stroke={guide} strokeWidth={2} />
-      <path d="M129 322 L129 338 M171 322 L171 338" strokeDasharray="4 5" strokeWidth={2} />
-      <text x={150} y={368} textAnchor="middle" fill={guide} fontSize={13} stroke="none">
-        talones despegados del suelo
+      <circle cx={150} cy={65} r={22} />
+      <path d="M142 62 L143 62 M157 62 L158 62" strokeWidth={4} />
+      <path d="M144 74 Q150 78 156 74" strokeWidth={2} />
+      <path d="M150 87 L150 190" />
+      <path d="M108 120 L150 100 L192 120 M108 120 L100 185 M192 120 L200 185" />
+      <path d="M150 190 L130 270 L128 340 M150 190 L172 262 L176 330" />
+      <path d="M120 346 L136 346 M168 336 L184 336" />
+      <path d="M150 20 L150 42" stroke={guide} strokeDasharray="6 7" strokeWidth={2} />
+      <text x={150} y={388} textAnchor="middle" fill={guide} fontSize={12} stroke="none">
+        el paciente camina hacia la cámara
+      </text>
+    </g>
+  );
+
+  // Plano general: cámara alejada, cuerpo entero pequeño con aire alrededor
+  const general = (
+    <g stroke={zone} {...common}>
+      <rect x={22} y={28} width={256} height={336} rx={10} stroke={guide} strokeDasharray="10 8" strokeWidth={2} />
+      <g transform="translate(58 118) scale(0.6)">{figuraLateral}</g>
+      <path d="M45 340 L255 340" stroke={guide} strokeWidth={2} strokeDasharray="2 6" />
+      <path d="M70 355 L230 355 M230 355 L216 347 M230 355 L216 363" stroke={guide} strokeWidth={2} />
+      <text x={150} y={388} textAnchor="middle" fill={guide} fontSize={12} stroke="none">
+        plano general: cuerpo entero con aire alrededor
       </text>
     </g>
   );
@@ -81,13 +104,16 @@ function Overlay({ kind }: { kind: OverlayKind }) {
         <>
           <path d="M150 330 L150 70" stroke={guide} strokeDasharray="5 8" strokeWidth={2} />
           <path d="M150 70 L138 88 M150 70 L162 88" stroke={guide} strokeWidth={2} />
+          <text x={150} y={388} textAnchor="middle" fill={guide} fontSize={12} stroke="none">
+            varias pasadas seguidas sobre la plataforma
+          </text>
         </>
       )}
     </g>
   );
 
-  const walkArrow = (flip: boolean) => (
-    <g stroke={guide} strokeWidth={2} fill="none" transform={flip ? "translate(300,0) scale(-1,1)" : undefined}>
+  const walkArrow = (
+    <g stroke={guide} strokeWidth={2} fill="none">
       <path d="M60 372 L240 372 M240 372 L224 362 M240 372 L224 382" />
       <path d="M30 352 L270 352" strokeDasharray="2 6" strokeWidth={1.5} />
     </g>
@@ -95,20 +121,15 @@ function Overlay({ kind }: { kind: OverlayKind }) {
 
   return (
     <svg className="cam-overlay" viewBox="0 0 300 400" preserveAspectRatio="xMidYMid meet" aria-hidden>
-      {kind === "marcha_lat_dcha" && (
+      {kind === "marcha_lat" && (
         <>
-          {lateral(false)}
-          {walkArrow(false)}
-        </>
-      )}
-      {kind === "marcha_lat_izq" && (
-        <>
-          {lateral(true)}
-          {walkArrow(true)}
+          {lateral}
+          {walkArrow}
         </>
       )}
       {kind === "marcha_post" && posterior}
-      {kind === "heel_rise" && heelRise}
+      {kind === "marcha_ant" && anterior}
+      {kind === "marcha_general" && general}
       {kind === "pie_izq" && pie(false)}
       {kind === "pie_dcho" && pie(true)}
       {kind === "baro_estatica" && baro(false)}
@@ -126,7 +147,7 @@ export function CamaraGuiada({
   next,
 }: {
   caseId: string;
-  kind: string; // kind de MediaAsset (video_lat_dcha_descalzo, scan_L…)
+  kind: string; // kind de MediaAsset (video_posterior, scan_L…)
   overlay: OverlayKind;
   mode: "foto" | "video";
   checks: string[];

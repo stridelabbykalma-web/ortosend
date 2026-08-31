@@ -28,7 +28,8 @@ asociadas. Stack: **Next.js (App Router, server actions) + PostgreSQL (Prisma)**
   visible entero en el expediente que llega al prescriptor), exploración biomecánica con tests
   podológicos (Silfverskiöld, lunge, FPI-6, Jack, navicular drop, heel rise), dismetría valorada
   con nivel pélvico y láminas calibradas, y análisis observacional de la marcha,
-  escaneo 3D (2), vídeos (7: 6 de marcha + heel rise), baropodometría (2 estáticas + dinámica +
+  escaneo 3D (2), vídeos de marcha (4: desde atrás, de frente, de lado y plano general),
+  baropodometría Podisense (estática + dinámica múltiple +
   informe) y **checklist bloqueante** — sin todo en verde no hay envío.
 
 **Prescripción**

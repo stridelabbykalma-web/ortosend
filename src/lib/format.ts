@@ -59,20 +59,18 @@ export function fmtEUR(cents: number) {
   return (cents / 100).toLocaleString("es-ES", { style: "currency", currency: "EUR" });
 }
 
-// Vídeos obligatorios del protocolo de captura (6 de marcha + heel rise)
+// Vídeos obligatorios del protocolo de captura: marcha desde atrás, de frente,
+// de lado y un plano general del caminar (cuerpo entero, cámara alejada).
 export const VIDEO_KINDS = [
-  ["video_lat_dcha_descalzo", "Marcha lateral dcha. — descalzo"],
-  ["video_lat_dcha_calzado", "Marcha lateral dcha. — calzado"],
-  ["video_lat_izq_descalzo", "Marcha lateral izq. — descalzo"],
-  ["video_lat_izq_calzado", "Marcha lateral izq. — calzado"],
-  ["video_post_descalzo", "Marcha posterior — descalzo"],
-  ["video_post_calzado", "Marcha posterior — calzado"],
-  ["video_heel_rise", "Heel rise test — descalzo"],
+  ["video_posterior", "Marcha desde atrás (posterior)"],
+  ["video_anterior", "Marcha de frente (anterior)"],
+  ["video_lateral", "Marcha de lado (lateral)"],
+  ["video_general", "Marcha — plano general"],
 ] as const;
 
+// Baropodometría con Podisense: estática + dinámica múltiple + informe.
 export const BARO_KINDS = [
-  ["baro_est_1", "Estática — captura 1 (10 s)"],
-  ["baro_est_2", "Estática — captura 2 (10 s)"],
-  ["baro_din", "Dinámica — 3 pasos válidos"],
+  ["baro_est", "Estática (10 s)"],
+  ["baro_din_multi", "Dinámica múltiple"],
   ["baro_informe", "Informe del dashboard Podisense"],
 ] as const;

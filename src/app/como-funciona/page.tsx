@@ -1,7 +1,7 @@
 const BLOQUES: [string, string][] = [
   [
     "El estudio",
-    "En tu clínica asociada te hacen un estudio completo: escaneo 3D de ambos pies, cuestionario y exploración física, vídeos de tu marcha desde tres ángulos y análisis de presiones plantares. Dura unos 45 minutos. Trae tu calzado habitual.",
+    "En tu clínica asociada te hacen un estudio completo: escaneo 3D de ambos pies, cuestionario y exploración física, vídeos de tu marcha desde atrás, de frente, de lado y en plano general, y análisis de presiones plantares. Dura unos 45 minutos. Trae tu calzado habitual.",
   ],
   [
     "La prescripción",

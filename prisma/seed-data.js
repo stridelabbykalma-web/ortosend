@@ -3,16 +3,8 @@ const bcrypt = require("bcryptjs");
 
 const PASS = "ortosend123";
 
-const VIDEO_KINDS = [
-  "video_lat_dcha_descalzo",
-  "video_lat_dcha_calzado",
-  "video_lat_izq_descalzo",
-  "video_lat_izq_calzado",
-  "video_post_descalzo",
-  "video_post_calzado",
-  "video_heel_rise",
-];
-const BARO_KINDS = ["baro_est_1", "baro_est_2", "baro_din", "baro_informe"];
+const VIDEO_KINDS = ["video_posterior", "video_anterior", "video_lateral", "video_general"];
+const BARO_KINDS = ["baro_est", "baro_din_multi", "baro_informe"];
 
 function inDays(d, h = 10, m = 0) {
   const t = new Date();

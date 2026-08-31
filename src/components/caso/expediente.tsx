@@ -2,6 +2,7 @@ import type { Capture, Case, MediaAsset, Patient, Prescription, User } from "@pr
 import { checklistOf } from "@/lib/cases";
 import { questionnaireLines, type Questionnaire } from "@/lib/questionnaire";
 import { examLines, type Exam } from "@/lib/exploracion";
+import { VIDEO_KINDS } from "@/lib/format";
 
 type CaseFull = Case & {
   patient: Patient & { owner: User };
@@ -55,12 +56,16 @@ export function Expediente({ kase }: { kase: CaseFull }) {
           <div className="muted">{cl.escaneos ? "Ambos pies ✓ (visor 3D pendiente)" : "Pendiente"}</div>
         </div>
         <div>
-          <div className="tiny">VÍDEOS (7)</div>
-          <div className="muted">{cl.videos}/7 confirmados por el servidor</div>
+          <div className="tiny">VÍDEOS DE MARCHA ({VIDEO_KINDS.length})</div>
+          <div className="muted">
+            {cl.videos}/{VIDEO_KINDS.length} confirmados (atrás, frente, lado y plano general)
+          </div>
         </div>
         <div>
           <div className="tiny">BAROPODOMETRÍA</div>
-          <div className="muted">{cl.baro ? "Estática 2/2 · Dinámica ✓ · Informe adjunto" : "Pendiente"}</div>
+          <div className="muted">
+            {cl.baro ? "Estática ✓ · Dinámica múltiple ✓ · Informe adjunto" : "Pendiente"}
+          </div>
         </div>
         <div>
           <div className="tiny">PACIENTE</div>
