@@ -22,6 +22,7 @@ export function BuscadorVivo({ initialQuery = "" }: { initialQuery?: string }) {
   const [wlContact, setWlContact] = useState("");
   const [wlDone, setWlDone] = useState(false);
   const [geoDenied, setGeoDenied] = useState(false);
+  const [locating, setLocating] = useState(false);
   const resultsRef = useRef<HTMLDivElement>(null);
 
   async function search(params: string, opts: { scroll?: boolean } = {}) {
@@ -46,17 +47,25 @@ export function BuscadorVivo({ initialQuery = "" }: { initialQuery?: string }) {
   // Si llega con búsqueda inicial (p. ej. /buscar?q=...), la lanza al cargar.
   useEffect(() => {
     const t = setTimeout(() => {
+      // Despierta servidor y base de datos en paralelo al aviso de permiso.
+      fetch("/api/clinicas?warm=1").catch(() => {});
       if (initialQuery) {
         void search(`q=${encodeURIComponent(initialQuery)}`, { scroll: false });
       } else if (navigator.geolocation) {
+        setLocating(true);
         // Petición de ubicación automática al entrar. Si acepta → cercanas;
         // si deniega → nada hasta que busque por población o CP.
         navigator.geolocation.getCurrentPosition(
-          (pos) =>
+          (pos) => {
+            setLocating(false);
             void search(`lat=${pos.coords.latitude.toFixed(5)}&lng=${pos.coords.longitude.toFixed(5)}`, {
               scroll: false,
-            }),
-          () => setGeoDenied(true),
+            });
+          },
+          () => {
+            setLocating(false);
+            setGeoDenied(true);
+          },
           { timeout: 10000, maximumAge: 300000 }
         );
       } else {
@@ -141,9 +150,11 @@ export function BuscadorVivo({ initialQuery = "" }: { initialQuery?: string }) {
         </button>
       </form>
       <div className="tiny" style={{ marginTop: 10, textAlign: "center" }}>
-        {geoDenied && !searched
-          ? "Sin acceso a tu ubicación — escribe tu población o código postal para ver las clínicas cercanas."
-          : "Te mostramos las clínicas asociadas en un radio de 50 km · Recibe tus plantillas en 5 días laborables desde el pago"}
+        {locating && !searched
+          ? "Detectando tu ubicación para mostrarte las clínicas más cercanas…"
+          : geoDenied && !searched
+            ? "Sin acceso a tu ubicación — escribe tu población o código postal para ver las clínicas cercanas."
+            : "Te mostramos las clínicas asociadas en un radio de 50 km · Recibe tus plantillas en 5 días laborables desde el pago"}
       </div>
 
       <div ref={resultsRef} style={{ marginTop: 26, textAlign: "left" }}>

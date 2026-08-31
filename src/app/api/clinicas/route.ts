@@ -8,6 +8,12 @@ export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
+  // Precalentamiento: despierta la función y la base de datos mientras el
+  // visitante responde al aviso de ubicación (Neon gratis se suspende en reposo).
+  if (searchParams.get("warm")) {
+    await prisma.clinic.count();
+    return NextResponse.json({ ok: true });
+  }
   const q = (searchParams.get("q") ?? "").trim();
   const lat = searchParams.get("lat");
   const lng = searchParams.get("lng");
