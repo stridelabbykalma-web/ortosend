@@ -502,7 +502,7 @@ export function CapturaGuiada({ kase, paso }: { kase: CaseWithCapture; paso?: nu
           <div className="row between">
             <b style={{ fontFamily: "var(--font-sora)" }}>Protocolo de captura</b>
             <span className="pill n">
-              {doneFlags.filter(Boolean).length}/{total - 1} pruebas
+              {doneFlags.filter((d, j) => d && SLIDES[j].t !== "envio").length}/{total - 1} pruebas
             </span>
           </div>
           <div className="sp" />
