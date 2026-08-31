@@ -25,7 +25,9 @@ asociadas. Stack: **Next.js (App Router, server actions) + PostgreSQL (Prisma)**
   formación 5/5, liquidaciones (placeholder).
 - **Asistente de captura** de 6 pasos con guardado continuo: cuestionario clínico completo
   (motivo/dolor, actividad y datos físicos, calzado, antecedentes y tratamientos previos —
-  visible entero en el expediente que llega al prescriptor), exploración física,
+  visible entero en el expediente que llega al prescriptor), exploración biomecánica con tests
+  podológicos (Silfverskiöld, lunge, FPI-6, Jack, navicular drop, heel rise), dismetría valorada
+  con nivel pélvico y láminas calibradas, y análisis observacional de la marcha,
   escaneo 3D (2), vídeos (7: 6 de marcha + heel rise), baropodometría (2 estáticas + dinámica +
   informe) y **checklist bloqueante** — sin todo en verde no hay envío.
 

@@ -7,6 +7,7 @@ import { requireRole, createInviteToken } from "@/lib/auth";
 import { checklistOf, notify, pushEvent } from "@/lib/cases";
 import { VIDEO_KINDS, BARO_KINDS } from "@/lib/format";
 import type { Questionnaire } from "@/lib/questionnaire";
+import type { Exam } from "@/lib/exploracion";
 import type { User } from "@prisma/client";
 
 const MAX_SLOTS = 5;
@@ -152,19 +153,51 @@ export async function saveQuestionnaireAction(formData: FormData) {
 export async function saveExamAction(formData: FormData) {
   const u = await requireClinicStaff();
   const caseId = String(formData.get("caseId"));
+  const back = `/caso/${caseId}`;
+  const str = (k: string) => String(formData.get(k) ?? "").trim();
+
+  const dismetria = str("dismetria");
+  if (dismetria === "Sí" && (!str("ladoCorto") || !str("lamina")))
+    fail(back, "Con dismetría marcada indica el lado corto y la lámina que nivela la pelvis");
+
+  const physicalExam: Exam = {
+    v: 2,
+    // A · Movilidad y flexibilidad
+    tobillo: str("tobillo"),
+    lungeIzq: str("lungeIzq"),
+    lungeDcha: str("lungeDcha"),
+    subastragalina: str("subastragalina"),
+    primerRadio: str("primerRadio"),
+    hallux: str("hallux"),
+    cadenaPosterior: str("cadenaPosterior"),
+    // B · Tests en carga
+    fpiIzq: str("fpiIzq"),
+    fpiDcho: str("fpiDcho"),
+    jackIzq: str("jackIzq"),
+    jackDcho: str("jackDcho"),
+    navDropIzq: str("navDropIzq"),
+    navDropDcho: str("navDropDcho"),
+    heelRise: str("heelRise"),
+    tipoPie: str("tipoPie"),
+    // C · Dismetría
+    dismetria,
+    ladoCorto: dismetria === "Sí" ? str("ladoCorto") : "",
+    lamina: dismetria === "Sí" ? str("lamina") : "",
+    alza: dismetria === "Sí" ? str("alza") || "No" : "No",
+    // D · Marcha
+    marchaPatron: str("marchaPatron"),
+    contactoInicial: str("contactoInicial"),
+    anguloPaso: str("anguloPaso"),
+    retropieApoyo: str("retropieApoyo"),
+    despegue: str("despegue"),
+    marchaObs: str("marchaObs"),
+  };
   const { capture } = await captureFor(caseId, u);
   await prisma.capture.update({
     where: { id: capture.id },
-    data: {
-      physicalExam: {
-        tobillo: String(formData.get("tobillo") ?? ""),
-        hallux: String(formData.get("hallux") ?? ""),
-        dismetria: String(formData.get("dismetria") ?? ""),
-        alza: String(formData.get("alza") ?? "").trim() || "No",
-      },
-    },
+    data: { physicalExam },
   });
-  redirect(`/caso/${caseId}`);
+  redirect(back);
 }
 
 // Marca un elemento de captura como subido y CONFIRMADO por el servidor.

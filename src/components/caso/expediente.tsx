@@ -1,6 +1,7 @@
 import type { Capture, Case, MediaAsset, Patient, Prescription, User } from "@prisma/client";
 import { checklistOf } from "@/lib/cases";
 import { questionnaireLines, type Questionnaire } from "@/lib/questionnaire";
+import { examLines, type Exam } from "@/lib/exploracion";
 
 type CaseFull = Case & {
   patient: Patient & { owner: User };
@@ -12,9 +13,10 @@ type CaseFull = Case & {
 export function Expediente({ kase }: { kase: CaseFull }) {
   const cp = kase.capture;
   const q = cp?.questionnaire as Questionnaire | null;
-  const e = cp?.physicalExam as { tobillo?: string; hallux?: string; dismetria?: string; alza?: string } | null;
+  const e = cp?.physicalExam as Exam | null;
   const cl = checklistOf(cp);
   const qLines = questionnaireLines(q);
+  const eLines = examLines(e);
   return (
     <div className="card">
       <b style={{ fontFamily: "var(--font-sora)" }}>Expediente del estudio</b>
@@ -32,28 +34,22 @@ export function Expediente({ kase }: { kase: CaseFull }) {
           <div className="muted">Pendiente</div>
         )}
       </div>
-      <div className="grid g2" style={{ marginTop: 14 }}>
-        <div>
-          <div className="tiny">EXPLORACIÓN FÍSICA</div>
-          <div className="muted">
-            {e ? (
-              <>
-                Tobillo: {e.tobillo}
-                {e.hallux ? <> · Hallux: {e.hallux}</> : null}
-                <br />
-                Dismetría: {e.dismetria}
-                {e.alza && e.alza !== "No" ? (
-                  <>
-                    {" "}
-                    · <b>Alza: {e.alza}</b>
-                  </>
-                ) : null}
-              </>
-            ) : (
-              "Pendiente"
-            )}
+      <div style={{ marginTop: 14 }}>
+        <div className="tiny">EXPLORACIÓN BIOMECÁNICA Y TESTS</div>
+        {eLines.length ? (
+          <div className="grid g2" style={{ gap: "2px 14px", marginTop: 4 }}>
+            {eLines.map(([label, value]) => (
+              <div className="muted" key={label}>
+                <span style={{ fontWeight: 600 }}>{label}:</span>{" "}
+                {label.startsWith("Alza") ? <b>{value}</b> : value}
+              </div>
+            ))}
           </div>
-        </div>
+        ) : (
+          <div className="muted">Pendiente</div>
+        )}
+      </div>
+      <div className="grid g2" style={{ marginTop: 14 }}>
         <div>
           <div className="tiny">ESCANEO 3D</div>
           <div className="muted">{cl.escaneos ? "Ambos pies ✓ (visor 3D pendiente)" : "Pendiente"}</div>
