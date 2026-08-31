@@ -145,6 +145,40 @@ function sectionValues(formData: FormData, def: { strs: string[]; lists: string[
   return out;
 }
 
+// Autoguardado (estilo Drive): cada pulsación guarda la sección en curso, sin
+// validar ni redirigir. La validación dura queda para el botón «Continuar»,
+// que además marca el bloque como completo en su última sección.
+export async function autosaveSectionAction(
+  formData: FormData
+): Promise<{ ok: boolean }> {
+  try {
+    const u = await requireClinicStaff();
+    const caseId = String(formData.get("caseId"));
+    const block = String(formData.get("block"));
+    const section = String(formData.get("section"));
+    const def = block === "q" ? Q_FIELDS[section] : block === "e" ? E_FIELDS[section] : null;
+    if (!def) return { ok: false };
+    const { capture } = await captureFor(caseId, u);
+    const prev = ((block === "q" ? capture.questionnaire : capture.physicalExam) ?? {}) as Record<
+      string,
+      unknown
+    >;
+    const merged = {
+      ...prev,
+      ...sectionValues(formData, def as { strs: string[]; lists: string[] }),
+      v: 2,
+      done: prev.done === true,
+    };
+    await prisma.capture.update({
+      where: { id: capture.id },
+      data: block === "q" ? { questionnaire: merged } : { physicalExam: merged },
+    });
+    return { ok: true };
+  } catch {
+    return { ok: false };
+  }
+}
+
 export async function saveQuestionnaireSectionAction(formData: FormData) {
   const u = await requireClinicStaff();
   const caseId = String(formData.get("caseId"));

@@ -36,12 +36,14 @@ import {
 } from "@/lib/exploracion";
 import { CheckLine } from "@/components/ui";
 import {
+  autosaveSectionAction,
   markMediaAction,
   saveExamSectionAction,
   saveQuestionnaireSectionAction,
   sendCaseAction,
 } from "@/app/panel/clinica-actions";
 import { CamaraGuiada, type OverlayKind } from "./camara-guiada";
+import { AutosaveForm } from "./autosave-form";
 
 type CaseWithCapture = Case & {
   capture: (Capture & { media: MediaAsset[] }) | null;
@@ -493,8 +495,9 @@ export function CapturaGuiada({ kase, paso }: { kase: CaseWithCapture; paso?: nu
           </div>
         ) : (
           <div className="note">
-            Protocolo guiado: una prueba por pantalla, con guardado continuo. Puedes empezar en el
-            PC y seguir desde el móvil o la tablet — siempre continúa por donde se quedó.
+            Protocolo guiado: una prueba por pantalla, con guardado automático mientras escribes
+            (como en Drive). Puedes empezar en el PC y seguir desde el móvil o la tablet — siempre
+            continúa por donde se quedó, sin perder nada.
           </div>
         )}
         <div className="sp" />
@@ -561,10 +564,11 @@ export function CapturaGuiada({ kase, paso }: { kase: CaseWithCapture; paso?: nu
     </div>
   );
 
-  const hiddenNav = (section: string) => (
+  const hiddenNav = (section: string, block: "q" | "e") => (
     <>
       <input type="hidden" name="caseId" value={kase.id} />
       <input type="hidden" name="section" value={section} />
+      <input type="hidden" name="block" value={block} />
       <input type="hidden" name="paso" value={paso} />
       <input type="hidden" name="next" value={next ?? ""} />
     </>
@@ -588,25 +592,25 @@ export function CapturaGuiada({ kase, paso }: { kase: CaseWithCapture; paso?: nu
         <h3 style={{ margin: "0 0 4px", fontFamily: "var(--font-sora)" }}>{s.title}</h3>
 
         {s.t === "q" && (
-          <form action={saveQuestionnaireSectionAction}>
-            {hiddenNav(s.section)}
+          <AutosaveForm action={saveQuestionnaireSectionAction} autosave={autosaveSectionAction}>
+            {hiddenNav(s.section, "q")}
             <QSection section={s.section} q={q} />
             <div className="sp" />
             <button type="submit" className="pri wfull">
-              Guardar y continuar →
+              Continuar →
             </button>
-          </form>
+          </AutosaveForm>
         )}
 
         {s.t === "e" && (
-          <form action={saveExamSectionAction}>
-            {hiddenNav(s.section)}
+          <AutosaveForm action={saveExamSectionAction} autosave={autosaveSectionAction}>
+            {hiddenNav(s.section, "e")}
             <ESection section={s.section} e={e} />
             <div className="sp" />
             <button type="submit" className="pri wfull">
-              Guardar y continuar →
+              Continuar →
             </button>
-          </form>
+          </AutosaveForm>
         )}
 
         {s.t === "media" &&
