@@ -52,14 +52,14 @@ export function Expediente({ kase }: { kase: CaseFull }) {
       </div>
       <div className="grid g2" style={{ marginTop: 14 }}>
         <div>
-          <div className="tiny">ESCANEO 3D</div>
-          <div className="muted">{cl.escaneos ? "Ambos pies ✓ (visor 3D pendiente)" : "Pendiente"}</div>
-        </div>
-        <div>
           <div className="tiny">VÍDEOS DE MARCHA ({VIDEO_KINDS.length})</div>
           <div className="muted">
             {cl.videos}/{VIDEO_KINDS.length} confirmados (atrás, frente, lado y plano general)
           </div>
+        </div>
+        <div>
+          <div className="tiny">ESCANEO 3D</div>
+          <div className="muted">{cl.escaneos ? "Ambos pies ✓ (visor 3D pendiente)" : "Pendiente"}</div>
         </div>
         <div>
           <div className="tiny">BAROPODOMETRÍA</div>

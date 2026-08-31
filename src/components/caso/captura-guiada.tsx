@@ -119,6 +119,21 @@ function buildSlides(): Slide[] {
     { t: "e", section: "tests", title: "Tests en carga", grupo: "Exploración" },
     { t: "e", section: "dismetria", title: "Dismetría: nivel y láminas", grupo: "Exploración" },
     { t: "e", section: "marcha", title: "Análisis de la marcha", grupo: "Exploración" },
+    // Con el paciente delante se termina primero la parte «de consulta» (cuestionario,
+    // exploración y vídeos); las máquinas (escáner y Podisense) quedan para el final.
+    ...VIDEO_KINDS.map(([kind, label]) => {
+      const m = VIDEO_META[kind];
+      return {
+        t: "media",
+        kind,
+        title: label,
+        grupo: "Vídeos de marcha",
+        overlay: m.overlay,
+        mode: "video",
+        checks: m.checks,
+        help: m.help,
+      } as Slide;
+    }),
     {
       t: "media",
       kind: "scan_L",
@@ -147,19 +162,6 @@ function buildSlides(): Slide[] {
       ],
       help: "Escanea con Revopoint toda la superficie plantar y los laterales del pie derecho.",
     },
-    ...VIDEO_KINDS.map(([kind, label]) => {
-      const m = VIDEO_META[kind];
-      return {
-        t: "media",
-        kind,
-        title: label,
-        grupo: "Vídeos de marcha",
-        overlay: m.overlay,
-        mode: "video",
-        checks: m.checks,
-        help: m.help,
-      } as Slide;
-    }),
     {
       t: "media",
       kind: "baro_est",
@@ -670,10 +672,10 @@ export function CapturaGuiada({ kase, paso }: { kase: CaseWithCapture; paso?: nu
             </p>
             <CheckLine ok={cl.cuestionario}>Cuestionario clínico (5 pantallas)</CheckLine>
             <CheckLine ok={cl.exploracion}>Exploración biomecánica y tests (4 pantallas)</CheckLine>
-            <CheckLine ok={cl.escaneos}>Escaneo 3D de ambos pies</CheckLine>
             <CheckLine ok={cl.videos >= VIDEO_KINDS.length}>
               Vídeos de marcha {cl.videos}/{VIDEO_KINDS.length} (atrás, frente, lado y plano general)
             </CheckLine>
+            <CheckLine ok={cl.escaneos}>Escaneo 3D de ambos pies</CheckLine>
             <CheckLine ok={cl.baro}>Baropodometría (estática + dinámica múltiple + informe)</CheckLine>
             {cl.completa ? (
               <form action={sendCaseAction}>
