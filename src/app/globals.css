@@ -134,3 +134,19 @@ tr.click:hover { background: var(--paper); }
   .hero h1 { font-size: 26px; }
   .nav .links { gap: 10px; font-size: 13px; }
 }
+
+/* --- Protocolo de captura guiado (modo diapositivas) --- */
+.slide-wrap { max-width: 720px; margin: 0 auto; }
+.slide-head { margin-bottom: 10px; }
+.slide-bar { height: 6px; background: #e8e5dc; border-radius: 99px; margin-top: 8px; overflow: hidden; }
+.slide-bar-fill { height: 100%; background: var(--teal); border-radius: 99px; transition: width .3s; }
+.slide-card { animation: slidein .25s ease; }
+@keyframes slidein { from { opacity: 0; transform: translateX(14px); } to { opacity: 1; transform: none; } }
+
+/* Cámara guiada con silueta de encuadre */
+.cam-box { position: relative; width: 100%; aspect-ratio: 3 / 4; max-height: 62vh; background: #1c1b18; border-radius: 12px; overflow: hidden; }
+.cam-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.cam-overlay { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; filter: drop-shadow(0 0 4px rgba(0,0,0,.55)); }
+.cam-off { position: absolute; inset: 0; display: flex; align-items: flex-end; justify-content: center; text-align: center; color: #b9b5aa; font-size: 13px; padding: 14px; }
+.cam-rec { position: absolute; top: 10px; left: 12px; color: #fff; background: rgba(200,40,40,.9); font-size: 12.5px; font-weight: 600; padding: 4px 10px; border-radius: 99px; animation: blink 1s step-end infinite; }
+@keyframes blink { 50% { opacity: .55; } }

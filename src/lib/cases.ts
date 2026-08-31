@@ -47,8 +47,11 @@ export function checklistOf(capture: {
   const media = capture?.media.filter((m) => m.confirmedAt) ?? [];
   const has = (k: string) => media.some((m) => m.kind === k);
   const videos = media.filter((m) => m.kind.startsWith("video_")).length;
-  const cuestionario = !!capture?.questionnaire;
-  const exploracion = !!capture?.physicalExam;
+  // El modo guiado guarda por secciones con done:false hasta terminar el bloque;
+  // los datos antiguos (sin done) cuentan como completos.
+  const blockDone = (x: unknown) => !!x && (x as { done?: boolean }).done !== false;
+  const cuestionario = blockDone(capture?.questionnaire);
+  const exploracion = blockDone(capture?.physicalExam);
   const escaneos = has("scan_L") && has("scan_R");
   const baro = has("baro_est_1") && has("baro_est_2") && has("baro_din") && has("baro_informe");
   return {

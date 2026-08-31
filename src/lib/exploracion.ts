@@ -73,6 +73,7 @@ export const DESPEGUE_OPTS = [
 // tobillo/hallux/dismetria/alza y se siguen mostrando sin romper nada.
 export type Exam = {
   v?: number;
+  done?: boolean; // true cuando la clínica completó la última sección (modo guiado)
   // A · Movilidad y flexibilidad
   tobillo?: string; // Silfverskiöld
   lungeIzq?: string; // cm a la pared

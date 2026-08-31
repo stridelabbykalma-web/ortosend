@@ -5,7 +5,7 @@ import { getSessionUser } from "@/lib/auth";
 import { audit } from "@/lib/cases";
 import { Flash, StatePill, Steps } from "@/components/ui";
 import { Expediente, Historial } from "@/components/caso/expediente";
-import { Wizard } from "@/components/caso/wizard";
+import { CapturaGuiada } from "@/components/caso/captura-guiada";
 import { RxView } from "@/components/caso/rx-view";
 import { TallerView } from "@/components/caso/taller-view";
 import { unlockRxAction } from "@/app/panel/cliente-actions";
@@ -19,12 +19,12 @@ export default async function CasoPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string; ok?: string; doc?: string }>;
+  searchParams: Promise<{ error?: string; ok?: string; doc?: string; paso?: string }>;
 }) {
   const user = await getSessionUser();
   if (!user) redirect("/login");
   const { id } = await params;
-  const { error, ok, doc } = await searchParams;
+  const { error, ok, doc, paso } = await searchParams;
   const kase = await prisma.case.findUnique({
     where: { id },
     include: {
@@ -68,10 +68,11 @@ export default async function CasoPage({
 
   let inner: React.ReactNode;
   if (isClinicStaff && inCapture) {
+    const pasoNum = paso ? Number(paso) || undefined : undefined;
     inner = (
       <>
-        <Wizard kase={k} />
-        <Historial events={k.events} />
+        <CapturaGuiada kase={k} paso={pasoNum} />
+        {!pasoNum && <Historial events={k.events} />}
       </>
     );
   } else if (canPrescribeHere && inRx) {

@@ -76,6 +76,7 @@ export const TRATAMIENTOS_OPTS = [
 // y se siguen mostrando sin romper nada.
 export type Questionnaire = {
   v?: number;
+  done?: boolean; // true cuando la clínica completó la última sección (modo guiado)
   // Motivo de consulta y dolor
   motivo: string;
   evolucion?: string;

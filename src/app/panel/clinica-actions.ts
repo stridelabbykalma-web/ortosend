@@ -103,101 +103,114 @@ async function captureFor(caseId: string, u: User) {
   return { kase, capture };
 }
 
-export async function saveQuestionnaireAction(formData: FormData) {
-  const u = await requireClinicStaff();
-  const caseId = String(formData.get("caseId"));
-  const back = `/caso/${caseId}`;
-  const str = (k: string) => String(formData.get(k) ?? "").trim();
-  const list = (k: string) => formData.getAll(k).map((v) => String(v).trim()).filter(Boolean);
+// --- Guardado por secciones del modo guiado (una pantalla = una sección) ---
+// Cada sección hace merge sobre el JSON existente; el bloque se marca done al
+// guardar su última sección. Así el estudio puede continuarse desde cualquier
+// dispositivo por la pantalla en la que se quedó.
 
-  const motivo = str("motivo");
-  if (!motivo) fail(back, "Falta el motivo de consulta");
-  const dolor = str("dolor");
-  if (dolor === "") fail(back, "Indica la intensidad del dolor (0-10)");
-  const lado = str("lado");
-  if (lado !== "Sin dolor localizado" && list("zonas").length === 0)
-    fail(back, "Marca al menos una zona de dolor (o elige «Sin dolor localizado»)");
+const Q_FIELDS: Record<string, { strs: (keyof Questionnaire)[]; lists: (keyof Questionnaire)[]; last?: boolean }> = {
+  motivo: { strs: ["motivo", "evolucion", "dolor", "lado"], lists: [] },
+  zonas: { strs: [], lists: ["zonas", "momentos"] },
+  actividad: { strs: ["actividad", "deporte", "horasPie", "profesion", "peso", "altura", "tallaCalzado"], lists: [] },
+  calzado: { strs: ["desgaste", "plantillasPrevias"], lists: ["calzado"] },
+  antecedentes: {
+    strs: ["antecedentesDetalle", "medicacion", "observaciones"],
+    lists: ["antecedentes", "tratamientosPrevios"],
+    last: true,
+  },
+};
 
-  const questionnaire: Questionnaire = {
-    v: 2,
-    motivo,
-    evolucion: str("evolucion"),
-    lado,
-    zonas: list("zonas"),
-    dolor,
-    momentos: list("momentos"),
-    actividad: str("actividad"),
-    deporte: str("deporte"),
-    horasPie: str("horasPie"),
-    profesion: str("profesion"),
-    peso: str("peso"),
-    altura: str("altura"),
-    tallaCalzado: str("tallaCalzado"),
-    calzado: list("calzado"),
-    desgaste: str("desgaste"),
-    plantillasPrevias: str("plantillasPrevias"),
-    antecedentes: list("antecedentes"),
-    antecedentesDetalle: str("antecedentesDetalle"),
-    medicacion: str("medicacion"),
-    tratamientosPrevios: list("tratamientosPrevios"),
-    observaciones: str("observaciones"),
-  };
-  const { capture } = await captureFor(caseId, u);
-  await prisma.capture.update({
-    where: { id: capture.id },
-    data: { questionnaire },
-  });
-  redirect(back);
+const E_FIELDS: Record<string, { strs: (keyof Exam)[]; lists: never[]; last?: boolean }> = {
+  movilidad: {
+    strs: ["tobillo", "hallux", "subastragalina", "primerRadio", "cadenaPosterior", "lungeIzq", "lungeDcha"],
+    lists: [],
+  },
+  tests: {
+    strs: ["fpiIzq", "fpiDcho", "jackIzq", "jackDcho", "navDropIzq", "navDropDcho", "heelRise", "tipoPie"],
+    lists: [],
+  },
+  dismetria: { strs: ["dismetria", "ladoCorto", "lamina", "alza"], lists: [] },
+  marcha: {
+    strs: ["marchaPatron", "contactoInicial", "anguloPaso", "retropieApoyo", "despegue", "marchaObs"],
+    lists: [],
+    last: true,
+  },
+};
+
+function sectionValues(formData: FormData, def: { strs: string[]; lists: string[] }) {
+  const out: Record<string, unknown> = {};
+  for (const k of def.strs) out[k] = String(formData.get(k) ?? "").trim();
+  for (const k of def.lists)
+    out[k] = formData.getAll(k).map((v) => String(v).trim()).filter(Boolean);
+  return out;
 }
 
-export async function saveExamAction(formData: FormData) {
+export async function saveQuestionnaireSectionAction(formData: FormData) {
   const u = await requireClinicStaff();
   const caseId = String(formData.get("caseId"));
-  const back = `/caso/${caseId}`;
-  const str = (k: string) => String(formData.get(k) ?? "").trim();
+  const paso = String(formData.get("paso") ?? "");
+  const next = String(formData.get("next") ?? "");
+  const back = `/caso/${caseId}${paso ? `?paso=${paso}` : ""}`;
+  const section = String(formData.get("section"));
+  const def = Q_FIELDS[section];
+  if (!def) fail(back, "Sección desconocida");
 
-  const dismetria = str("dismetria");
-  if (dismetria === "Sí" && (!str("ladoCorto") || !str("lamina")))
-    fail(back, "Con dismetría marcada indica el lado corto y la lámina que nivela la pelvis");
-
-  const physicalExam: Exam = {
-    v: 2,
-    // A · Movilidad y flexibilidad
-    tobillo: str("tobillo"),
-    lungeIzq: str("lungeIzq"),
-    lungeDcha: str("lungeDcha"),
-    subastragalina: str("subastragalina"),
-    primerRadio: str("primerRadio"),
-    hallux: str("hallux"),
-    cadenaPosterior: str("cadenaPosterior"),
-    // B · Tests en carga
-    fpiIzq: str("fpiIzq"),
-    fpiDcho: str("fpiDcho"),
-    jackIzq: str("jackIzq"),
-    jackDcho: str("jackDcho"),
-    navDropIzq: str("navDropIzq"),
-    navDropDcho: str("navDropDcho"),
-    heelRise: str("heelRise"),
-    tipoPie: str("tipoPie"),
-    // C · Dismetría
-    dismetria,
-    ladoCorto: dismetria === "Sí" ? str("ladoCorto") : "",
-    lamina: dismetria === "Sí" ? str("lamina") : "",
-    alza: dismetria === "Sí" ? str("alza") || "No" : "No",
-    // D · Marcha
-    marchaPatron: str("marchaPatron"),
-    contactoInicial: str("contactoInicial"),
-    anguloPaso: str("anguloPaso"),
-    retropieApoyo: str("retropieApoyo"),
-    despegue: str("despegue"),
-    marchaObs: str("marchaObs"),
-  };
   const { capture } = await captureFor(caseId, u);
-  await prisma.capture.update({
-    where: { id: capture.id },
-    data: { physicalExam },
-  });
-  redirect(back);
+  const prev = (capture.questionnaire ?? {}) as Record<string, unknown>;
+  const merged = { ...prev, ...sectionValues(formData, def as { strs: string[]; lists: string[] }) };
+
+  if (section === "motivo" && !String(merged.motivo ?? "").trim())
+    fail(back, "Falta el motivo de consulta");
+  if (
+    section === "zonas" &&
+    merged.lado !== "Sin dolor localizado" &&
+    (merged.zonas as string[]).length === 0
+  )
+    fail(back, "Marca al menos una zona de dolor (o vuelve atrás y elige «Sin dolor localizado»)");
+
+  const questionnaire = {
+    ...merged,
+    v: 2,
+    done: def.last ? true : prev.done === true,
+  } as Questionnaire;
+  await prisma.capture.update({ where: { id: capture.id }, data: { questionnaire } });
+  redirect(`/caso/${caseId}${next ? `?paso=${next}` : ""}`);
+}
+
+export async function saveExamSectionAction(formData: FormData) {
+  const u = await requireClinicStaff();
+  const caseId = String(formData.get("caseId"));
+  const paso = String(formData.get("paso") ?? "");
+  const next = String(formData.get("next") ?? "");
+  const back = `/caso/${caseId}${paso ? `?paso=${paso}` : ""}`;
+  const section = String(formData.get("section"));
+  const def = E_FIELDS[section];
+  if (!def) fail(back, "Sección desconocida");
+
+  const { capture } = await captureFor(caseId, u);
+  const prev = (capture.physicalExam ?? {}) as Record<string, unknown>;
+  const values = sectionValues(formData, def);
+
+  if (section === "dismetria") {
+    if (values.dismetria === "Sí" && (!values.ladoCorto || !values.lamina))
+      fail(back, "Con dismetría marcada indica el lado corto y la lámina que nivela la pelvis");
+    if (values.dismetria !== "Sí") {
+      values.ladoCorto = "";
+      values.lamina = "";
+      values.alza = "No";
+    } else if (!values.alza) {
+      values.alza = "No";
+    }
+  }
+
+  const physicalExam = {
+    ...prev,
+    ...values,
+    v: 2,
+    done: def.last ? true : prev.done === true,
+  } as Exam;
+  await prisma.capture.update({ where: { id: capture.id }, data: { physicalExam } });
+  redirect(`/caso/${caseId}${next ? `?paso=${next}` : ""}`);
 }
 
 // Marca un elemento de captura como subido y CONFIRMADO por el servidor.
@@ -206,6 +219,7 @@ export async function markMediaAction(formData: FormData) {
   const u = await requireClinicStaff();
   const caseId = String(formData.get("caseId"));
   const kind = String(formData.get("kind"));
+  const next = String(formData.get("next") ?? "");
   const valid = ["scan_L", "scan_R", ...VIDEO_KINDS.map(([k]) => k), ...BARO_KINDS.map(([k]) => k)];
   if (!valid.includes(kind)) fail(`/caso/${caseId}`, "Elemento de captura desconocido");
   const { capture } = await captureFor(caseId, u);
@@ -220,7 +234,7 @@ export async function markMediaAction(formData: FormData) {
       },
     });
   }
-  redirect(`/caso/${caseId}`);
+  redirect(`/caso/${caseId}${next ? `?paso=${next}` : ""}`);
 }
 
 // Envío del estudio: checklist bloqueante → ESTUDIO_COMPLETO → EN_PRESCRIPCION.
