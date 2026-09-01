@@ -52,9 +52,9 @@ export function Expediente({ kase }: { kase: CaseFull }) {
       </div>
       <div className="grid g2" style={{ marginTop: 14 }}>
         <div>
-          <div className="tiny">VÍDEOS DE MARCHA ({VIDEO_KINDS.length})</div>
+          <div className="tiny">VÍDEOS ({VIDEO_KINDS.length})</div>
           <div className="muted">
-            {cl.videos}/{VIDEO_KINDS.length} confirmados (atrás, frente, lado y plano general)
+            {cl.videos}/{VIDEO_KINDS.length} confirmados (de pie, marcha y elevación de talones)
           </div>
         </div>
         <div>

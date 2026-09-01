@@ -6,7 +6,13 @@
 import { useEffect, useRef, useState } from "react";
 import { markMediaAction } from "@/app/panel/clinica-actions";
 
-export type OverlayKind = "marcha_post" | "marcha_ant" | "marcha_lat" | "marcha_general";
+export type OverlayKind =
+  | "pie_post"
+  | "pie_ant"
+  | "marcha_post"
+  | "marcha_ant"
+  | "marcha_lat"
+  | "heel_rise";
 
 // Silueta de encuadre que se dibuja sobre la imagen de la cámara.
 function Overlay({ kind }: { kind: OverlayKind }) {
@@ -63,15 +69,50 @@ function Overlay({ kind }: { kind: OverlayKind }) {
     </g>
   );
 
-  // Plano general: cámara alejada, cuerpo entero pequeño con aire alrededor
-  const general = (
+  // De pie quieto, de espaldas: piernas juntas y brazos al costado
+  const piePost = (
     <g stroke={zone} {...common}>
-      <rect x={22} y={28} width={256} height={336} rx={10} stroke={guide} strokeDasharray="10 8" strokeWidth={2} />
-      <g transform="translate(58 118) scale(0.6)">{figuraLateral}</g>
-      <path d="M45 340 L255 340" stroke={guide} strokeWidth={2} strokeDasharray="2 6" />
-      <path d="M70 355 L230 355 M230 355 L216 347 M230 355 L216 363" stroke={guide} strokeWidth={2} />
+      <circle cx={150} cy={62} r={22} />
+      <path d="M150 84 L150 196" />
+      <path d="M110 116 L150 100 L190 116 M110 116 L102 200 M190 116 L198 200" />
+      <path d="M150 196 L136 280 L134 346 M150 196 L164 280 L166 346" />
+      <path d="M120 350 L148 350 M152 350 L180 350" />
+      <path d="M150 18 L150 40 M150 372 L150 392" stroke={guide} strokeDasharray="6 7" strokeWidth={2} />
       <text x={150} y={388} textAnchor="middle" fill={guide} fontSize={12} stroke="none">
-        plano general: cuerpo entero con aire alrededor
+        de pie, quieto, mirando al frente
+      </text>
+    </g>
+  );
+
+  // De pie quieto, de frente
+  const pieAnt = (
+    <g stroke={zone} {...common}>
+      <circle cx={150} cy={62} r={22} />
+      <path d="M142 58 L143 58 M157 58 L158 58" strokeWidth={4} />
+      <path d="M144 72 Q150 76 156 72" strokeWidth={2} />
+      <path d="M150 84 L150 196" />
+      <path d="M110 116 L150 100 L190 116 M110 116 L102 200 M190 116 L198 200" />
+      <path d="M150 196 L136 280 L134 346 M150 196 L164 280 L166 346" />
+      <path d="M120 350 L148 350 M152 350 L180 350" />
+      <path d="M150 18 L150 40" stroke={guide} strokeDasharray="6 7" strokeWidth={2} />
+      <text x={150} y={388} textAnchor="middle" fill={guide} fontSize={12} stroke="none">
+        de pie, quieto, de frente a la cámara
+      </text>
+    </g>
+  );
+
+  // De espaldas, de puntillas: talones despegados del suelo
+  const heelRise = (
+    <g stroke={zone} {...common}>
+      <circle cx={150} cy={58} r={20} />
+      <path d="M150 78 L150 186" />
+      <path d="M112 110 L150 94 L188 110 M112 110 L96 58 M188 110 L204 58" />
+      <path d="M150 186 L132 268 L130 320 M150 186 L168 268 L170 320" />
+      <path d="M118 324 L140 324 M160 324 L182 324" />
+      <path d="M100 348 L200 348" stroke={guide} strokeWidth={2} />
+      <path d="M130 322 L130 344 M170 322 L170 344" strokeDasharray="4 5" strokeWidth={2} stroke={guide} />
+      <text x={150} y={370} textAnchor="middle" fill={guide} fontSize={12} stroke="none">
+        talones despegados del suelo
       </text>
     </g>
   );
@@ -93,7 +134,9 @@ function Overlay({ kind }: { kind: OverlayKind }) {
       )}
       {kind === "marcha_post" && posterior}
       {kind === "marcha_ant" && anterior}
-      {kind === "marcha_general" && general}
+      {kind === "pie_post" && piePost}
+      {kind === "pie_ant" && pieAnt}
+      {kind === "heel_rise" && heelRise}
     </svg>
   );
 }

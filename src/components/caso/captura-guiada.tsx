@@ -22,8 +22,6 @@ import {
   CONTACTO_OPTS,
   DESPEGUE_OPTS,
   HALLUX_OPTS,
-  HEEL_RISE_OPTS,
-  JACK_OPTS,
   LADO_CORTO_OPTS,
   LAMINA_OPTS,
   MARCHA_PATRON_OPTS,
@@ -34,6 +32,16 @@ import {
   TOBILLO_OPTS,
   type Exam,
 } from "@/lib/exploracion";
+import {
+  HEEL_RISE_OPTS,
+  JACK_OPTS,
+  MAX_PRONACION_OPTS,
+  MIN_TESTS,
+  RESIST_SUP_OPTS,
+  recomendarTests,
+  testsCompletos,
+  type TestId,
+} from "@/lib/tests-podologicos";
 import { CheckLine } from "@/components/ui";
 import {
   autosaveSectionAction,
@@ -70,17 +78,37 @@ type Slide =
   | { t: "envio"; title: string; grupo: string };
 
 const VIDEO_META: Record<string, { overlay: OverlayKind; checks: string[]; help: string }> = {
-  video_posterior: {
+  video_pie_post: {
+    overlay: "pie_post",
+    checks: [
+      "El paciente va descalzo, de espaldas y quieto",
+      "Se ve el cuerpo entero, centrado en la línea",
+      "Pies a la anchura de las caderas, brazos relajados al costado",
+      "Cámara en trípode a la altura de la cadera",
+    ],
+    help: "Bipedestación desde atrás: se valora la alineación del retropié (valgo/varo), las rodillas y la pelvis en estático.",
+  },
+  video_pie_ant: {
+    overlay: "pie_ant",
+    checks: [
+      "El paciente va descalzo, de frente y quieto",
+      "Se ve el cuerpo entero, centrado en el encuadre",
+      "Pies a la anchura de las caderas, brazos relajados al costado",
+      "Cámara en trípode a la altura de la cadera",
+    ],
+    help: "Bipedestación de frente: se valora el alineamiento de rodillas, rótulas y antepié, y la simetría en estático.",
+  },
+  video_marcha_post: {
     overlay: "marcha_post",
     checks: [
       "El paciente va descalzo",
       "Se ve el cuerpo entero de espaldas, centrado en la línea",
-      "Cámara en trípode a la altura de la cadera; pasillo de 4-5 m libre",
+      "Pasillo de 4-5 m libre; cámara en trípode a la altura de la cadera",
       "Camina a ritmo natural, sin posar",
     ],
-    help: "El paciente se aleja de la cámara caminando por la línea central: se valora el retropié (valgo/varo) y el apoyo desde atrás.",
+    help: "El paciente se aleja de la cámara: se valora el retropié en dinámica y las compensaciones desde atrás.",
   },
-  video_anterior: {
+  video_marcha_ant: {
     overlay: "marcha_ant",
     checks: [
       "El paciente va descalzo",
@@ -88,26 +116,27 @@ const VIDEO_META: Record<string, { overlay: OverlayKind; checks: string[]; help:
       "Cámara en trípode a la altura de la cadera",
       "Camina hacia la cámara a ritmo natural",
     ],
-    help: "El paciente camina de frente hacia la cámara: se valora el antepié, el ángulo de paso y el alineamiento desde delante.",
+    help: "El paciente camina de frente: se valora el antepié, el ángulo de paso y el alineamiento desde delante.",
   },
-  video_lateral: {
+  video_marcha_lat: {
     overlay: "marcha_lat",
     checks: [
       "El paciente va descalzo",
       "Se ve el cuerpo entero de perfil, como en la figura",
-      "Cámara en trípode a la altura de la cadera; pasillo de 4-5 m libre",
-      "Camina a ritmo natural, sin posar (2-3 pasadas)",
+      "Grabado desde AMBOS lados: una pasada por el lado derecho y otra por el izquierdo",
+      "Camina a ritmo natural, sin posar (2-3 pasadas por lado)",
     ],
-    help: "El paciente cruza el encuadre de lado: se valora el ciclo completo de la marcha (contacto, apoyo medio y despegue) de perfil.",
+    help: "Marcha de perfil por los dos lados: se valora el ciclo completo (contacto, apoyo medio y despegue) en cada pie.",
   },
-  video_general: {
-    overlay: "marcha_general",
+  video_heel_rise: {
+    overlay: "heel_rise",
     checks: [
-      "Cámara alejada (4-6 m): el cuerpo entero con aire alrededor, como en la figura",
-      "Plano abierto y estable: no acerques ni sigas rodillas o pies",
-      "El paciente camina varios ciclos completos, ida y vuelta",
+      "Paciente de espaldas y descalzo, con apoyo ligero de los dedos en la pared",
+      "Ambos talones bien visibles, como en la figura",
+      "Primero bilateral y después monopodal de cada pie",
+      "Elevaciones a ritmo constante (una cada 2 segundos)",
     ],
-    help: "Plano general del caminar: una toma abierta del conjunto (postura, braceo, ritmo, compensaciones). No es un plano de detalle de rodillas ni pies — eso ya lo cubren los otros vídeos.",
+    help: "Elevación de talones desde atrás, bilateral y monopodal: se valora el tibial posterior y si el retropié se invierte al subir.",
   },
 };
 
@@ -119,7 +148,8 @@ function buildSlides(): Slide[] {
     { t: "q", section: "calzado", title: "Calzado y plantillas", grupo: "Cuestionario" },
     { t: "q", section: "antecedentes", title: "Antecedentes y tratamientos", grupo: "Cuestionario" },
     { t: "e", section: "movilidad", title: "Movilidad y flexibilidad", grupo: "Exploración" },
-    { t: "e", section: "tests", title: "Tests en carga", grupo: "Exploración" },
+    { t: "e", section: "tests_sel", title: `Tests: elige al menos ${MIN_TESTS} de 6`, grupo: "Exploración" },
+    { t: "e", section: "tests_res", title: "Tests: resultados", grupo: "Exploración" },
     { t: "e", section: "dismetria", title: "Dismetría: nivel y láminas", grupo: "Exploración" },
     { t: "e", section: "marcha", title: "Análisis de la marcha", grupo: "Exploración" },
     // Con el paciente delante se termina primero la parte «de consulta» (cuestionario,
@@ -130,7 +160,7 @@ function buildSlides(): Slide[] {
         t: "media",
         kind,
         title: label,
-        grupo: "Vídeos de marcha",
+        grupo: "Vídeos",
         overlay: m.overlay,
         mode: "video",
         checks: m.checks,
@@ -184,9 +214,11 @@ function slideDone(s: Slide, q: Questionnaire | null, e: Exam | null, has: (k: s
   if (s.t === "e") {
     if (!e) return false;
     if (e.done) return true;
-    const key = { movilidad: "subastragalina", tests: "heelRise", dismetria: "dismetria", marcha: "marchaPatron" }[
+    if (s.section === "tests_sel") return (e.testsSel ?? []).length >= MIN_TESTS;
+    if (s.section === "tests_res") return testsCompletos(e);
+    const key = { movilidad: "subastragalina", dismetria: "dismetria", marcha: "marchaPatron" }[
       s.section
-    ] as keyof Exam;
+    ] as keyof Exam | undefined;
     return key !== undefined && key in e;
   }
   if (s.t === "media" || s.t === "file") return has(s.kind);
@@ -338,7 +370,7 @@ function QSection({ section, q }: { section: string; q: Questionnaire | null }) 
   );
 }
 
-function ESection({ section, e }: { section: string; e: Exam | null }) {
+function ESection({ section, e, q }: { section: string; e: Exam | null; q: Questionnaire | null }) {
   if (section === "movilidad")
     return (
       <>
@@ -351,36 +383,138 @@ function ESection({ section, e }: { section: string; e: Exam | null }) {
           <Sel name="primerRadio" label="Primer radio" opts={PRIMER_RADIO_OPTS} def={e?.primerRadio} />
           <Sel name="cadenaPosterior" label="Cadena posterior (isquios/gemelos)" opts={CADENA_POSTERIOR_OPTS} def={e?.cadenaPosterior} />
         </div>
-        <div className="grid g2">
-          <Num name="lungeIzq" label="Lunge test — pie izquierdo (cm a la pared)" def={e?.lungeIzq} min={0} max={20} step="0.5" ph="10" />
-          <Num name="lungeDcha" label="Lunge test — pie derecho (cm a la pared)" def={e?.lungeDcha} min={0} max={20} step="0.5" ph="10" />
-        </div>
-        <div className="tiny">Lunge: rodilla a la pared sin despegar el talón. Menos de 9-10 cm sugiere restricción de flexión dorsal.</div>
-      </>
-    );
-  if (section === "tests")
-    return (
-      <>
-        <div className="grid g2">
+        <div className="grid g3">
+          <Sel name="tipoPie" label="Tipo de pie" opts={TIPO_PIE_OPTS} def={e?.tipoPie} />
           <Num name="fpiIzq" label="FPI-6 pie izquierdo (−12 a +12)" def={e?.fpiIzq} min={-12} max={12} ph="+4" />
           <Num name="fpiDcho" label="FPI-6 pie derecho (−12 a +12)" def={e?.fpiDcho} min={-12} max={12} ph="+4" />
         </div>
         <div className="tiny">FPI-6: 0 a +5 neutro · +6 a +9 pronado · +10 o más muy pronado · negativo supinado.</div>
-        <div className="grid g2">
-          <Sel name="jackIzq" label="Test de Jack (windlass) — izquierdo" opts={JACK_OPTS} def={e?.jackIzq} />
-          <Sel name="jackDcho" label="Test de Jack (windlass) — derecho" opts={JACK_OPTS} def={e?.jackDcho} />
-        </div>
-        <div className="grid g2">
-          <Num name="navDropIzq" label="Navicular drop izquierdo (mm)" def={e?.navDropIzq} min={0} max={30} ph="6" />
-          <Num name="navDropDcho" label="Navicular drop derecho (mm)" def={e?.navDropDcho} min={0} max={30} ph="6" />
-        </div>
-        <div className="tiny">Navicular drop: descenso del navicular de neutro a apoyo relajado. Más de 10 mm se considera patológico.</div>
-        <div className="grid g2">
-          <Sel name="heelRise" label="Heel rise test (puntillas monopodal)" opts={HEEL_RISE_OPTS} def={e?.heelRise} />
-          <Sel name="tipoPie" label="Tipo de pie" opts={TIPO_PIE_OPTS} def={e?.tipoPie} />
-        </div>
       </>
     );
+  // Elegir qué tests se hacen: se ordenan por lo indicados que están para este
+  // paciente y se explica el motivo, para que elegir sea inmediato.
+  if (section === "tests_sel") {
+    const recs = recomendarTests(q, e);
+    const sel = e?.testsSel ?? [];
+    const conMotivo = recs.filter((r) => r.motivos.length > 0).length;
+    return (
+      <>
+        <p className="muted" style={{ margin: "4px 0 10px" }}>
+          Haz al menos {MIN_TESTS} de los 6 y elige cuáles según el caso. Están ordenados por lo
+          indicados que resultan para este paciente; el último de la lista es el que menos aporta
+          aquí, si necesitas omitir uno.
+        </p>
+        {conMotivo === 0 && (
+          <div className="note">
+            Aún no hay zonas de dolor ni desgaste anotados en el cuestionario, así que no se puede
+            priorizar: elige según tu criterio.
+          </div>
+        )}
+        {recs.map(({ test, motivos }) => (
+          <label className="testcard" key={test.id}>
+            <input
+              type="checkbox"
+              name="testsSel"
+              value={test.id}
+              defaultChecked={sel.includes(test.id)}
+            />
+            <div>
+              <div className="row" style={{ gap: 8 }}>
+                <b>{test.nombre}</b>
+                {motivos.length > 0 ? (
+                  <span className="pill g">Recomendado</span>
+                ) : (
+                  <span className="pill n">Menos indicado aquí</span>
+                )}
+              </div>
+              <div className="tiny" style={{ marginTop: 3 }}>{test.para}</div>
+              <div className="tiny">
+                <b>Indicado en:</b> {test.indicado}
+              </div>
+              {motivos.length > 0 && (
+                <div className="tiny" style={{ color: "var(--green)" }}>
+                  En este paciente: {motivos.join(", ")}.
+                </div>
+              )}
+            </div>
+          </label>
+        ))}
+      </>
+    );
+  }
+
+  // Resultados: solo se piden los de los tests elegidos
+  if (section === "tests_res") {
+    const sel = (e?.testsSel ?? []) as TestId[];
+    if (sel.length === 0)
+      return (
+        <div className="note a">
+          Todavía no has elegido los tests. Vuelve a la pantalla anterior y marca al menos{" "}
+          {MIN_TESTS}.
+        </div>
+      );
+    return (
+      <>
+        <p className="muted" style={{ margin: "4px 0 10px" }}>
+          Anota el resultado de los {sel.length} tests que has elegido.
+        </p>
+        {sel.includes("jack") && (
+          <>
+            <div className="tiny" style={{ marginTop: 12 }}>TEST DE JACK / HUBSCHER</div>
+            <div className="grid g2">
+              <Sel name="jackIzq" label="Pie izquierdo" opts={JACK_OPTS} def={e?.jackIzq} />
+              <Sel name="jackDcho" label="Pie derecho" opts={JACK_OPTS} def={e?.jackDcho} />
+            </div>
+          </>
+        )}
+        {sel.includes("navicular") && (
+          <>
+            <div className="tiny" style={{ marginTop: 12 }}>NAVICULAR DROP</div>
+            <div className="grid g2">
+              <Num name="navDropIzq" label="Pie izquierdo (mm)" def={e?.navDropIzq} min={0} max={30} ph="6" />
+              <Num name="navDropDcho" label="Pie derecho (mm)" def={e?.navDropDcho} min={0} max={30} ph="6" />
+            </div>
+            <div className="tiny">Descenso del escafoides de neutro a apoyo relajado. Más de 10 mm se considera patológico.</div>
+          </>
+        )}
+        {sel.includes("resist_sup") && (
+          <>
+            <div className="tiny" style={{ marginTop: 12 }}>RESISTENCIA A LA SUPINACIÓN</div>
+            <div className="grid g2">
+              <Sel name="resistSupIzq" label="Pie izquierdo" opts={RESIST_SUP_OPTS} def={e?.resistSupIzq} />
+              <Sel name="resistSupDcho" label="Pie derecho" opts={RESIST_SUP_OPTS} def={e?.resistSupDcho} />
+            </div>
+            <div className="tiny">Alta resistencia → hace falta más cuña/posting medial en la plantilla.</div>
+          </>
+        )}
+        {sel.includes("max_pronacion") && (
+          <>
+            <div className="tiny" style={{ marginTop: 12 }}>MÁXIMA PRONACIÓN</div>
+            <div className="grid g2">
+              <Sel name="maxPronIzq" label="Pie izquierdo" opts={MAX_PRONACION_OPTS} def={e?.maxPronIzq} />
+              <Sel name="maxPronDcho" label="Pie derecho" opts={MAX_PRONACION_OPTS} def={e?.maxPronDcho} />
+            </div>
+          </>
+        )}
+        {sel.includes("lunge") && (
+          <>
+            <div className="tiny" style={{ marginTop: 12 }}>LUNGE TEST</div>
+            <div className="grid g2">
+              <Num name="lungeIzq" label="Pie izquierdo (cm a la pared)" def={e?.lungeIzq} min={0} max={20} step="0.5" ph="10" />
+              <Num name="lungeDcha" label="Pie derecho (cm a la pared)" def={e?.lungeDcha} min={0} max={20} step="0.5" ph="10" />
+            </div>
+            <div className="tiny">Rodilla a la pared sin despegar el talón. Menos de 9-10 cm sugiere restricción de flexión dorsal.</div>
+          </>
+        )}
+        {sel.includes("heel_rise") && (
+          <>
+            <div className="tiny" style={{ marginTop: 12 }}>DOUBLE HEEL RISE</div>
+            <Sel name="heelRise" label="Resultado" opts={HEEL_RISE_OPTS} def={e?.heelRise} />
+          </>
+        )}
+      </>
+    );
+  }
   if (section === "dismetria")
     return (
       <>
@@ -569,7 +703,7 @@ export function CapturaGuiada({ kase, paso }: { kase: CaseWithCapture; paso?: nu
         {s.t === "e" && (
           <AutosaveForm action={saveExamSectionAction} autosave={autosaveSectionAction}>
             {hiddenNav(s.section, "e")}
-            <ESection section={s.section} e={e} />
+            <ESection section={s.section} e={e} q={q} />
             <div className="sp" />
             <button type="submit" className="pri wfull">
               Continuar →
@@ -645,9 +779,9 @@ export function CapturaGuiada({ kase, paso }: { kase: CaseWithCapture; paso?: nu
               Checklist bloqueante del protocolo: sin todo en verde no hay envío a prescripción.
             </p>
             <CheckLine ok={cl.cuestionario}>Cuestionario clínico (5 pantallas)</CheckLine>
-            <CheckLine ok={cl.exploracion}>Exploración biomecánica y tests (4 pantallas)</CheckLine>
+            <CheckLine ok={cl.exploracion}>Exploración y tests (5 pantallas)</CheckLine>
             <CheckLine ok={cl.videos >= VIDEO_KINDS.length}>
-              Vídeos de marcha {cl.videos}/{VIDEO_KINDS.length} (atrás, frente, lado y plano general)
+              Vídeos {cl.videos}/{VIDEO_KINDS.length} (de pie, marcha y elevación de talones)
             </CheckLine>
             <CheckLine ok={cl.baro}>Baropodometría (estática + dinámica múltiple)</CheckLine>
             <CheckLine ok={cl.escaneos}>Escaneo de las espumas fenólicas</CheckLine>

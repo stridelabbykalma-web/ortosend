@@ -156,3 +156,10 @@ tr.click:hover { background: var(--paper); }
 .autosave-chip.guardado { background: var(--green-l); color: var(--green); }
 .autosave-chip.guardando, .autosave-chip.escribiendo { background: var(--amber-l); color: var(--amber); }
 .autosave-chip.error { background: var(--red-l); color: var(--red); }
+
+/* Tarjetas de elección de test (una por test, con su recomendación) */
+.testcard { display: flex; gap: 10px; align-items: flex-start; border: 1px solid var(--line); border-radius: 10px; padding: 11px 12px; margin-bottom: 8px; cursor: pointer; background: #fff; font-weight: 400; }
+.testcard:hover { border-color: var(--teal); }
+.testcard input { width: auto; margin-top: 3px; flex: none; }
+.testcard:has(input:checked) { border-color: var(--teal); background: var(--teal-l); }
+.testcard .tiny { margin-top: 2px; }

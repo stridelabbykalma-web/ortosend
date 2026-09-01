@@ -26,10 +26,13 @@ asociadas. Stack: **Next.js (App Router, server actions) + PostgreSQL (Prisma)**
 - **Asistente de captura** de 6 pasos con guardado continuo: cuestionario clínico completo
   (motivo/dolor, actividad y datos físicos, calzado, antecedentes y tratamientos previos —
   visible entero en el expediente que llega al prescriptor), exploración biomecánica con tests
-  podológicos (Silfverskiöld, lunge, FPI-6, Jack, navicular drop, heel rise), dismetría valorada
-  con nivel pélvico y láminas calibradas, y análisis observacional de la marcha,
-  vídeos de marcha (4: desde atrás, de frente, de lado y plano general, grabados con la
-  cámara guiada por silueta), baropodometría Podisense (estática + dinámica múltiple) y
+  (Silfverskiöld, subastragalina, primer radio, hallux, cadena posterior, FPI-6 y tipo de pie),
+  **6 tests podológicos de los que se eligen al menos 5** (Jack/Hubscher, navicular drop,
+  resistencia a la supinación, máxima pronación, lunge y double heel rise) con recomendación
+  automática según las zonas de dolor, el desgaste del calzado y los hallazgos ya anotados,
+  dismetría valorada con nivel pélvico y láminas calibradas, análisis observacional de la
+  marcha, 6 vídeos (de pie posterior y anterior, caminando desde atrás, desde delante y
+  lateral, y elevación de talones), baropodometría Podisense (estática + dinámica múltiple) y
   escaneo de las espumas fenólicas como último paso — estas tres se hacen en su propia
   plataforma y aquí solo se marcan como hechas; el informe llega desde Podisense y no se
   adjunta. **Checklist bloqueante**: sin todo en verde no hay envío.

@@ -8,6 +8,7 @@ import { checklistOf, notify, pushEvent } from "@/lib/cases";
 import { VIDEO_KINDS, BARO_KINDS, SCAN_KIND } from "@/lib/format";
 import type { Questionnaire } from "@/lib/questionnaire";
 import type { Exam } from "@/lib/exploracion";
+import { MIN_TESTS } from "@/lib/tests-podologicos";
 import type { User } from "@prisma/client";
 
 const MAX_SLOTS = 5;
@@ -130,13 +131,26 @@ const Q_FIELDS: Record<string, { strs: (keyof Questionnaire)[]; lists: (keyof Qu
   },
 };
 
-const E_FIELDS: Record<string, { strs: (keyof Exam)[]; lists: never[]; last?: boolean }> = {
+const E_FIELDS: Record<string, { strs: (keyof Exam)[]; lists: (keyof Exam)[]; last?: boolean }> = {
   movilidad: {
-    strs: ["tobillo", "hallux", "subastragalina", "primerRadio", "cadenaPosterior", "lungeIzq", "lungeDcha"],
+    strs: ["tobillo", "hallux", "subastragalina", "primerRadio", "cadenaPosterior", "tipoPie", "fpiIzq", "fpiDcho"],
     lists: [],
   },
-  tests: {
-    strs: ["fpiIzq", "fpiDcho", "jackIzq", "jackDcho", "navDropIzq", "navDropDcho", "heelRise", "tipoPie"],
+  tests_sel: { strs: [], lists: ["testsSel"] },
+  tests_res: {
+    strs: [
+      "jackIzq",
+      "jackDcho",
+      "navDropIzq",
+      "navDropDcho",
+      "resistSupIzq",
+      "resistSupDcho",
+      "maxPronIzq",
+      "maxPronDcho",
+      "lungeIzq",
+      "lungeDcha",
+      "heelRise",
+    ],
     lists: [],
   },
   dismetria: { strs: ["dismetria", "ladoCorto", "lamina", "alza"], lists: [] },
@@ -234,6 +248,9 @@ export async function saveExamSectionAction(formData: FormData) {
   const { capture } = await captureFor(caseId, u);
   const prev = (capture.physicalExam ?? {}) as Record<string, unknown>;
   const values = sectionValues(formData, def);
+
+  if (section === "tests_sel" && ((values.testsSel as string[]) ?? []).length < MIN_TESTS)
+    fail(back, `Elige al menos ${MIN_TESTS} tests de los 6`);
 
   if (section === "dismetria") {
     if (values.dismetria === "Sí" && (!values.ladoCorto || !values.lamina))

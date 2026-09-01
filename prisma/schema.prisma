@@ -203,19 +203,20 @@ model Capture {
   caseId    String  @unique
   case      Case    @relation(fields: [caseId], references: [id])
   questionnaire Json?   // cuestionario clínico (paso 2 del protocolo)
-  physicalExam  Json?   // exploración: tobillo/Silfverskiöld, hallux, dismetría, ALZA mm…
+  physicalExam  Json?   // exploración + los 5 tests elegidos de 6 y sus resultados
   media     MediaAsset[]
   baroFileUrl String?   // informe del dashboard Podisense (vía 2; vía 1 = API Fresco)
   completedAt DateTime? // checklist superada → envío
 }
 
-// Vídeos de marcha (4) grabados en la app; escaneo de espumas y baropodometría se
+// Vídeos (6: de pie, marcha y elevación de talones) grabados en la app; escaneo de
+// espumas y baropodometría se
 // marcan como hechos porque los produce su propia plataforma
 model MediaAsset {
   id        String  @id @default(cuid())
   captureId String
   capture   Capture @relation(fields: [captureId], references: [id])
-  kind      String  // video_posterior|anterior|lateral|general | baro_est | baro_din_multi | scan_espumas
+  kind      String  // video_pie_post|pie_ant|marcha_post|marcha_ant|marcha_lat|heel_rise | baro_est | baro_din_multi | scan_espumas
   url       String
   sizeBytes Int?
   confirmedAt DateTime? // check verde SOLO cuando el servidor confirma

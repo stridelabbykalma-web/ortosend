@@ -1,3 +1,5 @@
+import { TEST_POR_ID, type TestId } from "./tests-podologicos";
+
 // Exploración biomecánica (paso 2 del protocolo de captura): la valoración que
 // necesita el prescriptor para recetar la plantilla. Definición compartida entre
 // el formulario de la clínica, la acción de guardado y las vistas del expediente.
@@ -28,15 +30,6 @@ export const CADENA_POSTERIOR_OPTS = [
 ] as const;
 
 // --- B · Tests podológicos en carga ---
-export const JACK_OPTS = ["Positivo (arco se restaura)", "Negativo", "No valorable"] as const;
-
-export const HEEL_RISE_OPTS = [
-  "Normal bilateral",
-  "Alterado izquierdo",
-  "Alterado derecho",
-  "Alterado bilateral",
-] as const;
-
 export const TIPO_PIE_OPTS = [
   "Neutro",
   "Plano flexible",
@@ -82,14 +75,20 @@ export type Exam = {
   primerRadio?: string;
   hallux?: string;
   cadenaPosterior?: string;
-  // B · Tests en carga
-  fpiIzq?: string; // FPI-6, -12..+12
-  fpiDcho?: string;
+  // B · Tests elegidos (mínimo 5 de 6) y sus resultados
+  testsSel?: string[]; // ids de TESTS realizados
   jackIzq?: string;
   jackDcho?: string;
   navDropIzq?: string; // mm
   navDropDcho?: string;
+  resistSupIzq?: string;
+  resistSupDcho?: string;
+  maxPronIzq?: string;
+  maxPronDcho?: string;
   heelRise?: string;
+  // Exploración general
+  fpiIzq?: string; // FPI-6, -12..+12
+  fpiDcho?: string;
   tipoPie?: string;
   // C · Dismetría
   dismetria?: string; // "No" | "Sí" (v1: "Sí — izq. más corta")
@@ -131,17 +130,22 @@ export function examLines(e: Exam | null | undefined): [string, string][] {
   };
   // A · Movilidad
   add("Flexión dorsal tobillo (Silfverskiöld)", e.tobillo);
-  add("Lunge test", pair(e.lungeIzq, e.lungeDcha, " cm"));
   add("Subastragalina", e.subastragalina);
   add("Primer radio", e.primerRadio);
   add("Hallux", e.hallux);
   add("Cadena posterior", e.cadenaPosterior);
-  // B · Tests en carga
   add("FPI-6", pair(fpiLabel(e.fpiIzq), fpiLabel(e.fpiDcho)));
-  add("Test de Jack (windlass)", pair(e.jackIzq, e.jackDcho));
-  add("Navicular drop", pair(e.navDropIzq, e.navDropDcho, " mm"));
-  add("Heel rise", e.heelRise);
   add("Tipo de pie", e.tipoPie);
+  // B · Tests realizados y resultados (solo salen los que se hicieron)
+  const sel = (e.testsSel ?? []) as TestId[];
+  if (sel.length)
+    add("Tests realizados", sel.map((id) => TEST_POR_ID[id]?.nombre ?? id).join(" · "));
+  add("Test de Jack / Hubscher", pair(e.jackIzq, e.jackDcho));
+  add("Navicular drop", pair(e.navDropIzq, e.navDropDcho, " mm"));
+  add("Resistencia a la supinación", pair(e.resistSupIzq, e.resistSupDcho));
+  add("Máxima pronación", pair(e.maxPronIzq, e.maxPronDcho));
+  add("Lunge test", pair(e.lungeIzq, e.lungeDcha, " cm"));
+  add("Double heel rise", e.heelRise);
   // C · Dismetría
   if (e.dismetria === "Sí" && e.ladoCorto) {
     add("Dismetría", `Sí — ${e.ladoCorto.toLowerCase()} más corta`);

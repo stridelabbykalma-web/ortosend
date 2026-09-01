@@ -59,13 +59,15 @@ export function fmtEUR(cents: number) {
   return (cents / 100).toLocaleString("es-ES", { style: "currency", currency: "EUR" });
 }
 
-// Vídeos obligatorios del protocolo de captura: marcha desde atrás, de frente,
-// de lado y un plano general del caminar (cuerpo entero, cámara alejada).
+// Vídeos obligatorios del protocolo: dos en bipedestación, tres caminando y la
+// elevación de talones. El lateral cubre los dos lados en una misma prueba.
 export const VIDEO_KINDS = [
-  ["video_posterior", "Marcha desde atrás (posterior)"],
-  ["video_anterior", "Marcha de frente (anterior)"],
-  ["video_lateral", "Marcha de lado (lateral)"],
-  ["video_general", "Marcha — plano general"],
+  ["video_pie_post", "De pie — vista posterior"],
+  ["video_pie_ant", "De pie — vista anterior"],
+  ["video_marcha_post", "Caminando — desde atrás"],
+  ["video_marcha_ant", "Caminando — desde delante"],
+  ["video_marcha_lat", "Caminando — lateral derecho e izquierdo"],
+  ["video_heel_rise", "Elevación de talones — vista posterior"],
 ] as const;
 
 // Baropodometría con Podisense: estática + dinámica múltiple. El informe lo

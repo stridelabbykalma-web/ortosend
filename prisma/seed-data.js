@@ -3,7 +3,14 @@ const bcrypt = require("bcryptjs");
 
 const PASS = "ortosend123";
 
-const VIDEO_KINDS = ["video_posterior", "video_anterior", "video_lateral", "video_general"];
+const VIDEO_KINDS = [
+  "video_pie_post",
+  "video_pie_ant",
+  "video_marcha_post",
+  "video_marcha_ant",
+  "video_marcha_lat",
+  "video_heel_rise",
+];
 const BARO_KINDS = ["baro_est", "baro_din_multi"];
 const SCAN_KIND = "scan_espumas";
 
@@ -233,12 +240,15 @@ async function seedDemo(prisma) {
         cadenaPosterior: "Acortamiento leve",
         fpiIzq: "6",
         fpiDcho: "8",
-        jackIzq: "Positivo (arco se restaura)",
-        jackDcho: "Positivo (arco se restaura)",
+        tipoPie: "Plano flexible",
+        testsSel: ["jack", "navicular", "resist_sup", "lunge", "heel_rise"],
+        jackIzq: "Positivo (se forma el arco)",
+        jackDcho: "Positivo (se forma el arco)",
         navDropIzq: "9",
         navDropDcho: "12",
+        resistSupIzq: "Moderada",
+        resistSupDcho: "Alta",
         heelRise: "Normal bilateral",
-        tipoPie: "Plano flexible",
         dismetria: "No",
         ladoCorto: "",
         lamina: "",
@@ -331,12 +341,15 @@ async function seedDemo(prisma) {
         cadenaPosterior: "Normal",
         fpiIzq: "-3",
         fpiDcho: "-4",
-        jackIzq: "Positivo (arco se restaura)",
-        jackDcho: "Positivo (arco se restaura)",
+        tipoPie: "Cavo",
+        testsSel: ["lunge", "jack", "navicular", "max_pronacion", "heel_rise"],
+        jackIzq: "Positivo (se forma el arco)",
+        jackDcho: "Positivo (se forma el arco)",
         navDropIzq: "4",
         navDropDcho: "3",
+        maxPronIzq: "Rango disminuido",
+        maxPronDcho: "Rango disminuido",
         heelRise: "Normal bilateral",
-        tipoPie: "Cavo",
         dismetria: "Sí",
         ladoCorto: "Izquierda",
         lamina: "7 mm",
