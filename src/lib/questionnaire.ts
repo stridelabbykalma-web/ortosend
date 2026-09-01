@@ -12,15 +12,31 @@ export const EVOLUCION_OPTS = [
 
 export const LADO_OPTS = ["Ambos", "Izquierdo", "Derecho", "Sin dolor localizado"] as const;
 
+// Las zonas activan las ramas de tests complementarias, así que distinguen lo
+// que cambia la exploración: cara interna y externa del tobillo por separado,
+// el dedo gordo aparte de la zona intermetatarsal, y el Aquiles como zona
+// propia. Las etiquetas antiguas («Dedos», «Tobillo», «Cadera») siguen
+// activando su rama en los casos ya guardados.
 export const ZONA_OPTS = [
   "Talón",
   "Arco / planta",
   "Metatarsos / antepié",
-  "Dedos",
-  "Tobillo",
+  "Dedo gordo / 1.ª MTF",
+  "Zona intermetatarsal / dedos menores",
+  "Tobillo (cara interna)",
+  "Tobillo (cara externa)",
+  "Tendón de Aquiles",
   "Rodilla",
-  "Cadera",
+  "Cadera / pelvis",
   "Zona lumbar",
+] as const;
+
+// El tipo de síntoma decide si hay que explorar la vía neural: una quemazón o
+// un hormigueo no se valoran con los mismos tests que un dolor mecánico.
+export const TIPO_SINTOMA_OPTS = [
+  "Mecánico (duele al cargar o al caminar)",
+  "Quemazón, hormigueo o adormecimiento",
+  "Ambos",
 ] as const;
 
 export const MOMENTO_OPTS = [
@@ -82,6 +98,7 @@ export type Questionnaire = {
   evolucion?: string;
   lado?: string;
   zonas?: string[];
+  tipoSintoma?: string;
   dolor?: string; // intensidad 0-10
   momentos?: string[];
   // Actividad y estilo de vida
@@ -125,6 +142,7 @@ export function questionnaireLines(q: Questionnaire | null | undefined): [string
   add("Dolor", dolorLabel(q));
   add("Lado", q.lado);
   add("Zonas", join(q.zonas));
+  add("Tipo de síntoma", q.tipoSintoma);
   add("Cuándo duele", join(q.momentos));
   add(
     "Actividad",

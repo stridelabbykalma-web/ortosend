@@ -12,6 +12,7 @@ import {
   LADO_OPTS,
   MOMENTO_OPTS,
   PLANTILLAS_OPTS,
+  TIPO_SINTOMA_OPTS,
   TRATAMIENTOS_OPTS,
   ZONA_OPTS,
   type Questionnaire,
@@ -33,13 +34,37 @@ import {
   type Exam,
 } from "@/lib/exploracion";
 import {
+  AVISO_VOLUMEN,
+  COLEMAN_OPTS,
+  ESTABILIDAD_OPTS,
+  FORMULA_DIGITAL_OPTS,
+  FORMULA_MTT_OPTS,
+  HALLUX_LIMITUS_OPTS,
   HEEL_RISE_OPTS,
   JACK_OPTS,
   MAX_PRONACION_OPTS,
-  MIN_TESTS,
+  NUCLEO,
+  PALP_AQUILES_OPTS,
+  PALP_CALCANEO_OPTS,
+  POS_NEG_OPTS,
+  RESIST_INV_OPTS,
   RESIST_SUP_OPTS,
-  recomendarTests,
-  testsCompletos,
+  ROT_CADERA_OPTS,
+  SINGLE_HEEL_OPTS,
+  SQUAT_OPTS,
+  STEP_DOWN_OPTS,
+  TERRITORIO_OPTS,
+  TESTS,
+  TOO_MANY_TOES_OPTS,
+  TRENDELENBURG_OPTS,
+  alertasDe,
+  complementariosCompletos,
+  complementariosSugeridos,
+  minutosDe,
+  normalizaId,
+  nucleoCompleto,
+  ramasActivas,
+  ramasSinCubrir,
   type TestId,
 } from "@/lib/tests-podologicos";
 import { CheckLine } from "@/components/ui";
@@ -148,8 +173,9 @@ function buildSlides(): Slide[] {
     { t: "q", section: "calzado", title: "Calzado y plantillas", grupo: "Cuestionario" },
     { t: "q", section: "antecedentes", title: "Antecedentes y tratamientos", grupo: "Cuestionario" },
     { t: "e", section: "movilidad", title: "Movilidad y flexibilidad", grupo: "Exploración" },
-    { t: "e", section: "tests_sel", title: `Tests: elige al menos ${MIN_TESTS} de 6`, grupo: "Exploración" },
-    { t: "e", section: "tests_res", title: "Tests: resultados", grupo: "Exploración" },
+    { t: "e", section: "nucleo", title: `Tests generales (los ${NUCLEO.length} de siempre)`, grupo: "Exploración" },
+    { t: "e", section: "comp_sel", title: "Tests complementarios: cuáles hacer", grupo: "Exploración" },
+    { t: "e", section: "comp_res", title: "Tests complementarios: resultados", grupo: "Exploración" },
     { t: "e", section: "dismetria", title: "Dismetría: nivel y láminas", grupo: "Exploración" },
     { t: "e", section: "marcha", title: "Análisis de la marcha", grupo: "Exploración" },
     // Con el paciente delante se termina primero la parte «de consulta» (cuestionario,
@@ -214,8 +240,11 @@ function slideDone(s: Slide, q: Questionnaire | null, e: Exam | null, has: (k: s
   if (s.t === "e") {
     if (!e) return false;
     if (e.done) return true;
-    if (s.section === "tests_sel") return (e.testsSel ?? []).length >= MIN_TESTS;
-    if (s.section === "tests_res") return testsCompletos(e);
+    if (s.section === "nucleo") return nucleoCompleto(e);
+    // Elegir es una decisión, no un dato: se da por hecha cuando toda rama
+    // activa tiene ya algún test que la cubra.
+    if (s.section === "comp_sel") return ramasSinCubrir(q, e).length === 0;
+    if (s.section === "comp_res") return complementariosCompletos(e);
     const key = { movilidad: "subastragalina", dismetria: "dismetria", marcha: "marchaPatron" }[
       s.section
     ] as keyof Exam | undefined;
@@ -282,6 +311,78 @@ const Checks = ({ name, opts, def }: { name: string; opts: readonly string[]; de
   </div>
 );
 
+// Campos de resultado de cada test complementario. Todo tiene respuesta
+// cerrada (opciones o unidades): nada de texto libre, para que lo que llega al
+// prescriptor sea comparable entre clínicas.
+function CompCampos({ id, e }: { id: TestId; e: Exam | null }) {
+  const dos = (a: React.ReactNode, b: React.ReactNode) => <div className="grid g2">{a}{b}</div>;
+  switch (id) {
+    case "double_heel_rise":
+      return <Sel name="heelRise" label="Resultado" opts={HEEL_RISE_OPTS} def={e?.heelRise} />;
+    case "max_pronacion":
+      return dos(
+        <Sel name="maxPronIzq" label="Pie izquierdo" opts={MAX_PRONACION_OPTS} def={e?.maxPronIzq} />,
+        <Sel name="maxPronDcho" label="Pie derecho" opts={MAX_PRONACION_OPTS} def={e?.maxPronDcho} />
+      );
+    case "nav_drift":
+      return dos(
+        <Num name="navDriftIzq" label="Pie izquierdo (mm)" def={e?.navDriftIzq} min={0} max={30} ph="8" />,
+        <Num name="navDriftDcho" label="Pie derecho (mm)" def={e?.navDriftDcho} min={0} max={30} ph="8" />
+      );
+    case "too_many_toes":
+      return <Sel name="tooManyToes" label="Vista posterior" opts={TOO_MANY_TOES_OPTS} def={e?.tooManyToes} />;
+    case "resist_inversion":
+      return <Sel name="resistInversion" label="Resultado" opts={RESIST_INV_OPTS} def={e?.resistInversion} />;
+    case "coleman":
+      return <Sel name="coleman" label="Resultado" opts={COLEMAN_OPTS} def={e?.coleman} />;
+    case "balance_mono":
+      return dos(
+        <Num name="balanceIzq" label="Apoyo izquierdo (s)" def={e?.balanceIzq} min={0} max={60} ph="30" />,
+        <Num name="balanceDcho" label="Apoyo derecho (s)" def={e?.balanceDcho} min={0} max={60} ph="30" />
+      );
+    case "single_leg_squat":
+      return <Sel name="singleLegSquat" label="Resultado" opts={SQUAT_OPTS} def={e?.singleLegSquat} />;
+    case "step_down":
+      return <Sel name="stepDown" label="Resultado" opts={STEP_DOWN_OPTS} def={e?.stepDown} />;
+    case "trendelenburg":
+      return <Sel name="trendelenburg" label="Resultado" opts={TRENDELENBURG_OPTS} def={e?.trendelenburg} />;
+    case "rot_cadera":
+      return <Sel name="rotCadera" label="Resultado" opts={ROT_CADERA_OPTS} def={e?.rotCadera} />;
+    case "hallux_limitus":
+      return <Sel name="halluxLimitus" label="Resultado" opts={HALLUX_LIMITUS_OPTS} def={e?.halluxLimitus} />;
+    case "dorsiflex_1mtf":
+      return dos(
+        <Num name="dorsi1mtfIzq" label="Pie izquierdo (grados)" def={e?.dorsi1mtfIzq} min={0} max={90} ph="65" />,
+        <Num name="dorsi1mtfDcho" label="Pie derecho (grados)" def={e?.dorsi1mtfDcho} min={0} max={90} ph="65" />
+      );
+    case "formula_metatarsal":
+      return dos(
+        <Sel name="formulaMetatarsal" label="Fórmula metatarsal" opts={FORMULA_MTT_OPTS} def={e?.formulaMetatarsal} />,
+        <Sel name="formulaDigital" label="Fórmula digital" opts={FORMULA_DIGITAL_OPTS} def={e?.formulaDigital} />
+      );
+    case "compresion_mtt":
+      return <Sel name="compresionMtt" label="Resultado" opts={POS_NEG_OPTS} def={e?.compresionMtt} />;
+    case "mulder":
+      return <Sel name="mulder" label="Resultado" opts={POS_NEG_OPTS} def={e?.mulder} />;
+    case "compresion_calcaneo":
+      return <Sel name="compresionCalcaneo" label="Resultado" opts={POS_NEG_OPTS} def={e?.compresionCalcaneo} />;
+    case "palpacion_calcaneo":
+      return <Sel name="palpacionCalcaneo" label="Resultado" opts={PALP_CALCANEO_OPTS} def={e?.palpacionCalcaneo} />;
+    case "palpacion_aquiles":
+      return <Sel name="palpacionAquiles" label="Resultado" opts={PALP_AQUILES_OPTS} def={e?.palpacionAquiles} />;
+    case "thompson":
+      return <Sel name="thompson" label="Resultado" opts={POS_NEG_OPTS} def={e?.thompson} />;
+    case "tinel":
+      return <Sel name="tinel" label="Resultado" opts={POS_NEG_OPTS} def={e?.tinel} />;
+    case "estabilidad_tobillo":
+      return <Sel name="estabilidadTobillo" label="Resultado" opts={ESTABILIDAD_OPTS} def={e?.estabilidadTobillo} />;
+    case "territorio_sensitivo":
+      return <Sel name="territorioSensitivo" label="Territorio afectado" opts={TERRITORIO_OPTS} def={e?.territorioSensitivo} />;
+    default:
+      return null;
+  }
+}
+
 // --- Formularios de cada sección (con los valores ya guardados como defaults) ---
 
 function QSection({ section, q }: { section: string; q: Questionnaire | null }) {
@@ -311,6 +412,11 @@ function QSection({ section, q }: { section: string; q: Questionnaire | null }) 
       <>
         <label>Zonas de dolor (marca todas las que apliquen)</label>
         <Checks name="zonas" opts={ZONA_OPTS} def={q?.zonas} />
+        <div className="tiny">
+          Cada zona activa después los tests que la valoran, así que conviene afinar: no es lo
+          mismo la cara interna del tobillo que la externa.
+        </div>
+        <Sel name="tipoSintoma" label="Tipo de síntoma" opts={TIPO_SINTOMA_OPTS} def={q?.tipoSintoma} />
         <label>¿Cuándo aparece el dolor?</label>
         <Checks name="momentos" opts={MOMENTO_OPTS} def={q?.momentos} />
       </>
@@ -391,47 +497,127 @@ function ESection({ section, e, q }: { section: string; e: Exam | null; q: Quest
         <div className="tiny">FPI-6: 0 a +5 neutro · +6 a +9 pronado · +10 o más muy pronado · negativo supinado.</div>
       </>
     );
-  // Elegir qué tests se hacen: se ordenan por lo indicados que están para este
-  // paciente y se explica el motivo, para que elegir sea inmediato.
-  if (section === "tests_sel") {
-    const recs = recomendarTests(q, e);
-    const sel = e?.testsSel ?? [];
-    const conMotivo = recs.filter((r) => r.motivos.length > 0).length;
+  // Núcleo: los 5 que se hacen siempre. Van antes de elegir complementarios
+  // para que sus resultados puedan orientar esa elección.
+  if (section === "nucleo")
     return (
       <>
         <p className="muted" style={{ margin: "4px 0 10px" }}>
-          Haz al menos {MIN_TESTS} de los 6 y elige cuáles según el caso. Están ordenados por lo
-          indicados que resultan para este paciente; el último de la lista es el que menos aporta
-          aquí, si necesitas omitir uno.
+          Estos {NUCLEO.length} se hacen en todos los pacientes, duela lo que duela. Sus
+          resultados se usan luego para proponer los complementarios.
         </p>
-        {conMotivo === 0 && (
+        <div className="tiny" style={{ marginTop: 12 }}>1 · JACK / HUBSCHER</div>
+        <div className="grid g2">
+          <Sel name="jackIzq" label="Pie izquierdo" opts={JACK_OPTS} def={e?.jackIzq} />
+          <Sel name="jackDcho" label="Pie derecho" opts={JACK_OPTS} def={e?.jackDcho} />
+        </div>
+        <div className="tiny">Windlass: al dorsiflexionar el hallux debe formarse el arco.</div>
+
+        <div className="tiny" style={{ marginTop: 12 }}>2 · NAVICULAR DROP</div>
+        <div className="grid g2">
+          <Num name="navDropIzq" label="Pie izquierdo (mm)" def={e?.navDropIzq} min={0} max={30} ph="6" />
+          <Num name="navDropDcho" label="Pie derecho (mm)" def={e?.navDropDcho} min={0} max={30} ph="6" />
+        </div>
+        <div className="tiny">De neutro a apoyo relajado. Más de 10 mm se considera patológico.</div>
+
+        <div className="tiny" style={{ marginTop: 12 }}>3 · RESISTENCIA A LA SUPINACIÓN</div>
+        <div className="grid g2">
+          <Sel name="resistSupIzq" label="Pie izquierdo" opts={RESIST_SUP_OPTS} def={e?.resistSupIzq} />
+          <Sel name="resistSupDcho" label="Pie derecho" opts={RESIST_SUP_OPTS} def={e?.resistSupDcho} />
+        </div>
+        <div className="tiny">Alta resistencia → hace falta más cuña o posting medial en la plantilla.</div>
+
+        <div className="tiny" style={{ marginTop: 12 }}>4 · LUNGE TEST / KNEE TO WALL</div>
+        <div className="grid g2">
+          <Num name="lungeIzq" label="Pie izquierdo (cm a la pared)" def={e?.lungeIzq} min={0} max={20} step="0.5" ph="10" />
+          <Num name="lungeDcha" label="Pie derecho (cm a la pared)" def={e?.lungeDcha} min={0} max={20} step="0.5" ph="10" />
+        </div>
+        <div className="tiny">Sin despegar el talón. Menos de 9-10 cm sugiere restricción de flexión dorsal.</div>
+
+        <div className="tiny" style={{ marginTop: 12 }}>5 · SINGLE HEEL RISE</div>
+        <div className="grid g2">
+          <Sel name="singleHeelIzq" label="Pie izquierdo" opts={SINGLE_HEEL_OPTS} def={e?.singleHeelIzq} />
+          <Sel name="singleHeelDcho" label="Pie derecho" opts={SINGLE_HEEL_OPTS} def={e?.singleHeelDcho} />
+        </div>
+        <div className="tiny">
+          Si el paciente no puede hacerlo, márcalo como tal: es un hallazgo en sí mismo y la app te
+          propondrá el <b>Double Heel Rise</b> como alternativa en la pantalla siguiente.
+        </div>
+      </>
+    );
+
+  // Elegir complementarios: se agrupan por la rama que los pide, ya
+  // deduplicados y con tope, para que elegir sea inmediato.
+  if (section === "comp_sel") {
+    const ramas = ramasActivas(q, e);
+    const sugerencias = complementariosSugeridos(q, e);
+    // Al entrar por primera vez no hay nada guardado, pero sí premarcado: el
+    // aviso y el tiempo tienen que hablar de lo que se ve marcado en pantalla.
+    const guardado = (e?.testsSel ?? []).map(normalizaId);
+    const efectiva = guardado.length
+      ? guardado
+      : sugerencias.filter((x) => x.sugerido).map((x) => x.test.id);
+    const sel = guardado;
+    const sinCubrir = ramas
+      .filter(({ rama }) => !rama.tests.some((id) => efectiva.includes(id)))
+      .map(({ rama }) => rama.nombre);
+    const minutos = minutosDe(efectiva as TestId[]);
+    if (ramas.length === 0)
+      return (
+        <>
           <div className="note">
-            Aún no hay zonas de dolor ni desgaste anotados en el cuestionario, así que no se puede
-            priorizar: elige según tu criterio.
+            Con lo anotado hasta ahora no se activa ninguna rama: no hay zonas de dolor marcadas ni
+            un morfotipo que pida tests extra. Con los {NUCLEO.length} generales es suficiente, pero
+            puedes añadir los que veas.
+          </div>
+          <div className="sp" />
+          {TESTS.filter((t) => !NUCLEO.includes(t)).map((test) => (
+            <label className="testcard" key={test.id}>
+              <input type="checkbox" name="testsSel" value={test.id} defaultChecked={sel.includes(test.id)} />
+              <div>
+                <b>{test.nombre}</b>
+                <div className="tiny" style={{ marginTop: 3 }}>{test.para}</div>
+              </div>
+            </label>
+          ))}
+        </>
+      );
+    return (
+      <>
+        <p className="muted" style={{ margin: "4px 0 10px" }}>
+          Según el cuadro se activan estas ramas:{" "}
+          <b>{ramas.map(({ rama }) => rama.nombre).join(" · ")}</b>. Cada rama necesita al menos un
+          test que la valore. Nada se repite: lo que ya está en los generales o en la exploración no
+          vuelve a salir.
+        </p>
+        {sinCubrir.length > 0 && (
+          <div className="note a">
+            Sin cubrir todavía: <b>{sinCubrir.join(", ")}</b>. Marca al menos un test de cada una.
           </div>
         )}
-        {recs.map(({ test, motivos }) => (
+        {sugerencias.map(({ test, ramas: rs, motivos, sugerido }) => (
           <label className="testcard" key={test.id}>
             <input
               type="checkbox"
               name="testsSel"
               value={test.id}
-              defaultChecked={sel.includes(test.id)}
+              defaultChecked={sel.length ? sel.includes(test.id) : sugerido}
             />
             <div>
               <div className="row" style={{ gap: 8 }}>
                 <b>{test.nombre}</b>
-                {motivos.length >= 2 ? (
-                  <span className="pill g">Muy indicado</span>
-                ) : motivos.length === 1 ? (
-                  <span className="pill a">Indicado</span>
+                {rs.length > 1 ? (
+                  <span className="pill g">Sirve para {rs.length} ramas</span>
+                ) : sugerido ? (
+                  <span className="pill a">Sugerido</span>
                 ) : (
-                  <span className="pill n">Menos indicado aquí</span>
+                  <span className="pill n">Opcional</span>
                 )}
+                {test.alerta && <span className="pill r">Descarta bandera roja</span>}
               </div>
               <div className="tiny" style={{ marginTop: 3 }}>{test.para}</div>
               <div className="tiny">
-                <b>Indicado en:</b> {test.indicado}
+                <b>Rama:</b> {rs.join(" · ")} · ~{test.minutos} min
               </div>
               {motivos.length > 0 && (
                 <div className="tiny" style={{ color: "var(--green)" }}>
@@ -441,79 +627,39 @@ function ESection({ section, e, q }: { section: string; e: Exam | null; q: Quest
             </div>
           </label>
         ))}
+        <div className="tiny" style={{ marginTop: 8 }}>
+          Vienen premarcados los que propone la app. Los {NUCLEO.length} generales no aparecen aquí
+          porque ya se han hecho. Tiempo estimado de lo marcado: ~{minutos} min
+          {efectiva.length > AVISO_VOLUMEN && " — son bastantes pruebas para una sola visita"}.
+        </div>
       </>
     );
   }
 
-  // Resultados: solo se piden los de los tests elegidos
-  if (section === "tests_res") {
-    const sel = (e?.testsSel ?? []) as TestId[];
+  // Resultados: solo los complementarios elegidos
+  if (section === "comp_res") {
+    const sel = (e?.testsSel ?? []).map(normalizaId);
     if (sel.length === 0)
       return (
-        <div className="note a">
-          Todavía no has elegido los tests. Vuelve a la pantalla anterior y marca al menos{" "}
-          {MIN_TESTS}.
+        <div className="note">
+          No has elegido ningún test complementario, así que aquí no hay nada que anotar. Con los{" "}
+          {NUCLEO.length} generales el estudio sigue siendo válido: continúa a la dismetría.
         </div>
       );
     return (
       <>
         <p className="muted" style={{ margin: "4px 0 10px" }}>
-          Anota el resultado de los {sel.length} tests que has elegido.
+          Anota el resultado de los {sel.length} tests complementarios que has elegido.
         </p>
-        {sel.includes("jack") && (
-          <>
-            <div className="tiny" style={{ marginTop: 12 }}>TEST DE JACK / HUBSCHER</div>
-            <div className="grid g2">
-              <Sel name="jackIzq" label="Pie izquierdo" opts={JACK_OPTS} def={e?.jackIzq} />
-              <Sel name="jackDcho" label="Pie derecho" opts={JACK_OPTS} def={e?.jackDcho} />
+        {TESTS.filter((t) => sel.includes(t.id)).map((t) => (
+          <div key={t.id}>
+            <div className="tiny" style={{ marginTop: 12 }}>
+              {t.nombre.toUpperCase()}
+              {t.alerta && " · HALLAZGO DE ALERTA SI ES POSITIVO"}
             </div>
-          </>
-        )}
-        {sel.includes("navicular") && (
-          <>
-            <div className="tiny" style={{ marginTop: 12 }}>NAVICULAR DROP</div>
-            <div className="grid g2">
-              <Num name="navDropIzq" label="Pie izquierdo (mm)" def={e?.navDropIzq} min={0} max={30} ph="6" />
-              <Num name="navDropDcho" label="Pie derecho (mm)" def={e?.navDropDcho} min={0} max={30} ph="6" />
-            </div>
-            <div className="tiny">Descenso del escafoides de neutro a apoyo relajado. Más de 10 mm se considera patológico.</div>
-          </>
-        )}
-        {sel.includes("resist_sup") && (
-          <>
-            <div className="tiny" style={{ marginTop: 12 }}>RESISTENCIA A LA SUPINACIÓN</div>
-            <div className="grid g2">
-              <Sel name="resistSupIzq" label="Pie izquierdo" opts={RESIST_SUP_OPTS} def={e?.resistSupIzq} />
-              <Sel name="resistSupDcho" label="Pie derecho" opts={RESIST_SUP_OPTS} def={e?.resistSupDcho} />
-            </div>
-            <div className="tiny">Alta resistencia → hace falta más cuña/posting medial en la plantilla.</div>
-          </>
-        )}
-        {sel.includes("max_pronacion") && (
-          <>
-            <div className="tiny" style={{ marginTop: 12 }}>MÁXIMA PRONACIÓN</div>
-            <div className="grid g2">
-              <Sel name="maxPronIzq" label="Pie izquierdo" opts={MAX_PRONACION_OPTS} def={e?.maxPronIzq} />
-              <Sel name="maxPronDcho" label="Pie derecho" opts={MAX_PRONACION_OPTS} def={e?.maxPronDcho} />
-            </div>
-          </>
-        )}
-        {sel.includes("lunge") && (
-          <>
-            <div className="tiny" style={{ marginTop: 12 }}>LUNGE TEST</div>
-            <div className="grid g2">
-              <Num name="lungeIzq" label="Pie izquierdo (cm a la pared)" def={e?.lungeIzq} min={0} max={20} step="0.5" ph="10" />
-              <Num name="lungeDcha" label="Pie derecho (cm a la pared)" def={e?.lungeDcha} min={0} max={20} step="0.5" ph="10" />
-            </div>
-            <div className="tiny">Rodilla a la pared sin despegar el talón. Menos de 9-10 cm sugiere restricción de flexión dorsal.</div>
-          </>
-        )}
-        {sel.includes("heel_rise") && (
-          <>
-            <div className="tiny" style={{ marginTop: 12 }}>DOUBLE HEEL RISE</div>
-            <Sel name="heelRise" label="Resultado" opts={HEEL_RISE_OPTS} def={e?.heelRise} />
-          </>
-        )}
+            <CompCampos id={t.id} e={e} />
+          </div>
+        ))}
       </>
     );
   }
@@ -574,6 +720,7 @@ export function CapturaGuiada({ kase, paso }: { kase: CaseWithCapture; paso?: nu
   const media = cp?.media.filter((m) => m.confirmedAt) ?? [];
   const has = (k: string) => media.some((m) => m.kind === k);
   const cl = checklistOf(cp);
+  const alertas = alertasDe(e);
   const repeat = kase.state === "DEVUELTO_CLINICA";
   const lastIncident = repeat
     ? [...kase.incidents].sort((a, b) => +b.createdAt - +a.createdAt).find((i) => i.type === "CAPTURA_INVALIDA")
@@ -781,12 +928,23 @@ export function CapturaGuiada({ kase, paso }: { kase: CaseWithCapture; paso?: nu
               Checklist bloqueante del protocolo: sin todo en verde no hay envío a prescripción.
             </p>
             <CheckLine ok={cl.cuestionario}>Cuestionario clínico (5 pantallas)</CheckLine>
-            <CheckLine ok={cl.exploracion}>Exploración y tests (5 pantallas)</CheckLine>
+            <CheckLine ok={cl.exploracion}>Exploración y tests (6 pantallas)</CheckLine>
             <CheckLine ok={cl.videos >= VIDEO_KINDS.length}>
               Vídeos {cl.videos}/{VIDEO_KINDS.length} (de pie, marcha y elevación de talones)
             </CheckLine>
             <CheckLine ok={cl.baro}>Baropodometría (estática + dinámica múltiple)</CheckLine>
             <CheckLine ok={cl.escaneos}>Escaneo de las espumas fenólicas</CheckLine>
+            {alertas.length > 0 && (
+              <div className="note r" style={{ marginTop: 10 }}>
+                <b>Hallazgos de alerta en la exploración</b> — se envían destacados al prescriptor,
+                porque no se resuelven con una plantilla:
+                <ul style={{ margin: "6px 0 0 18px" }}>
+                  {alertas.map((a) => (
+                    <li key={a}>{a}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
             {cl.completa ? (
               <form action={sendCaseAction}>
                 <input type="hidden" name="caseId" value={kase.id} />

@@ -2,6 +2,7 @@ import type { Capture, Case, MediaAsset, Patient, Prescription, User } from "@pr
 import { checklistOf } from "@/lib/cases";
 import { questionnaireLines, type Questionnaire } from "@/lib/questionnaire";
 import { examLines, type Exam } from "@/lib/exploracion";
+import { alertasDe } from "@/lib/tests-podologicos";
 import { VIDEO_KINDS } from "@/lib/format";
 
 type CaseFull = Case & {
@@ -18,6 +19,7 @@ export function Expediente({ kase }: { kase: CaseFull }) {
   const cl = checklistOf(cp);
   const qLines = questionnaireLines(q);
   const eLines = examLines(e);
+  const alertas = alertasDe(e);
   return (
     <div className="card">
       <b style={{ fontFamily: "var(--font-sora)" }}>Expediente del estudio</b>
@@ -35,6 +37,16 @@ export function Expediente({ kase }: { kase: CaseFull }) {
           <div className="muted">Pendiente</div>
         )}
       </div>
+      {alertas.length > 0 && (
+        <div className="note r" style={{ marginTop: 12 }}>
+          <b>Hallazgos de alerta</b> — valorar antes de prescribir:
+          <ul style={{ margin: "6px 0 0 18px" }}>
+            {alertas.map((a) => (
+              <li key={a}>{a}</li>
+            ))}
+          </ul>
+        </div>
+      )}
       <div style={{ marginTop: 14 }}>
         <div className="tiny">EXPLORACIÓN BIOMECÁNICA Y TESTS</div>
         {eLines.length ? (

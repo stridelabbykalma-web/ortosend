@@ -1,4 +1,4 @@
-import { TEST_POR_ID, type TestId } from "./tests-podologicos";
+import { TEST_POR_ID, normalizaId } from "./tests-podologicos";
 
 // Exploración biomecánica (paso 2 del protocolo de captura): la valoración que
 // necesita el prescriptor para recetar la plantilla. Definición compartida entre
@@ -29,7 +29,7 @@ export const CADENA_POSTERIOR_OPTS = [
   "Acortamiento marcado",
 ] as const;
 
-// --- B · Tests podológicos en carga ---
+// --- B · Tests podológicos en carga (el catálogo vive en tests-podologicos.ts) ---
 export const TIPO_PIE_OPTS = [
   "Neutro",
   "Plano flexible",
@@ -75,27 +75,56 @@ export type Exam = {
   primerRadio?: string;
   hallux?: string;
   cadenaPosterior?: string;
-  // B · Tests elegidos (mínimo 5 de 6) y sus resultados
-  testsSel?: string[]; // ids de TESTS realizados
+  // B · Núcleo: los 5 tests que se hacen siempre
   jackIzq?: string;
   jackDcho?: string;
   navDropIzq?: string; // mm
   navDropDcho?: string;
   resistSupIzq?: string;
   resistSupDcho?: string;
+  singleHeelIzq?: string;
+  singleHeelDcho?: string;
+  // (lungeIzq / lungeDcha están arriba: se miden en la misma camilla)
+  // C · Complementarios elegidos según la rama del cuadro
+  testsSel?: string[]; // ids de los complementarios realizados
+  heelRise?: string; // double heel rise
   maxPronIzq?: string;
   maxPronDcho?: string;
-  heelRise?: string;
+  navDriftIzq?: string; // mm
+  navDriftDcho?: string;
+  tooManyToes?: string;
+  resistInversion?: string;
+  coleman?: string;
+  balanceIzq?: string; // segundos
+  balanceDcho?: string;
+  singleLegSquat?: string;
+  stepDown?: string;
+  trendelenburg?: string;
+  rotCadera?: string;
+  halluxLimitus?: string;
+  dorsi1mtfIzq?: string; // grados
+  dorsi1mtfDcho?: string;
+  formulaMetatarsal?: string;
+  formulaDigital?: string;
+  compresionMtt?: string;
+  mulder?: string;
+  compresionCalcaneo?: string;
+  palpacionCalcaneo?: string;
+  palpacionAquiles?: string;
+  thompson?: string;
+  tinel?: string;
+  estabilidadTobillo?: string;
+  territorioSensitivo?: string;
   // Exploración general
   fpiIzq?: string; // FPI-6, -12..+12
   fpiDcho?: string;
   tipoPie?: string;
-  // C · Dismetría
+  // D · Dismetría
   dismetria?: string; // "No" | "Sí" (v1: "Sí — izq. más corta")
   ladoCorto?: string;
   lamina?: string; // lámina que nivela la pelvis
   alza?: string; // alza recomendada en plantilla (mm); v1: texto libre
-  // D · Marcha
+  // E · Marcha
   marchaPatron?: string;
   contactoInicial?: string;
   anguloPaso?: string;
@@ -136,17 +165,46 @@ export function examLines(e: Exam | null | undefined): [string, string][] {
   add("Cadena posterior", e.cadenaPosterior);
   add("FPI-6", pair(fpiLabel(e.fpiIzq), fpiLabel(e.fpiDcho)));
   add("Tipo de pie", e.tipoPie);
-  // B · Tests realizados y resultados (solo salen los que se hicieron)
-  const sel = (e.testsSel ?? []) as TestId[];
-  if (sel.length)
-    add("Tests realizados", sel.map((id) => TEST_POR_ID[id]?.nombre ?? id).join(" · "));
-  add("Test de Jack / Hubscher", pair(e.jackIzq, e.jackDcho));
+  // B · Núcleo (siempre) — los 5 salen aunque estén a medias, para que se vea qué falta
+  add("Jack / Hubscher", pair(e.jackIzq, e.jackDcho));
   add("Navicular drop", pair(e.navDropIzq, e.navDropDcho, " mm"));
   add("Resistencia a la supinación", pair(e.resistSupIzq, e.resistSupDcho));
-  add("Máxima pronación", pair(e.maxPronIzq, e.maxPronDcho));
   add("Lunge test", pair(e.lungeIzq, e.lungeDcha, " cm"));
+  add("Single heel rise", pair(e.singleHeelIzq, e.singleHeelDcho));
+  // C · Complementarios (solo los que se eligieron y se hicieron)
+  const sel = (e.testsSel ?? []).map(normalizaId);
+  if (sel.length)
+    add(
+      "Tests complementarios",
+      sel.map((id) => TEST_POR_ID[id]?.nombre ?? id).join(" · ")
+    );
   add("Double heel rise", e.heelRise);
-  // C · Dismetría
+  add("Máxima pronación", pair(e.maxPronIzq, e.maxPronDcho));
+  add("Navicular drift", pair(e.navDriftIzq, e.navDriftDcho, " mm"));
+  add("Too many toes", e.tooManyToes);
+  add("Resistencia a la inversión", e.resistInversion);
+  add("Coleman block test", e.coleman);
+  add("Balance monopodal", pair(e.balanceIzq, e.balanceDcho, " s"));
+  add("Single leg squat", e.singleLegSquat);
+  add("Step down test", e.stepDown);
+  add("Trendelenburg", e.trendelenburg);
+  add("Rotación de cadera", e.rotCadera);
+  add("Hallux limitus funcional", e.halluxLimitus);
+  add("Dorsiflexión 1.ª MTF", pair(e.dorsi1mtfIzq, e.dorsi1mtfDcho, "°"));
+  add(
+    "Fórmula metatarsal / digital",
+    [e.formulaMetatarsal, e.formulaDigital].filter(Boolean).join(" · ") || undefined
+  );
+  add("Compresión metatarsal", e.compresionMtt);
+  add("Signo de Mulder", e.mulder);
+  add("Compresión lateral del calcáneo", e.compresionCalcaneo);
+  add("Palpación del calcáneo", e.palpacionCalcaneo);
+  add("Palpación del tendón de Aquiles", e.palpacionAquiles);
+  add("Thompson", e.thompson);
+  add("Tinel túnel tarsiano", e.tinel);
+  add("Estabilidad de tobillo", e.estabilidadTobillo);
+  add("Exploración sensitiva", e.territorioSensitivo);
+  // D · Dismetría
   if (e.dismetria === "Sí" && e.ladoCorto) {
     add("Dismetría", `Sí — ${e.ladoCorto.toLowerCase()} más corta`);
   } else {
@@ -154,7 +212,7 @@ export function examLines(e: Exam | null | undefined): [string, string][] {
   }
   add("Lámina que nivela la pelvis", e.lamina);
   if (e.alza && e.alza !== "No") add("Alza recomendada en plantilla", /^\d/.test(e.alza) ? `${e.alza} mm` : e.alza);
-  // D · Marcha
+  // E · Marcha
   add("Patrón de pisada", e.marchaPatron);
   add("Contacto inicial", e.contactoInicial);
   add("Ángulo de paso", e.anguloPaso);

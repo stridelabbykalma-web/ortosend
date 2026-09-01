@@ -8,7 +8,7 @@ import { checklistOf, notify, pushEvent } from "@/lib/cases";
 import { VIDEO_KINDS, BARO_KINDS, SCAN_KIND } from "@/lib/format";
 import type { Questionnaire } from "@/lib/questionnaire";
 import type { Exam } from "@/lib/exploracion";
-import { MIN_TESTS } from "@/lib/tests-podologicos";
+import { nucleoCompleto, ramasSinCubrir } from "@/lib/tests-podologicos";
 import type { User } from "@prisma/client";
 
 const MAX_SLOTS = 5;
@@ -121,7 +121,7 @@ async function captureFor(caseId: string, u: User) {
 
 const Q_FIELDS: Record<string, { strs: (keyof Questionnaire)[]; lists: (keyof Questionnaire)[]; last?: boolean }> = {
   motivo: { strs: ["motivo", "evolucion", "dolor", "lado"], lists: [] },
-  zonas: { strs: [], lists: ["zonas", "momentos"] },
+  zonas: { strs: ["tipoSintoma"], lists: ["zonas", "momentos"] },
   actividad: { strs: ["actividad", "deporte", "horasPie", "profesion", "peso", "altura", "tallaCalzado"], lists: [] },
   calzado: { strs: ["desgaste", "plantillasPrevias"], lists: ["calzado"] },
   antecedentes: {
@@ -136,8 +136,8 @@ const E_FIELDS: Record<string, { strs: (keyof Exam)[]; lists: (keyof Exam)[]; la
     strs: ["tobillo", "hallux", "subastragalina", "primerRadio", "cadenaPosterior", "tipoPie", "fpiIzq", "fpiDcho"],
     lists: [],
   },
-  tests_sel: { strs: [], lists: ["testsSel"] },
-  tests_res: {
+  // Los 5 generales, que se hacen siempre
+  nucleo: {
     strs: [
       "jackIzq",
       "jackDcho",
@@ -145,11 +145,44 @@ const E_FIELDS: Record<string, { strs: (keyof Exam)[]; lists: (keyof Exam)[]; la
       "navDropDcho",
       "resistSupIzq",
       "resistSupDcho",
-      "maxPronIzq",
-      "maxPronDcho",
       "lungeIzq",
       "lungeDcha",
+      "singleHeelIzq",
+      "singleHeelDcho",
+    ],
+    lists: [],
+  },
+  comp_sel: { strs: [], lists: ["testsSel"] },
+  comp_res: {
+    strs: [
       "heelRise",
+      "maxPronIzq",
+      "maxPronDcho",
+      "navDriftIzq",
+      "navDriftDcho",
+      "tooManyToes",
+      "resistInversion",
+      "coleman",
+      "balanceIzq",
+      "balanceDcho",
+      "singleLegSquat",
+      "stepDown",
+      "trendelenburg",
+      "rotCadera",
+      "halluxLimitus",
+      "dorsi1mtfIzq",
+      "dorsi1mtfDcho",
+      "formulaMetatarsal",
+      "formulaDigital",
+      "compresionMtt",
+      "mulder",
+      "compresionCalcaneo",
+      "palpacionCalcaneo",
+      "palpacionAquiles",
+      "thompson",
+      "tinel",
+      "estabilidadTobillo",
+      "territorioSensitivo",
     ],
     lists: [],
   },
@@ -249,14 +282,24 @@ export async function saveExamSectionAction(formData: FormData) {
   const prev = (capture.physicalExam ?? {}) as Record<string, unknown>;
   const values = sectionValues(formData, def);
 
-  if (section === "tests_sel" && ((values.testsSel as string[]) ?? []).length < MIN_TESTS) {
-    // Guardamos igualmente lo ya marcado: al volver con el aviso, el profesional
-    // encuentra su selección tal cual la dejó y solo añade los que faltan.
-    await prisma.capture.update({
-      where: { id: capture.id },
-      data: { physicalExam: { ...prev, ...values, v: 2, done: prev.done === true } as Exam },
-    });
-    fail(back, `Elige al menos ${MIN_TESTS} tests de los 6`);
+  const merged = { ...prev, ...values } as Exam;
+
+  // Los 5 generales son obligatorios para todos.
+  if (section === "nucleo" && !nucleoCompleto(merged))
+    fail(back, "Faltan resultados: los 5 tests generales se hacen en todos los pacientes");
+
+  // Cada rama activa necesita al menos un test que la valore. Guardamos antes
+  // de avisar, para que al volver esté marcado lo que ya había elegido.
+  if (section === "comp_sel") {
+    const q = (capture.questionnaire ?? null) as Questionnaire | null;
+    const sinCubrir = ramasSinCubrir(q, merged);
+    if (sinCubrir.length) {
+      await prisma.capture.update({
+        where: { id: capture.id },
+        data: { physicalExam: { ...merged, v: 2, done: prev.done === true } as Exam },
+      });
+      fail(back, `Marca al menos un test para: ${sinCubrir.join(", ")}`);
+    }
   }
 
   if (section === "dismetria") {

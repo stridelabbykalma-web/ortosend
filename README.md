@@ -23,14 +23,17 @@ asociadas. Stack: **Next.js (App Router, server actions) + PostgreSQL (Prisma)**
 **Panel clínica**
 - Agenda (citas Flujo A + casos Flujo B), disponibilidad (máx. 5 huecos), profesionales y
   formación 5/5, liquidaciones (placeholder).
-- **Asistente de captura** de 6 pasos con guardado continuo: cuestionario clínico completo
+- **Asistente de captura** guiado con guardado continuo: cuestionario clínico completo
   (motivo/dolor, actividad y datos físicos, calzado, antecedentes y tratamientos previos —
   visible entero en el expediente que llega al prescriptor), exploración biomecánica con tests
   (Silfverskiöld, subastragalina, primer radio, hallux, cadena posterior, FPI-6 y tipo de pie),
-  **6 tests podológicos de los que se eligen al menos 5** (Jack/Hubscher, navicular drop,
-  resistencia a la supinación, máxima pronación, lunge y double heel rise) con recomendación
-  automática según las zonas de dolor, el desgaste del calzado y los hallazgos ya anotados,
-  dismetría valorada con nivel pélvico y láminas calibradas, análisis observacional de la
+  **núcleo de 5 tests obligatorios** (Jack/Hubscher, navicular drop, resistencia a la
+  supinación, lunge/knee-to-wall y single heel rise) más los **complementarios que activa cada
+  rama** según la zona y el tipo de dolor, el morfotipo del pie y los resultados del propio
+  núcleo (13 ramas, 23 tests, sin repetir nada que ya esté en el núcleo o en la exploración,
+  con tope de sugerencias y aviso de volumen), y **hallazgos de alerta** (Thompson, Tinel,
+  compresión del calcáneo) destacados para el prescriptor porque no se resuelven con una
+  plantilla; dismetría valorada con nivel pélvico y láminas calibradas, análisis observacional de la
   marcha, 6 vídeos (de pie posterior y anterior, caminando desde atrás, desde delante y
   lateral, y elevación de talones), baropodometría Podisense (estática + dinámica múltiple) y
   escaneo de las espumas fenólicas como último paso — estas tres se hacen en su propia

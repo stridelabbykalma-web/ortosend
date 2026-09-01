@@ -203,7 +203,7 @@ model Capture {
   caseId    String  @unique
   case      Case    @relation(fields: [caseId], references: [id])
   questionnaire Json?   // cuestionario clínico (paso 2 del protocolo)
-  physicalExam  Json?   // exploración + los 5 tests elegidos de 6 y sus resultados
+  physicalExam  Json?   // exploración + núcleo de 5 tests y complementarios por rama
   media     MediaAsset[]
   baroFileUrl String?   // informe del dashboard Podisense (vía 2; vía 1 = API Fresco)
   completedAt DateTime? // checklist superada → envío
