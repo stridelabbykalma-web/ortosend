@@ -6,15 +6,7 @@
 import { useEffect, useRef, useState } from "react";
 import { markMediaAction } from "@/app/panel/clinica-actions";
 
-export type OverlayKind =
-  | "marcha_post"
-  | "marcha_ant"
-  | "marcha_lat"
-  | "marcha_general"
-  | "pie_izq"
-  | "pie_dcho"
-  | "baro_estatica"
-  | "baro_dinamica";
+export type OverlayKind = "marcha_post" | "marcha_ant" | "marcha_lat" | "marcha_general";
 
 // Silueta de encuadre que se dibuja sobre la imagen de la cámara.
 function Overlay({ kind }: { kind: OverlayKind }) {
@@ -84,34 +76,6 @@ function Overlay({ kind }: { kind: OverlayKind }) {
     </g>
   );
 
-  // Contorno de pie (escaneo 3D), planta hacia la cámara
-  const pie = (flip: boolean) => (
-    <g stroke={zone} {...common} transform={flip ? "translate(300,0) scale(-1,1)" : undefined}>
-      <path d="M150 355 C 105 345 98 290 108 230 C 116 178 112 140 124 105 C 133 78 168 72 184 96 C 198 118 196 170 192 225 C 188 285 192 345 150 355 Z" />
-      <circle cx={131} cy={84} r={11} />
-      <circle cx={156} cy={72} r={9} />
-      <circle cx={177} cy={78} r={8} />
-    </g>
-  );
-
-  // Dos pies sobre la plataforma de presiones
-  const baro = (walking: boolean) => (
-    <g stroke={zone} {...common}>
-      <rect x={40} y={40} width={220} height={320} rx={12} stroke={guide} strokeDasharray="8 8" strokeWidth={2} />
-      <path d="M118 300 C 95 293 92 258 98 218 C 102 190 100 165 108 145 C 114 128 136 125 144 140 C 151 154 149 190 147 220 C 145 260 143 295 118 300 Z" />
-      <path d="M182 300 C 205 293 208 258 202 218 C 198 190 200 165 192 145 C 186 128 164 125 156 140 C 149 154 151 190 153 220 C 155 260 157 295 182 300 Z" />
-      {walking && (
-        <>
-          <path d="M150 330 L150 70" stroke={guide} strokeDasharray="5 8" strokeWidth={2} />
-          <path d="M150 70 L138 88 M150 70 L162 88" stroke={guide} strokeWidth={2} />
-          <text x={150} y={388} textAnchor="middle" fill={guide} fontSize={12} stroke="none">
-            varias pasadas seguidas sobre la plataforma
-          </text>
-        </>
-      )}
-    </g>
-  );
-
   const walkArrow = (
     <g stroke={guide} strokeWidth={2} fill="none">
       <path d="M60 372 L240 372 M240 372 L224 362 M240 372 L224 382" />
@@ -130,10 +94,6 @@ function Overlay({ kind }: { kind: OverlayKind }) {
       {kind === "marcha_post" && posterior}
       {kind === "marcha_ant" && anterior}
       {kind === "marcha_general" && general}
-      {kind === "pie_izq" && pie(false)}
-      {kind === "pie_dcho" && pie(true)}
-      {kind === "baro_estatica" && baro(false)}
-      {kind === "baro_dinamica" && baro(true)}
     </svg>
   );
 }

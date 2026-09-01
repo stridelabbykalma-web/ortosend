@@ -28,9 +28,10 @@ asociadas. Stack: **Next.js (App Router, server actions) + PostgreSQL (Prisma)**
   visible entero en el expediente que llega al prescriptor), exploración biomecánica con tests
   podológicos (Silfverskiöld, lunge, FPI-6, Jack, navicular drop, heel rise), dismetría valorada
   con nivel pélvico y láminas calibradas, y análisis observacional de la marcha,
-  escaneo 3D (2), vídeos de marcha (4: desde atrás, de frente, de lado y plano general),
-  baropodometría Podisense (estática + dinámica múltiple +
-  informe) y **checklist bloqueante** — sin todo en verde no hay envío.
+  vídeos de marcha (4: desde atrás, de frente, de lado y plano general, grabados con la
+  cámara guiada por silueta), escaneo 3D (2, archivo del Revopoint) y baropodometría
+  Podisense (estática + dinámica múltiple + informe, hechas en su programa y marcadas
+  aquí) y **checklist bloqueante** — sin todo en verde no hay envío.
 
 **Prescripción**
 - Cola del prescriptor de clínica y **cola central Ortosend** (clínicas sin prescriptor) con

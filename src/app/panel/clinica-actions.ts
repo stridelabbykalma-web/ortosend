@@ -12,6 +12,16 @@ import type { User } from "@prisma/client";
 
 const MAX_SLOTS = 5;
 
+// Nombre seguro para rutas de archivo a partir del nombre del paciente.
+function slugify(t: string) {
+  return t
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
 function fail(path: string, msg: string): never {
   redirect(`${path}${path.includes("?") ? "&" : "?"}error=` + encodeURIComponent(msg));
 }
@@ -256,14 +266,17 @@ export async function markMediaAction(formData: FormData) {
   const next = String(formData.get("next") ?? "");
   const valid = ["scan_L", "scan_R", ...VIDEO_KINDS.map(([k]) => k), ...BARO_KINDS.map(([k]) => k)];
   if (!valid.includes(kind)) fail(`/caso/${caseId}`, "Elemento de captura desconocido");
-  const { capture } = await captureFor(caseId, u);
+  const { kase, capture } = await captureFor(caseId, u);
   const exists = await prisma.mediaAsset.findFirst({ where: { captureId: capture.id, kind } });
   if (!exists) {
+    // Carpeta por caso identificada con el nombre del paciente, para que el archivo
+    // del escáner o del dashboard quede asociado sin depender de su nombre original.
+    const carpeta = `estudios/${String(kase.number).padStart(5, "0")}-${slugify(kase.patient.name)}`;
     await prisma.mediaAsset.create({
       data: {
         captureId: capture.id,
         kind,
-        url: `media/${caseId}/${kind}`,
+        url: `${carpeta}/${kind}`,
         confirmedAt: new Date(), // check verde SOLO con confirmación del servidor
       },
     });

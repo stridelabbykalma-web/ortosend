@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { Capture, Case, Incident, MediaAsset } from "@prisma/client";
+import type { Capture, Case, Incident, MediaAsset, Patient } from "@prisma/client";
 import { checklistOf } from "@/lib/cases";
 import { VIDEO_KINDS } from "@/lib/format";
 import {
@@ -46,6 +46,7 @@ import { CamaraGuiada, type OverlayKind } from "./camara-guiada";
 import { AutosaveForm } from "./autosave-form";
 
 type CaseWithCapture = Case & {
+  patient: Patient;
   capture: (Capture & { media: MediaAsset[] }) | null;
   incidents: Incident[];
 };
@@ -65,7 +66,7 @@ type Slide =
       checks: string[];
       help: string;
     }
-  | { t: "file"; kind: string; title: string; grupo: string; help: string }
+  | { t: "file"; kind: string; title: string; grupo: string; help: string; boton: string; hecho: string }
   | { t: "envio"; title: string; grupo: string };
 
 const VIDEO_META: Record<string, { overlay: OverlayKind; checks: string[]; help: string }> = {
@@ -137,68 +138,49 @@ function buildSlides(): Slide[] {
       } as Slide;
     }),
     {
-      t: "media",
+      t: "file",
       kind: "scan_L",
       title: "Escaneo 3D — pie izquierdo",
       grupo: "Escaneo 3D",
-      overlay: "pie_izq",
-      mode: "foto",
-      checks: [
-        "Pie limpio, sin calcetín y completo dentro del contorno",
-        "Paciente sentado con el pie relajado en el soporte",
-        "El contorno de la figura coincide con el pie",
-      ],
-      help: "Escanea con Revopoint toda la superficie plantar y los laterales del pie izquierdo.",
+      help: "Escanea el pie izquierdo con el Revopoint y adjunta aquí el archivo que genera el escáner (.stl / .ply / .obj).",
+      boton: "Adjuntar archivo del escáner",
+      hecho: "Escaneo del pie izquierdo adjuntado.",
     },
     {
-      t: "media",
+      t: "file",
       kind: "scan_R",
       title: "Escaneo 3D — pie derecho",
       grupo: "Escaneo 3D",
-      overlay: "pie_dcho",
-      mode: "foto",
-      checks: [
-        "Pie limpio, sin calcetín y completo dentro del contorno",
-        "Paciente sentado con el pie relajado en el soporte",
-        "El contorno de la figura coincide con el pie",
-      ],
-      help: "Escanea con Revopoint toda la superficie plantar y los laterales del pie derecho.",
+      help: "Escanea el pie derecho con el Revopoint y adjunta aquí el archivo que genera el escáner (.stl / .ply / .obj).",
+      boton: "Adjuntar archivo del escáner",
+      hecho: "Escaneo del pie derecho adjuntado.",
     },
     {
-      t: "media",
+      t: "file",
       kind: "baro_est",
       title: "Baropodometría estática",
       grupo: "Baropodometría",
-      overlay: "baro_estatica",
-      mode: "foto",
-      checks: [
-        "Ambos pies dentro de la plataforma, como en la figura",
-        "Paciente quieto, mirando al frente, brazos relajados",
-        "Captura de 10 segundos sin apoyos externos",
-      ],
-      help: "Captura estática de presiones con el Podisense: reparto de cargas y superficie de apoyo en bipedestación.",
+      help: "Haz la captura estática en el programa del Podisense (paciente quieto, 10 segundos) y marca aquí que está hecha, adjuntando la exportación si la tienes.",
+      boton: "Marcar estática como hecha",
+      hecho: "Baropodometría estática registrada.",
     },
     {
-      t: "media",
+      t: "file",
       kind: "baro_din_multi",
       title: "Baropodometría dinámica múltiple",
       grupo: "Baropodometría",
-      overlay: "baro_dinamica",
-      mode: "video",
-      checks: [
-        "Modo «dinámica múltiple» activado en el Podisense",
-        "El paciente cruza la plataforma andando con naturalidad, varias pasadas seguidas",
-        "El pie contacta completo dentro de la zona marcada",
-        "Hay pasos válidos suficientes de cada pie registrados",
-      ],
-      help: "Registro dinámico múltiple: varias pasadas consecutivas sobre la plataforma para promediar el patrón de presiones de cada pie durante la marcha.",
+      help: "Haz el registro dinámico múltiple en el programa del Podisense (varias pasadas seguidas) y márcalo aquí como hecho, adjuntando la exportación si la tienes.",
+      boton: "Marcar dinámica múltiple como hecha",
+      hecho: "Baropodometría dinámica múltiple registrada.",
     },
     {
       t: "file",
       kind: "baro_informe",
       title: "Informe de la baropodometría",
       grupo: "Baropodometría",
-      help: "Exporta el informe del dashboard Podisense y adjúntalo al caso.",
+      help: "Exporta el informe del dashboard Podisense y adjúntalo al caso (PDF).",
+      boton: "Adjuntar informe (PDF del dashboard)",
+      hecho: "Informe adjuntado.",
     },
     { t: "envio", title: "Revisión y envío", grupo: "Envío" },
   ];
@@ -645,7 +627,9 @@ export function CapturaGuiada({ kase, paso }: { kase: CaseWithCapture; paso?: nu
         {s.t === "file" &&
           (done ? (
             <>
-              <div className="note g">Informe adjuntado.</div>
+              <div className="note g">
+                {s.hecho} Queda asociado a <b>{kase.patient.name}</b> (caso #{kase.number}).
+              </div>
               <div className="sp" />
               <Link href={`/caso/${kase.id}?paso=${next ?? total}`}>
                 <button className="pri wfull" type="button">
@@ -663,9 +647,13 @@ export function CapturaGuiada({ kase, paso }: { kase: CaseWithCapture; paso?: nu
                 <input type="hidden" name="kind" value={s.kind} />
                 <input type="hidden" name="next" value={next ?? ""} />
                 <button type="submit" className="pri wfull">
-                  Adjuntar informe (PDF del dashboard)
+                  {s.boton}
                 </button>
               </form>
+              <div className="tiny" style={{ marginTop: 8 }}>
+                Se guardará asociado a <b>{kase.patient.name}</b> — caso #{kase.number}. No hace
+                falta renombrar el archivo: el nombre del paciente y el caso se añaden solos.
+              </div>
             </>
           ))}
 
