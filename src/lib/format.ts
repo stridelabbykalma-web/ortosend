@@ -68,9 +68,13 @@ export const VIDEO_KINDS = [
   ["video_general", "Marcha — plano general"],
 ] as const;
 
-// Baropodometría con Podisense: estática + dinámica múltiple + informe.
+// Baropodometría con Podisense: estática + dinámica múltiple. El informe lo
+// genera y entrega la propia plataforma, la clínica no lo adjunta.
 export const BARO_KINDS = [
   ["baro_est", "Estática (10 s)"],
   ["baro_din_multi", "Dinámica múltiple"],
-  ["baro_informe", "Informe del dashboard Podisense"],
 ] as const;
+
+// Escaneo de las espumas fenólicas: una sola pieza (ambos pies), hecha en la
+// plataforma del escáner; aquí solo se marca si está hecha.
+export const SCAN_KIND = "scan_espumas";

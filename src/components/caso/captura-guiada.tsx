@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { Capture, Case, Incident, MediaAsset, Patient } from "@prisma/client";
 import { checklistOf } from "@/lib/cases";
-import { VIDEO_KINDS } from "@/lib/format";
+import { SCAN_KIND, VIDEO_KINDS } from "@/lib/format";
 import {
   ACTIVIDAD_OPTS,
   ANTECEDENTES_OPTS,
@@ -139,24 +139,6 @@ function buildSlides(): Slide[] {
     }),
     {
       t: "file",
-      kind: "scan_L",
-      title: "Escaneo 3D — pie izquierdo",
-      grupo: "Escaneo 3D",
-      help: "Escanea el pie izquierdo con el Revopoint y adjunta aquí el archivo que genera el escáner (.stl / .ply / .obj).",
-      boton: "Adjuntar archivo del escáner",
-      hecho: "Escaneo del pie izquierdo adjuntado.",
-    },
-    {
-      t: "file",
-      kind: "scan_R",
-      title: "Escaneo 3D — pie derecho",
-      grupo: "Escaneo 3D",
-      help: "Escanea el pie derecho con el Revopoint y adjunta aquí el archivo que genera el escáner (.stl / .ply / .obj).",
-      boton: "Adjuntar archivo del escáner",
-      hecho: "Escaneo del pie derecho adjuntado.",
-    },
-    {
-      t: "file",
       kind: "baro_est",
       title: "Baropodometría estática",
       grupo: "Baropodometría",
@@ -175,12 +157,12 @@ function buildSlides(): Slide[] {
     },
     {
       t: "file",
-      kind: "baro_informe",
-      title: "Informe de la baropodometría",
-      grupo: "Baropodometría",
-      help: "Exporta el informe del dashboard Podisense y adjúntalo al caso (PDF).",
-      boton: "Adjuntar informe (PDF del dashboard)",
-      hecho: "Informe adjuntado.",
+      kind: SCAN_KIND,
+      title: "Escaneo de las espumas fenólicas",
+      grupo: "Escaneo",
+      help: "Toma el molde en las espumas fenólicas y escanéalo en su plataforma. Cuando esté hecho, márcalo aquí — es el último paso del estudio.",
+      boton: "Marcar escaneo como hecho",
+      hecho: "Escaneo de las espumas registrado.",
     },
     { t: "envio", title: "Revisión y envío", grupo: "Envío" },
   ];
@@ -667,8 +649,8 @@ export function CapturaGuiada({ kase, paso }: { kase: CaseWithCapture; paso?: nu
             <CheckLine ok={cl.videos >= VIDEO_KINDS.length}>
               Vídeos de marcha {cl.videos}/{VIDEO_KINDS.length} (atrás, frente, lado y plano general)
             </CheckLine>
-            <CheckLine ok={cl.escaneos}>Escaneo 3D de ambos pies</CheckLine>
-            <CheckLine ok={cl.baro}>Baropodometría (estática + dinámica múltiple + informe)</CheckLine>
+            <CheckLine ok={cl.baro}>Baropodometría (estática + dinámica múltiple)</CheckLine>
+            <CheckLine ok={cl.escaneos}>Escaneo de las espumas fenólicas</CheckLine>
             {cl.completa ? (
               <form action={sendCaseAction}>
                 <input type="hidden" name="caseId" value={kase.id} />

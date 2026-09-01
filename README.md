@@ -29,9 +29,10 @@ asociadas. Stack: **Next.js (App Router, server actions) + PostgreSQL (Prisma)**
   podológicos (Silfverskiöld, lunge, FPI-6, Jack, navicular drop, heel rise), dismetría valorada
   con nivel pélvico y láminas calibradas, y análisis observacional de la marcha,
   vídeos de marcha (4: desde atrás, de frente, de lado y plano general, grabados con la
-  cámara guiada por silueta), escaneo 3D (2, archivo del Revopoint) y baropodometría
-  Podisense (estática + dinámica múltiple + informe, hechas en su programa y marcadas
-  aquí) y **checklist bloqueante** — sin todo en verde no hay envío.
+  cámara guiada por silueta), baropodometría Podisense (estática + dinámica múltiple) y
+  escaneo de las espumas fenólicas como último paso — estas tres se hacen en su propia
+  plataforma y aquí solo se marcan como hechas; el informe llega desde Podisense y no se
+  adjunta. **Checklist bloqueante**: sin todo en verde no hay envío.
 
 **Prescripción**
 - Cola del prescriptor de clínica y **cola central Ortosend** (clínicas sin prescriptor) con

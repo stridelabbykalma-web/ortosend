@@ -209,12 +209,13 @@ model Capture {
   completedAt DateTime? // checklist superada → envío
 }
 
-// Vídeos (7: 6 de marcha + heel rise) y escaneos (2) — subida resiliente por fragmentos
+// Vídeos de marcha (4) grabados en la app; escaneo de espumas y baropodometría se
+// marcan como hechos porque los produce su propia plataforma
 model MediaAsset {
   id        String  @id @default(cuid())
   captureId String
   capture   Capture @relation(fields: [captureId], references: [id])
-  kind      String  // scan_L | scan_R | video_posterior|anterior|lateral|general | baro_est | baro_din_multi | baro_informe
+  kind      String  // video_posterior|anterior|lateral|general | baro_est | baro_din_multi | scan_espumas
   url       String
   sizeBytes Int?
   confirmedAt DateTime? // check verde SOLO cuando el servidor confirma

@@ -4,7 +4,8 @@ const bcrypt = require("bcryptjs");
 const PASS = "ortosend123";
 
 const VIDEO_KINDS = ["video_posterior", "video_anterior", "video_lateral", "video_general"];
-const BARO_KINDS = ["baro_est", "baro_din_multi", "baro_informe"];
+const BARO_KINDS = ["baro_est", "baro_din_multi"];
+const SCAN_KIND = "scan_espumas";
 
 function inDays(d, h = 10, m = 0) {
   const t = new Date();
@@ -251,7 +252,7 @@ async function seedDemo(prisma) {
       },
       completedAt: new Date(),
       media: {
-        create: ["scan_L", "scan_R", ...VIDEO_KINDS, ...BARO_KINDS].map((kind) => ({
+        create: [SCAN_KIND, ...VIDEO_KINDS, ...BARO_KINDS].map((kind) => ({
           kind,
           url: `media/demo1/${kind}`,
           confirmedAt: new Date(),
@@ -349,7 +350,7 @@ async function seedDemo(prisma) {
       },
       completedAt: new Date(),
       media: {
-        create: ["scan_L", "scan_R", ...VIDEO_KINDS, ...BARO_KINDS].map((kind) => ({
+        create: [SCAN_KIND, ...VIDEO_KINDS, ...BARO_KINDS].map((kind) => ({
           kind,
           url: `media/demo2/${kind}`,
           confirmedAt: new Date(),

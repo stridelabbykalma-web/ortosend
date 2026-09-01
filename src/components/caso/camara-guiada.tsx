@@ -107,7 +107,7 @@ export function CamaraGuiada({
   next,
 }: {
   caseId: string;
-  kind: string; // kind de MediaAsset (video_posterior, scan_L…)
+  kind: string; // kind de MediaAsset (video_posterior, video_lateral…)
   overlay: OverlayKind;
   mode: "foto" | "video";
   checks: string[];

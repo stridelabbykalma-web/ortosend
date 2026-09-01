@@ -58,13 +58,13 @@ export function Expediente({ kase }: { kase: CaseFull }) {
           </div>
         </div>
         <div>
-          <div className="tiny">ESCANEO 3D</div>
-          <div className="muted">{cl.escaneos ? "Ambos pies ✓ (visor 3D pendiente)" : "Pendiente"}</div>
+          <div className="tiny">ESCANEO DE ESPUMAS</div>
+          <div className="muted">{cl.escaneos ? "Hecho ✓ (llega desde la plataforma del escáner)" : "Pendiente"}</div>
         </div>
         <div>
           <div className="tiny">BAROPODOMETRÍA</div>
           <div className="muted">
-            {cl.baro ? "Estática ✓ · Dinámica múltiple ✓ · Informe adjunto" : "Pendiente"}
+            {cl.baro ? "Estática ✓ · Dinámica múltiple ✓ (informe desde Podisense)" : "Pendiente"}
           </div>
         </div>
         <div>

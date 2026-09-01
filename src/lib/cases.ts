@@ -1,7 +1,7 @@
 // Utilidades sobre casos: eventos, notificaciones simuladas, reparto y liberación.
 import { prisma } from "./db";
 import { OPEN_CASE_TIMEOUT_MIN } from "./states";
-import { BARO_KINDS, VIDEO_KINDS } from "./format";
+import { BARO_KINDS, SCAN_KIND, VIDEO_KINDS } from "./format";
 
 export async function pushEvent(caseId: string, text: string, actor: string) {
   await prisma.caseEvent.create({ data: { caseId, text, actor } });
@@ -34,7 +34,7 @@ export async function releaseStale() {
 export type Checklist = {
   cuestionario: boolean;
   exploracion: boolean;
-  escaneos: boolean;
+  escaneos: boolean; // escaneo de las espumas fenólicas
   videos: number; // confirmados de VIDEO_KINDS.length
   baro: boolean;
   completa: boolean;
@@ -53,7 +53,7 @@ export function checklistOf(capture: {
   const blockDone = (x: unknown) => !!x && (x as { done?: boolean }).done !== false;
   const cuestionario = blockDone(capture?.questionnaire);
   const exploracion = blockDone(capture?.physicalExam);
-  const escaneos = has("scan_L") && has("scan_R");
+  const escaneos = has(SCAN_KIND);
   const baro = BARO_KINDS.every(([k]) => has(k));
   return {
     cuestionario,
