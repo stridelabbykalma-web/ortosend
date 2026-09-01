@@ -249,8 +249,15 @@ export async function saveExamSectionAction(formData: FormData) {
   const prev = (capture.physicalExam ?? {}) as Record<string, unknown>;
   const values = sectionValues(formData, def);
 
-  if (section === "tests_sel" && ((values.testsSel as string[]) ?? []).length < MIN_TESTS)
+  if (section === "tests_sel" && ((values.testsSel as string[]) ?? []).length < MIN_TESTS) {
+    // Guardamos igualmente lo ya marcado: al volver con el aviso, el profesional
+    // encuentra su selección tal cual la dejó y solo añade los que faltan.
+    await prisma.capture.update({
+      where: { id: capture.id },
+      data: { physicalExam: { ...prev, ...values, v: 2, done: prev.done === true } as Exam },
+    });
     fail(back, `Elige al menos ${MIN_TESTS} tests de los 6`);
+  }
 
   if (section === "dismetria") {
     if (values.dismetria === "Sí" && (!values.ladoCorto || !values.lamina))

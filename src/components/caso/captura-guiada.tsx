@@ -421,8 +421,10 @@ function ESection({ section, e, q }: { section: string; e: Exam | null; q: Quest
             <div>
               <div className="row" style={{ gap: 8 }}>
                 <b>{test.nombre}</b>
-                {motivos.length > 0 ? (
-                  <span className="pill g">Recomendado</span>
+                {motivos.length >= 2 ? (
+                  <span className="pill g">Muy indicado</span>
+                ) : motivos.length === 1 ? (
+                  <span className="pill a">Indicado</span>
                 ) : (
                   <span className="pill n">Menos indicado aquí</span>
                 )}
