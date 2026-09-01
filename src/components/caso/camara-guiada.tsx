@@ -12,7 +12,7 @@ export type OverlayKind =
   | "marcha_post"
   | "marcha_ant"
   | "marcha_lat"
-  | "heel_rise";
+  | "retropie";
 
 // Silueta de encuadre que se dibuja sobre la imagen de la cámara.
 function Overlay({ kind }: { kind: OverlayKind }) {
@@ -102,17 +102,28 @@ function Overlay({ kind }: { kind: OverlayKind }) {
   );
 
   // De espaldas, de puntillas: talones despegados del suelo
-  const heelRise = (
+  // Primer plano de los dos talones desde atrás: lo que se mide sobre la foto es
+  // la inclinación del eje del calcáneo respecto a la vertical de la pierna.
+  const retropie = (
     <g stroke={zone} {...common}>
-      <circle cx={150} cy={58} r={20} />
-      <path d="M150 78 L150 186" />
-      <path d="M112 110 L150 94 L188 110 M112 110 L96 58 M188 110 L204 58" />
-      <path d="M150 186 L132 268 L130 320 M150 186 L168 268 L170 320" />
-      <path d="M118 324 L140 324 M160 324 L182 324" />
-      <path d="M100 348 L200 348" stroke={guide} strokeWidth={2} />
-      <path d="M130 322 L130 344 M170 322 L170 344" strokeDasharray="4 5" strokeWidth={2} stroke={guide} />
-      <text x={150} y={370} textAnchor="middle" fill={guide} fontSize={12} stroke="none">
-        talones despegados del suelo
+      {/* pierna y talón izquierdos */}
+      <path d="M78 52 C80 168, 88 224, 96 262" />
+      <path d="M142 52 C140 168, 132 224, 124 262" />
+      <path d="M96 262 Q110 274 124 262" />
+      {/* pierna y talón derechos */}
+      <path d="M158 52 C160 168, 168 224, 176 262" />
+      <path d="M222 52 C220 168, 212 224, 204 262" />
+      <path d="M176 262 Q190 274 204 262" />
+      {/* eje del calcáneo: es lo que se compara con la vertical */}
+      <path d="M110 150 L110 268" strokeDasharray="5 6" strokeWidth={2} stroke={guide} />
+      <path d="M190 150 L190 268" strokeDasharray="5 6" strokeWidth={2} stroke={guide} />
+      {/* suelo */}
+      <path d="M46 280 L254 280" stroke={guide} strokeWidth={2} />
+      <text x={150} y={32} textAnchor="middle" fill={guide} fontSize={12} stroke="none">
+        de rodilla para abajo, los dos talones
+      </text>
+      <text x={150} y={306} textAnchor="middle" fill={guide} fontSize={12} stroke="none">
+        cámara a la altura del suelo, perpendicular
       </text>
     </g>
   );
@@ -136,7 +147,7 @@ function Overlay({ kind }: { kind: OverlayKind }) {
       {kind === "marcha_ant" && anterior}
       {kind === "pie_post" && piePost}
       {kind === "pie_ant" && pieAnt}
-      {kind === "heel_rise" && heelRise}
+      {kind === "retropie" && retropie}
     </svg>
   );
 }

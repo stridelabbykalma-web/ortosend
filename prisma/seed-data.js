@@ -3,13 +3,14 @@ const bcrypt = require("bcryptjs");
 
 const PASS = "ortosend123";
 
-const VIDEO_KINDS = [
+// Lo que se captura con la cámara de la app: 5 vídeos + 1 foto de los talones
+const CAPTURA_VISUAL = [
   "video_pie_post",
   "video_pie_ant",
   "video_marcha_post",
   "video_marcha_ant",
   "video_marcha_lat",
-  "video_heel_rise",
+  "foto_retropie",
 ];
 const BARO_KINDS = ["baro_est", "baro_din_multi"];
 const SCAN_KIND = "scan_espumas";
@@ -278,7 +279,7 @@ async function seedDemo(prisma) {
       },
       completedAt: new Date(),
       media: {
-        create: [SCAN_KIND, ...VIDEO_KINDS, ...BARO_KINDS].map((kind) => ({
+        create: [SCAN_KIND, ...CAPTURA_VISUAL, ...BARO_KINDS].map((kind) => ({
           kind,
           url: `media/demo1/${kind}`,
           confirmedAt: new Date(),
@@ -396,7 +397,7 @@ async function seedDemo(prisma) {
       },
       completedAt: new Date(),
       media: {
-        create: [SCAN_KIND, ...VIDEO_KINDS, ...BARO_KINDS].map((kind) => ({
+        create: [SCAN_KIND, ...CAPTURA_VISUAL, ...BARO_KINDS].map((kind) => ({
           kind,
           url: `media/demo2/${kind}`,
           confirmedAt: new Date(),

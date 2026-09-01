@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { Capture, Case, Incident, MediaAsset, Patient } from "@prisma/client";
 import { checklistOf } from "@/lib/cases";
-import { SCAN_KIND, VIDEO_KINDS } from "@/lib/format";
+import { CAPTURA_VISUAL, FOTO_KINDS, SCAN_KIND, VIDEO_KINDS } from "@/lib/format";
 import {
   ACTIVIDAD_OPTS,
   ANTECEDENTES_OPTS,
@@ -102,9 +102,14 @@ type Slide =
   | { t: "file"; kind: string; title: string; grupo: string; help: string; boton: string; hecho: string }
   | { t: "envio"; title: string; grupo: string };
 
-const VIDEO_META: Record<string, { overlay: OverlayKind; checks: string[]; help: string }> = {
+const CAPTURA_META: Record<
+  string,
+  { overlay: OverlayKind; mode: "foto" | "video"; grupo: string; checks: string[]; help: string }
+> = {
   video_pie_post: {
     overlay: "pie_post",
+    mode: "video",
+    grupo: "Vídeos",
     checks: [
       "El paciente va descalzo, de espaldas y quieto",
       "Se ve el cuerpo entero, centrado en la línea",
@@ -115,6 +120,8 @@ const VIDEO_META: Record<string, { overlay: OverlayKind; checks: string[]; help:
   },
   video_pie_ant: {
     overlay: "pie_ant",
+    mode: "video",
+    grupo: "Vídeos",
     checks: [
       "El paciente va descalzo, de frente y quieto",
       "Se ve el cuerpo entero, centrado en el encuadre",
@@ -125,6 +132,8 @@ const VIDEO_META: Record<string, { overlay: OverlayKind; checks: string[]; help:
   },
   video_marcha_post: {
     overlay: "marcha_post",
+    mode: "video",
+    grupo: "Vídeos",
     checks: [
       "El paciente va descalzo",
       "Se ve el cuerpo entero de espaldas, centrado en la línea",
@@ -135,6 +144,8 @@ const VIDEO_META: Record<string, { overlay: OverlayKind; checks: string[]; help:
   },
   video_marcha_ant: {
     overlay: "marcha_ant",
+    mode: "video",
+    grupo: "Vídeos",
     checks: [
       "El paciente va descalzo",
       "Se ve el cuerpo entero de frente, centrado en el encuadre",
@@ -145,6 +156,8 @@ const VIDEO_META: Record<string, { overlay: OverlayKind; checks: string[]; help:
   },
   video_marcha_lat: {
     overlay: "marcha_lat",
+    mode: "video",
+    grupo: "Vídeos",
     checks: [
       "El paciente va descalzo",
       "Se ve el cuerpo entero de perfil, como en la figura",
@@ -153,15 +166,17 @@ const VIDEO_META: Record<string, { overlay: OverlayKind; checks: string[]; help:
     ],
     help: "Marcha de perfil por los dos lados: se valora el ciclo completo (contacto, apoyo medio y despegue) en cada pie.",
   },
-  video_heel_rise: {
-    overlay: "heel_rise",
+  foto_retropie: {
+    overlay: "retropie",
+    mode: "foto",
+    grupo: "Fotos",
     checks: [
-      "Paciente de espaldas y descalzo, con apoyo ligero de los dedos en la pared",
-      "Ambos talones bien visibles, como en la figura",
-      "Primero bilateral y después monopodal de cada pie",
-      "Elevaciones a ritmo constante (una cada 2 segundos)",
+      "El paciente está descalzo, de espaldas y quieto, en apoyo relajado",
+      "Se ve de rodilla para abajo: pantorrillas, talones y suelo",
+      "Los dos talones entran en el encuadre, sin recortar ninguno",
+      "Cámara a la altura del suelo y perpendicular al talón, no en diagonal",
     ],
-    help: "Elevación de talones desde atrás, bilateral y monopodal: se valora el tibial posterior y si el retropié se invierte al subir.",
+    help: "Primer plano de los talones desde atrás. Sobre esta foto se valora la inclinación del retropié (valgo o varo) comparando el eje del calcáneo con la vertical de la pierna, así que el encuadre perpendicular es lo que hace la medida fiable.",
   },
 };
 
@@ -180,15 +195,15 @@ function buildSlides(): Slide[] {
     { t: "e", section: "marcha", title: "Análisis de la marcha", grupo: "Exploración" },
     // Con el paciente delante se termina primero la parte «de consulta» (cuestionario,
     // exploración y vídeos); las máquinas (escáner y Podisense) quedan para el final.
-    ...VIDEO_KINDS.map(([kind, label]) => {
-      const m = VIDEO_META[kind];
+    ...CAPTURA_VISUAL.map(([kind, label]) => {
+      const m = CAPTURA_META[kind];
       return {
         t: "media",
         kind,
         title: label,
-        grupo: "Vídeos",
+        grupo: m.grupo,
         overlay: m.overlay,
-        mode: "video",
+        mode: m.mode,
         checks: m.checks,
         help: m.help,
       } as Slide;
@@ -929,8 +944,9 @@ export function CapturaGuiada({ kase, paso }: { kase: CaseWithCapture; paso?: nu
             </p>
             <CheckLine ok={cl.cuestionario}>Cuestionario clínico (5 pantallas)</CheckLine>
             <CheckLine ok={cl.exploracion}>Exploración y tests (6 pantallas)</CheckLine>
-            <CheckLine ok={cl.videos >= VIDEO_KINDS.length}>
-              Vídeos {cl.videos}/{VIDEO_KINDS.length} (de pie, marcha y elevación de talones)
+            <CheckLine ok={cl.capturas >= CAPTURA_VISUAL.length}>
+              Vídeos y fotos {cl.capturas}/{CAPTURA_VISUAL.length} ({VIDEO_KINDS.length} vídeos de
+              pie y marcha + {FOTO_KINDS.length} foto de los talones)
             </CheckLine>
             <CheckLine ok={cl.baro}>Baropodometría (estática + dinámica múltiple)</CheckLine>
             <CheckLine ok={cl.escaneos}>Escaneo de las espumas fenólicas</CheckLine>

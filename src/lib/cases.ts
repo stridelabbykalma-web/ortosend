@@ -1,7 +1,7 @@
 // Utilidades sobre casos: eventos, notificaciones simuladas, reparto y liberación.
 import { prisma } from "./db";
 import { OPEN_CASE_TIMEOUT_MIN } from "./states";
-import { BARO_KINDS, SCAN_KIND, VIDEO_KINDS } from "./format";
+import { BARO_KINDS, CAPTURA_VISUAL, SCAN_KIND } from "./format";
 
 export async function pushEvent(caseId: string, text: string, actor: string) {
   await prisma.caseEvent.create({ data: { caseId, text, actor } });
@@ -35,7 +35,7 @@ export type Checklist = {
   cuestionario: boolean;
   exploracion: boolean;
   escaneos: boolean; // escaneo de las espumas fenólicas
-  videos: number; // confirmados de VIDEO_KINDS.length
+  capturas: number; // vídeos + fotos confirmados, de CAPTURA_VISUAL.length
   baro: boolean;
   completa: boolean;
 };
@@ -47,7 +47,7 @@ export function checklistOf(capture: {
 } | null): Checklist {
   const media = capture?.media.filter((m) => m.confirmedAt) ?? [];
   const has = (k: string) => media.some((m) => m.kind === k);
-  const videos = media.filter((m) => m.kind.startsWith("video_")).length;
+  const capturas = CAPTURA_VISUAL.filter(([k]) => has(k)).length;
   // El modo guiado guarda por secciones con done:false hasta terminar el bloque;
   // los datos antiguos (sin done) cuentan como completos.
   const blockDone = (x: unknown) => !!x && (x as { done?: boolean }).done !== false;
@@ -59,8 +59,9 @@ export function checklistOf(capture: {
     cuestionario,
     exploracion,
     escaneos,
-    videos,
+    capturas,
     baro,
-    completa: cuestionario && exploracion && escaneos && videos >= VIDEO_KINDS.length && baro,
+    completa:
+      cuestionario && exploracion && escaneos && capturas >= CAPTURA_VISUAL.length && baro,
   };
 }

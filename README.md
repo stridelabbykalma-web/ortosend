@@ -34,8 +34,9 @@ asociadas. Stack: **Next.js (App Router, server actions) + PostgreSQL (Prisma)**
   con tope de sugerencias y aviso de volumen), y **hallazgos de alerta** (Thompson, Tinel,
   compresión del calcáneo) destacados para el prescriptor porque no se resuelven con una
   plantilla; dismetría valorada con nivel pélvico y láminas calibradas, análisis observacional de la
-  marcha, 6 vídeos (de pie posterior y anterior, caminando desde atrás, desde delante y
-  lateral, y elevación de talones), baropodometría Podisense (estática + dinámica múltiple) y
+  marcha, 5 vídeos (de pie posterior y anterior, y caminando desde atrás, desde delante y
+  lateral) más 1 foto de los talones desde atrás para valorar la inclinación del retropié,
+  baropodometría Podisense (estática + dinámica múltiple) y
   escaneo de las espumas fenólicas como último paso — estas tres se hacen en su propia
   plataforma y aquí solo se marcan como hechas; el informe llega desde Podisense y no se
   adjunta. **Checklist bloqueante**: sin todo en verde no hay envío.

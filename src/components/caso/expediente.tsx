@@ -3,7 +3,7 @@ import { checklistOf } from "@/lib/cases";
 import { questionnaireLines, type Questionnaire } from "@/lib/questionnaire";
 import { examLines, type Exam } from "@/lib/exploracion";
 import { alertasDe } from "@/lib/tests-podologicos";
-import { VIDEO_KINDS } from "@/lib/format";
+import { CAPTURA_VISUAL, FOTO_KINDS, VIDEO_KINDS } from "@/lib/format";
 
 type CaseFull = Case & {
   patient: Patient & { owner: User };
@@ -64,9 +64,10 @@ export function Expediente({ kase }: { kase: CaseFull }) {
       </div>
       <div className="grid g2" style={{ marginTop: 14 }}>
         <div>
-          <div className="tiny">VÍDEOS ({VIDEO_KINDS.length})</div>
+          <div className="tiny">VÍDEOS Y FOTOS ({CAPTURA_VISUAL.length})</div>
           <div className="muted">
-            {cl.videos}/{VIDEO_KINDS.length} confirmados (de pie, marcha y elevación de talones)
+            {cl.capturas}/{CAPTURA_VISUAL.length} confirmados — {VIDEO_KINDS.length} vídeos (de pie
+            y marcha) y {FOTO_KINDS.length} foto de los talones desde atrás
           </div>
         </div>
         <div>

@@ -59,16 +59,24 @@ export function fmtEUR(cents: number) {
   return (cents / 100).toLocaleString("es-ES", { style: "currency", currency: "EUR" });
 }
 
-// Vídeos obligatorios del protocolo: dos en bipedestación, tres caminando y la
-// elevación de talones. El lateral cubre los dos lados en una misma prueba.
+// Vídeos obligatorios del protocolo: dos en bipedestación y tres caminando.
+// El lateral cubre los dos lados en una misma prueba.
 export const VIDEO_KINDS = [
   ["video_pie_post", "De pie — vista posterior"],
   ["video_pie_ant", "De pie — vista anterior"],
   ["video_marcha_post", "Caminando — desde atrás"],
   ["video_marcha_ant", "Caminando — desde delante"],
   ["video_marcha_lat", "Caminando — lateral derecho e izquierdo"],
-  ["video_heel_rise", "Elevación de talones — vista posterior"],
 ] as const;
+
+// Fotos obligatorias: primer plano de los talones desde atrás para medir la
+// inclinación del retropié sobre la imagen.
+export const FOTO_KINDS = [
+  ["foto_retropie", "Foto de los talones desde atrás — inclinación del retropié"],
+] as const;
+
+// Todo lo que se captura con la cámara de la app, en el orden del protocolo.
+export const CAPTURA_VISUAL = [...VIDEO_KINDS, ...FOTO_KINDS] as const;
 
 // Baropodometría con Podisense: estática + dinámica múltiple. El informe lo
 // genera y entrega la propia plataforma, la clínica no lo adjunta.
