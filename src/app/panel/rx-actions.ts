@@ -114,6 +114,74 @@ export async function signRxAction(formData: FormData) {
   redirect("/panel?ok=" + encodeURIComponent(`Caso #${kase.number} prescrito y enviado a pago`));
 }
 
+// Receta directa: quien rellena el estudio es prescriptor verificado y firma la receta
+// en la misma visita, sin pasar por la cola de revisión. Los tests son opcionales
+// (elige los que necesite); lo obligatorio es el motivo de consulta registrado (paso 1)
+// y el escrito de la receta. La identidad y colegiación salen del perfil, no del formulario.
+export async function signDirectRxAction(formData: FormData) {
+  const caseId = String(formData.get("caseId"));
+  const back = `/caso/${caseId}`;
+  const u = await requireRole("PROFESIONAL", "ADMIN_CLINICA");
+  const kase = await prisma.case.findUnique({
+    where: { id: caseId },
+    include: { capture: true, patient: true, clinic: true, prescription: true },
+  });
+  if (!kase || kase.clinicId !== u.clinicId) fail("/panel", "Caso no accesible");
+  if (!["ESTUDIO_EN_CURSO", "DEVUELTO_CLINICA"].includes(kase.state))
+    fail(back, "El estudio no está en curso");
+  if (kase.prescription)
+    fail(back, "Este caso ya tiene receta firmada");
+  // Guardas duras: misma exigencia de colegiación que la firma en cola.
+  const profile = await prisma.professionalProfile.findUnique({ where: { userId: u.id } });
+  if (!profile?.canPrescribe || !profile.verifiedAt || !profile.collegiateNum)
+    fail(back, "Solo un prescriptor con colegiación verificada puede firmar la receta directa");
+  const q = kase.capture?.questionnaire as { motivo?: string } | null;
+  const motivo = q?.motivo?.trim();
+  if (!motivo)
+    fail(back, "Registra el motivo de consulta (paso 1) antes de firmar: debe quedar en el caso");
+  const diagnosis =
+    String(formData.get("diagnosis") ?? "") +
+    (formData.get("diagnosisDetail") ? ` — ${String(formData.get("diagnosisDetail")).trim()}` : "");
+  const fabricationOrder = String(formData.get("fabricationOrder") ?? "").trim();
+  const usageGuidelines = String(formData.get("usageGuidelines") ?? "").trim();
+  if (!fabricationOrder)
+    fail(back, "El escrito de la receta es obligatorio: cómo deben ser las plantillas, qué deben llevar y qué función tienen");
+  const expires = new Date(Date.now() + PAY_LINK_DAYS * 24 * 3600 * 1000);
+  await prisma.$transaction([
+    prisma.capture.update({ where: { caseId }, data: { completedAt: new Date() } }),
+    prisma.prescription.create({
+      data: {
+        caseId,
+        prescriberId: u.id,
+        prescriberName: u.name,
+        collegiateNum: profile.collegiateNum,
+        assessment: `Motivo de consulta: ${motivo}`, // el motivo queda registrado en la receta
+        diagnosis,
+        fabricationOrder,
+        usageGuidelines,
+        pdfUrl: `prescripciones/${kase.number}.pdf`, // PDF firmado e inmutable (generación real pendiente)
+      },
+    }),
+    prisma.payment.create({ data: { caseId, amountCents: PRICE_CENTS } }),
+    prisma.case.update({
+      where: { id: caseId },
+      data: { state: "PENDIENTE_PAGO", openBy: null, openAt: null, rxDraft: null, payLinkExpiresAt: expires },
+    }),
+  ]);
+  await pushEvent(
+    caseId,
+    `Receta directa firmada en la visita por ${u.name} (${profile.degree ?? "colegiado"}, col. ${profile.collegiateNum})`,
+    u.name
+  );
+  await audit(u.id, "prescription.sign_direct", `case:${kase.number}`);
+  const phone = await ownerPhone(kase);
+  if (phone)
+    await notify(phone, "rx_lista_pago", {
+      nota: "Tu prescripción está lista, firmada por el profesional que te ha atendido. Entra en tu panel para verla y completar el pago (199,99 €, enlace válido 30 días).",
+    });
+  redirect("/panel?ok=" + encodeURIComponent(`Caso #${kase.number} prescrito directamente y enviado a pago`));
+}
+
 // El prescriptor quiere hablar con el paciente → asignación pegajosa.
 export async function contactAction(formData: FormData) {
   const caseId = String(formData.get("caseId"));

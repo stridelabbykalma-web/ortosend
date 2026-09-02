@@ -34,6 +34,11 @@ asociadas. Stack: **Next.js (App Router, server actions) + PostgreSQL (Prisma)**
 - Firma solo por prescriptor con **colegiación verificada** (guarda dura). Salidas: prescribir
   (→ pago), contactar con el paciente (asignación pegajosa), devolver a clínica para repetir
   prueba (sin coste), no prescribir (el cliente no paga) y guardar borrador.
+- **Receta directa**: si quien rellena el estudio es prescriptor verificado, el asistente cambia
+  de modo — cualquier test es elegible (nada bloquea; vídeos de máx. 10 s), el motivo de consulta
+  debe quedar registrado y en el paso 6 escribe la receta (cómo deben ser las plantillas, qué
+  deben llevar y qué función tienen) y la firma en la misma visita, con identidad y colegiación
+  puestas automáticamente desde su perfil. El caso salta directo a pago, sin cola de revisión.
 
 **Pago y panel del cliente**
 - Sin prescripción no hay pago; enlace válido 30 días con caducidad → NO_CONVERTIDO y

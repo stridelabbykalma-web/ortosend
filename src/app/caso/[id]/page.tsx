@@ -61,6 +61,12 @@ export default async function CasoPage({
     !!profile?.canPrescribe &&
     !!profile.verifiedAt &&
     (isCentral || (isClinicStaff && k.clinic.hasPrescriber));
+  // Modo receta directa del asistente: quien rellena el estudio puede recetar en la visita.
+  // No se ofrece si el caso ya tiene receta firmada (p. ej. devuelto por el taller).
+  const directRx =
+    isClinicStaff && !k.prescription && !!profile?.canPrescribe && !!profile.verifiedAt && !!profile.collegiateNum
+      ? { name: user.name, degree: profile.degree, collegiateNum: profile.collegiateNum }
+      : null;
 
   const inCapture = ["CITA_RESERVADA", "ESTUDIO_EN_CURSO", "DEVUELTO_CLINICA"].includes(k.state);
   const inRx = ["EN_PRESCRIPCION", "EN_CONTACTO"].includes(k.state);
@@ -70,7 +76,7 @@ export default async function CasoPage({
   if (isClinicStaff && inCapture) {
     inner = (
       <>
-        <Wizard kase={k} />
+        <Wizard kase={k} directRx={directRx} />
         <Historial events={k.events} />
       </>
     );
