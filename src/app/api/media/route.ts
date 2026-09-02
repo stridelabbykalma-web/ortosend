@@ -62,6 +62,7 @@ export async function POST(req: Request) {
     if (raw && typeof raw === "object")
       meta = {
         seconds: typeof raw.seconds === "number" ? raw.seconds : undefined,
+        targetSeconds: typeof raw.targetSeconds === "number" ? raw.targetSeconds : undefined,
         validPct: typeof raw.validPct === "number" ? raw.validPct : undefined,
         mime,
         pose: typeof raw.pose === "string" ? raw.pose.slice(0, 40) : undefined,

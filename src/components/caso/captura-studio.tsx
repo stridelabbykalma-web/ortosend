@@ -7,7 +7,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { PoseLandmarker, NormalizedLandmark } from "@mediapipe/tasks-vision";
-import { CAPTURE_GUIDES, CHECK_LABEL, type CheckId } from "@/lib/capture-guide";
+import {
+  CAPTURE_GUIDES,
+  CHECK_LABEL,
+  VIDEO_PREROLL_SECONDS,
+  type CheckId,
+} from "@/lib/capture-guide";
 
 const WASM_CDN = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/wasm";
 const POSE_MODEL =
@@ -67,7 +72,7 @@ function pickVideoMime(): string {
   return "";
 }
 
-type Phase = "init" | "live" | "recording" | "review" | "uploading";
+type Phase = "init" | "live" | "countdown" | "recording" | "review" | "uploading";
 
 type Review = {
   blob: Blob;
@@ -96,6 +101,7 @@ export function CapturaStudio({
   const [poseState, setPoseState] = useState<"cargando" | "activo" | "sin_pose">("cargando");
   const [checks, setChecks] = useState<Checks>({});
   const [elapsed, setElapsed] = useState(0);
+  const [countdown, setCountdown] = useState(0);
   const [review, setReview] = useState<Review | null>(null);
   const [uploadErr, setUploadErr] = useState<string | null>(null);
 
@@ -112,6 +118,8 @@ export function CapturaStudio({
   const recStartRef = useRef(0);
   const lastVideoTimeRef = useRef(-1);
   const reviewUrlRef = useRef<string | null>(null);
+  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const stopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     phaseRef.current = phase;
@@ -120,8 +128,16 @@ export function CapturaStudio({
   const allOk =
     poseState !== "activo" || guide.checks.every((c) => checks[c] === true);
 
+  const clearTimers = useCallback(() => {
+    if (countdownRef.current) clearInterval(countdownRef.current);
+    countdownRef.current = null;
+    if (stopTimerRef.current) clearTimeout(stopTimerRef.current);
+    stopTimerRef.current = null;
+  }, []);
+
   const cleanup = useCallback(() => {
     cancelAnimationFrame(rafRef.current);
+    clearTimers();
     if (recorderRef.current && recorderRef.current.state !== "inactive")
       recorderRef.current.stop();
     recorderRef.current = null;
@@ -131,7 +147,7 @@ export function CapturaStudio({
     landmarkerRef.current = null;
     if (reviewUrlRef.current) URL.revokeObjectURL(reviewUrlRef.current);
     reviewUrlRef.current = null;
-  }, []);
+  }, [clearTimers]);
 
   const close = useCallback(() => {
     cleanup();
@@ -302,23 +318,53 @@ export function CapturaStudio({
       recStartRef.current = performance.now();
       setElapsed(0);
       setPhase("recording");
-      const maxMs = (guide.maxSeconds ?? 12) * 1000;
-      setTimeout(() => {
+      // Duración fija asignada a la prueba: el corte es automático
+      stopTimerRef.current = setTimeout(() => {
         if (recorderRef.current === rec && rec.state === "recording") rec.stop();
-      }, maxMs);
+      }, guide.seconds * 1000);
     } catch {
       setFatal("No se pudo iniciar la grabación en este dispositivo.");
     }
-  }, [finishRecording, guide.maxSeconds]);
+  }, [finishRecording, guide.seconds]);
 
   const stopRecording = useCallback(() => {
+    clearTimers();
     const rec = recorderRef.current;
     if (rec && rec.state === "recording") rec.stop();
-  }, []);
+  }, [clearTimers]);
+
+  // Cuenta atrás compartida: pre-roll antes del vídeo o temporizador de la foto
+  const runCountdown = useCallback(
+    (seconds: number, then: () => void) => {
+      clearTimers();
+      let left = seconds;
+      setCountdown(left);
+      setPhase("countdown");
+      countdownRef.current = setInterval(() => {
+        left -= 1;
+        if (left > 0) {
+          setCountdown(left);
+          return;
+        }
+        if (countdownRef.current) clearInterval(countdownRef.current);
+        countdownRef.current = null;
+        then();
+      }, 1000);
+    },
+    [clearTimers]
+  );
+
+  const cancelCountdown = useCallback(() => {
+    clearTimers();
+    setPhase("live");
+  }, [clearTimers]);
 
   const takePhoto = useCallback(() => {
     const video = videoRef.current;
-    if (!video || video.readyState < 2) return;
+    if (!video || video.readyState < 2) {
+      setPhase("live");
+      return;
+    }
     const c = document.createElement("canvas");
     c.width = video.videoWidth;
     c.height = video.videoHeight;
@@ -349,6 +395,7 @@ export function CapturaStudio({
       "meta",
       JSON.stringify({
         seconds: Math.round(review.seconds * 10) / 10,
+        targetSeconds: guide.seconds,
         validPct: review.validPct,
         mime: review.mime,
         pose: poseState === "activo" ? "pose_landmarker_lite" : "no_disponible",
@@ -365,18 +412,20 @@ export function CapturaStudio({
       setUploadErr(e instanceof Error ? e.message : "Fallo de red durante la subida");
       setPhase("review");
     }
-  }, [caseId, close, kind, poseState, review, router]);
+  }, [caseId, close, guide.seconds, kind, poseState, review, router]);
 
   const retake = useCallback(() => {
+    clearTimers();
     if (reviewUrlRef.current) URL.revokeObjectURL(reviewUrlRef.current);
     reviewUrlRef.current = null;
     setReview(null);
     setUploadErr(null);
     setPhase("live");
-  }, []);
+  }, [clearTimers]);
 
   if (!guide) return null;
   const isVideo = guide.mode === "video";
+  const remaining = Math.max(0, guide.seconds - elapsed);
 
   if (!open)
     return (
@@ -386,8 +435,8 @@ export function CapturaStudio({
     );
 
   const tooBig = !!review && review.blob.size > MAX_UPLOAD_BYTES;
-  const tooShort =
-    !!review && isVideo && !!guide.minSeconds && review.seconds < guide.minSeconds;
+  // Parada manual antes de tiempo: el clip no cubre la duración asignada
+  const tooShort = !!review && isVideo && review.seconds < guide.seconds - 1;
 
   return (
     <div className="studio" role="dialog" aria-label={`Estudio de captura: ${label}`}>
@@ -407,10 +456,21 @@ export function CapturaStudio({
           <div className="studio-stage" style={{ display: phase === "review" ? "none" : undefined }}>
             <video ref={videoRef} playsInline muted />
             <canvas ref={canvasRef} />
-            {phase === "recording" && (
-              <div className="studio-rec">
-                ● REC {elapsed.toFixed(0)} s / {guide.maxSeconds} s
+            {phase === "countdown" && (
+              <div className="studio-count" aria-live="assertive">
+                <div className="n">{countdown}</div>
+                <div className="t">{isVideo ? "La grabación empieza en…" : "Foto en… mantén el móvil quieto"}</div>
               </div>
+            )}
+            {phase === "recording" && (
+              <>
+                <div className="studio-rec">
+                  ● REC · quedan {Math.ceil(remaining)} s de {guide.seconds} s
+                </div>
+                <div className="studio-bar">
+                  <div style={{ width: `${Math.min(100, (100 * elapsed) / guide.seconds)}%` }} />
+                </div>
+              </>
             )}
           </div>
 
@@ -446,6 +506,13 @@ export function CapturaStudio({
                     </div>
                   ))}
                 <div className="sp" />
+                <div className="tiny">DURACIÓN ASIGNADA</div>
+                <div className="muted">
+                  {isVideo
+                    ? `Cuenta atrás de ${VIDEO_PREROLL_SECONDS} s y grabación fija de ${guide.seconds} s (corte automático).`
+                    : `Temporizador de ${guide.seconds} s y disparo automático.`}
+                </div>
+                <div className="sp" />
                 <div className="tiny">INSTRUCCIONES</div>
                 <ul className="studio-tips">
                   {guide.tips.map((t) => (
@@ -454,18 +521,32 @@ export function CapturaStudio({
                 </ul>
                 <div className="sp" />
                 {phase === "live" && isVideo && (
-                  <button type="button" className="pri wfull" onClick={record} disabled={!allOk}>
-                    {allOk ? "● Empezar a grabar" : "Ajusta el encuadre para grabar"}
+                  <button
+                    type="button"
+                    className="pri wfull"
+                    onClick={() => runCountdown(VIDEO_PREROLL_SECONDS, record)}
+                    disabled={!allOk}
+                  >
+                    {allOk ? `● Grabar ${guide.seconds} s` : "Ajusta el encuadre para grabar"}
                   </button>
                 )}
                 {phase === "live" && !isVideo && (
-                  <button type="button" className="pri wfull" onClick={takePhoto}>
-                    📷 Hacer foto
+                  <button
+                    type="button"
+                    className="pri wfull"
+                    onClick={() => runCountdown(guide.seconds, takePhoto)}
+                  >
+                    📷 Foto con temporizador ({guide.seconds} s)
+                  </button>
+                )}
+                {phase === "countdown" && (
+                  <button type="button" className="wfull" onClick={cancelCountdown}>
+                    Cancelar cuenta atrás
                   </button>
                 )}
                 {phase === "recording" && (
                   <button type="button" className="dang wfull" onClick={stopRecording}>
-                    ■ Parar grabación
+                    ■ Parar antes de tiempo
                   </button>
                 )}
               </>
@@ -475,14 +556,18 @@ export function CapturaStudio({
               <>
                 <div className="tiny">REVISIÓN</div>
                 <div className="muted">
-                  {isVideo && <>Duración: {review.seconds.toFixed(1)} s · </>}
+                  {isVideo && (
+                    <>
+                      Duración: {review.seconds.toFixed(1)} s de {guide.seconds} s ·{" "}
+                    </>
+                  )}
                   {review.validPct !== null && <>Encuadre válido: {review.validPct}% · </>}
                   Tamaño: {(review.blob.size / 1024 / 1024).toFixed(2)} MB
                 </div>
                 {tooShort && (
                   <div className="note a">
-                    Clip corto (mínimo recomendado {guide.minSeconds} s): comprueba que se ven
-                    pasos completos antes de usarlo.
+                    Clip incompleto: se paró antes de los {guide.seconds} s asignados. Comprueba
+                    que se ven pasos completos o repite la grabación.
                   </div>
                 )}
                 {tooBig && (

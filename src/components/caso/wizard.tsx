@@ -3,6 +3,7 @@ import { checklistOf } from "@/lib/cases";
 import { BARO_KINDS, PHOTO_KINDS, VIDEO_KINDS } from "@/lib/format";
 import { CheckLine } from "@/components/ui";
 import { CapturaStudio } from "@/components/caso/captura-studio";
+import { durationLabel } from "@/lib/capture-guide";
 import {
   markMediaAction,
   saveExamAction,
@@ -149,7 +150,9 @@ export function Wizard({ kase }: { kase: CaseWithCapture }) {
           <b>4 · Vídeos — estudio de captura guiado {cl.videos >= 7 && <span className="pill g">✓</span>}</b>
           {VIDEO_KINDS.map(([kind, label]) => (
             <CheckLine ok={has(kind)} key={kind}>
-              {label}
+              <span>
+                {label} <span className="tiny">· {durationLabel(kind)}</span>
+              </span>
               <CapturaStudio caseId={kase.id} kind={kind} label={label} redo={has(kind)} />
             </CheckLine>
           ))}
@@ -162,7 +165,9 @@ export function Wizard({ kase }: { kase: CaseWithCapture }) {
           <b className="tiny">FOTOS CLÍNICAS DE APOYO (OPCIONALES)</b>
           {PHOTO_KINDS.map(([kind, label]) => (
             <CheckLine ok={has(kind)} key={kind}>
-              {label}
+              <span>
+                {label} <span className="tiny">· {durationLabel(kind)}</span>
+              </span>
               <CapturaStudio caseId={kase.id} kind={kind} label={label} redo={has(kind)} />
             </CheckLine>
           ))}
