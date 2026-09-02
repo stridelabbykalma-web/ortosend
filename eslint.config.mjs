@@ -15,6 +15,8 @@ const eslintConfig = defineConfig([
     // Script CJS de seed (se ejecuta con node, fuera del bundle):
     "prisma/seed.js",
     "prisma/seed-data.js",
+    // WASM de MediaPipe copiado en local para pruebas (en producción va por CDN):
+    "public/mediapipe/wasm/**",
   ]),
 ]);
 

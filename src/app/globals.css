@@ -163,3 +163,10 @@ tr.click:hover { background: var(--paper); }
 .testcard input { width: auto; margin-top: 3px; flex: none; }
 .testcard:has(input:checked) { border-color: var(--teal); background: var(--teal-l); }
 .testcard .tiny { margin-top: 2px; }
+
+/* Detección de postura sobre la cámara: esqueleto detectado y estado */
+.cam-pose { pointer-events: none; }
+.cam-vision { position: absolute; left: 12px; right: 12px; top: 10px; text-align: center; color: #fff; font-size: 12.5px; font-weight: 600; padding: 5px 10px; border-radius: 99px; background: rgba(28,27,24,.72); }
+.cam-vision.g { background: rgba(22,120,90,.88); }
+.cam-vision.a { background: rgba(170,110,20,.88); }
+.chk.ok { color: var(--green); }

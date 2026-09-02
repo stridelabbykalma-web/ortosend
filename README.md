@@ -40,6 +40,13 @@ asociadas. Stack: **Next.js (App Router, server actions) + PostgreSQL (Prisma)**
   escaneo de las espumas fenólicas como último paso — estas tres se hacen en su propia
   plataforma y aquí solo se marcan como hechas; el informe llega desde Podisense y no se
   adjunta. **Checklist bloqueante**: sin todo en verde no hay envío.
+- **Validación automática del encuadre** en vídeos y fotos: un modelo de pose (MediaPipe
+  Pose Landmarker) corre en el propio navegador —la imagen no sale del dispositivo—, detecta
+  los 33 puntos del cuerpo y comprueba las reglas de cada captura (`src/lib/encuadre.ts`: qué
+  debe verse, hacia dónde mira el paciente, tamaño, centrado, quietud). La checklist se pone
+  en verde sola y el botón de captura solo se activa tras ~1 s con todo en verde. Si el modelo
+  no puede cargarse, se vuelve a la checklist manual. El modelo (5,8 MB) va en `public/`; el
+  WASM se sirve desde el CDN de jsDelivr (o desde la app con `NEXT_PUBLIC_MEDIAPIPE_WASM`).
 
 **Prescripción**
 - Cola del prescriptor de clínica y **cola central Ortosend** (clínicas sin prescriptor) con
@@ -97,7 +104,7 @@ Cuentas de demo (contraseña `ortosend123`):
 
 - **Stripe real** (PaymentIntent + webhook; Bizum) y facturas.
 - **Subida real de media** por fragmentos a Cloudflare R2/S3 con URLs firmadas; grabación de
-  vídeo con getUserMedia + MediaRecorder; visor del escaneo 3D.
+  vídeo con MediaRecorder (la captura sigue simulada); visor del escaneo 3D.
 - **WhatsApp Business API** (360dialog/Twilio) para la cola de `Notification`; email de respaldo.
 - Mapa Leaflet/OSM con radio 50 km real en `/buscar` (lat/lng ya en el modelo).
 - Envíos (Sendcloud/Packlink) con webhook de entrega; PDF real de la prescripción.
