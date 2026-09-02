@@ -132,10 +132,7 @@ const Q_FIELDS: Record<string, { strs: (keyof Questionnaire)[]; lists: (keyof Qu
 };
 
 const E_FIELDS: Record<string, { strs: (keyof Exam)[]; lists: (keyof Exam)[]; last?: boolean }> = {
-  movilidad: {
-    strs: ["tobillo", "hallux", "subastragalina", "primerRadio", "cadenaPosterior", "tipoPie", "fpiIzq", "fpiDcho"],
-    lists: [],
-  },
+  movilidad: { strs: ["tipoPie", "fpiIzq", "fpiDcho", "movilidadObs"], lists: [] },
   // Los 5 generales, que se hacen siempre
   nucleo: {
     strs: [
@@ -171,6 +168,8 @@ const E_FIELDS: Record<string, { strs: (keyof Exam)[]; lists: (keyof Exam)[]; la
       "rotCadera",
       "dorsi1mtfIzq",
       "dorsi1mtfDcho",
+      "tobillo",
+      "primerRadio",
       "formulaMetatarsal",
       "formulaDigital",
       "compresionMtt",

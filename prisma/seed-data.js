@@ -233,6 +233,7 @@ async function seedDemo(prisma) {
       },
       physicalExam: {
         v: 2,
+        movilidadObs: "Gemelos acortados; mejora al calentar.",
         tobillo: "Limitada rodilla extendida (gastrocnemios)",
         lungeIzq: "8",
         lungeDcha: "6.5",
@@ -255,6 +256,7 @@ async function seedDemo(prisma) {
         // Complementarios de las ramas «talón / fascia» y «arco medial / pie plano»
         testsSel: [
           "palpacion_calcaneo",
+          "silfverskiold",
           "compresion_calcaneo",
           "too_many_toes",
           "nav_drift",

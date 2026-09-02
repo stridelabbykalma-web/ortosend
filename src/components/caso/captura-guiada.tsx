@@ -19,16 +19,13 @@ import {
 } from "@/lib/questionnaire";
 import {
   ANGULO_PASO_OPTS,
-  CADENA_POSTERIOR_OPTS,
   CONTACTO_OPTS,
   DESPEGUE_OPTS,
-  HALLUX_OPTS,
   LADO_CORTO_OPTS,
   LAMINA_OPTS,
   MARCHA_PATRON_OPTS,
   PRIMER_RADIO_OPTS,
   RETROPIE_OPTS,
-  SUBASTRAGALINA_OPTS,
   TIPO_PIE_OPTS,
   TOBILLO_OPTS,
   type Exam,
@@ -186,7 +183,7 @@ function buildSlides(): Slide[] {
     { t: "q", section: "actividad", title: "Actividad y datos físicos", grupo: "Cuestionario" },
     { t: "q", section: "calzado", title: "Calzado y plantillas", grupo: "Cuestionario" },
     { t: "q", section: "antecedentes", title: "Antecedentes y tratamientos", grupo: "Cuestionario" },
-    { t: "e", section: "movilidad", title: "Movilidad y flexibilidad", grupo: "Exploración" },
+    { t: "e", section: "movilidad", title: "Tipo de pie y observaciones", grupo: "Exploración" },
     { t: "e", section: "nucleo", title: `Tests generales (los ${NUCLEO.length} de siempre)`, grupo: "Exploración" },
     { t: "e", section: "comp_sel", title: "Tests complementarios: cuáles hacer", grupo: "Exploración" },
     { t: "e", section: "comp_res", title: "Tests complementarios: resultados", grupo: "Exploración" },
@@ -259,7 +256,7 @@ function slideDone(s: Slide, q: Questionnaire | null, e: Exam | null, has: (k: s
     // activa tiene ya algún test que la cubra.
     if (s.section === "comp_sel") return ramasSinCubrir(q, e).length === 0;
     if (s.section === "comp_res") return complementariosCompletos(e);
-    const key = { movilidad: "subastragalina", dismetria: "dismetria", marcha: "marchaPatron" }[
+    const key = { movilidad: "tipoPie", dismetria: "dismetria", marcha: "marchaPatron" }[
       s.section
     ] as keyof Exam | undefined;
     return key !== undefined && key in e;
@@ -367,6 +364,10 @@ function CompCampos({ id, e }: { id: TestId; e: Exam | null }) {
         <Num name="dorsi1mtfIzq" label="Pie izquierdo (grados)" def={e?.dorsi1mtfIzq} min={0} max={90} ph="65" />,
         <Num name="dorsi1mtfDcho" label="Pie derecho (grados)" def={e?.dorsi1mtfDcho} min={0} max={90} ph="65" />
       );
+    case "silfverskiold":
+      return <Sel name="tobillo" label="Flexión dorsal de tobillo" opts={TOBILLO_OPTS} def={e?.tobillo} />;
+    case "primer_radio":
+      return <Sel name="primerRadio" label="Primer radio" opts={PRIMER_RADIO_OPTS} def={e?.primerRadio} />;
     case "formula_metatarsal":
       return dos(
         <Sel name="formulaMetatarsal" label="Fórmula metatarsal" opts={FORMULA_MTT_OPTS} def={e?.formulaMetatarsal} />,
@@ -492,21 +493,29 @@ function ESection({ section, e, q }: { section: string; e: Exam | null; q: Quest
   if (section === "movilidad")
     return (
       <>
-        <div className="grid g2">
-          <Sel name="tobillo" label="Flexión dorsal de tobillo (Silfverskiöld)" opts={TOBILLO_OPTS} def={e?.tobillo} />
-          <Sel name="hallux" label="Hallux en descarga (camilla)" opts={HALLUX_OPTS} def={e?.hallux} />
-        </div>
-        <div className="grid g3">
-          <Sel name="subastragalina" label="Articulación subastragalina" opts={SUBASTRAGALINA_OPTS} def={e?.subastragalina} />
-          <Sel name="primerRadio" label="Primer radio" opts={PRIMER_RADIO_OPTS} def={e?.primerRadio} />
-          <Sel name="cadenaPosterior" label="Cadena posterior (isquios/gemelos)" opts={CADENA_POSTERIOR_OPTS} def={e?.cadenaPosterior} />
-        </div>
         <div className="grid g3">
           <Sel name="tipoPie" label="Tipo de pie" opts={TIPO_PIE_OPTS} def={e?.tipoPie} />
-          <Num name="fpiIzq" label="FPI-6 pie izquierdo (−12 a +12)" def={e?.fpiIzq} min={-12} max={12} ph="+4" />
-          <Num name="fpiDcho" label="FPI-6 pie derecho (−12 a +12)" def={e?.fpiDcho} min={-12} max={12} ph="+4" />
+          <Num name="fpiIzq" label="FPI-6 pie izquierdo (opcional)" def={e?.fpiIzq} min={-12} max={12} ph="+4" />
+          <Num name="fpiDcho" label="FPI-6 pie derecho (opcional)" def={e?.fpiDcho} min={-12} max={12} ph="+4" />
         </div>
-        <div className="tiny">FPI-6: 0 a +5 neutro · +6 a +9 pronado · +10 o más muy pronado · negativo supinado.</div>
+        <div className="tiny">
+          El tipo de pie y el FPI-6 activan las ramas de pie plano y pie cavo en los tests
+          complementarios. FPI-6: 0 a +5 neutro · +6 a +9 pronado · +10 o más muy pronado ·
+          negativo supinado.
+        </div>
+        <label style={{ marginTop: 12 }}>
+          ¿Hay algo de movilidad o flexibilidad relevante para las plantillas? (opcional)
+        </label>
+        <textarea
+          name="movilidadObs"
+          rows={3}
+          defaultValue={e?.movilidadObs}
+          placeholder="Ej.: gemelos muy acortados, subastragalina rígida, hallux rígido, cadena posterior tensa…"
+        />
+        <div className="tiny">
+          Lo que necesite un resultado cerrado (Silfverskiöld, primer radio, 1.ª MTF…) se anota en
+          los tests complementarios, que salen según el cuadro.
+        </div>
       </>
     );
   // Núcleo: los 5 que se hacen siempre. Van antes de elegir complementarios

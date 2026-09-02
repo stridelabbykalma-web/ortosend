@@ -4,7 +4,7 @@
 //
 // Tres reglas de diseño, para que esto sea usable en consulta:
 //  1. Nada se pide dos veces. Un test que piden varias ramas —o que ya está en
-//     el núcleo o en la exploración— aparece una sola vez.
+//     el núcleo— aparece una sola vez.
 //  2. Hay tope. Se sugieren como mucho MAX_SUGERIDOS y se avisa al pasar de
 //     AVISO_VOLUMEN, porque un paciente con tres zonas de dolor activaría
 //     veinte tests que nadie va a hacer.
@@ -39,6 +39,8 @@ export type TestId =
   | "trendelenburg"
   | "rot_cadera"
   | "dorsiflex_1mtf"
+  | "silfverskiold"
+  | "primer_radio"
   | "formula_metatarsal"
   | "compresion_mtt"
   | "mulder"
@@ -167,6 +169,18 @@ export const COMPLEMENTARIOS: TestDef[] = [
     minutos: 1,
   },
   {
+    id: "silfverskiold",
+    nombre: "Silfverskiöld",
+    para: "Flexión dorsal de tobillo con rodilla extendida y flexionada: distingue acortamiento de gemelos de sóleo.",
+    minutos: 2,
+  },
+  {
+    id: "primer_radio",
+    nombre: "Movilidad del primer radio",
+    para: "Rango y posición del primer radio en descarga: hipo/hipermóvil, plantar o dorsiflexionado.",
+    minutos: 1,
+  },
+  {
     id: "formula_metatarsal",
     nombre: "Fórmula metatarsal y digital",
     para: "Index plus / plus-minus / minus y fórmula digital. Condiciona el diseño de la descarga.",
@@ -260,15 +274,15 @@ export type RamaDef = { id: RamaId; nombre: string; tests: TestId[] };
 // El orden dentro de cada rama es el de prioridad: si hay que recortar, se
 // recorta por el final.
 export const RAMAS: RamaDef[] = [
-  { id: "talon", nombre: "Talón / fascia plantar", tests: ["palpacion_calcaneo", "compresion_calcaneo", "dorsiflex_1mtf"] },
+  { id: "talon", nombre: "Talón / fascia plantar", tests: ["palpacion_calcaneo", "silfverskiold", "compresion_calcaneo", "dorsiflex_1mtf"] },
   { id: "arco_plano", nombre: "Arco medial / pie plano", tests: ["too_many_toes", "nav_drift", "double_heel_rise", "max_pronacion", "resist_inversion"] },
-  { id: "cavo", nombre: "Pie cavo / varo", tests: ["coleman", "balance_mono", "double_heel_rise"] },
-  { id: "antepie", nombre: "Antepié / metatarsalgia", tests: ["formula_metatarsal", "compresion_mtt", "dorsiflex_1mtf", "mulder"] },
-  { id: "hallux", nombre: "Dedo gordo / 1.ª MTF", tests: ["dorsiflex_1mtf", "formula_metatarsal"] },
+  { id: "cavo", nombre: "Pie cavo / varo", tests: ["coleman", "primer_radio", "balance_mono", "double_heel_rise"] },
+  { id: "antepie", nombre: "Antepié / metatarsalgia", tests: ["formula_metatarsal", "primer_radio", "compresion_mtt", "dorsiflex_1mtf", "mulder"] },
+  { id: "hallux", nombre: "Dedo gordo / 1.ª MTF", tests: ["dorsiflex_1mtf", "primer_radio", "formula_metatarsal"] },
   { id: "neuroma", nombre: "Neuroma / dolor intermetatarsal", tests: ["mulder", "compresion_mtt", "territorio_sensitivo"] },
   { id: "tibial_post", nombre: "Tobillo medial / tibial posterior", tests: ["too_many_toes", "resist_inversion", "double_heel_rise", "tinel"] },
   { id: "tobillo_lat", nombre: "Tobillo lateral / inestabilidad", tests: ["estabilidad_tobillo", "balance_mono", "single_leg_squat", "step_down"] },
-  { id: "aquiles", nombre: "Tendón de Aquiles", tests: ["palpacion_aquiles", "thompson"] },
+  { id: "aquiles", nombre: "Tendón de Aquiles", tests: ["palpacion_aquiles", "silfverskiold", "thompson"] },
   { id: "rodilla", nombre: "Rodilla", tests: ["single_leg_squat", "step_down", "rot_cadera", "trendelenburg"] },
   { id: "cadera", nombre: "Cadera / pelvis", tests: ["trendelenburg", "single_leg_squat", "step_down", "rot_cadera", "balance_mono"] },
   { id: "lumbar", nombre: "Zona lumbar", tests: ["trendelenburg", "single_leg_squat", "rot_cadera"] },
@@ -451,6 +465,8 @@ const CAMPOS: Record<TestId, (keyof Exam)[]> = {
   trendelenburg: ["trendelenburg"],
   rot_cadera: ["rotCadera"],
   dorsiflex_1mtf: ["dorsi1mtfIzq", "dorsi1mtfDcho"],
+  silfverskiold: ["tobillo"],
+  primer_radio: ["primerRadio"],
   formula_metatarsal: ["formulaMetatarsal", "formulaDigital"],
   compresion_mtt: ["compresionMtt"],
   mulder: ["mulder"],

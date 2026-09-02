@@ -67,9 +67,12 @@ export const DESPEGUE_OPTS = [
 export type Exam = {
   v?: number;
   done?: boolean; // true cuando la clínica completó la última sección (modo guiado)
-  // A · Movilidad y flexibilidad
-  tobillo?: string; // Silfverskiöld
-  lungeIzq?: string; // cm a la pared
+  // A · Tipo de pie y observaciones (tipoPie y FPI-6 están más abajo, en «general»)
+  movilidadObs?: string; // texto libre: algo de movilidad/flexibilidad relevante para la plantilla
+  // Campos de la antigua pantalla de movilidad: se siguen mostrando si existen.
+  // tobillo (Silfverskiöld) y primerRadio los rellenan ahora los tests complementarios.
+  tobillo?: string;
+  lungeIzq?: string; // cm a la pared (núcleo)
   lungeDcha?: string;
   subastragalina?: string;
   primerRadio?: string;
@@ -156,14 +159,13 @@ export function examLines(e: Exam | null | undefined): [string, string][] {
   const add = (label: string, value?: string) => {
     if (value && value.trim()) lines.push([label, value.trim()]);
   };
-  // A · Movilidad
-  add("Flexión dorsal tobillo (Silfverskiöld)", e.tobillo);
+  // A · Tipo de pie y observaciones
+  add("Tipo de pie", e.tipoPie);
+  add("FPI-6", pair(fpiLabel(e.fpiIzq), fpiLabel(e.fpiDcho)));
+  add("Movilidad / flexibilidad relevante", e.movilidadObs);
   add("Subastragalina", e.subastragalina);
-  add("Primer radio", e.primerRadio);
   add("Hallux en descarga", e.hallux);
   add("Cadena posterior", e.cadenaPosterior);
-  add("FPI-6", pair(fpiLabel(e.fpiIzq), fpiLabel(e.fpiDcho)));
-  add("Tipo de pie", e.tipoPie);
   // B · Núcleo (siempre) — los 5 salen aunque estén a medias, para que se vea qué falta
   add("Jack / Hubscher", pair(e.jackIzq, e.jackDcho));
   add("Navicular drop", pair(e.navDropIzq, e.navDropDcho, " mm"));
@@ -189,6 +191,8 @@ export function examLines(e: Exam | null | undefined): [string, string][] {
   add("Trendelenburg", e.trendelenburg);
   add("Rotación de cadera", e.rotCadera);
   add("Dorsiflexión 1.ª MTF", pair(e.dorsi1mtfIzq, e.dorsi1mtfDcho, "°"));
+  add("Silfverskiöld", e.tobillo);
+  add("Primer radio", e.primerRadio);
   add(
     "Fórmula metatarsal / digital",
     [e.formulaMetatarsal, e.formulaDigital].filter(Boolean).join(" · ") || undefined

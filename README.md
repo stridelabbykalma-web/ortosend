@@ -25,12 +25,12 @@ asociadas. Stack: **Next.js (App Router, server actions) + PostgreSQL (Prisma)**
   formación 5/5, liquidaciones (placeholder).
 - **Asistente de captura** guiado con guardado continuo: cuestionario clínico completo
   (motivo/dolor, actividad y datos físicos, calzado, antecedentes y tratamientos previos —
-  visible entero en el expediente que llega al prescriptor), exploración biomecánica con tests
-  (Silfverskiöld, subastragalina, primer radio, hallux, cadena posterior, FPI-6 y tipo de pie),
+  visible entero en el expediente que llega al prescriptor), tipo de pie y FPI-6 más una
+  pregunta abierta sobre movilidad/flexibilidad relevante para la plantilla,
   **núcleo de 5 tests obligatorios** (Jack/Hubscher, navicular drop, resistencia a la
   supinación, lunge/knee-to-wall y single heel rise) más los **complementarios que activa cada
   rama** según la zona y el tipo de dolor, el morfotipo del pie y los resultados del propio
-  núcleo (13 ramas, 22 tests, sin repetir nada que ya esté en el núcleo o en la exploración,
+  núcleo (13 ramas, 24 tests, sin repetir nada que ya esté en el núcleo o en la exploración,
   con tope de sugerencias y aviso de volumen), y **hallazgos de alerta** (Thompson, Tinel,
   compresión del calcáneo) destacados para el prescriptor porque no se resuelven con una
   plantilla; dismetría valorada con nivel pélvico y láminas calibradas, análisis observacional de la
