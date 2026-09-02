@@ -33,11 +33,88 @@ const NOSE = 0,
   L_HEEL = 29,
   R_HEEL = 30,
   L_FOOT = 31,
-  R_FOOT = 32;
+  R_FOOT = 32,
+  L_KNEE = 25,
+  R_KNEE = 26,
+  L_EAR = 7,
+  R_EAR = 8,
+  L_MOUTH = 9,
+  R_MOUTH = 10;
+
+// Ancho de la miniatura en la que se leen píxeles para el check de piel
+const SAMPLE_W = 240;
+const SKIN_HISTORY = 12; // frames de historial para estabilizar el check
+
+function toYCbCr(r: number, g: number, b: number): [number, number, number] {
+  return [
+    0.299 * r + 0.587 * g + 0.114 * b,
+    128 - 0.168736 * r - 0.331264 * g + 0.5 * b,
+    128 + 0.5 * r - 0.418688 * g - 0.081312 * b,
+  ];
+}
+
+// ¿Se ve piel (y no pantalón) de la rodilla al tobillo? MediaPipe no ve la
+// ropa, pero sí dónde están rodilla y tobillo: se leen los píxeles de la
+// espinilla y se comparan con el tono de piel de la propia cara del paciente
+// (cuando se ve); si no, con un rango genérico de piel en crominancia YCbCr.
+// Devuelve null si no hay ninguna pierna evaluable en el frame.
+function legsBare(img: ImageData, lms: NormalizedLandmark[]): boolean | null {
+  const { width: w, height: h, data } = img;
+  const vis = (i: number) => lms[i]?.visibility ?? 0;
+  const chroma = (nx: number, ny: number): [number, number, number] | null => {
+    const cx = Math.round(nx * w);
+    const cy = Math.round(ny * h);
+    if (cx < 1 || cy < 1 || cx >= w - 1 || cy >= h - 1) return null;
+    let r = 0, g = 0, b = 0;
+    for (let dy = -1; dy <= 1; dy++)
+      for (let dx = -1; dx <= 1; dx++) {
+        const i = ((cy + dy) * w + (cx + dx)) * 4;
+        r += data[i]; g += data[i + 1]; b += data[i + 2];
+      }
+    return toYCbCr(r / 9, g / 9, b / 9);
+  };
+  // Referencia personal: cara (entre nariz y boca, y mejillas hacia las orejas)
+  const ref: [number, number, number][] = [];
+  if (vis(NOSE) > 0.5) {
+    const n = lms[NOSE];
+    if (vis(L_MOUTH) > 0.5 && vis(R_MOUTH) > 0.5) {
+      const mx = (lms[L_MOUTH].x + lms[R_MOUTH].x) / 2;
+      const my = (lms[L_MOUTH].y + lms[R_MOUTH].y) / 2;
+      const c = chroma((n.x + mx) / 2, (n.y + my) / 2);
+      if (c) ref.push(c);
+    }
+    for (const ear of [L_EAR, R_EAR]) {
+      if (vis(ear) < 0.5) continue;
+      const c = chroma(n.x + (lms[ear].x - n.x) * 0.45, n.y + (lms[ear].y - n.y) * 0.45);
+      if (c) ref.push(c);
+    }
+  }
+  const isSkin = (c: [number, number, number]) => {
+    if (c[0] < 30) return false; // demasiado oscuro para decidir
+    if (ref.length) return ref.some((r) => Math.hypot(c[1] - r[1], c[2] - r[2]) < 16);
+    return c[1] >= 85 && c[1] <= 135 && c[2] >= 135 && c[2] <= 180;
+  };
+  let legs = 0;
+  let bare = 0;
+  for (const [k, a] of [[L_KNEE, L_ANKLE], [R_KNEE, R_ANKLE]] as const) {
+    if (vis(k) < 0.5 || vis(a) < 0.5) continue;
+    legs++;
+    let n = 0, skin = 0;
+    for (const t of [0.2, 0.32, 0.44, 0.56, 0.68, 0.8]) {
+      const c = chroma(lms[k].x + (lms[a].x - lms[k].x) * t, lms[k].y + (lms[a].y - lms[k].y) * t);
+      if (!c) continue;
+      n++;
+      if (isSkin(c)) skin++;
+    }
+    if (n >= 3 && skin / n >= 0.6) bare++;
+  }
+  if (legs === 0) return null;
+  return bare === legs;
+}
 
 type Checks = Partial<Record<CheckId, boolean>>;
 
-function evalChecks(lms: NormalizedLandmark[] | undefined): Checks {
+function evalChecks(lms: NormalizedLandmark[] | undefined, piernas: boolean | null): Checks {
   if (!lms || lms.length < 33) return {};
   const vis = (i: number) => lms[i]?.visibility ?? 0;
   const avg = (...v: number[]) => v.reduce((a, b) => a + b, 0) / v.length;
@@ -74,6 +151,7 @@ function evalChecks(lms: NormalizedLandmark[] | undefined): Checks {
     lado_izq: perfil && zL < zR - sideMargin,
     de_frente: abierto && izqEnDerechaImagen,
     de_espaldas: abierto && !izqEnDerechaImagen,
+    piernas_descubiertas: piernas === true && vis(L_KNEE) + vis(R_KNEE) > 0.5,
     pies_visibles: avg(vis(L_HEEL), vis(R_HEEL), vis(L_FOOT), vis(R_FOOT)) > 0.4,
   };
 }
@@ -139,6 +217,9 @@ export function CapturaStudio({
   const checksOkRef = useRef(false);
   // valid/total: frames; validMs: tiempo real acumulado con encuadre válido
   const frameStatsRef = useRef({ valid: 0, total: 0, validMs: 0, lastTs: 0 });
+  // Miniatura del frame para leer píxeles (check de piel) + historial para estabilizarlo
+  const sampleRef = useRef<HTMLCanvasElement | null>(null);
+  const skinHistRef = useRef<boolean[]>([]);
   const [validLive, setValidLive] = useState(0);
   const recStartRef = useRef(0);
   const lastVideoTimeRef = useRef(-1);
@@ -225,7 +306,30 @@ export function CapturaStudio({
         } catch {
           // un frame fallido no rompe el estudio
         }
-        const c = evalChecks(lms);
+        // Check de piel en la espinilla: se lee una miniatura del frame y se
+        // estabiliza por mayoría sobre los últimos frames.
+        let piernas: boolean | null = null;
+        if (lms) {
+          const sc = (sampleRef.current ??= document.createElement("canvas"));
+          const sw = SAMPLE_W;
+          const sh = Math.max(1, Math.round((SAMPLE_W * video.videoHeight) / video.videoWidth));
+          if (sc.width !== sw || sc.height !== sh) {
+            sc.width = sw;
+            sc.height = sh;
+          }
+          const sctx = sc.getContext("2d", { willReadFrequently: true });
+          if (sctx) {
+            sctx.drawImage(video, 0, 0, sw, sh);
+            const res = legsBare(sctx.getImageData(0, 0, sw, sh), lms);
+            const hist = skinHistRef.current;
+            if (res !== null) {
+              hist.push(res);
+              if (hist.length > SKIN_HISTORY) hist.shift();
+            }
+            if (hist.length >= 3) piernas = hist.filter(Boolean).length * 2 > hist.length;
+          }
+        } else skinHistRef.current = [];
+        const c = evalChecks(lms, piernas);
         setChecks(c);
         const ok = guide.checks.every((k) => c[k] === true);
         checksOkRef.current = ok;

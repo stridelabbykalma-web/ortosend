@@ -10,6 +10,7 @@ export type CheckId =
   | "lado_izq" // de perfil con el lado izquierdo del paciente hacia la cámara
   | "de_frente" // hombros abiertos y mirando a la cámara (viene hacia ella)
   | "de_espaldas" // hombros abiertos y de espaldas a la cámara (se aleja)
+  | "piernas_descubiertas" // de la rodilla al tobillo se ve piel, no pantalón
   | "pies_visibles"; // tobillos/talones/antepié visibles
 
 export const CHECK_LABEL: Record<CheckId, string> = {
@@ -20,6 +21,7 @@ export const CHECK_LABEL: Record<CheckId, string> = {
   lado_izq: "Lado izquierdo hacia la cámara",
   de_frente: "De frente a la cámara",
   de_espaldas: "De espaldas a la cámara",
+  piernas_descubiertas: "Piernas descubiertas de la rodilla al tobillo",
   pies_visibles: "Pies visibles",
 };
 
@@ -45,6 +47,7 @@ export type CaptureGuide = {
 // cámara el paciente cruza el encuadre de izquierda a derecha; con el izquierdo,
 // de derecha a izquierda.
 const LATERAL_TIPS = (lado: "derecho" | "izquierdo", calzado: string, seg: number) => [
+  "Piernas descubiertas de la rodilla para abajo (pantalón corto o remangado por encima de la rodilla): hay que ver la pierna y la reacción del cuerpo al andar. El estudio lo comprueba.",
   `Móvil en trípode, en horizontal, a la altura de la cadera, a un lado del pasillo (3-4 m) y perpendicular al recorrido.`,
   `El paciente camina recto hacia delante, ${calzado}, con su lado ${lado} hacia la cámara: cruza el encuadre ${
     lado === "derecho" ? "de izquierda a derecha" : "de derecha a izquierda"
@@ -55,6 +58,7 @@ const LATERAL_TIPS = (lado: "derecho" | "izquierdo", calzado: string, seg: numbe
 
 // Marcha posterior: cámara detrás del paciente, en el eje del pasillo; se aleja.
 const POSTERIOR_TIPS = (calzado: string, seg: number) => [
+  "Piernas descubiertas de la rodilla para abajo (pantalón corto o remangado por encima de la rodilla): hay que ver la pierna y la reacción del cuerpo al andar. El estudio lo comprueba.",
   "Móvil en trípode, en horizontal, a la altura de la cadera, en el eje del pasillo.",
   `El paciente parte junto a la cámara, de espaldas a ella, y camina recto alejándose 4-6 m, ${calzado}.`,
   "Antes de grabar, que se coloque de espaldas en el punto de salida: el estudio comprueba la orientación.",
@@ -63,6 +67,7 @@ const POSTERIOR_TIPS = (calzado: string, seg: number) => [
 
 // Marcha anterior: misma posición de cámara; el paciente viene hacia ella.
 const ANTERIOR_TIPS = (calzado: string, seg: number) => [
+  "Piernas descubiertas de la rodilla para abajo (pantalón corto o remangado por encima de la rodilla): hay que ver la pierna y la reacción del cuerpo al andar. El estudio lo comprueba.",
   "Móvil en trípode, en horizontal, a la altura de la cadera, en el eje del pasillo.",
   `El paciente parte a 4-6 m, de frente a la cámara, y camina recto hacia ella, ${calzado}; se detiene justo antes de salir del plano.`,
   "Antes de grabar, que se coloque de frente en el punto de salida: el estudio comprueba la orientación.",
@@ -72,7 +77,7 @@ const ANTERIOR_TIPS = (calzado: string, seg: number) => [
 export const CAPTURE_GUIDES: Record<string, CaptureGuide> = {
   video_lat_dcha_descalzo: {
     mode: "video",
-    checks: ["persona", "cuerpo_completo", "perfil", "lado_dcho"],
+    checks: ["persona", "cuerpo_completo", "piernas_descubiertas", "perfil", "lado_dcho"],
     seconds: 8,
     minValidSeconds: 3,
     direction: "ltr",
@@ -80,7 +85,7 @@ export const CAPTURE_GUIDES: Record<string, CaptureGuide> = {
   },
   video_lat_dcha_calzado: {
     mode: "video",
-    checks: ["persona", "cuerpo_completo", "perfil", "lado_dcho"],
+    checks: ["persona", "cuerpo_completo", "piernas_descubiertas", "perfil", "lado_dcho"],
     seconds: 8,
     minValidSeconds: 3,
     direction: "ltr",
@@ -88,7 +93,7 @@ export const CAPTURE_GUIDES: Record<string, CaptureGuide> = {
   },
   video_lat_izq_descalzo: {
     mode: "video",
-    checks: ["persona", "cuerpo_completo", "perfil", "lado_izq"],
+    checks: ["persona", "cuerpo_completo", "piernas_descubiertas", "perfil", "lado_izq"],
     seconds: 8,
     minValidSeconds: 3,
     direction: "rtl",
@@ -96,7 +101,7 @@ export const CAPTURE_GUIDES: Record<string, CaptureGuide> = {
   },
   video_lat_izq_calzado: {
     mode: "video",
-    checks: ["persona", "cuerpo_completo", "perfil", "lado_izq"],
+    checks: ["persona", "cuerpo_completo", "piernas_descubiertas", "perfil", "lado_izq"],
     seconds: 8,
     minValidSeconds: 3,
     direction: "rtl",
@@ -104,28 +109,28 @@ export const CAPTURE_GUIDES: Record<string, CaptureGuide> = {
   },
   video_post_descalzo: {
     mode: "video",
-    checks: ["persona", "cuerpo_completo", "de_espaldas"],
+    checks: ["persona", "cuerpo_completo", "piernas_descubiertas", "de_espaldas"],
     seconds: 10,
     minValidSeconds: 3,
     tips: POSTERIOR_TIPS("descalzo", 10),
   },
   video_post_calzado: {
     mode: "video",
-    checks: ["persona", "cuerpo_completo", "de_espaldas"],
+    checks: ["persona", "cuerpo_completo", "piernas_descubiertas", "de_espaldas"],
     seconds: 10,
     minValidSeconds: 3,
     tips: POSTERIOR_TIPS("con su calzado habitual", 10),
   },
   video_ant_descalzo: {
     mode: "video",
-    checks: ["persona", "cuerpo_completo", "de_frente"],
+    checks: ["persona", "cuerpo_completo", "piernas_descubiertas", "de_frente"],
     seconds: 10,
     minValidSeconds: 3,
     tips: ANTERIOR_TIPS("descalzo", 10),
   },
   video_ant_calzado: {
     mode: "video",
-    checks: ["persona", "cuerpo_completo", "de_frente"],
+    checks: ["persona", "cuerpo_completo", "piernas_descubiertas", "de_frente"],
     seconds: 10,
     minValidSeconds: 3,
     tips: ANTERIOR_TIPS("con su calzado habitual", 10),
