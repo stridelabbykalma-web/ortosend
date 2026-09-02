@@ -1,5 +1,8 @@
 import type { Capture, Case, MediaAsset, Patient, Prescription, User } from "@prisma/client";
 import { checklistOf } from "@/lib/cases";
+import { PASOS_CAPTURA } from "@/lib/captura-pasos";
+
+const tituloDe = (kind: string) => PASOS_CAPTURA.find((p) => p.kind === kind)?.titulo ?? kind;
 
 type CaseFull = Case & {
   patient: Patient & { owner: User };
@@ -13,6 +16,11 @@ export function Expediente({ kase }: { kase: CaseFull }) {
   const q = cp?.questionnaire as { motivo?: string; dolor?: string; actividad?: string } | null;
   const e = cp?.physicalExam as { tobillo?: string; hallux?: string; dismetria?: string; alza?: string } | null;
   const cl = checklistOf(cp);
+  // Solo los assets subidos de verdad por la captura guiada (tienen visor propio).
+  const kinds = PASOS_CAPTURA.map((p) => p.kind);
+  const mediaGuiada = (cp?.media ?? [])
+    .filter((m) => m.confirmedAt && m.sizeBytes && kinds.includes(m.kind))
+    .sort((a, b) => kinds.indexOf(a.kind) - kinds.indexOf(b.kind));
   return (
     <div className="card">
       <b style={{ fontFamily: "var(--font-sora)" }}>Expediente del estudio</b>
@@ -57,8 +65,23 @@ export function Expediente({ kase }: { kase: CaseFull }) {
           <div className="muted">{cl.escaneos ? "Ambos pies ✓ (visor 3D pendiente)" : "Pendiente"}</div>
         </div>
         <div>
-          <div className="tiny">VÍDEOS (7)</div>
-          <div className="muted">{cl.videos}/7 confirmados por el servidor</div>
+          <div className="tiny">CAPTURA GUIADA (FOTOS + VÍDEOS)</div>
+          <div className="muted">
+            Estáticas de pie {cl.fotos ? "2/2" : "pendientes"} · Vídeos {cl.videos}/7 confirmados
+            por el servidor
+          </div>
+          {mediaGuiada.length > 0 && (
+            <div className="muted" style={{ marginTop: 4 }}>
+              {mediaGuiada.map((m, i) => (
+                <span key={m.kind}>
+                  {i > 0 && " · "}
+                  <a href={`/api/casos/${kase.id}/media/${m.kind}`} target="_blank" rel="noreferrer">
+                    {tituloDe(m.kind)}
+                  </a>
+                </span>
+              ))}
+            </div>
+          )}
         </div>
         <div>
           <div className="tiny">BAROPODOMETRÍA</div>

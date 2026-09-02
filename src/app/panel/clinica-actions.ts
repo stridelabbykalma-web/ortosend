@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { requireRole, createInviteToken } from "@/lib/auth";
 import { checklistOf, notify, pushEvent } from "@/lib/cases";
-import { VIDEO_KINDS, BARO_KINDS } from "@/lib/format";
+import { BARO_KINDS } from "@/lib/format";
 import type { User } from "@prisma/client";
 
 const MAX_SLOTS = 5;
@@ -139,12 +139,13 @@ export async function saveExamAction(formData: FormData) {
 }
 
 // Marca un elemento de captura como subido y CONFIRMADO por el servidor.
-// (En producción: subida por fragmentos a R2/S3 y confirmación real del servidor.)
+// Solo escaneos y baropodometría: fotos y vídeos van por el modo captura guiado,
+// que sube el archivo real a /api/casos/[id]/media.
 export async function markMediaAction(formData: FormData) {
   const u = await requireClinicStaff();
   const caseId = String(formData.get("caseId"));
   const kind = String(formData.get("kind"));
-  const valid = ["scan_L", "scan_R", ...VIDEO_KINDS.map(([k]) => k), ...BARO_KINDS.map(([k]) => k)];
+  const valid = ["scan_L", "scan_R", ...BARO_KINDS.map(([k]) => k)];
   if (!valid.includes(kind)) fail(`/caso/${caseId}`, "Elemento de captura desconocido");
   const { capture } = await captureFor(caseId, u);
   const exists = await prisma.mediaAsset.findFirst({ where: { captureId: capture.id, kind } });

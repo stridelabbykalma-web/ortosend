@@ -24,8 +24,15 @@ asociadas. Stack: **Next.js (App Router, server actions) + PostgreSQL (Prisma)**
 - Agenda (citas Flujo A + casos Flujo B), disponibilidad (máx. 5 huecos), profesionales y
   formación 5/5, liquidaciones (placeholder).
 - **Asistente de captura** de 6 pasos con guardado continuo: cuestionario, exploración física,
-  escaneo 3D (2), vídeos (7: 6 de marcha + heel rise), baropodometría (2 estáticas + dinámica +
-  informe) y **checklist bloqueante** — sin todo en verde no hay envío.
+  escaneo 3D (2), cámara guiada, baropodometría (2 estáticas + dinámica + informe) y
+  **checklist bloqueante** — sin todo en verde no hay envío.
+- **Modo captura guiado con cámara** (`/caso/[id]?paso=N`): 2 fotos de bipedestación (anterior y
+  posterior) + 7 vídeos (6 de marcha + heel rise). Silueta de encuadre, **comprobación
+  automática del paciente** (pose con MediaPipe vía CDN: cuerpo entero, pies con talones y
+  puntas, orientación correcta y distancia), cuenta atrás y disparo/grabación automáticos
+  (getUserMedia + MediaRecorder), con fallback manual si no hay detección. La subida es real
+  (`/api/casos/[id]/media`) y **el check verde solo sale con la confirmación del servidor**; las
+  capturas se sirven con control de acceso por rol desde el expediente.
 
 **Prescripción**
 - Cola del prescriptor de clínica y **cola central Ortosend** (clínicas sin prescriptor) con
@@ -82,8 +89,8 @@ Cuentas de demo (contraseña `ortosend123`):
 ## Pendiente (siguientes fases)
 
 - **Stripe real** (PaymentIntent + webhook; Bizum) y facturas.
-- **Subida real de media** por fragmentos a Cloudflare R2/S3 con URLs firmadas; grabación de
-  vídeo con getUserMedia + MediaRecorder; visor del escaneo 3D.
+- **Media en R2/S3** con URLs firmadas y subida por fragmentos (hoy las capturas guiadas se
+  guardan en PostgreSQL con límite de 4 MB por archivo); visor del escaneo 3D.
 - **WhatsApp Business API** (360dialog/Twilio) para la cola de `Notification`; email de respaldo.
 - Mapa Leaflet/OSM con radio 50 km real en `/buscar` (lat/lng ya en el modelo).
 - Envíos (Sendcloud/Packlink) con webhook de entrega; PDF real de la prescripción.

@@ -1,6 +1,8 @@
+import Link from "next/link";
 import type { Capture, Case, Incident, MediaAsset } from "@prisma/client";
 import { checklistOf } from "@/lib/cases";
-import { BARO_KINDS, VIDEO_KINDS } from "@/lib/format";
+import { BARO_KINDS } from "@/lib/format";
+import { CAPTURA_KINDS, PASOS_CAPTURA, primerPasoPendiente } from "@/lib/captura-pasos";
 import { CheckLine } from "@/components/ui";
 import {
   markMediaAction,
@@ -21,6 +23,8 @@ export function Wizard({ kase }: { kase: CaseWithCapture }) {
   const e = cp?.physicalExam as { tobillo?: string; dismetria?: string; alza?: string } | null;
   const media = cp?.media.filter((m) => m.confirmedAt) ?? [];
   const has = (k: string) => media.some((m) => m.kind === k);
+  const hechos = media.map((m) => m.kind).filter((k) => CAPTURA_KINDS.includes(k));
+  const pendiente = primerPasoPendiente(hechos);
   const cl = checklistOf(cp);
   const repeat = kase.state === "DEVUELTO_CLINICA";
   const lastIncident = repeat
@@ -145,22 +149,34 @@ export function Wizard({ kase }: { kase: CaseWithCapture }) {
           </div>
         </div>
         <div className="card">
-          <b>4 · Vídeos — modo captura guiado {cl.videos >= 7 && <span className="pill g">✓</span>}</b>
-          {VIDEO_KINDS.map(([kind, label]) => (
-            <CheckLine ok={has(kind)} key={kind}>
-              {label}
-              {!has(kind) && (
-                <form action={markMediaAction}>
-                  {hidden(kind)}
-                  <button type="submit">● Grabar</button>
-                </form>
-              )}
+          <b>
+            4 · Cámara — modo captura guiado{" "}
+            {cl.fotos && cl.videos >= 7 && <span className="pill g">✓</span>}
+          </b>
+          {pendiente && (
+            <>
+              <div className="sp" />
+              <Link className="btn pri" href={`/caso/${kase.id}?paso=${pendiente.paso}`}>
+                ▶ {hechos.length ? "Continuar captura guiada" : "Iniciar captura guiada"} — paso{" "}
+                {pendiente.paso} de {PASOS_CAPTURA.length}
+              </Link>
+              <div className="sp" />
+            </>
+          )}
+          {PASOS_CAPTURA.map((p) => (
+            <CheckLine ok={has(p.kind)} key={p.kind}>
+              {p.titulo}
+              <span className="push">
+                <Link className="btn" href={`/caso/${kase.id}?paso=${p.paso}`}>
+                  {has(p.kind) ? "↻ Repetir" : "● Capturar"}
+                </Link>
+              </span>
             </CheckLine>
           ))}
           <div className="tiny">
-            En producción: grabación con la cámara del móvil en trípode (getUserMedia +
-            MediaRecorder), silueta de encuadre y subida en segundo plano. El check verde solo
-            aparece cuando el servidor confirma la subida.
+            Cámara en trípode con silueta de encuadre: la app comprueba sola que el paciente se ve
+            entero y bien orientado, y dispara la foto o la grabación. El check verde solo aparece
+            cuando el servidor confirma la subida real del archivo.
           </div>
         </div>
         <div className="card">
@@ -182,6 +198,7 @@ export function Wizard({ kase }: { kase: CaseWithCapture }) {
           <CheckLine ok={cl.cuestionario}>Cuestionario</CheckLine>
           <CheckLine ok={cl.exploracion}>Exploración</CheckLine>
           <CheckLine ok={cl.escaneos}>Escaneo 3D (2)</CheckLine>
+          <CheckLine ok={cl.fotos}>Estáticas de pie (2)</CheckLine>
           <CheckLine ok={cl.videos >= 7}>Vídeos 7/7</CheckLine>
           <CheckLine ok={cl.baro}>Baropodometría</CheckLine>
           {cl.completa ? (

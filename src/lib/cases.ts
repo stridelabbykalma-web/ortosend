@@ -1,6 +1,7 @@
 // Utilidades sobre casos: eventos, notificaciones simuladas, reparto y liberación.
 import { prisma } from "./db";
 import { OPEN_CASE_TIMEOUT_MIN } from "./states";
+import { FOTO_KINDS } from "./captura-pasos";
 
 export async function pushEvent(caseId: string, text: string, actor: string) {
   await prisma.caseEvent.create({ data: { caseId, text, actor } });
@@ -34,6 +35,7 @@ export type Checklist = {
   cuestionario: boolean;
   exploracion: boolean;
   escaneos: boolean;
+  fotos: boolean; // estáticas de pie (2) de la captura guiada
   videos: number; // confirmados de 7
   baro: boolean;
   completa: boolean;
@@ -50,13 +52,15 @@ export function checklistOf(capture: {
   const cuestionario = !!capture?.questionnaire;
   const exploracion = !!capture?.physicalExam;
   const escaneos = has("scan_L") && has("scan_R");
+  const fotos = FOTO_KINDS.every((k) => has(k));
   const baro = has("baro_est_1") && has("baro_est_2") && has("baro_din") && has("baro_informe");
   return {
     cuestionario,
     exploracion,
     escaneos,
+    fotos,
     videos,
     baro,
-    completa: cuestionario && exploracion && escaneos && videos >= 7 && baro,
+    completa: cuestionario && exploracion && escaneos && fotos && videos >= 7 && baro,
   };
 }

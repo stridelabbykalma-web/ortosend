@@ -214,9 +214,11 @@ model MediaAsset {
   id        String  @id @default(cuid())
   captureId String
   capture   Capture @relation(fields: [captureId], references: [id])
-  kind      String  // scan_L | scan_R | video_lat_dcha_descalzo | ... | video_heel_rise | baro
+  kind      String  // foto_de_pie_* | scan_L | scan_R | video_lat_dcha_descalzo | ... | video_heel_rise | baro
   url       String
   sizeBytes Int?
+  mime      String? // image/jpeg | video/webm | video/mp4 (captura guiada)
+  data      Bytes?  // contenido subido desde el modo captura guiado (R2/S3 por fragmentos: pendiente)
   confirmedAt DateTime? // check verde SOLO cuando el servidor confirma
 }
 

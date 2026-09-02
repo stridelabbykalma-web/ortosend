@@ -134,3 +134,33 @@ tr.click:hover { background: var(--paper); }
   .hero h1 { font-size: 26px; }
   .nav .links { gap: 10px; font-size: 13px; }
 }
+
+/* --- Modo captura guiado (cámara + silueta + comprobación automática) --- */
+.cap-wrap { max-width: 860px; }
+.cap-stage {
+  position: relative; background: #10181c; border-radius: 16px; overflow: hidden;
+  aspect-ratio: 16 / 10; display: flex; align-items: center; justify-content: center;
+}
+.cap-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0.55; }
+.cap-silueta { position: relative; height: 82%; max-height: 100%; z-index: 2; opacity: 0.95; }
+.cap-estado {
+  position: absolute; top: 14px; left: 0; right: 0; text-align: center; z-index: 3;
+  color: #fff; font-weight: 600; font-size: 15.5px; text-shadow: 0 1px 4px rgba(0,0,0,.6);
+}
+.cap-caption {
+  position: absolute; bottom: 12px; left: 0; right: 0; text-align: center; z-index: 3;
+  color: #dfe8e4; font-size: 13.5px; text-shadow: 0 1px 4px rgba(0,0,0,.6);
+}
+.cap-cuenta {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  z-index: 4; color: #6ee0c8; font-family: var(--font-sora); font-size: 110px; font-weight: 700;
+  text-shadow: 0 2px 12px rgba(0,0,0,.5);
+}
+.cap-stop {
+  position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%); z-index: 4;
+  background: #c0392b; border-color: #c0392b; color: #fff; font-weight: 600;
+}
+.cap-error { position: relative; z-index: 3; color: #fff; text-align: center; padding: 20px; }
+.cap-checks { list-style: none; margin: 8px 0 0; padding: 0; }
+.cap-checks li { padding: 4px 0; color: var(--ink2); font-size: 13.5px; }
+.cap-checks li.ok { color: var(--green); font-weight: 600; }

@@ -6,6 +6,8 @@ import { audit } from "@/lib/cases";
 import { Flash, StatePill, Steps } from "@/components/ui";
 import { Expediente, Historial } from "@/components/caso/expediente";
 import { Wizard } from "@/components/caso/wizard";
+import { CapturaGuiada } from "@/components/caso/captura-guiada";
+import { pasoByNumber } from "@/lib/captura-pasos";
 import { RxView } from "@/components/caso/rx-view";
 import { TallerView } from "@/components/caso/taller-view";
 import { unlockRxAction } from "@/app/panel/cliente-actions";
@@ -19,12 +21,12 @@ export default async function CasoPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string; ok?: string; doc?: string }>;
+  searchParams: Promise<{ error?: string; ok?: string; doc?: string; paso?: string }>;
 }) {
   const user = await getSessionUser();
   if (!user) redirect("/login");
   const { id } = await params;
-  const { error, ok, doc } = await searchParams;
+  const { error, ok, doc, paso } = await searchParams;
   const kase = await prisma.case.findUnique({
     where: { id },
     include: {
@@ -66,8 +68,17 @@ export default async function CasoPage({
   const inRx = ["EN_PRESCRIPCION", "EN_CONTACTO"].includes(k.state);
   const inTaller = ["ENTRADA_TALLER", "DISENO", "FABRICACION", "CALIDAD", "ENVIADO"].includes(k.state);
 
+  // Modo captura guiado a pantalla de trabajo: /caso/[id]?paso=N
+  const pasoCaptura = paso ? pasoByNumber(Number(paso)) : null;
+
   let inner: React.ReactNode;
-  if (isClinicStaff && inCapture) {
+  if (isClinicStaff && inCapture && pasoCaptura) {
+    const hechos =
+      k.capture?.media.filter((m) => m.confirmedAt).map((m) => m.kind) ?? [];
+    inner = (
+      <CapturaGuiada key={pasoCaptura.paso} caseId={k.id} paso={pasoCaptura} hechos={hechos} />
+    );
+  } else if (isClinicStaff && inCapture) {
     inner = (
       <>
         <Wizard kase={k} />
