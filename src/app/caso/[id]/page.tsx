@@ -45,7 +45,9 @@ export default async function CasoPage({
   const isOwner = user.role === "CLIENTE" && k.patient.ownerId === user.id;
   const isClinicStaff =
     (user.role === "PROFESIONAL" || user.role === "ADMIN_CLINICA") && user.clinicId === k.clinicId;
-  const isCentral = user.role === "RECETADOR" && !k.clinic.hasPrescriber;
+  // El recetador central ve las clínicas sin prescriptor y, además, cualquier caso
+  // con revisión de receta directa solicitada (para poder dar su opinión).
+  const isCentral = user.role === "RECETADOR" && (!k.clinic.hasPrescriber || !!k.reviewRequestedAt);
   const isTaller = user.role === "TALLER";
   const isAdmin = user.role === "ADMIN";
   if (!isOwner && !isClinicStaff && !isCentral && !isTaller && !isAdmin) redirect("/panel");
@@ -61,10 +63,16 @@ export default async function CasoPage({
     !!profile?.canPrescribe &&
     !!profile.verifiedAt &&
     (isCentral || (isClinicStaff && k.clinic.hasPrescriber));
-  // Modo receta directa del asistente: quien rellena el estudio puede recetar en la visita.
+  // Modo receta directa del asistente: al crear el caso se eligió que la receta el propio
+  // profesional (rxMode DIRECTA) y quien lo abre es prescriptor verificado.
   // No se ofrece si el caso ya tiene receta firmada (p. ej. devuelto por el taller).
   const directRx =
-    isClinicStaff && !k.prescription && !!profile?.canPrescribe && !!profile.verifiedAt && !!profile.collegiateNum
+    isClinicStaff &&
+    k.rxMode === "DIRECTA" &&
+    !k.prescription &&
+    !!profile?.canPrescribe &&
+    !!profile.verifiedAt &&
+    !!profile.collegiateNum
       ? { name: user.name, degree: profile.degree, collegiateNum: profile.collegiateNum }
       : null;
 
@@ -147,6 +155,28 @@ export default async function CasoPage({
   } else {
     inner = (
       <>
+        {k.reviewQuestion && (
+          <>
+            <div className="card">
+              <b>Revisión solicitada a Ortosend</b>
+              <div className="muted" style={{ margin: "6px 0" }}>
+                «{k.reviewQuestion}»
+              </div>
+              {k.reviewAnswer ? (
+                <div className="note g">
+                  <b>Opinión de {k.reviewAnsweredBy}</b> ({fmtd(k.reviewAnsweredAt!)}):{" "}
+                  {k.reviewAnswer}
+                </div>
+              ) : (
+                <div className="tiny">
+                  Pendiente de respuesta de uno de nuestros profesionales. Es consultiva: no
+                  bloquea el caso ni modifica la receta firmada.
+                </div>
+              )}
+            </div>
+            <div className="sp" />
+          </>
+        )}
         <Expediente kase={k} />
         <Historial events={k.events} />
       </>

@@ -127,6 +127,8 @@ export async function signDirectRxAction(formData: FormData) {
     include: { capture: true, patient: true, clinic: true, prescription: true },
   });
   if (!kase || kase.clinicId !== u.clinicId) fail("/panel", "Caso no accesible");
+  if (kase.rxMode !== "DIRECTA")
+    fail(back, "Este caso se creó para valoración de Ortosend: completa el estudio y envíalo a la cola");
   if (!["ESTUDIO_EN_CURSO", "DEVUELTO_CLINICA"].includes(kase.state))
     fail(back, "El estudio no está en curso");
   if (kase.prescription)
@@ -146,6 +148,8 @@ export async function signDirectRxAction(formData: FormData) {
   const usageGuidelines = String(formData.get("usageGuidelines") ?? "").trim();
   if (!fabricationOrder)
     fail(back, "El escrito de la receta es obligatorio: cómo deben ser las plantillas, qué deben llevar y qué función tienen");
+  // Revisión opcional: consulta al equipo de Ortosend, que responderá con su opinión.
+  const reviewQuestion = String(formData.get("reviewQuestion") ?? "").trim();
   const expires = new Date(Date.now() + PAY_LINK_DAYS * 24 * 3600 * 1000);
   await prisma.$transaction([
     prisma.capture.update({ where: { caseId }, data: { completedAt: new Date() } }),
@@ -165,7 +169,14 @@ export async function signDirectRxAction(formData: FormData) {
     prisma.payment.create({ data: { caseId, amountCents: PRICE_CENTS } }),
     prisma.case.update({
       where: { id: caseId },
-      data: { state: "PENDIENTE_PAGO", openBy: null, openAt: null, rxDraft: null, payLinkExpiresAt: expires },
+      data: {
+        state: "PENDIENTE_PAGO",
+        openBy: null,
+        openAt: null,
+        rxDraft: null,
+        payLinkExpiresAt: expires,
+        ...(reviewQuestion ? { reviewQuestion, reviewRequestedAt: new Date() } : {}),
+      },
     }),
   ]);
   await pushEvent(
@@ -173,6 +184,8 @@ export async function signDirectRxAction(formData: FormData) {
     `Receta directa firmada en la visita por ${u.name} (${profile.degree ?? "colegiado"}, col. ${profile.collegiateNum})`,
     u.name
   );
+  if (reviewQuestion)
+    await pushEvent(caseId, `Revisión solicitada a Ortosend: ${reviewQuestion}`, u.name);
   await audit(u.id, "prescription.sign_direct", `case:${kase.number}`);
   const phone = await ownerPhone(kase);
   if (phone)
@@ -180,6 +193,25 @@ export async function signDirectRxAction(formData: FormData) {
       nota: "Tu prescripción está lista, firmada por el profesional que te ha atendido. Entra en tu panel para verla y completar el pago (199,99 €, enlace válido 30 días).",
     });
   redirect("/panel?ok=" + encodeURIComponent(`Caso #${kase.number} prescrito directamente y enviado a pago`));
+}
+
+// Respuesta a una revisión de receta directa: uno de nuestros profesionales (recetador
+// central) da su opinión. Es consultiva — no bloquea ni modifica la receta ya firmada.
+export async function answerReviewAction(formData: FormData) {
+  const u = await requireRole("RECETADOR");
+  const caseId = String(formData.get("caseId"));
+  const answer = String(formData.get("answer") ?? "").trim();
+  if (!answer) fail("/panel", "Escribe tu opinión para responder la revisión");
+  const kase = await prisma.case.findUnique({ where: { id: caseId } });
+  if (!kase || !kase.reviewRequestedAt) fail("/panel", "Este caso no tiene revisión solicitada");
+  if (kase.reviewAnswer) fail("/panel", "La revisión ya está respondida");
+  await prisma.case.update({
+    where: { id: caseId },
+    data: { reviewAnswer: answer, reviewAnsweredBy: u.name, reviewAnsweredAt: new Date() },
+  });
+  await pushEvent(caseId, `Revisión respondida por ${u.name}: ${answer}`, u.name);
+  await audit(u.id, "review.answer", `case:${kase.number}`);
+  redirect("/panel?ok=" + encodeURIComponent(`Revisión del caso #${kase.number} respondida`));
 }
 
 // El prescriptor quiere hablar con el paciente → asignación pegajosa.

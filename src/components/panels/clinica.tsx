@@ -14,6 +14,9 @@ export async function PanelClinica({ user, tab }: { user: User; tab?: string }) 
   if (!clinic) return <div className="note r">Usuario sin clínica asignada.</div>;
   const profile = await prisma.professionalProfile.findUnique({ where: { userId: user.id } });
   const isPrescriber = !!profile?.canPrescribe && !!profile.verifiedAt && clinic.hasPrescriber;
+  // Puede recetar directamente (capacidad personal, con colegiación verificada):
+  // al crear un caso elige si la receta la firma él/ella o la valora Ortosend.
+  const canDirectRx = !!profile?.canPrescribe && !!profile.verifiedAt && !!profile.collegiateNum;
 
   const tabsDef: [string, string][] = [
     ["agenda", "Agenda"],
@@ -97,6 +100,19 @@ export async function PanelClinica({ user, tab }: { user: User; tab?: string }) 
             </div>
             <label>Fecha de nacimiento</label>
             <input name="birth" type="date" />
+            {canDirectRx && (
+              <>
+                <label>¿Quién hará la receta?</label>
+                <select name="rxMode" defaultValue="DIRECTA">
+                  <option value="DIRECTA">La receto yo en la visita (receta directa)</option>
+                  <option value="ORTOSEND">Que la valore Ortosend (estudio completo a la cola)</option>
+                </select>
+                <div className="tiny" style={{ marginTop: 4 }}>
+                  Con receta directa los tests son opcionales y firmas tú en la visita; si la
+                  valora Ortosend, el estudio completo pasa por la cola de prescripción.
+                </div>
+              </>
+            )}
             <div className="sp" />
             <button type="submit" className="pri">
               Crear caso e invitar al paciente

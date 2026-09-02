@@ -52,6 +52,14 @@ export async function newCaseBAction(formData: FormData) {
   const email = String(formData.get("email") ?? "").trim().toLowerCase() || null;
   const birth = String(formData.get("birth") ?? "");
   if (!name || !phone) fail(back, "Nombre y móvil del paciente son obligatorios");
+  // Elección de quién hará la receta: solo un prescriptor verificado puede quedarse la receta.
+  let rxMode = String(formData.get("rxMode") ?? "ORTOSEND");
+  if (!["DIRECTA", "ORTOSEND"].includes(rxMode)) rxMode = "ORTOSEND";
+  if (rxMode === "DIRECTA") {
+    const profile = await prisma.professionalProfile.findUnique({ where: { userId: u.id } });
+    if (!profile?.canPrescribe || !profile.verifiedAt || !profile.collegiateNum)
+      fail(back, "Solo un prescriptor con colegiación verificada puede elegir la receta directa");
+  }
   const dup = await prisma.user.findFirst({
     where: { OR: [{ phone }, ...(email ? [{ email }] : [])] },
   });
@@ -71,13 +79,19 @@ export async function newCaseBAction(formData: FormData) {
       },
     });
     const kase = await tx.case.create({
-      data: { patientId: patient.id, clinicId: u.clinicId, state: "ESTUDIO_EN_CURSO", flow: "B" },
+      data: { patientId: patient.id, clinicId: u.clinicId, state: "ESTUDIO_EN_CURSO", flow: "B", rxMode },
     });
     await tx.capture.create({ data: { caseId: kase.id } });
     return { kase, owner };
   });
   const token = await createInviteToken(owner.id);
-  await pushEvent(kase.id, `Caso creado en clínica (Flujo B) por ${u.name}`, u.name);
+  await pushEvent(
+    kase.id,
+    `Caso creado en clínica (Flujo B) por ${u.name}${
+      rxMode === "DIRECTA" ? " — receta directa: la firmará el propio profesional" : ""
+    }`,
+    u.name
+  );
   await notify(phone, "invitacion_cuenta", {
     enlace: `/activar?token=${token}`,
     validez: "72 h",

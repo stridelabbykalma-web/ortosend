@@ -231,6 +231,12 @@ export function Wizard({ kase, directRx }: { kase: CaseWithCapture; directRx?: D
                   rows={2}
                   defaultValue="Adaptación progresiva 2-3 semanas, con calzado cerrado. Revisión anual incluida."
                 />
+                <label>Revisión de Ortosend (opcional)</label>
+                <textarea
+                  name="reviewQuestion"
+                  rows={2}
+                  placeholder="Si quieres una segunda opinión, escribe aquí tu consulta: uno de nuestros profesionales te responderá con la suya. No bloquea el caso."
+                />
                 <div className="sp" />
                 <button type="submit" className="pri wfull">
                   Firmar y prescribir

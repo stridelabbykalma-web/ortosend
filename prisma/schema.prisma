@@ -189,6 +189,15 @@ model Case {
   material     String?   // trazabilidad: lote de material en confección
   designFileUrl String?  // CAD archivado (reposiciones / revisión anual)
   rxDraft      String?   // borrador de valoración guardado al soltar el caso
+  // Elección al crear el caso (Flujo B) cuando quien lo crea puede recetar:
+  // "DIRECTA" = la receta el propio profesional en la visita | "ORTOSEND" = cola de valoración
+  rxMode       String?
+  // Revisión opcional del prescriptor de receta directa: pregunta y opinión de Ortosend
+  reviewQuestion    String?
+  reviewRequestedAt DateTime?
+  reviewAnswer      String?   // opinión de uno de nuestros profesionales (no bloquea el caso)
+  reviewAnsweredBy  String?
+  reviewAnsweredAt  DateTime?
   qcPhotoUrl   String?   // foto obligatoria del par en calidad
   payLinkExpiresAt DateTime? // 30 días; recordatorios días 0/3/7/15
   incidents    Incident[]

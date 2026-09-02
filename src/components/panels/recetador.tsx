@@ -3,11 +3,11 @@ import type { User } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { releaseStale } from "@/lib/cases";
 import { Kpi } from "@/components/ui";
-import { nextRxAction } from "@/app/panel/rx-actions";
+import { answerReviewAction, nextRxAction } from "@/app/panel/rx-actions";
 
 export async function PanelRecetador({ user }: { user: User }) {
   await releaseStale();
-  const [queueCount, mineOpen, contact] = await Promise.all([
+  const [queueCount, mineOpen, contact, reviews] = await Promise.all([
     prisma.case.count({
       where: { state: "EN_PRESCRIPCION", openBy: null, clinic: { hasPrescriber: false } },
     }),
@@ -15,6 +15,12 @@ export async function PanelRecetador({ user }: { user: User }) {
     prisma.case.findMany({
       where: { state: "EN_CONTACTO", assignedTo: user.id },
       include: { patient: { include: { owner: true } } },
+    }),
+    // Revisiones de recetas directas pendientes de opinión (consultivas, por antigüedad)
+    prisma.case.findMany({
+      where: { reviewRequestedAt: { not: null }, reviewAnswer: null },
+      include: { prescription: true, clinic: true },
+      orderBy: { reviewRequestedAt: "asc" },
     }),
   ]);
   return (
@@ -66,6 +72,45 @@ export async function PanelRecetador({ user }: { user: User }) {
                 ))}
               </tbody>
             </table>
+          </div>
+        </>
+      )}
+      {reviews.length > 0 && (
+        <>
+          <div className="sp" />
+          <div className="card">
+            <b>Revisiones de recetas directas pendientes</b>
+            <div className="tiny" style={{ marginBottom: 6 }}>
+              Un prescriptor de clínica ya ha firmado su receta y pide tu opinión. Es consultiva:
+              no bloquea ni modifica el caso.
+            </div>
+            {reviews.map((c) => (
+              <div className="card" key={c.id} style={{ padding: 14, marginTop: 8 }}>
+                <b style={{ fontSize: 13 }}>
+                  <Link href={`/caso/${c.id}`}>Caso #{c.number}</Link> · {c.clinic.name} ·{" "}
+                  {c.prescription
+                    ? `receta de ${c.prescription.prescriberName} (col. ${c.prescription.collegiateNum})`
+                    : "receta directa"}
+                </b>
+                <div className="muted" style={{ margin: "6px 0" }}>
+                  «{c.reviewQuestion}»
+                </div>
+                {c.prescription && (
+                  <div className="tiny" style={{ marginBottom: 6 }}>
+                    Receta firmada: {c.prescription.fabricationOrder}
+                  </div>
+                )}
+                <form action={answerReviewAction}>
+                  <input type="hidden" name="caseId" value={c.id} />
+                  <label>Tu opinión (la verá el prescriptor en el caso)</label>
+                  <textarea name="answer" rows={2} required />
+                  <div className="sp" />
+                  <button type="submit" className="pri">
+                    Enviar opinión
+                  </button>
+                </form>
+              </div>
+            ))}
           </div>
         </>
       )}

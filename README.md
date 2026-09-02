@@ -34,11 +34,15 @@ asociadas. Stack: **Next.js (App Router, server actions) + PostgreSQL (Prisma)**
 - Firma solo por prescriptor con **colegiación verificada** (guarda dura). Salidas: prescribir
   (→ pago), contactar con el paciente (asignación pegajosa), devolver a clínica para repetir
   prueba (sin coste), no prescribir (el cliente no paga) y guardar borrador.
-- **Receta directa**: si quien rellena el estudio es prescriptor verificado, el asistente cambia
-  de modo — cualquier test es elegible (nada bloquea; vídeos de máx. 10 s), el motivo de consulta
-  debe quedar registrado y en el paso 6 escribe la receta (cómo deben ser las plantillas, qué
-  deben llevar y qué función tienen) y la firma en la misma visita, con identidad y colegiación
-  puestas automáticamente desde su perfil. El caso salta directo a pago, sin cola de revisión.
+- **Receta directa**: al crear el caso (Flujo B), un prescriptor verificado elige quién hará la
+  receta — él/ella en la visita, o Ortosend (entonces el flujo es el normal: estudio completo a
+  la cola). Con receta directa el asistente cambia de modo: cualquier test es elegible (nada
+  bloquea; vídeos de máx. 10 s), el motivo de consulta debe quedar registrado y en el paso 6
+  escribe la receta (cómo deben ser las plantillas, qué deben llevar y qué función tienen) y la
+  firma en la misma visita, con identidad y colegiación puestas automáticamente desde su perfil.
+  El caso salta directo a pago, sin cola de revisión. Al firmar puede pedir opcionalmente una
+  **revisión**: uno de nuestros profesionales (recetador central) responde con su opinión —
+  consultiva, no bloquea el caso — que el prescriptor ve en la página del caso.
 
 **Pago y panel del cliente**
 - Sin prescripción no hay pago; enlace válido 30 días con caducidad → NO_CONVERTIDO y
