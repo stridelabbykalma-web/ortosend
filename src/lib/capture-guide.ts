@@ -33,6 +33,9 @@ export type CaptureGuide = {
   // Duración asignada a la prueba. Vídeo: la grabación dura exactamente esto y
   // se corta sola. Foto: temporizador de cuenta atrás hasta el disparo automático.
   seconds: number;
+  // Vídeo: tiempo mínimo acumulado con TODOS los checks en verde para aceptar
+  // el clip (≈ 3 pasos completos bien encuadrados). Por debajo no se puede subir.
+  minValidSeconds?: number;
   direction?: "ltr" | "rtl"; // sentido en que el paciente cruza el encuadre (flecha guía)
   tips: string[]; // instrucciones de encuadre para el profesional
 };
@@ -71,6 +74,7 @@ export const CAPTURE_GUIDES: Record<string, CaptureGuide> = {
     mode: "video",
     checks: ["persona", "cuerpo_completo", "perfil", "lado_dcho"],
     seconds: 8,
+    minValidSeconds: 3,
     direction: "ltr",
     tips: LATERAL_TIPS("derecho", "descalzo", 8),
   },
@@ -78,6 +82,7 @@ export const CAPTURE_GUIDES: Record<string, CaptureGuide> = {
     mode: "video",
     checks: ["persona", "cuerpo_completo", "perfil", "lado_dcho"],
     seconds: 8,
+    minValidSeconds: 3,
     direction: "ltr",
     tips: LATERAL_TIPS("derecho", "con su calzado habitual", 8),
   },
@@ -85,6 +90,7 @@ export const CAPTURE_GUIDES: Record<string, CaptureGuide> = {
     mode: "video",
     checks: ["persona", "cuerpo_completo", "perfil", "lado_izq"],
     seconds: 8,
+    minValidSeconds: 3,
     direction: "rtl",
     tips: LATERAL_TIPS("izquierdo", "descalzo", 8),
   },
@@ -92,6 +98,7 @@ export const CAPTURE_GUIDES: Record<string, CaptureGuide> = {
     mode: "video",
     checks: ["persona", "cuerpo_completo", "perfil", "lado_izq"],
     seconds: 8,
+    minValidSeconds: 3,
     direction: "rtl",
     tips: LATERAL_TIPS("izquierdo", "con su calzado habitual", 8),
   },
@@ -99,24 +106,28 @@ export const CAPTURE_GUIDES: Record<string, CaptureGuide> = {
     mode: "video",
     checks: ["persona", "cuerpo_completo", "de_espaldas"],
     seconds: 10,
+    minValidSeconds: 3,
     tips: POSTERIOR_TIPS("descalzo", 10),
   },
   video_post_calzado: {
     mode: "video",
     checks: ["persona", "cuerpo_completo", "de_espaldas"],
     seconds: 10,
+    minValidSeconds: 3,
     tips: POSTERIOR_TIPS("con su calzado habitual", 10),
   },
   video_ant_descalzo: {
     mode: "video",
     checks: ["persona", "cuerpo_completo", "de_frente"],
     seconds: 10,
+    minValidSeconds: 3,
     tips: ANTERIOR_TIPS("descalzo", 10),
   },
   video_ant_calzado: {
     mode: "video",
     checks: ["persona", "cuerpo_completo", "de_frente"],
     seconds: 10,
+    minValidSeconds: 3,
     tips: ANTERIOR_TIPS("con su calzado habitual", 10),
   },
   foto_posterior: {

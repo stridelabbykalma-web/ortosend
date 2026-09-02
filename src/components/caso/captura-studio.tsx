@@ -95,6 +95,7 @@ type Review = {
   mime: string;
   seconds: number;
   validPct: number | null; // % de frames con encuadre válido (null si sin pose)
+  validSeconds: number | null; // tiempo acumulado con todos los checks en verde
 };
 
 export function CapturaStudio({
@@ -129,7 +130,9 @@ export function CapturaStudio({
   const chunksRef = useRef<Blob[]>([]);
   const phaseRef = useRef<Phase>("init");
   const checksOkRef = useRef(false);
-  const frameStatsRef = useRef({ valid: 0, total: 0 });
+  // valid/total: frames; validMs: tiempo real acumulado con encuadre válido
+  const frameStatsRef = useRef({ valid: 0, total: 0, validMs: 0, lastTs: 0 });
+  const [validLive, setValidLive] = useState(0);
   const recStartRef = useRef(0);
   const lastVideoTimeRef = useRef(-1);
   const reviewUrlRef = useRef<string | null>(null);
@@ -203,8 +206,16 @@ export function CapturaStudio({
         const ok = guide.checks.every((k) => c[k] === true);
         checksOkRef.current = ok;
         if (phaseRef.current === "recording") {
-          frameStatsRef.current.total++;
-          if (ok || guide.checks.length === 0) frameStatsRef.current.valid++;
+          const st = frameStatsRef.current;
+          const now = performance.now();
+          const dt = st.lastTs ? now - st.lastTs : 0;
+          st.lastTs = now;
+          st.total++;
+          if (ok || guide.checks.length === 0) {
+            st.valid++;
+            st.validMs += dt;
+            setValidLive(st.validMs / 1000);
+          }
         }
         if (ctx) {
           const { width: w, height: h } = canvas;
@@ -318,7 +329,7 @@ export function CapturaStudio({
       const blob = new Blob(chunksRef.current, { type: mime.split(";")[0] });
       chunksRef.current = [];
       const seconds = (performance.now() - recStartRef.current) / 1000;
-      const { valid, total } = frameStatsRef.current;
+      const { valid, total, validMs } = frameStatsRef.current;
       const url = URL.createObjectURL(blob);
       if (reviewUrlRef.current) URL.revokeObjectURL(reviewUrlRef.current);
       reviewUrlRef.current = url;
@@ -328,6 +339,7 @@ export function CapturaStudio({
         mime: mime.split(";")[0],
         seconds,
         validPct: total > 0 ? Math.round((100 * valid) / total) : null,
+        validSeconds: total > 0 ? Math.round(validMs / 100) / 10 : null,
       });
       setPhase("review");
     },
@@ -346,7 +358,8 @@ export function CapturaStudio({
       const rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 2_000_000 });
       recorderRef.current = rec;
       chunksRef.current = [];
-      frameStatsRef.current = { valid: 0, total: 0 };
+      frameStatsRef.current = { valid: 0, total: 0, validMs: 0, lastTs: 0 };
+      setValidLive(0);
       rec.ondataavailable = (e) => e.data.size && chunksRef.current.push(e.data);
       rec.onstop = () => finishRecording(mime);
       rec.start(250);
@@ -410,7 +423,7 @@ export function CapturaStudio({
         const url = URL.createObjectURL(blob);
         if (reviewUrlRef.current) URL.revokeObjectURL(reviewUrlRef.current);
         reviewUrlRef.current = url;
-        setReview({ blob, url, mime: "image/jpeg", seconds: 0, validPct: null });
+        setReview({ blob, url, mime: "image/jpeg", seconds: 0, validPct: null, validSeconds: null });
         setPhase("review");
       },
       "image/jpeg",
@@ -432,6 +445,8 @@ export function CapturaStudio({
         seconds: Math.round(review.seconds * 10) / 10,
         targetSeconds: guide.seconds,
         validPct: review.validPct,
+        validSeconds: review.validSeconds,
+        minValidSeconds: guide.minValidSeconds ?? null,
         mime: review.mime,
         pose: poseState === "activo" ? "pose_landmarker_lite" : "no_disponible",
       })
@@ -447,7 +462,7 @@ export function CapturaStudio({
       setUploadErr(e instanceof Error ? e.message : "Fallo de red durante la subida");
       setPhase("review");
     }
-  }, [caseId, close, guide.seconds, kind, poseState, review, router]);
+  }, [caseId, close, guide.seconds, guide.minValidSeconds, kind, poseState, review, router]);
 
   const retake = useCallback(() => {
     clearTimers();
@@ -472,6 +487,15 @@ export function CapturaStudio({
   const tooBig = !!review && review.blob.size > MAX_UPLOAD_BYTES;
   // Parada manual antes de tiempo: el clip no cubre la duración asignada
   const tooShort = !!review && isVideo && review.seconds < guide.seconds - 1;
+  // Umbral de calidad: tiempo mínimo con todos los checks en verde. Solo se
+  // puede exigir cuando el análisis de pose ha funcionado durante el clip.
+  const tooFewValid =
+    !!review &&
+    isVideo &&
+    poseState === "activo" &&
+    !!guide.minValidSeconds &&
+    review.validSeconds !== null &&
+    review.validSeconds < guide.minValidSeconds;
 
   return (
     <div className="studio" role="dialog" aria-label={`Estudio de captura: ${label}`}>
@@ -501,6 +525,9 @@ export function CapturaStudio({
               <>
                 <div className="studio-rec">
                   ● REC · quedan {Math.ceil(remaining)} s de {guide.seconds} s
+                  {poseState === "activo" && guide.minValidSeconds
+                    ? ` · válido ${validLive.toFixed(1)} s / mín. ${guide.minValidSeconds} s`
+                    : ""}
                 </div>
                 <div className="studio-bar">
                   <div style={{ width: `${Math.min(100, (100 * elapsed) / guide.seconds)}%` }} />
@@ -544,7 +571,11 @@ export function CapturaStudio({
                 <div className="tiny">DURACIÓN ASIGNADA</div>
                 <div className="muted">
                   {isVideo
-                    ? `Cuenta atrás de ${VIDEO_PREROLL_SECONDS} s y grabación fija de ${guide.seconds} s (corte automático).`
+                    ? `Cuenta atrás de ${VIDEO_PREROLL_SECONDS} s y grabación fija de ${guide.seconds} s (corte automático).${
+                        guide.minValidSeconds
+                          ? ` Para aceptar el clip: al menos ${guide.minValidSeconds} s con todos los checks en verde.`
+                          : ""
+                      }`
                     : `Temporizador de ${guide.seconds} s y disparo automático.`}
                 </div>
                 <div className="sp" />
@@ -596,10 +627,23 @@ export function CapturaStudio({
                       Duración: {review.seconds.toFixed(1)} s de {guide.seconds} s ·{" "}
                     </>
                   )}
-                  {review.validPct !== null && <>Encuadre válido: {review.validPct}% · </>}
+                  {review.validSeconds !== null && (
+                    <>
+                      Encuadre válido: {review.validSeconds.toFixed(1)} s
+                      {guide.minValidSeconds ? ` (mín. ${guide.minValidSeconds} s)` : ""}
+                      {review.validPct !== null ? ` · ${review.validPct}% de los frames` : ""} ·{" "}
+                    </>
+                  )}
                   Tamaño: {(review.blob.size / 1024 / 1024).toFixed(2)} MB
                 </div>
-                {tooShort && (
+                {tooFewValid && (
+                  <div className="note r">
+                    Solo {review.validSeconds?.toFixed(1)} s con el encuadre correcto; el protocolo
+                    exige al menos {guide.minValidSeconds} s con todos los checks en verde (unos 3
+                    pasos completos). Repite la grabación.
+                  </div>
+                )}
+                {tooShort && !tooFewValid && (
                   <div className="note a">
                     Clip incompleto: se paró antes de los {guide.seconds} s asignados. Comprueba
                     que se ven pasos completos o repite la grabación.
@@ -617,7 +661,12 @@ export function CapturaStudio({
                   <button type="button" onClick={retake}>
                     ↺ Repetir
                   </button>
-                  <button type="button" className="pri" onClick={upload} disabled={tooBig}>
+                  <button
+                    type="button"
+                    className="pri"
+                    onClick={upload}
+                    disabled={tooBig || tooFewValid}
+                  >
                     ✓ Usar y subir
                   </button>
                 </div>

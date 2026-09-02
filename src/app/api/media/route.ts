@@ -6,6 +6,7 @@ import { prisma } from "@/lib/db";
 import { requireRole } from "@/lib/auth";
 import { audit, pushEvent } from "@/lib/cases";
 import { MEDIA_LABEL, PHOTO_KINDS, VIDEO_KINDS } from "@/lib/format";
+import { CAPTURE_GUIDES } from "@/lib/capture-guide";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -64,12 +65,31 @@ export async function POST(req: Request) {
         seconds: typeof raw.seconds === "number" ? raw.seconds : undefined,
         targetSeconds: typeof raw.targetSeconds === "number" ? raw.targetSeconds : undefined,
         validPct: typeof raw.validPct === "number" ? raw.validPct : undefined,
+        validSeconds: typeof raw.validSeconds === "number" ? raw.validSeconds : undefined,
+        minValidSeconds: typeof raw.minValidSeconds === "number" ? raw.minValidSeconds : undefined,
         mime,
         pose: typeof raw.pose === "string" ? raw.pose.slice(0, 40) : undefined,
       };
   } catch {
     // meta inválida: se ignora
   }
+
+  // Umbral de calidad del protocolo: si el análisis de pose funcionó, el clip
+  // debe acumular el tiempo mínimo con encuadre válido (misma regla que el estudio).
+  const guide = CAPTURE_GUIDES[kind];
+  const m = meta as { validSeconds?: number; pose?: string } | undefined;
+  if (
+    guide?.minValidSeconds &&
+    m?.pose === "pose_landmarker_lite" &&
+    typeof m.validSeconds === "number" &&
+    m.validSeconds < guide.minValidSeconds
+  )
+    return NextResponse.json(
+      {
+        error: `Solo ${m.validSeconds} s con encuadre válido; el protocolo exige ${guide.minValidSeconds} s. Repite la grabación.`,
+      },
+      { status: 422 }
+    );
 
   const bytes = new Uint8Array(await file.arrayBuffer());
   const asset = await prisma.$transaction(async (tx) => {

@@ -104,7 +104,12 @@ function MediaGallery({ media }: { media: MediaAsset[] }) {
       <div className="tiny">CAPTURAS DEL ESTUDIO (VÍDEOS Y FOTOS)</div>
       <div className="grid g3" style={{ marginTop: 8 }}>
         {files.map((m) => {
-          const meta = m.meta as { seconds?: number; targetSeconds?: number; validPct?: number } | null;
+          const meta = m.meta as {
+            seconds?: number;
+            targetSeconds?: number;
+            validPct?: number;
+            validSeconds?: number;
+          } | null;
           const isVideo = m.kind.startsWith("video_");
           return (
             <figure key={m.id} className="media-item">
@@ -119,7 +124,11 @@ function MediaGallery({ media }: { media: MediaAsset[] }) {
                 {meta?.seconds
                   ? ` · ${meta.seconds} s${meta.targetSeconds ? ` de ${meta.targetSeconds} s` : ""}`
                   : ""}
-                {typeof meta?.validPct === "number" ? ` · encuadre ${meta.validPct}%` : ""}
+                {typeof meta?.validSeconds === "number"
+                  ? ` · encuadre válido ${meta.validSeconds} s`
+                  : typeof meta?.validPct === "number"
+                    ? ` · encuadre ${meta.validPct}%`
+                    : ""}
               </figcaption>
             </figure>
           );
