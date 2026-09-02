@@ -5,14 +5,18 @@
 export type CheckId =
   | "persona" // hay una persona detectada con confianza suficiente
   | "cuerpo_completo" // de cabeza a pies dentro del encuadre, con margen
-  | "perfil" // orientación lateral (hombros alineados con la cámara)
+  | "perfil" // se le ve de lado (hombros alineados con la cámara)
+  | "lado_dcho" // de perfil con el lado derecho del paciente hacia la cámara
+  | "lado_izq" // de perfil con el lado izquierdo del paciente hacia la cámara
   | "frente_espalda" // orientación frontal o posterior (hombros abiertos)
   | "pies_visibles"; // tobillos/talones/antepié visibles
 
 export const CHECK_LABEL: Record<CheckId, string> = {
   persona: "Persona detectada",
   cuerpo_completo: "Cuerpo completo en el encuadre",
-  perfil: "Orientación de perfil correcta",
+  perfil: "Se le ve de lado (perfil)",
+  lado_dcho: "Lado derecho hacia la cámara",
+  lado_izq: "Lado izquierdo hacia la cámara",
   frente_espalda: "Orientación frontal/posterior correcta",
   pies_visibles: "Pies visibles",
 };
@@ -27,51 +31,70 @@ export type CaptureGuide = {
   // Duración asignada a la prueba. Vídeo: la grabación dura exactamente esto y
   // se corta sola. Foto: temporizador de cuenta atrás hasta el disparo automático.
   seconds: number;
+  direction?: "ltr" | "rtl"; // sentido en que el paciente cruza el encuadre (flecha guía)
   tips: string[]; // instrucciones de encuadre para el profesional
 };
 
-const MARCHA_TIPS = (vista: string, seg: number) => [
-  `Móvil en trípode, en horizontal, a la altura de la cadera — ${vista}.`,
-  "Pasillo de 4-6 m: el paciente camina a ritmo natural, ida y vuelta.",
-  `Grabación fija de ${seg} s tras la cuenta atrás: al menos 3 pasos completos dentro del encuadre.`,
+// Marcha lateral: el paciente camina recto hacia delante y la cámara está a un
+// lado del pasillo, perpendicular al recorrido. Con el lado derecho hacia la
+// cámara el paciente cruza el encuadre de izquierda a derecha; con el izquierdo,
+// de derecha a izquierda.
+const LATERAL_TIPS = (lado: "derecho" | "izquierdo", calzado: string, seg: number) => [
+  `Móvil en trípode, en horizontal, a la altura de la cadera, a un lado del pasillo (3-4 m) y perpendicular al recorrido.`,
+  `El paciente camina recto hacia delante, ${calzado}, con su lado ${lado} hacia la cámara: cruza el encuadre ${
+    lado === "derecho" ? "de izquierda a derecha" : "de derecha a izquierda"
+  }.`,
+  "Antes de grabar, que se coloque de perfil en el punto de salida: el estudio comprueba que sea el lado correcto.",
+  `Grabación fija de ${seg} s: si sale del plano, vuelve al punto de salida por fuera del encuadre y repite el paso.`,
+];
+
+// Marcha posterior: cámara detrás del paciente, en el eje del pasillo.
+const POSTERIOR_TIPS = (calzado: string, seg: number) => [
+  "Móvil en trípode, en horizontal, a la altura de la cadera, detrás del paciente y en el eje del pasillo.",
+  `El paciente camina recto alejándose de la cámara, ${calzado}, 4-6 m; da la vuelta y regresa.`,
+  `Grabación fija de ${seg} s: al menos 3 pasos completos alejándose (retropié visible).`,
 ];
 
 export const CAPTURE_GUIDES: Record<string, CaptureGuide> = {
   video_lat_dcha_descalzo: {
     mode: "video",
-    checks: ["persona", "cuerpo_completo", "perfil"],
+    checks: ["persona", "cuerpo_completo", "perfil", "lado_dcho"],
     seconds: 8,
-    tips: MARCHA_TIPS("vista lateral derecha, descalzo", 8),
+    direction: "ltr",
+    tips: LATERAL_TIPS("derecho", "descalzo", 8),
   },
   video_lat_dcha_calzado: {
     mode: "video",
-    checks: ["persona", "cuerpo_completo", "perfil"],
+    checks: ["persona", "cuerpo_completo", "perfil", "lado_dcho"],
     seconds: 8,
-    tips: MARCHA_TIPS("vista lateral derecha, con su calzado habitual", 8),
+    direction: "ltr",
+    tips: LATERAL_TIPS("derecho", "con su calzado habitual", 8),
   },
   video_lat_izq_descalzo: {
     mode: "video",
-    checks: ["persona", "cuerpo_completo", "perfil"],
+    checks: ["persona", "cuerpo_completo", "perfil", "lado_izq"],
     seconds: 8,
-    tips: MARCHA_TIPS("vista lateral izquierda, descalzo", 8),
+    direction: "rtl",
+    tips: LATERAL_TIPS("izquierdo", "descalzo", 8),
   },
   video_lat_izq_calzado: {
     mode: "video",
-    checks: ["persona", "cuerpo_completo", "perfil"],
+    checks: ["persona", "cuerpo_completo", "perfil", "lado_izq"],
     seconds: 8,
-    tips: MARCHA_TIPS("vista lateral izquierda, con su calzado habitual", 8),
+    direction: "rtl",
+    tips: LATERAL_TIPS("izquierdo", "con su calzado habitual", 8),
   },
   video_post_descalzo: {
     mode: "video",
     checks: ["persona", "cuerpo_completo", "frente_espalda"],
     seconds: 10,
-    tips: MARCHA_TIPS("desde atrás, descalzo (retropié visible al alejarse y volver)", 10),
+    tips: POSTERIOR_TIPS("descalzo", 10),
   },
   video_post_calzado: {
     mode: "video",
     checks: ["persona", "cuerpo_completo", "frente_espalda"],
     seconds: 10,
-    tips: MARCHA_TIPS("desde atrás, con su calzado habitual", 10),
+    tips: POSTERIOR_TIPS("con su calzado habitual", 10),
   },
   foto_dorsal: {
     mode: "photo",

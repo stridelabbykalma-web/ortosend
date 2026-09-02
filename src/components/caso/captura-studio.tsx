@@ -46,6 +46,13 @@ function evalChecks(lms: NormalizedLandmark[] | undefined): Checks {
   const torsoH = Math.abs(
     (lms[L_SHOULDER].y + lms[R_SHOULDER].y) / 2 - (lms[L_HIP].y + lms[R_HIP].y) / 2
   );
+  const perfil = persona && torsoH > 0 && shoulderDx < 0.5 * torsoH;
+  // z de MediaPipe: menor = más cerca de la cámara. En perfil, el lado del
+  // paciente que da a la cámara tiene hombro y cadera con z más pequeña.
+  // (Los índices "L/R" de MediaPipe son el lado izquierdo/derecho del paciente.)
+  const zL = (lms[L_SHOULDER].z + lms[L_HIP].z) / 2;
+  const zR = (lms[R_SHOULDER].z + lms[R_HIP].z) / 2;
+  const sideMargin = 0.02;
   return {
     persona,
     cuerpo_completo:
@@ -54,7 +61,9 @@ function evalChecks(lms: NormalizedLandmark[] | undefined): Checks {
       Math.min(vis(L_ANKLE), vis(R_ANKLE)) > 0.4 &&
       minY > 0.02 &&
       maxY < 0.98,
-    perfil: persona && torsoH > 0 && shoulderDx < 0.5 * torsoH,
+    perfil,
+    lado_dcho: perfil && zR < zL - sideMargin,
+    lado_izq: perfil && zL < zR - sideMargin,
     frente_espalda: persona && torsoH > 0 && shoulderDx > 0.45 * torsoH,
     pies_visibles: avg(vis(L_HEEL), vis(R_HEEL), vis(L_FOOT), vis(R_FOOT)) > 0.4,
   };
@@ -200,6 +209,26 @@ export function CapturaStudio({
           ctx.lineWidth = 2;
           ctx.strokeRect(w * 0.06, h * 0.04, w * 0.88, h * 0.92);
           ctx.setLineDash([]);
+          // flecha con el sentido de la marcha (vistas laterales)
+          if (guide.direction) {
+            const y = h * 0.12;
+            const x0 = guide.direction === "ltr" ? w * 0.3 : w * 0.7;
+            const x1 = guide.direction === "ltr" ? w * 0.7 : w * 0.3;
+            const s = guide.direction === "ltr" ? 1 : -1;
+            ctx.strokeStyle = "rgba(255,255,255,.85)";
+            ctx.fillStyle = "rgba(255,255,255,.85)";
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.moveTo(x0, y);
+            ctx.lineTo(x1, y);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(x1 + s * 18, y);
+            ctx.lineTo(x1 - s * 6, y - 12);
+            ctx.lineTo(x1 - s * 6, y + 12);
+            ctx.closePath();
+            ctx.fill();
+          }
           // esqueleto
           if (lms) {
             const col = ok ? "#37c78f" : "#f0a848";
@@ -235,7 +264,7 @@ export function CapturaStudio({
       rafRef.current = requestAnimationFrame(tick);
     };
     tick();
-  }, [guide.checks]);
+  }, [guide]);
 
   // Arranque del estudio: cámara + modelo de pose (CDN) en paralelo
   const start = useCallback(async () => {
