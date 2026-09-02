@@ -101,7 +101,6 @@ export type Exam = {
   stepDown?: string;
   trendelenburg?: string;
   rotCadera?: string;
-  halluxLimitus?: string;
   dorsi1mtfIzq?: string; // grados
   dorsi1mtfDcho?: string;
   formulaMetatarsal?: string;
@@ -161,7 +160,7 @@ export function examLines(e: Exam | null | undefined): [string, string][] {
   add("Flexión dorsal tobillo (Silfverskiöld)", e.tobillo);
   add("Subastragalina", e.subastragalina);
   add("Primer radio", e.primerRadio);
-  add("Hallux", e.hallux);
+  add("Hallux en descarga", e.hallux);
   add("Cadena posterior", e.cadenaPosterior);
   add("FPI-6", pair(fpiLabel(e.fpiIzq), fpiLabel(e.fpiDcho)));
   add("Tipo de pie", e.tipoPie);
@@ -189,7 +188,6 @@ export function examLines(e: Exam | null | undefined): [string, string][] {
   add("Step down test", e.stepDown);
   add("Trendelenburg", e.trendelenburg);
   add("Rotación de cadera", e.rotCadera);
-  add("Hallux limitus funcional", e.halluxLimitus);
   add("Dorsiflexión 1.ª MTF", pair(e.dorsi1mtfIzq, e.dorsi1mtfDcho, "°"));
   add(
     "Fórmula metatarsal / digital",

@@ -169,7 +169,6 @@ const E_FIELDS: Record<string, { strs: (keyof Exam)[]; lists: (keyof Exam)[]; la
       "stepDown",
       "trendelenburg",
       "rotCadera",
-      "halluxLimitus",
       "dorsi1mtfIzq",
       "dorsi1mtfDcho",
       "formulaMetatarsal",

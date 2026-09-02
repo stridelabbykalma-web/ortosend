@@ -38,7 +38,6 @@ export type TestId =
   | "step_down"
   | "trendelenburg"
   | "rot_cadera"
-  | "hallux_limitus"
   | "dorsiflex_1mtf"
   | "formula_metatarsal"
   | "compresion_mtt"
@@ -162,15 +161,9 @@ export const COMPLEMENTARIOS: TestDef[] = [
     minutos: 2,
   },
   {
-    id: "hallux_limitus",
-    nombre: "Hallux Limitus funcional",
-    para: "Si la 1.ª MTF pierde dorsiflexión al cargar el primer radio, aunque en descarga sea normal.",
-    minutos: 2,
-  },
-  {
     id: "dorsiflex_1mtf",
     nombre: "Dorsiflexión de 1.ª MTF",
-    para: "Grados de dorsiflexión pasiva del dedo gordo en descarga.",
+    para: "Grados de dorsiflexión del dedo gordo. Con el Jack del núcleo basta para decidir si hay limitus funcional, así que no se explora dos veces.",
     minutos: 1,
   },
   {
@@ -270,8 +263,8 @@ export const RAMAS: RamaDef[] = [
   { id: "talon", nombre: "Talón / fascia plantar", tests: ["palpacion_calcaneo", "compresion_calcaneo", "dorsiflex_1mtf"] },
   { id: "arco_plano", nombre: "Arco medial / pie plano", tests: ["too_many_toes", "nav_drift", "double_heel_rise", "max_pronacion", "resist_inversion"] },
   { id: "cavo", nombre: "Pie cavo / varo", tests: ["coleman", "balance_mono", "double_heel_rise"] },
-  { id: "antepie", nombre: "Antepié / metatarsalgia", tests: ["formula_metatarsal", "compresion_mtt", "dorsiflex_1mtf", "hallux_limitus", "mulder"] },
-  { id: "hallux", nombre: "Dedo gordo / 1.ª MTF", tests: ["hallux_limitus", "dorsiflex_1mtf", "formula_metatarsal"] },
+  { id: "antepie", nombre: "Antepié / metatarsalgia", tests: ["formula_metatarsal", "compresion_mtt", "dorsiflex_1mtf", "mulder"] },
+  { id: "hallux", nombre: "Dedo gordo / 1.ª MTF", tests: ["dorsiflex_1mtf", "formula_metatarsal"] },
   { id: "neuroma", nombre: "Neuroma / dolor intermetatarsal", tests: ["mulder", "compresion_mtt", "territorio_sensitivo"] },
   { id: "tibial_post", nombre: "Tobillo medial / tibial posterior", tests: ["too_many_toes", "resist_inversion", "double_heel_rise", "tinel"] },
   { id: "tobillo_lat", nombre: "Tobillo lateral / inestabilidad", tests: ["estabilidad_tobillo", "balance_mono", "single_leg_squat", "step_down"] },
@@ -425,7 +418,6 @@ export const SQUAT_OPTS = ["Normal", "Valgo dinámico de rodilla", "Caída pélv
 export const STEP_DOWN_OPTS = ["Normal", "Valgo dinámico de rodilla", "Control excéntrico deficiente", "No lo puede hacer"] as const;
 export const TRENDELENBURG_OPTS = ["Negativo", "Positivo izquierdo", "Positivo derecho", "Positivo bilateral"] as const;
 export const ROT_CADERA_OPTS = ["Normal", "Rotación interna aumentada", "Rotación externa aumentada", "Globalmente limitada"] as const;
-export const HALLUX_LIMITUS_OPTS = ["Normal", "Hallux limitus funcional", "Hallux limitus estructural"] as const;
 export const FORMULA_MTT_OPTS = ["Index plus", "Index plus-minus", "Index minus"] as const;
 export const FORMULA_DIGITAL_OPTS = ["Egipcio", "Griego", "Cuadrado"] as const;
 export const PALP_CALCANEO_OPTS = ["No dolorosa", "Dolor en tubérculo medial", "Dolor difuso en talón"] as const;
@@ -458,7 +450,6 @@ const CAMPOS: Record<TestId, (keyof Exam)[]> = {
   step_down: ["stepDown"],
   trendelenburg: ["trendelenburg"],
   rot_cadera: ["rotCadera"],
-  hallux_limitus: ["halluxLimitus"],
   dorsiflex_1mtf: ["dorsi1mtfIzq", "dorsi1mtfDcho"],
   formula_metatarsal: ["formulaMetatarsal", "formulaDigital"],
   compresion_mtt: ["compresionMtt"],

@@ -39,7 +39,6 @@ import {
   ESTABILIDAD_OPTS,
   FORMULA_DIGITAL_OPTS,
   FORMULA_MTT_OPTS,
-  HALLUX_LIMITUS_OPTS,
   HEEL_RISE_OPTS,
   JACK_OPTS,
   MAX_PRONACION_OPTS,
@@ -363,8 +362,6 @@ function CompCampos({ id, e }: { id: TestId; e: Exam | null }) {
       return <Sel name="trendelenburg" label="Resultado" opts={TRENDELENBURG_OPTS} def={e?.trendelenburg} />;
     case "rot_cadera":
       return <Sel name="rotCadera" label="Resultado" opts={ROT_CADERA_OPTS} def={e?.rotCadera} />;
-    case "hallux_limitus":
-      return <Sel name="halluxLimitus" label="Resultado" opts={HALLUX_LIMITUS_OPTS} def={e?.halluxLimitus} />;
     case "dorsiflex_1mtf":
       return dos(
         <Num name="dorsi1mtfIzq" label="Pie izquierdo (grados)" def={e?.dorsi1mtfIzq} min={0} max={90} ph="65" />,
@@ -497,7 +494,7 @@ function ESection({ section, e, q }: { section: string; e: Exam | null; q: Quest
       <>
         <div className="grid g2">
           <Sel name="tobillo" label="Flexión dorsal de tobillo (Silfverskiöld)" opts={TOBILLO_OPTS} def={e?.tobillo} />
-          <Sel name="hallux" label="Hallux (primer dedo)" opts={HALLUX_OPTS} def={e?.hallux} />
+          <Sel name="hallux" label="Hallux en descarga (camilla)" opts={HALLUX_OPTS} def={e?.hallux} />
         </div>
         <div className="grid g3">
           <Sel name="subastragalina" label="Articulación subastragalina" opts={SUBASTRAGALINA_OPTS} def={e?.subastragalina} />
