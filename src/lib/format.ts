@@ -59,21 +59,24 @@ export function fmtEUR(cents: number) {
   return (cents / 100).toLocaleString("es-ES", { style: "currency", currency: "EUR" });
 }
 
-// Vídeos obligatorios del protocolo de captura (6 de marcha)
+// Vídeos obligatorios del protocolo de captura (8 de marcha: lateral dcha./izq., posterior y anterior × descalzo/calzado)
 export const VIDEO_KINDS = [
   ["video_lat_dcha_descalzo", "Marcha lateral dcha. — descalzo"],
   ["video_lat_dcha_calzado", "Marcha lateral dcha. — calzado"],
   ["video_lat_izq_descalzo", "Marcha lateral izq. — descalzo"],
   ["video_lat_izq_calzado", "Marcha lateral izq. — calzado"],
-  ["video_post_descalzo", "Marcha posterior — descalzo"],
-  ["video_post_calzado", "Marcha posterior — calzado"],
+  ["video_post_descalzo", "Marcha posterior (alejándose) — descalzo"],
+  ["video_post_calzado", "Marcha posterior (alejándose) — calzado"],
+  ["video_ant_descalzo", "Marcha anterior (viniendo hacia la cámara) — descalzo"],
+  ["video_ant_calzado", "Marcha anterior (viniendo hacia la cámara) — calzado"],
 ] as const;
 export const VIDEO_COUNT = VIDEO_KINDS.length;
 
 // Fotos clínicas de apoyo (opcionales — no bloquean la checklist)
 export const PHOTO_KINDS = [
-  ["foto_dorsal", "Vista dorsal — ambos pies en carga"],
-  ["foto_posterior", "Retropié posterior — en carga"],
+  ["foto_posterior", "Pies de cerca desde atrás (retropié) — en carga"],
+  ["foto_anterior", "Pies de cerca desde delante (antepié) — en carga"],
+  ["foto_dorsal", "Vista dorsal desde arriba — ambos pies en carga"],
   ["foto_calzado", "Calzado habitual — desgaste de la suela"],
 ] as const;
 

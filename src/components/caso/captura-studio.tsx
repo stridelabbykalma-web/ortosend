@@ -53,6 +53,11 @@ function evalChecks(lms: NormalizedLandmark[] | undefined): Checks {
   const zL = (lms[L_SHOULDER].z + lms[L_HIP].z) / 2;
   const zR = (lms[R_SHOULDER].z + lms[R_HIP].z) / 2;
   const sideMargin = 0.02;
+  // De frente o de espaldas: hombros abiertos. La imagen no está espejada, así
+  // que de frente el hombro izquierdo del paciente cae a la derecha de la
+  // imagen (x mayor) y de espaldas a la izquierda.
+  const abierto = persona && torsoH > 0 && shoulderDx > 0.45 * torsoH;
+  const izqEnDerechaImagen = lms[L_SHOULDER].x > lms[R_SHOULDER].x;
   return {
     persona,
     cuerpo_completo:
@@ -64,7 +69,8 @@ function evalChecks(lms: NormalizedLandmark[] | undefined): Checks {
     perfil,
     lado_dcho: perfil && zR < zL - sideMargin,
     lado_izq: perfil && zL < zR - sideMargin,
-    frente_espalda: persona && torsoH > 0 && shoulderDx > 0.45 * torsoH,
+    de_frente: abierto && izqEnDerechaImagen,
+    de_espaldas: abierto && !izqEnDerechaImagen,
     pies_visibles: avg(vis(L_HEEL), vis(R_HEEL), vis(L_FOOT), vis(R_FOOT)) > 0.4,
   };
 }

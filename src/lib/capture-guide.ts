@@ -8,7 +8,8 @@ export type CheckId =
   | "perfil" // se le ve de lado (hombros alineados con la cámara)
   | "lado_dcho" // de perfil con el lado derecho del paciente hacia la cámara
   | "lado_izq" // de perfil con el lado izquierdo del paciente hacia la cámara
-  | "frente_espalda" // orientación frontal o posterior (hombros abiertos)
+  | "de_frente" // hombros abiertos y mirando a la cámara (viene hacia ella)
+  | "de_espaldas" // hombros abiertos y de espaldas a la cámara (se aleja)
   | "pies_visibles"; // tobillos/talones/antepié visibles
 
 export const CHECK_LABEL: Record<CheckId, string> = {
@@ -17,7 +18,8 @@ export const CHECK_LABEL: Record<CheckId, string> = {
   perfil: "Se le ve de lado (perfil)",
   lado_dcho: "Lado derecho hacia la cámara",
   lado_izq: "Lado izquierdo hacia la cámara",
-  frente_espalda: "Orientación frontal/posterior correcta",
+  de_frente: "De frente a la cámara",
+  de_espaldas: "De espaldas a la cámara",
   pies_visibles: "Pies visibles",
 };
 
@@ -48,11 +50,20 @@ const LATERAL_TIPS = (lado: "derecho" | "izquierdo", calzado: string, seg: numbe
   `Grabación fija de ${seg} s: si sale del plano, vuelve al punto de salida por fuera del encuadre y repite el paso.`,
 ];
 
-// Marcha posterior: cámara detrás del paciente, en el eje del pasillo.
+// Marcha posterior: cámara detrás del paciente, en el eje del pasillo; se aleja.
 const POSTERIOR_TIPS = (calzado: string, seg: number) => [
-  "Móvil en trípode, en horizontal, a la altura de la cadera, detrás del paciente y en el eje del pasillo.",
-  `El paciente camina recto alejándose de la cámara, ${calzado}, 4-6 m; da la vuelta y regresa.`,
-  `Grabación fija de ${seg} s: al menos 3 pasos completos alejándose (retropié visible).`,
+  "Móvil en trípode, en horizontal, a la altura de la cadera, en el eje del pasillo.",
+  `El paciente parte junto a la cámara, de espaldas a ella, y camina recto alejándose 4-6 m, ${calzado}.`,
+  "Antes de grabar, que se coloque de espaldas en el punto de salida: el estudio comprueba la orientación.",
+  `Grabación fija de ${seg} s: al menos 3 pasos completos alejándose (retropié visible). Si sobra tiempo, vuelve al punto de salida por fuera del plano y repite.`,
+];
+
+// Marcha anterior: misma posición de cámara; el paciente viene hacia ella.
+const ANTERIOR_TIPS = (calzado: string, seg: number) => [
+  "Móvil en trípode, en horizontal, a la altura de la cadera, en el eje del pasillo.",
+  `El paciente parte a 4-6 m, de frente a la cámara, y camina recto hacia ella, ${calzado}; se detiene justo antes de salir del plano.`,
+  "Antes de grabar, que se coloque de frente en el punto de salida: el estudio comprueba la orientación.",
+  `Grabación fija de ${seg} s: al menos 3 pasos completos viniendo hacia la cámara. Si sobra tiempo, vuelve al punto de salida por fuera del plano y repite.`,
 ];
 
 export const CAPTURE_GUIDES: Record<string, CaptureGuide> = {
@@ -86,15 +97,47 @@ export const CAPTURE_GUIDES: Record<string, CaptureGuide> = {
   },
   video_post_descalzo: {
     mode: "video",
-    checks: ["persona", "cuerpo_completo", "frente_espalda"],
+    checks: ["persona", "cuerpo_completo", "de_espaldas"],
     seconds: 10,
     tips: POSTERIOR_TIPS("descalzo", 10),
   },
   video_post_calzado: {
     mode: "video",
-    checks: ["persona", "cuerpo_completo", "frente_espalda"],
+    checks: ["persona", "cuerpo_completo", "de_espaldas"],
     seconds: 10,
     tips: POSTERIOR_TIPS("con su calzado habitual", 10),
+  },
+  video_ant_descalzo: {
+    mode: "video",
+    checks: ["persona", "cuerpo_completo", "de_frente"],
+    seconds: 10,
+    tips: ANTERIOR_TIPS("descalzo", 10),
+  },
+  video_ant_calzado: {
+    mode: "video",
+    checks: ["persona", "cuerpo_completo", "de_frente"],
+    seconds: 10,
+    tips: ANTERIOR_TIPS("con su calzado habitual", 10),
+  },
+  foto_posterior: {
+    mode: "photo",
+    checks: [],
+    seconds: 5,
+    tips: [
+      "Paciente de pie, en carga, descalzo, pies paralelos al ancho de caderas.",
+      "Móvil bajo, a la altura de los tobillos, a 40-60 cm por detrás: talones y tercio inferior de la pierna llenando el encuadre.",
+      "Temporizador de 5 s: apoya el móvil y mantenlo quieto hasta el disparo.",
+    ],
+  },
+  foto_anterior: {
+    mode: "photo",
+    checks: [],
+    seconds: 5,
+    tips: [
+      "Paciente de pie, en carga, descalzo, pies paralelos al ancho de caderas.",
+      "Móvil bajo, a la altura de los tobillos, a 40-60 cm por delante: dedos, antepié y tobillos llenando el encuadre.",
+      "Temporizador de 5 s: apoya el móvil y mantenlo quieto hasta el disparo.",
+    ],
   },
   foto_dorsal: {
     mode: "photo",
@@ -104,16 +147,6 @@ export const CAPTURE_GUIDES: Record<string, CaptureGuide> = {
       "Paciente de pie, en carga, pies paralelos al ancho de caderas.",
       "Foto cenital desde arriba: ambos pies completos y centrados.",
       "Temporizador de 5 s: coloca el móvil encima y mantenlo quieto hasta el disparo.",
-    ],
-  },
-  foto_posterior: {
-    mode: "photo",
-    checks: [],
-    seconds: 5,
-    tips: [
-      "Cámara baja, desde atrás, a la altura de los tobillos.",
-      "Talones y tercio inferior de la pierna, en carga.",
-      "Temporizador de 5 s: apoya el móvil y mantenlo quieto hasta el disparo.",
     ],
   },
   foto_calzado: {
