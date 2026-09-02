@@ -1,6 +1,7 @@
 // Utilidades sobre casos: eventos, notificaciones simuladas, reparto y liberación.
 import { prisma } from "./db";
 import { OPEN_CASE_TIMEOUT_MIN } from "./states";
+import { VIDEO_COUNT, VIDEO_KINDS } from "./format";
 
 export async function pushEvent(caseId: string, text: string, actor: string) {
   await prisma.caseEvent.create({ data: { caseId, text, actor } });
@@ -34,7 +35,7 @@ export type Checklist = {
   cuestionario: boolean;
   exploracion: boolean;
   escaneos: boolean;
-  videos: number; // confirmados de 7
+  videos: number; // confirmados de VIDEO_COUNT
   baro: boolean;
   completa: boolean;
 };
@@ -46,7 +47,8 @@ export function checklistOf(capture: {
 } | null): Checklist {
   const media = capture?.media.filter((m) => m.confirmedAt) ?? [];
   const has = (k: string) => media.some((m) => m.kind === k);
-  const videos = media.filter((m) => m.kind.startsWith("video_")).length;
+  // Solo cuentan los vídeos vigentes del protocolo (capturas antiguas de otros tipos no suman)
+  const videos = media.filter((m) => VIDEO_KINDS.some(([k]) => k === m.kind)).length;
   const cuestionario = !!capture?.questionnaire;
   const exploracion = !!capture?.physicalExam;
   const escaneos = has("scan_L") && has("scan_R");
@@ -57,6 +59,6 @@ export function checklistOf(capture: {
     escaneos,
     videos,
     baro,
-    completa: cuestionario && exploracion && escaneos && videos >= 7 && baro,
+    completa: cuestionario && exploracion && escaneos && videos >= VIDEO_COUNT && baro,
   };
 }

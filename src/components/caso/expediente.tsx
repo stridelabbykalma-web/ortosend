@@ -1,6 +1,6 @@
 import type { Capture, Case, MediaAsset, Patient, Prescription, User } from "@prisma/client";
 import { checklistOf } from "@/lib/cases";
-import { MEDIA_LABEL } from "@/lib/format";
+import { MEDIA_LABEL, VIDEO_COUNT } from "@/lib/format";
 
 type CaseFull = Case & {
   patient: Patient & { owner: User };
@@ -58,8 +58,10 @@ export function Expediente({ kase }: { kase: CaseFull }) {
           <div className="muted">{cl.escaneos ? "Ambos pies ✓ (visor 3D pendiente)" : "Pendiente"}</div>
         </div>
         <div>
-          <div className="tiny">VÍDEOS (7)</div>
-          <div className="muted">{cl.videos}/7 confirmados por el servidor</div>
+          <div className="tiny">VÍDEOS DE MARCHA ({VIDEO_COUNT})</div>
+          <div className="muted">
+            {cl.videos}/{VIDEO_COUNT} confirmados por el servidor
+          </div>
         </div>
         <div>
           <div className="tiny">BAROPODOMETRÍA</div>

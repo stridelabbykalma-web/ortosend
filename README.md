@@ -24,8 +24,9 @@ asociadas. Stack: **Next.js (App Router, server actions) + PostgreSQL (Prisma)**
 - Agenda (citas Flujo A + casos Flujo B), disponibilidad (máx. 5 huecos), profesionales y
   formación 5/5, liquidaciones (placeholder).
 - **Asistente de captura** de 6 pasos con guardado continuo: cuestionario, exploración física,
-  escaneo 3D (2), vídeos (7: 6 de marcha + heel rise), baropodometría (2 estáticas + dinámica +
-  informe) y **checklist bloqueante** — sin todo en verde no hay envío.
+  escaneo 3D (2), vídeos de marcha (6, grabados en el estudio de captura web con MediaPipe y
+  duración fija por prueba) más fotos clínicas opcionales con temporizador, baropodometría
+  (2 estáticas + dinámica + informe) y **checklist bloqueante** — sin todo en verde no hay envío.
 
 **Prescripción**
 - Cola del prescriptor de clínica y **cola central Ortosend** (clínicas sin prescriptor) con

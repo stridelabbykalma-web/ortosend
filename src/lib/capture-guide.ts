@@ -73,16 +73,6 @@ export const CAPTURE_GUIDES: Record<string, CaptureGuide> = {
     seconds: 10,
     tips: MARCHA_TIPS("desde atrás, con su calzado habitual", 10),
   },
-  video_heel_rise: {
-    mode: "video",
-    checks: ["persona", "pies_visibles", "frente_espalda"],
-    seconds: 15,
-    tips: [
-      "Cámara baja, desde atrás: retropié y pantorrillas centrados.",
-      "Grabación fija de 15 s: el paciente sube y baja de puntillas 5-10 veces, descalzo.",
-      "Apoyo de un dedo en la pared solo para el equilibrio.",
-    ],
-  },
   foto_dorsal: {
     mode: "photo",
     checks: [],

@@ -10,7 +10,6 @@ const VIDEO_KINDS = [
   "video_lat_izq_calzado",
   "video_post_descalzo",
   "video_post_calzado",
-  "video_heel_rise",
 ];
 const BARO_KINDS = ["baro_est_1", "baro_est_2", "baro_din", "baro_informe"];
 

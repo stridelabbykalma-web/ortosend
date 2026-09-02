@@ -1,6 +1,6 @@
 import type { Capture, Case, Incident, MediaAsset } from "@prisma/client";
 import { checklistOf } from "@/lib/cases";
-import { BARO_KINDS, PHOTO_KINDS, VIDEO_KINDS } from "@/lib/format";
+import { BARO_KINDS, PHOTO_KINDS, VIDEO_COUNT, VIDEO_KINDS } from "@/lib/format";
 import { CheckLine } from "@/components/ui";
 import { CapturaStudio } from "@/components/caso/captura-studio";
 import { durationLabel } from "@/lib/capture-guide";
@@ -147,7 +147,10 @@ export function Wizard({ kase }: { kase: CaseWithCapture }) {
           </div>
         </div>
         <div className="card">
-          <b>4 · Vídeos — estudio de captura guiado {cl.videos >= 7 && <span className="pill g">✓</span>}</b>
+          <b>
+            4 · Vídeos de marcha — estudio de captura guiado{" "}
+            {cl.videos >= VIDEO_COUNT && <span className="pill g">✓</span>}
+          </b>
           {VIDEO_KINDS.map(([kind, label]) => (
             <CheckLine ok={has(kind)} key={kind}>
               <span>
@@ -191,7 +194,9 @@ export function Wizard({ kase }: { kase: CaseWithCapture }) {
           <CheckLine ok={cl.cuestionario}>Cuestionario</CheckLine>
           <CheckLine ok={cl.exploracion}>Exploración</CheckLine>
           <CheckLine ok={cl.escaneos}>Escaneo 3D (2)</CheckLine>
-          <CheckLine ok={cl.videos >= 7}>Vídeos 7/7</CheckLine>
+          <CheckLine ok={cl.videos >= VIDEO_COUNT}>
+            Vídeos de marcha {Math.min(cl.videos, VIDEO_COUNT)}/{VIDEO_COUNT}
+          </CheckLine>
           <CheckLine ok={cl.baro}>Baropodometría</CheckLine>
           {cl.completa ? (
             <form action={sendCaseAction}>
