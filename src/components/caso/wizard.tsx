@@ -1,7 +1,8 @@
 import type { Capture, Case, Incident, MediaAsset } from "@prisma/client";
 import { checklistOf } from "@/lib/cases";
-import { BARO_KINDS, VIDEO_KINDS } from "@/lib/format";
+import { BARO_KINDS, PHOTO_KINDS, VIDEO_KINDS } from "@/lib/format";
 import { CheckLine } from "@/components/ui";
+import { CapturaStudio } from "@/components/caso/captura-studio";
 import {
   markMediaAction,
   saveExamAction,
@@ -145,23 +146,26 @@ export function Wizard({ kase }: { kase: CaseWithCapture }) {
           </div>
         </div>
         <div className="card">
-          <b>4 · Vídeos — modo captura guiado {cl.videos >= 7 && <span className="pill g">✓</span>}</b>
+          <b>4 · Vídeos — estudio de captura guiado {cl.videos >= 7 && <span className="pill g">✓</span>}</b>
           {VIDEO_KINDS.map(([kind, label]) => (
             <CheckLine ok={has(kind)} key={kind}>
               {label}
-              {!has(kind) && (
-                <form action={markMediaAction}>
-                  {hidden(kind)}
-                  <button type="submit">● Grabar</button>
-                </form>
-              )}
+              <CapturaStudio caseId={kase.id} kind={kind} label={label} redo={has(kind)} />
             </CheckLine>
           ))}
           <div className="tiny">
-            En producción: grabación con la cámara del móvil en trípode (getUserMedia +
-            MediaRecorder), silueta de encuadre y subida en segundo plano. El check verde solo
-            aparece cuando el servidor confirma la subida.
+            Grabación real con la cámara del dispositivo (móvil en trípode): MediaPipe Pose valida
+            el encuadre en vivo antes de permitir grabar. El check verde solo aparece cuando el
+            servidor confirma la subida.
           </div>
+          <div className="sp" />
+          <b className="tiny">FOTOS CLÍNICAS DE APOYO (OPCIONALES)</b>
+          {PHOTO_KINDS.map(([kind, label]) => (
+            <CheckLine ok={has(kind)} key={kind}>
+              {label}
+              <CapturaStudio caseId={kase.id} kind={kind} label={label} redo={has(kind)} />
+            </CheckLine>
+          ))}
         </div>
         <div className="card">
           <b>5 · Baropodometría (Podisense GO) {cl.baro && <span className="pill g">✓</span>}</b>

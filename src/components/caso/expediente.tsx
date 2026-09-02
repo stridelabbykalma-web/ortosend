@@ -1,5 +1,6 @@
 import type { Capture, Case, MediaAsset, Patient, Prescription, User } from "@prisma/client";
 import { checklistOf } from "@/lib/cases";
+import { MEDIA_LABEL } from "@/lib/format";
 
 type CaseFull = Case & {
   patient: Patient & { owner: User };
@@ -71,6 +72,7 @@ export function Expediente({ kase }: { kase: CaseFull }) {
           </div>
         </div>
       </div>
+      <MediaGallery media={cp?.media ?? []} />
       {kase.prescription && (
         <>
           <div className="sp" />
@@ -86,6 +88,40 @@ export function Expediente({ kase }: { kase: CaseFull }) {
         </div>
       )}
     </div>
+  );
+}
+
+// Visor de las capturas reales subidas desde el estudio web (vídeos y fotos).
+// Solo hay archivo servible cuando la URL apunta a /api/media (subida confirmada).
+function MediaGallery({ media }: { media: MediaAsset[] }) {
+  const files = media.filter((m) => m.confirmedAt && m.url.startsWith("/api/media/"));
+  if (files.length === 0) return null;
+  return (
+    <>
+      <div className="sp" />
+      <div className="tiny">CAPTURAS DEL ESTUDIO (VÍDEOS Y FOTOS)</div>
+      <div className="grid g3" style={{ marginTop: 8 }}>
+        {files.map((m) => {
+          const meta = m.meta as { seconds?: number; validPct?: number } | null;
+          const isVideo = m.kind.startsWith("video_");
+          return (
+            <figure key={m.id} className="media-item">
+              {isVideo ? (
+                <video src={m.url} controls playsInline preload="metadata" />
+              ) : (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img src={m.url} alt={MEDIA_LABEL[m.kind] ?? m.kind} loading="lazy" />
+              )}
+              <figcaption className="tiny">
+                {MEDIA_LABEL[m.kind] ?? m.kind}
+                {meta?.seconds ? ` · ${meta.seconds} s` : ""}
+                {typeof meta?.validPct === "number" ? ` · encuadre ${meta.validPct}%` : ""}
+              </figcaption>
+            </figure>
+          );
+        })}
+      </div>
+    </>
   );
 }
 

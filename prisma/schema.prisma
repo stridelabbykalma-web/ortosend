@@ -209,15 +209,27 @@ model Capture {
   completedAt DateTime? // checklist superada → envío
 }
 
-// Vídeos (7: 6 de marcha + heel rise) y escaneos (2) — subida resiliente por fragmentos
+// Vídeos (7: 6 de marcha + heel rise), fotos clínicas y escaneos (2)
 model MediaAsset {
   id        String  @id @default(cuid())
   captureId String
   capture   Capture @relation(fields: [captureId], references: [id])
-  kind      String  // scan_L | scan_R | video_lat_dcha_descalzo | ... | video_heel_rise | baro
+  kind      String  // scan_L | scan_R | video_lat_dcha_descalzo | ... | video_heel_rise | foto_* | baro
   url       String
   sizeBytes Int?
+  meta      Json?     // métricas del estudio de captura: duración, % encuadre válido (MediaPipe), mime…
   confirmedAt DateTime? // check verde SOLO cuando el servidor confirma
+  blob      MediaBlob?
+}
+
+// Contenido binario de la captura (prototipo: en Postgres; producción: R2/S3 por fragmentos).
+// Tabla separada para no arrastrar los bytes en las lecturas normales del caso.
+model MediaBlob {
+  id      String     @id @default(cuid())
+  mediaId String     @unique
+  media   MediaAsset @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+  mime    String
+  bytes   Bytes
 }
 
 // Documento clínico firmado — sin prescripción no se fabrica

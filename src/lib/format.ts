@@ -70,9 +70,25 @@ export const VIDEO_KINDS = [
   ["video_heel_rise", "Heel rise test — descalzo"],
 ] as const;
 
+// Fotos clínicas de apoyo (opcionales — no bloquean la checklist)
+export const PHOTO_KINDS = [
+  ["foto_dorsal", "Vista dorsal — ambos pies en carga"],
+  ["foto_posterior", "Retropié posterior — en carga"],
+  ["foto_calzado", "Calzado habitual — desgaste de la suela"],
+] as const;
+
 export const BARO_KINDS = [
   ["baro_est_1", "Estática — captura 1 (10 s)"],
   ["baro_est_2", "Estática — captura 2 (10 s)"],
   ["baro_din", "Dinámica — 3 pasos válidos"],
   ["baro_informe", "Informe del dashboard Podisense"],
 ] as const;
+
+// Etiqueta legible de cualquier elemento de captura (para expediente y visor)
+export const MEDIA_LABEL: Record<string, string> = Object.fromEntries([
+  ["scan_L", "Escaneo 3D — pie izquierdo"],
+  ["scan_R", "Escaneo 3D — pie derecho"],
+  ...VIDEO_KINDS,
+  ...PHOTO_KINDS,
+  ...BARO_KINDS,
+]);
