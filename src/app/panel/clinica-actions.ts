@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { requireRole, createInviteToken } from "@/lib/auth";
 import { checklistOf, notify, pushEvent } from "@/lib/cases";
-import { CAPTURA_VISUAL, BARO_KINDS, SCAN_KIND } from "@/lib/format";
+import { BARO_KINDS, SCAN_KIND } from "@/lib/format";
 import type { Questionnaire } from "@/lib/questionnaire";
 import type { Exam } from "@/lib/exploracion";
 import { nucleoCompleto, ramasSinCubrir } from "@/lib/tests-podologicos";
@@ -329,7 +329,8 @@ export async function markMediaAction(formData: FormData) {
   const caseId = String(formData.get("caseId"));
   const kind = String(formData.get("kind"));
   const next = String(formData.get("next") ?? "");
-  const valid = [SCAN_KIND, ...CAPTURA_VISUAL.map(([k]) => k), ...BARO_KINDS.map(([k]) => k)];
+  // Los vídeos y fotos NO pasan por aquí: suben de verdad vía /api/media.
+  const valid = [SCAN_KIND, ...BARO_KINDS.map(([k]) => k)];
   if (!valid.includes(kind)) fail(`/caso/${caseId}`, "Elemento de captura desconocido");
   const { kase, capture } = await captureFor(caseId, u);
   const exists = await prisma.mediaAsset.findFirst({ where: { captureId: capture.id, kind } });

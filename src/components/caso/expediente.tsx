@@ -3,7 +3,7 @@ import { checklistOf } from "@/lib/cases";
 import { questionnaireLines, type Questionnaire } from "@/lib/questionnaire";
 import { examLines, type Exam } from "@/lib/exploracion";
 import { alertasDe } from "@/lib/tests-podologicos";
-import { CAPTURA_VISUAL, FOTO_KINDS, VIDEO_KINDS } from "@/lib/format";
+import { CAPTURA_VISUAL, FOTO_KINDS, MEDIA_LABEL, VIDEO_KINDS } from "@/lib/format";
 
 type CaseFull = Case & {
   patient: Patient & { owner: User };
@@ -66,8 +66,8 @@ export function Expediente({ kase }: { kase: CaseFull }) {
         <div>
           <div className="tiny">VÍDEOS Y FOTOS ({CAPTURA_VISUAL.length})</div>
           <div className="muted">
-            {cl.capturas}/{CAPTURA_VISUAL.length} confirmados — {VIDEO_KINDS.length} vídeos (de pie
-            y marcha) y {FOTO_KINDS.length} foto de los talones desde atrás
+            {cl.capturas}/{CAPTURA_VISUAL.length} confirmados — {VIDEO_KINDS.length} vídeos de
+            marcha y {FOTO_KINDS.length} fotos de los pies de cerca
           </div>
         </div>
         <div>
@@ -87,6 +87,7 @@ export function Expediente({ kase }: { kase: CaseFull }) {
           </div>
         </div>
       </div>
+      <MediaGallery media={cp?.media ?? []} />
       {kase.prescription && (
         <>
           <div className="sp" />
@@ -124,6 +125,51 @@ export function Historial({ events }: { events: { id: string; at: Date; text: st
             ))}
           </tbody>
         </table>
+      </div>
+    </>
+  );
+}
+
+// Visor de las capturas reales subidas desde el estudio web (vídeos y fotos).
+// Solo hay archivo servible cuando la URL apunta a /api/media (subida confirmada).
+function MediaGallery({ media }: { media: MediaAsset[] }) {
+  const files = media.filter((m) => m.confirmedAt && m.url.startsWith("/api/media/"));
+  if (files.length === 0) return null;
+  return (
+    <>
+      <div className="sp" />
+      <div className="tiny">CAPTURAS DEL ESTUDIO (VÍDEOS Y FOTOS)</div>
+      <div className="grid g3" style={{ marginTop: 8 }}>
+        {files.map((m) => {
+          const meta = m.meta as {
+            seconds?: number;
+            targetSeconds?: number;
+            validPct?: number;
+            validSeconds?: number;
+          } | null;
+          const isVideo = m.kind.startsWith("video_");
+          return (
+            <figure key={m.id} className="media-item">
+              {isVideo ? (
+                <video src={m.url} controls playsInline preload="metadata" />
+              ) : (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img src={m.url} alt={MEDIA_LABEL[m.kind] ?? m.kind} loading="lazy" />
+              )}
+              <figcaption className="tiny">
+                {MEDIA_LABEL[m.kind] ?? m.kind}
+                {meta?.seconds
+                  ? ` · ${meta.seconds} s${meta.targetSeconds ? ` de ${meta.targetSeconds} s` : ""}`
+                  : ""}
+                {typeof meta?.validSeconds === "number"
+                  ? ` · encuadre válido ${meta.validSeconds} s`
+                  : typeof meta?.validPct === "number"
+                    ? ` · encuadre ${meta.validPct}%`
+                    : ""}
+              </figcaption>
+            </figure>
+          );
+        })}
       </div>
     </>
   );

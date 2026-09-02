@@ -34,18 +34,25 @@ asociadas. Stack: **Next.js (App Router, server actions) + PostgreSQL (Prisma)**
   con tope de sugerencias y aviso de volumen), y **hallazgos de alerta** (Thompson, Tinel,
   compresión del calcáneo) destacados para el prescriptor porque no se resuelven con una
   plantilla; dismetría valorada con nivel pélvico y láminas calibradas, análisis observacional de la
-  marcha, 5 vídeos (de pie posterior y anterior, y caminando desde atrás, desde delante y
-  lateral) más 1 foto de los talones desde atrás para valorar la inclinación del retropié,
+  marcha, 8 vídeos de marcha (lateral derecha e izquierda, posterior alejándose y anterior
+  viniendo hacia la cámara; cada vista descalzo y con su calzado) más 2 fotos de los pies de
+  cerca en carga (desde atrás para el retropié y desde delante para el antepié),
   baropodometría Podisense (estática + dinámica múltiple) y
   escaneo de las espumas fenólicas como último paso — estas tres se hacen en su propia
   plataforma y aquí solo se marcan como hechas; el informe llega desde Podisense y no se
   adjunta. **Checklist bloqueante**: sin todo en verde no hay envío.
-- **Validación automática del encuadre** en vídeos y fotos: un modelo de pose (MediaPipe
-  Pose Landmarker) corre en el propio navegador —la imagen no sale del dispositivo—, detecta
-  los 33 puntos del cuerpo y comprueba las reglas de cada captura (`src/lib/encuadre.ts`: qué
-  debe verse, hacia dónde mira el paciente, tamaño, centrado, quietud). La checklist se pone
-  en verde sola y el botón de captura solo se activa tras ~1 s con todo en verde. Si el modelo
-  no puede cargarse, se vuelve a la checklist manual. El modelo (5,8 MB) va en `public/`; el
+- **Estudio de captura guiado con MediaPipe** (`src/components/caso/captura-studio.tsx`,
+  reglas en `src/lib/capture-guide.ts`): la cámara se abre a pantalla completa, un modelo de
+  pose (MediaPipe Pose Landmarker) corre en el propio navegador —la imagen no sale del
+  dispositivo hasta la subida— y comprueba en vivo los checks de cada vídeo (persona, cuerpo
+  completo, de perfil con el lado correcto hacia la cámara, de frente o de espaldas). El botón
+  de grabar solo se activa con todo en verde; cada vídeo tiene **duración fija** (laterales 8 s,
+  posterior y anterior 10 s) con cuenta atrás y corte automático, y solo se acepta si acumula
+  **al menos 3 s con encuadre válido** (regla aplicada también en el servidor). Las fotos usan el
+  mismo temporizador (5 s) con disparo automático. La grabación es real (MediaRecorder) y la
+  subida va a `/api/media`, que guarda el archivo (Postgres en el prototipo; R2/S3 en
+  producción) y solo entonces confirma el check verde; `/api/media/[id]` lo sirve con el mismo
+  control de acceso que el expediente y registro RGPD. El modelo (5,8 MB) va en `public/`; el
   WASM se sirve desde el CDN de jsDelivr (o desde la app con `NEXT_PUBLIC_MEDIAPIPE_WASM`).
 
 **Prescripción**
@@ -103,8 +110,8 @@ Cuentas de demo (contraseña `ortosend123`):
 ## Pendiente (siguientes fases)
 
 - **Stripe real** (PaymentIntent + webhook; Bizum) y facturas.
-- **Subida real de media** por fragmentos a Cloudflare R2/S3 con URLs firmadas; grabación de
-  vídeo con MediaRecorder (la captura sigue simulada); visor del escaneo 3D.
+- **Media en Cloudflare R2/S3** por fragmentos con URLs firmadas (hoy los vídeos y fotos se
+  guardan en Postgres, con tope de 4 MB por archivo); visor del escaneo 3D.
 - **WhatsApp Business API** (360dialog/Twilio) para la cola de `Notification`; email de respaldo.
 - Mapa Leaflet/OSM con radio 50 km real en `/buscar` (lat/lng ya en el modelo).
 - Envíos (Sendcloud/Packlink) con webhook de entrega; PDF real de la prescripción.

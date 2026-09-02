@@ -3,14 +3,18 @@ const bcrypt = require("bcryptjs");
 
 const PASS = "ortosend123";
 
-// Lo que se captura con la cámara de la app: 5 vídeos + 1 foto de los talones
+// Lo que se captura con la cámara de la app: 8 vídeos de marcha + 2 fotos de los pies de cerca
 const CAPTURA_VISUAL = [
-  "video_pie_post",
-  "video_pie_ant",
-  "video_marcha_post",
-  "video_marcha_ant",
-  "video_marcha_lat",
-  "foto_retropie",
+  "video_lat_dcha_descalzo",
+  "video_lat_dcha_calzado",
+  "video_lat_izq_descalzo",
+  "video_lat_izq_calzado",
+  "video_post_descalzo",
+  "video_post_calzado",
+  "video_ant_descalzo",
+  "video_ant_calzado",
+  "foto_posterior",
+  "foto_anterior",
 ];
 const BARO_KINDS = ["baro_est", "baro_din_multi"];
 const SCAN_KIND = "scan_espumas";

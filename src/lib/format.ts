@@ -59,20 +59,26 @@ export function fmtEUR(cents: number) {
   return (cents / 100).toLocaleString("es-ES", { style: "currency", currency: "EUR" });
 }
 
-// Vídeos obligatorios del protocolo: dos en bipedestación y tres caminando.
-// El lateral cubre los dos lados en una misma prueba.
+// Vídeos obligatorios del protocolo: 8 de marcha. El paciente camina recto;
+// la cámara va a su lado (laterales, un vídeo por lado), detrás (posterior,
+// se aleja) o delante (anterior, viene hacia ella); cada vista descalzo y
+// con su calzado. Duraciones y checks de encuadre en src/lib/capture-guide.ts.
 export const VIDEO_KINDS = [
-  ["video_pie_post", "De pie — vista posterior"],
-  ["video_pie_ant", "De pie — vista anterior"],
-  ["video_marcha_post", "Caminando — desde atrás"],
-  ["video_marcha_ant", "Caminando — desde delante"],
-  ["video_marcha_lat", "Caminando — lateral derecho e izquierdo"],
+  ["video_lat_dcha_descalzo", "Marcha lateral dcha. — descalzo"],
+  ["video_lat_dcha_calzado", "Marcha lateral dcha. — calzado"],
+  ["video_lat_izq_descalzo", "Marcha lateral izq. — descalzo"],
+  ["video_lat_izq_calzado", "Marcha lateral izq. — calzado"],
+  ["video_post_descalzo", "Marcha posterior (alejándose) — descalzo"],
+  ["video_post_calzado", "Marcha posterior (alejándose) — calzado"],
+  ["video_ant_descalzo", "Marcha anterior (viniendo hacia la cámara) — descalzo"],
+  ["video_ant_calzado", "Marcha anterior (viniendo hacia la cámara) — calzado"],
 ] as const;
 
-// Fotos obligatorias: primer plano de los talones desde atrás para medir la
-// inclinación del retropié sobre la imagen.
+// Fotos obligatorias: los pies de cerca, en carga, desde atrás (retropié) y
+// desde delante (antepié). Con temporizador y disparo automático.
 export const FOTO_KINDS = [
-  ["foto_retropie", "Foto de los talones desde atrás — inclinación del retropié"],
+  ["foto_posterior", "Pies de cerca desde atrás (retropié) — en carga"],
+  ["foto_anterior", "Pies de cerca desde delante (antepié) — en carga"],
 ] as const;
 
 // Todo lo que se captura con la cámara de la app, en el orden del protocolo.
@@ -88,3 +94,10 @@ export const BARO_KINDS = [
 // Escaneo de las espumas fenólicas: una sola pieza (ambos pies), hecha en la
 // plataforma del escáner; aquí solo se marca si está hecha.
 export const SCAN_KIND = "scan_espumas";
+
+// Etiqueta legible de cualquier elemento de captura (expediente, visor, historial)
+export const MEDIA_LABEL: Record<string, string> = Object.fromEntries([
+  ...CAPTURA_VISUAL,
+  ...BARO_KINDS,
+  [SCAN_KIND, "Escaneo de las espumas fenólicas"],
+]);

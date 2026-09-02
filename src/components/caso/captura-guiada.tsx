@@ -71,7 +71,8 @@ import {
   saveQuestionnaireSectionAction,
   sendCaseAction,
 } from "@/app/panel/clinica-actions";
-import { CamaraGuiada, type OverlayKind } from "./camara-guiada";
+import { CapturaStudio } from "./captura-studio";
+import { CAPTURE_GUIDES, durationLabel } from "@/lib/capture-guide";
 import { AutosaveForm } from "./autosave-form";
 
 type CaseWithCapture = Case & {
@@ -85,94 +86,52 @@ type CaseWithCapture = Case & {
 type Slide =
   | { t: "q"; section: string; title: string; grupo: string }
   | { t: "e"; section: string; title: string; grupo: string }
-  | {
-      t: "media";
-      kind: string;
-      title: string;
-      grupo: string;
-      overlay: OverlayKind;
-      mode: "foto" | "video";
-      checks: string[];
-      help: string;
-    }
+  | { t: "media"; kind: string; title: string; grupo: string; help: string }
   | { t: "file"; kind: string; title: string; grupo: string; help: string; boton: string; hecho: string }
   | { t: "envio"; title: string; grupo: string };
 
-const CAPTURA_META: Record<
-  string,
-  { overlay: OverlayKind; mode: "foto" | "video"; grupo: string; checks: string[]; help: string }
-> = {
-  video_pie_post: {
-    overlay: "pie_post",
-    mode: "video",
-    grupo: "Vídeos",
-    checks: [
-      "El paciente va descalzo, de espaldas y quieto",
-      "Se ve el cuerpo entero, centrado en la línea",
-      "Pies a la anchura de las caderas, brazos relajados al costado",
-      "Cámara en trípode a la altura de la cadera",
-    ],
-    help: "Bipedestación desde atrás: se valora la alineación del retropié (valgo/varo), las rodillas y la pelvis en estático.",
+// Para qué sirve cada captura de cámara. Cómo se hace (colocación, duración,
+// checks de encuadre que valida MediaPipe) está en src/lib/capture-guide.ts.
+const CAPTURA_META: Record<string, { grupo: string; help: string }> = {
+  video_lat_dcha_descalzo: {
+    grupo: "Vídeos de marcha",
+    help: "Marcha de perfil con el lado derecho hacia la cámara, descalzo: ciclo completo del pie derecho (contacto, apoyo medio y despegue).",
   },
-  video_pie_ant: {
-    overlay: "pie_ant",
-    mode: "video",
-    grupo: "Vídeos",
-    checks: [
-      "El paciente va descalzo, de frente y quieto",
-      "Se ve el cuerpo entero, centrado en el encuadre",
-      "Pies a la anchura de las caderas, brazos relajados al costado",
-      "Cámara en trípode a la altura de la cadera",
-    ],
-    help: "Bipedestación de frente: se valora el alineamiento de rodillas, rótulas y antepié, y la simetría en estático.",
+  video_lat_dcha_calzado: {
+    grupo: "Vídeos de marcha",
+    help: "Misma vista lateral derecha con su calzado habitual: cómo cambia el ciclo con el zapato que usa a diario.",
   },
-  video_marcha_post: {
-    overlay: "marcha_post",
-    mode: "video",
-    grupo: "Vídeos",
-    checks: [
-      "El paciente va descalzo",
-      "Se ve el cuerpo entero de espaldas, centrado en la línea",
-      "Pasillo de 4-5 m libre; cámara en trípode a la altura de la cadera",
-      "Camina a ritmo natural, sin posar",
-    ],
-    help: "El paciente se aleja de la cámara: se valora el retropié en dinámica y las compensaciones desde atrás.",
+  video_lat_izq_descalzo: {
+    grupo: "Vídeos de marcha",
+    help: "Marcha de perfil con el lado izquierdo hacia la cámara, descalzo: ciclo completo del pie izquierdo.",
   },
-  video_marcha_ant: {
-    overlay: "marcha_ant",
-    mode: "video",
-    grupo: "Vídeos",
-    checks: [
-      "El paciente va descalzo",
-      "Se ve el cuerpo entero de frente, centrado en el encuadre",
-      "Cámara en trípode a la altura de la cadera",
-      "Camina hacia la cámara a ritmo natural",
-    ],
-    help: "El paciente camina de frente: se valora el antepié, el ángulo de paso y el alineamiento desde delante.",
+  video_lat_izq_calzado: {
+    grupo: "Vídeos de marcha",
+    help: "Misma vista lateral izquierda con su calzado habitual.",
   },
-  video_marcha_lat: {
-    overlay: "marcha_lat",
-    mode: "video",
-    grupo: "Vídeos",
-    checks: [
-      "El paciente va descalzo",
-      "Se ve el cuerpo entero de perfil, como en la figura",
-      "Grabado desde AMBOS lados: una pasada por el lado derecho y otra por el izquierdo",
-      "Camina a ritmo natural, sin posar (2-3 pasadas por lado)",
-    ],
-    help: "Marcha de perfil por los dos lados: se valora el ciclo completo (contacto, apoyo medio y despegue) en cada pie.",
+  video_post_descalzo: {
+    grupo: "Vídeos de marcha",
+    help: "El paciente se aleja de la cámara, descalzo: retropié en dinámica (valgo/varo), eversión del calcáneo y compensaciones desde atrás.",
   },
-  foto_retropie: {
-    overlay: "retropie",
-    mode: "foto",
+  video_post_calzado: {
+    grupo: "Vídeos de marcha",
+    help: "Misma vista posterior con su calzado habitual: comportamiento del retropié dentro del zapato.",
+  },
+  video_ant_descalzo: {
+    grupo: "Vídeos de marcha",
+    help: "El paciente viene hacia la cámara, descalzo: antepié, ángulo de paso, rótulas y alineamiento desde delante.",
+  },
+  video_ant_calzado: {
+    grupo: "Vídeos de marcha",
+    help: "Misma vista anterior con su calzado habitual.",
+  },
+  foto_posterior: {
     grupo: "Fotos",
-    checks: [
-      "El paciente está descalzo, de espaldas y quieto, en apoyo relajado",
-      "Se ve de rodilla para abajo: pantorrillas, talones y suelo",
-      "Los dos talones entran en el encuadre, sin recortar ninguno",
-      "Cámara a la altura del suelo y perpendicular al talón, no en diagonal",
-    ],
-    help: "Primer plano de los talones desde atrás. Sobre esta foto se valora la inclinación del retropié (valgo o varo) comparando el eje del calcáneo con la vertical de la pierna, así que el encuadre perpendicular es lo que hace la medida fiable.",
+    help: "Primer plano de los talones desde atrás, en carga. Sobre esta foto se valora la inclinación del retropié comparando el eje del calcáneo con la vertical de la pierna.",
+  },
+  foto_anterior: {
+    grupo: "Fotos",
+    help: "Primer plano de los pies desde delante, en carga: dedos, antepié y tobillos (hallux, dedos en garra, antepié aducto/abducto).",
   },
 };
 
@@ -193,16 +152,7 @@ function buildSlides(): Slide[] {
     // exploración y vídeos); las máquinas (escáner y Podisense) quedan para el final.
     ...CAPTURA_VISUAL.map(([kind, label]) => {
       const m = CAPTURA_META[kind];
-      return {
-        t: "media",
-        kind,
-        title: label,
-        grupo: m.grupo,
-        overlay: m.overlay,
-        mode: m.mode,
-        checks: m.checks,
-        help: m.help,
-      } as Slide;
+      return { t: "media", kind, title: label, grupo: m.grupo, help: m.help } as Slide;
     }),
     {
       t: "file",
@@ -899,14 +849,29 @@ export function CapturaGuiada({ kase, paso }: { kase: CaseWithCapture; paso?: nu
               <p className="muted" style={{ margin: "4px 0 10px" }}>
                 {s.help}
               </p>
-              <CamaraGuiada
+              <div className="tiny" style={{ marginBottom: 6 }}>
+                {durationLabel(s.kind)}
+                {CAPTURE_GUIDES[s.kind]?.minValidSeconds
+                  ? ` · se acepta con al menos ${CAPTURE_GUIDES[s.kind].minValidSeconds} s de encuadre válido`
+                  : ""}
+              </div>
+              <ul className="muted" style={{ margin: "0 0 12px 18px", padding: 0 }}>
+                {CAPTURE_GUIDES[s.kind]?.tips.map((t) => (
+                  <li key={t}>{t}</li>
+                ))}
+              </ul>
+              <CapturaStudio
                 caseId={kase.id}
                 kind={s.kind}
-                overlay={s.overlay}
-                mode={s.mode}
-                checks={s.checks}
-                next={next ?? total}
+                label={s.title}
+                autoStart
+                nextHref={`/caso/${kase.id}?paso=${next ?? total}`}
               />
+              <div className="tiny" style={{ marginTop: 8 }}>
+                La cámara se abre a pantalla completa. MediaPipe comprueba el encuadre en vivo y el
+                botón de grabar solo se activa con todo en verde; el check del protocolo aparece
+                cuando el servidor confirma la subida.
+              </div>
             </>
           ))}
 
@@ -952,7 +917,7 @@ export function CapturaGuiada({ kase, paso }: { kase: CaseWithCapture; paso?: nu
             <CheckLine ok={cl.exploracion}>Exploración y tests (6 pantallas)</CheckLine>
             <CheckLine ok={cl.capturas >= CAPTURA_VISUAL.length}>
               Vídeos y fotos {cl.capturas}/{CAPTURA_VISUAL.length} ({VIDEO_KINDS.length} vídeos de
-              pie y marcha + {FOTO_KINDS.length} foto de los talones)
+              marcha + {FOTO_KINDS.length} fotos de los pies de cerca)
             </CheckLine>
             <CheckLine ok={cl.baro}>Baropodometría (estática + dinámica múltiple)</CheckLine>
             <CheckLine ok={cl.escaneos}>Escaneo de las espumas fenólicas</CheckLine>
