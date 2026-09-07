@@ -38,8 +38,8 @@ export type CaptureGuide = {
   // Deben estar en verde para ARRANCAR la grabación. Durante el clip no se exige
   // nada: el paciente se mueve y el modelo no acierta todos los frames.
   checks: CheckId[];
-  // Duración asignada a la prueba. Vídeo: la grabación dura exactamente esto y
-  // se corta sola. Foto: temporizador de cuenta atrás hasta el disparo automático.
+  // Vídeo: la grabación dura exactamente esto y se corta sola. Foto: 0 (dispara
+  // al instante en cuanto los checks están en verde, sin cuenta atrás).
   seconds: number;
   direction?: "ltr" | "rtl"; // sentido en que el paciente cruza el encuadre (flecha guía)
   tips: string[]; // instrucciones de encuadre para el profesional
@@ -118,21 +118,21 @@ export const CAPTURE_GUIDES: Record<string, CaptureGuide> = {
   foto_posterior: {
     mode: "photo",
     checks: ["pies_visibles", "pies_de_cerca", "pies_desde_atras"],
-    seconds: 3,
+    seconds: 0,
     tips: [
       "Paciente de pie, en carga, descalzo, pies paralelos al ancho de caderas.",
       "Móvil bajo, a la altura de los tobillos, a 40-60 cm por detrás y perpendicular al talón: los dos talones y el tercio inferior de la pierna llenando el encuadre, sin cortar los pies.",
-      "La foto se dispara sola en cuanto la app ve los dos pies de cerca y desde atrás (cuenta atrás de 3 s): mantén el móvil quieto.",
+      "La foto se dispara sola, al instante, en cuanto la app ve los dos pies de cerca y desde atrás: mantén el móvil quieto.",
     ],
   },
   foto_anterior: {
     mode: "photo",
     checks: ["pies_visibles", "pies_de_cerca", "pies_de_frente"],
-    seconds: 3,
+    seconds: 0,
     tips: [
       "Paciente de pie, en carga, descalzo, pies paralelos al ancho de caderas.",
       "Móvil bajo, a la altura de los tobillos, a 40-60 cm por delante: dedos, antepié y tobillos de los dos pies llenando el encuadre, sin cortar los pies.",
-      "La foto se dispara sola en cuanto la app ve los dos pies de cerca y desde delante (cuenta atrás de 3 s): mantén el móvil quieto.",
+      "La foto se dispara sola, al instante, en cuanto la app ve los dos pies de cerca y desde delante: mantén el móvil quieto.",
     ],
   },
 };
@@ -143,5 +143,5 @@ export function durationLabel(kind: string): string {
   if (!g) return "";
   return g.mode === "video"
     ? `${g.seconds} s de grabación`
-    : `disparo automático al ver los pies de cerca (${g.seconds} s)`;
+    : "disparo automático al ver los dos pies de cerca, sin cuenta atrás";
 }

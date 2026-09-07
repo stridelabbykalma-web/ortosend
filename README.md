@@ -53,8 +53,8 @@ asociadas. Stack: **Next.js (App Router, server actions) + PostgreSQL (Prisma)**
   para arrancar; durante la grabación no se exige nada (el paciente se mueve y el modelo no
   acierta todos los frames), y los segundos con encuadre válido se guardan solo como dato. Las fotos exigen ver
   **los dos pies de cerca** (talones y dedos detectados, llenando el encuadre, talones hacia la
-  cámara en la posterior y dedos hacia la cámara en la anterior) y se disparan solas con una
-  cuenta atrás de 3 s; si el modelo no ve los pies queda el disparo manual. La grabación es real (MediaRecorder) y la
+  cámara en la posterior y dedos hacia la cámara en la anterior) y se disparan solas al
+  instante, sin cuenta atrás; si el modelo no ve los pies queda el disparo manual. La grabación es real (MediaRecorder) y la
   subida va a `/api/media`, que guarda el archivo (Postgres en el prototipo; R2/S3 en
   producción) y solo entonces confirma el check verde; `/api/media/[id]` lo sirve con el mismo
   control de acceso que el expediente y registro RGPD. El modelo (5,8 MB) va en `public/`; el

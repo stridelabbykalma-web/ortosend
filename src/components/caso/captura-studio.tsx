@@ -622,8 +622,8 @@ export function CapturaStudio({
     autoRecordRef.current = () =>
       guide.mode === "video"
         ? runCountdown(VIDEO_PREROLL_SECONDS, record)
-        : runCountdown(guide.seconds, takePhotoRef.current);
-  }, [guide.mode, guide.seconds, runCountdown, record]);
+        : takePhotoRef.current(); // fotos: disparo inmediato, sin cuenta atrás
+  }, [guide.mode, runCountdown, record]);
 
   const takePhoto = useCallback(() => {
     const video = videoRef.current;
@@ -649,22 +649,9 @@ export function CapturaStudio({
     );
   }, []);
 
-  // Fotos sin checks (o sin análisis de pose disponible): al abrir la cámara
-  // (y tras "Repetir") la cuenta atrás arranca sola. Con checks, arranca cuando
-  // la app ve los pies de cerca (mismo mecanismo que los vídeos).
-  const photoArmedRef = useRef(true);
-  useEffect(() => {
-    if (guide.mode !== "photo" || phase !== "live" || !photoArmedRef.current) return;
-    if (guide.checks.length > 0 && poseState !== "sin_pose") return;
-    // Diferido al siguiente tick: la cuenta atrás cambia estado y no debe
-    // hacerse de forma síncrona dentro del efecto.
-    const t = setTimeout(() => {
-      if (!photoArmedRef.current) return;
-      photoArmedRef.current = false;
-      runCountdown(guide.seconds, takePhoto);
-    }, 0);
-    return () => clearTimeout(t);
-  }, [guide.checks.length, guide.mode, guide.seconds, phase, poseState, runCountdown, takePhoto]);
+  // Fotos: sin cuenta atrás. Disparan solas en cuanto la app ve los dos pies de
+  // cerca (mismo mecanismo de estabilidad que los vídeos); si el análisis de
+  // pose no está disponible, solo queda el botón manual.
 
   useEffect(() => {
     takePhotoRef.current = takePhoto;
@@ -708,7 +695,6 @@ export function CapturaStudio({
     // Vuelve a exigir ~1 s estable en verde antes de arrancar solo otra vez
     okHistRef.current = [];
     armedRef.current = true;
-    photoArmedRef.current = true;
     if (reviewUrlRef.current) URL.revokeObjectURL(reviewUrlRef.current);
     reviewUrlRef.current = null;
     setReview(null);
@@ -726,7 +712,7 @@ export function CapturaStudio({
         {autoStart
           ? isVideo
             ? `● Abrir la cámara y grabar (${guide.seconds} s)`
-            : `📷 Abrir la cámara y hacer la foto (${guide.seconds} s)`
+            : "📷 Abrir la cámara y hacer la foto"
           : isVideo
             ? redo
               ? "↺ Repetir vídeo"
@@ -857,8 +843,8 @@ export function CapturaStudio({
                   {isVideo
                     ? `Cuenta atrás de ${VIDEO_PREROLL_SECONDS} s y grabación fija de ${guide.seconds} s (corte automático). El pitido de salida suena medio segundo después de empezar a grabar, para captar el arranque desde parado; otro tono grave avisa del final. Los checks solo hacen falta para arrancar; durante la grabación no se exige nada.`
                     : guide.checks.length > 0
-                      ? `La foto se dispara sola (cuenta atrás de ${guide.seconds} s) en cuanto la app ve los dos pies de cerca con la orientación correcta.`
-                      : `La foto se dispara sola: cuenta atrás de ${guide.seconds} s al abrir la cámara.`}
+                      ? "La foto se dispara sola, al instante y sin cuenta atrás, en cuanto la app ve los dos pies de cerca con la orientación correcta."
+                      : "Sin comprobación automática: pulsa el botón para hacer la foto."}
                 </div>
                 <div className="sp" />
                 <div className="tiny">INSTRUCCIONES</div>
@@ -889,11 +875,9 @@ export function CapturaStudio({
                     <button
                       type="button"
                       className={allOk ? "pri wfull" : "wfull"}
-                      onClick={() => runCountdown(guide.seconds, takePhoto)}
+                      onClick={takePhoto}
                     >
-                      {allOk
-                        ? `📷 Hacer la foto ahora (${guide.seconds} s)`
-                        : `📷 Hacer la foto sin comprobar (${guide.seconds} s)`}
+                      {allOk ? "📷 Hacer la foto ahora" : "📷 Hacer la foto sin comprobar"}
                     </button>
                     {poseState === "activo" && guide.checks.length > 0 && (
                       <div className="tiny" style={{ marginTop: 6 }}>
