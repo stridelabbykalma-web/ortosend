@@ -347,7 +347,7 @@ export function CapturaStudio({
         const oh = okHistRef.current;
         oh.push(ok);
         if (oh.length > 15) oh.shift();
-        const stable = oh.length >= 12 && oh.filter(Boolean).length >= 0.8 * oh.length;
+        const stable = oh.length >= 10 && oh.filter(Boolean).length >= 0.75 * oh.length;
         if (stable !== stableOkRef.current) {
           stableOkRef.current = stable;
           setStableOk(stable);
@@ -600,6 +600,15 @@ export function CapturaStudio({
     );
   }, []);
 
+  // Fotos: no hay botón que pulsar. Al abrir la cámara (y tras "Repetir") la
+  // cuenta atrás arranca sola y dispara. Si se cancela, queda el botón manual.
+  const photoArmedRef = useRef(true);
+  useEffect(() => {
+    if (guide.mode !== "photo" || phase !== "live" || !photoArmedRef.current) return;
+    photoArmedRef.current = false;
+    runCountdown(guide.seconds, takePhoto);
+  }, [guide.mode, guide.seconds, phase, runCountdown, takePhoto]);
+
   const upload = useCallback(async () => {
     if (!review) return;
     setPhase("uploading");
@@ -639,6 +648,7 @@ export function CapturaStudio({
     // Vuelve a exigir ~1 s estable en verde antes de arrancar solo otra vez
     okHistRef.current = [];
     armedRef.current = true;
+    photoArmedRef.current = true;
     if (reviewUrlRef.current) URL.revokeObjectURL(reviewUrlRef.current);
     reviewUrlRef.current = null;
     setReview(null);
@@ -759,7 +769,7 @@ export function CapturaStudio({
                           ? ` Para aceptar el clip: al menos ${guide.minValidSeconds} s con todos los checks en verde.`
                           : ""
                       }`
-                    : `Temporizador de ${guide.seconds} s y disparo automático.`}
+                    : `La foto se dispara sola: cuenta atrás de ${guide.seconds} s al abrir la cámara.`}
                 </div>
                 <div className="sp" />
                 <div className="tiny">INSTRUCCIONES</div>
@@ -781,7 +791,8 @@ export function CapturaStudio({
                 )}
                 {phase === "live" && isVideo && poseState === "activo" && (
                   <div className="tiny" style={{ marginTop: 6 }}>
-                    Con todos los checks en verde durante un segundo la cuenta atrás arranca sola.
+                    No hay que pulsar nada: con todos los checks en verde durante un segundo la
+                    cuenta atrás arranca sola y graba.
                   </div>
                 )}
                 {phase === "live" && !isVideo && (
@@ -790,7 +801,7 @@ export function CapturaStudio({
                     className="pri wfull"
                     onClick={() => runCountdown(guide.seconds, takePhoto)}
                   >
-                    📷 Foto con temporizador ({guide.seconds} s)
+                    📷 Volver a lanzar la cuenta atrás ({guide.seconds} s)
                   </button>
                 )}
                 {phase === "countdown" && (
