@@ -98,12 +98,20 @@ function evalChecks(lms: NormalizedLandmark[] | undefined): Checks {
   // De frente o de espaldas: la imagen no está espejada, así que de frente la
   // cadera izquierda del paciente cae a la derecha de la imagen (x mayor).
   const izqEnDerechaImagen = lms[L_HIP].x > lms[R_HIP].x;
-  // Pies (fotos de cerca): talones y dedos de los dos pies con buena confianza,
-  // y anchura que ocupan en la imagen (de cerca, los dos pies llenan el ancho).
-  const piesVisibles = Math.min(vis(L_HEEL), vis(R_HEEL), vis(L_FOOT), vis(R_FOOT)) > 0.5;
-  const feetXs = [lms[L_HEEL].x, lms[R_HEEL].x, lms[L_FOOT].x, lms[R_FOOT].x];
-  const footSpan = Math.max(...feetXs) - Math.min(...feetXs);
-  const feetBottom = Math.max(lms[L_HEEL].y, lms[R_HEEL].y, lms[L_FOOT].y, lms[R_FOOT].y);
+  // Pies (fotos de cerca). Desde atrás los dedos quedan tapados por el talón y
+  // desde delante el talón queda tapado por el pie, así que solo se exige lo que
+  // realmente se ve en cada vista: tobillos + talones (posterior) o tobillos +
+  // dedos (anterior). La anchura que ocupan en la imagen se mide con los puntos
+  // de pie que estén bien detectados (de cerca, los dos pies llenan el ancho).
+  const V = 0.45;
+  const tobillos = Math.min(vis(L_ANKLE), vis(R_ANKLE)) > V;
+  const talones = Math.min(vis(L_HEEL), vis(R_HEEL)) > V;
+  const dedos = Math.min(vis(L_FOOT), vis(R_FOOT)) > V;
+  const piesVisibles = tobillos && (talones || dedos);
+  const feetPts = [L_ANKLE, R_ANKLE, L_HEEL, R_HEEL, L_FOOT, R_FOOT].filter((i) => vis(i) > V);
+  const feetXs = feetPts.map((i) => lms[i].x);
+  const footSpan = feetXs.length ? Math.max(...feetXs) - Math.min(...feetXs) : 0;
+  const feetBottom = feetPts.length ? Math.max(...feetPts.map((i) => lms[i].y)) : 1;
   return {
     persona,
     cintura_a_pies: cinturaAPies,
@@ -113,21 +121,13 @@ function evalChecks(lms: NormalizedLandmark[] | undefined): Checks {
     de_frente: abierto && izqEnDerechaImagen,
     de_espaldas: abierto && !izqEnDerechaImagen,
     pies_visibles: piesVisibles,
-    pies_de_cerca: piesVisibles && footSpan > 0.35 && feetBottom < 0.97,
-    // Perspectiva con la cámara a la altura del tobillo: lo que está más lejos
-    // sale más alto en la imagen. Desde atrás los dedos quedan por encima de los
-    // talones y el pie izquierdo del paciente cae a la izquierda de la imagen;
-    // desde delante, al revés.
-    pies_desde_atras:
-      piesVisibles &&
-      lms[L_FOOT].y < lms[L_HEEL].y &&
-      lms[R_FOOT].y < lms[R_HEEL].y &&
-      lms[L_HEEL].x < lms[R_HEEL].x,
-    pies_de_frente:
-      piesVisibles &&
-      lms[L_FOOT].y > lms[L_HEEL].y &&
-      lms[R_FOOT].y > lms[R_HEEL].y &&
-      lms[L_FOOT].x > lms[R_FOOT].x,
+    pies_de_cerca: piesVisibles && footSpan > 0.3 && feetBottom < 0.97,
+    // Orientación por el lado en que cae cada pie (MediaPipe etiqueta izquierdo/
+    // derecho del paciente): desde atrás el pie izquierdo del paciente queda a la
+    // izquierda de la imagen y se ven los talones; desde delante queda a la
+    // derecha y se ven los dedos.
+    pies_desde_atras: tobillos && talones && lms[L_HEEL].x < lms[R_HEEL].x,
+    pies_de_frente: tobillos && dedos && lms[L_FOOT].x > lms[R_FOOT].x,
   };
 }
 
@@ -515,13 +515,18 @@ export function CapturaStudio({
           baseOptions: { modelAssetPath: POSE_MODEL, delegate },
           runningMode: "VIDEO",
           numPoses: 1,
+          // Fotos de los pies: solo hay pies y parte de la pierna en plano, y el
+          // modelo (entrenado con cuerpos enteros) detecta con menos confianza.
+          minPoseDetectionConfidence: guide.mode === "photo" ? 0.25 : 0.5,
+          minPosePresenceConfidence: guide.mode === "photo" ? 0.25 : 0.5,
+          minTrackingConfidence: guide.mode === "photo" ? 0.25 : 0.5,
         });
       landmarkerRef.current = await make("GPU").catch(() => make("CPU"));
       setPoseState("activo");
     } catch {
       setPoseState("sin_pose");
     }
-  }, [deviceId, loop, openCamera]);
+  }, [deviceId, guide.mode, loop, openCamera]);
 
   // Protocolo guiado: la cámara se abre sola al entrar en la pantalla
   const startedRef = useRef(false);

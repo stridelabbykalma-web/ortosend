@@ -10,7 +10,7 @@ export type CheckId =
   | "lado_izq" // de perfil con el lado izquierdo del paciente hacia la cámara
   | "de_frente" // hombros abiertos y mirando a la cámara (viene hacia ella)
   | "de_espaldas" // hombros abiertos y de espaldas a la cámara (se aleja)
-  | "pies_visibles" // talones y dedos de los dos pies visibles
+  | "pies_visibles" // tobillos de los dos pies, más talones (atrás) o dedos (delante)
   | "pies_de_cerca" // los dos pies llenan el encuadre (primer plano)
   | "pies_desde_atras" // talones hacia la cámara (foto posterior)
   | "pies_de_frente"; // dedos hacia la cámara (foto anterior)
@@ -23,7 +23,7 @@ export const CHECK_LABEL: Record<CheckId, string> = {
   lado_izq: "Lado izquierdo hacia la cámara",
   de_frente: "De frente a la cámara",
   de_espaldas: "De espaldas a la cámara",
-  pies_visibles: "Se ven los dos pies (talones y dedos)",
+  pies_visibles: "Se ven los dos pies (tobillos y talones o dedos)",
   pies_de_cerca: "Pies de cerca, llenando el encuadre",
   pies_desde_atras: "Vistos desde atrás (talones hacia la cámara)",
   pies_de_frente: "Vistos desde delante (dedos hacia la cámara)",
