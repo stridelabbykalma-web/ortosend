@@ -46,10 +46,8 @@ asociadas. Stack: **Next.js (App Router, server actions) + PostgreSQL (Prisma)**
   pose (MediaPipe Pose Landmarker) corre en el propio navegador —la imagen no sale del
   dispositivo hasta la subida— y comprueba en vivo los checks de cada vídeo (persona, de la
   cintura a los pies en plano, de perfil con el lado correcto hacia la cámara, de frente o de
-  espaldas, y **piernas
-  descubiertas de la rodilla al tobillo**: se leen los píxeles de la espinilla entre los puntos de
-  rodilla y tobillo y se comparan con el tono de piel de la cara del paciente, para que no valga
-  un pantalón que tape la reacción de la pierna al andar). Con todo
+  espaldas). Que el paciente lleve las piernas descubiertas de la rodilla al tobillo es
+  responsabilidad del profesional (va en las instrucciones, la app no lo valida). Con todo
   en verde de forma estable (~1 s) la cuenta atrás arranca sola (también hay botón); cada vídeo tiene **duración fija** (laterales 8 s,
   posterior y anterior 10 s) con cuenta atrás y corte automático, y solo se acepta si acumula
   **al menos 3 s con encuadre válido** (regla aplicada también en el servidor). Las fotos usan el
