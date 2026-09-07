@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Sora, Inter } from "next/font/google";
 import "./globals.css";
 import { Nav } from "@/components/nav";
+import { AudioPrimer } from "@/components/audio-primer";
 
 const sora = Sora({ variable: "--font-sora", subsets: ["latin"], weight: ["400", "600", "700"] });
 const inter = Inter({ variable: "--font-inter", subsets: ["latin"], weight: ["400", "500", "600"] });
@@ -16,6 +17,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="es" className={`${sora.variable} ${inter.variable}`}>
       <body>
+        <AudioPrimer />
         <Nav />
         {children}
         <div className="footer">

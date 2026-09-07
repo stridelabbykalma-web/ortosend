@@ -13,6 +13,7 @@ import {
   VIDEO_PREROLL_SECONDS,
   type CheckId,
 } from "@/lib/capture-guide";
+import { BEEP_LEAD_MS, playBeep, primeBeeps } from "@/lib/beeps";
 
 // El WASM del modelo pesa 12 MB y se sirve desde el CDN de jsDelivr; el modelo
 // de pose (5,8 MB) va con la app para no depender de terceros para lo clínico.
@@ -23,6 +24,7 @@ const POSE_MODEL = "/mediapipe/pose_landmarker_lite.task";
 const MAX_UPLOAD_BYTES = 4 * 1024 * 1024; // límite del servidor (4 MB)
 // La grabación arranca en silencio y el pitido de salida suena este tiempo
 // después, para que quede grabado el arranque del paciente desde parado.
+// (El WAV lleva un silencio inicial de BEEP_LEAD_MS que se descuenta.)
 const START_BEEP_DELAY_MS = 500;
 
 // Tonos con Web Audio (sin archivos). Devuelve false si el navegador no deja
@@ -266,17 +268,20 @@ export function CapturaStudio({
 
   // Pitidos: salida (dos tonos ascendentes) y fin (un tono grave). Si el
   // navegador bloquea el audio, la señal visual "¡YA!" sigue apareciendo.
+  // Primero como contenido multimedia (<audio>: en iPhone no lo silencia el
+  // interruptor lateral); si el navegador no lo permite, Web Audio de respaldo.
   const beep = useCallback(async (kind: "start" | "stop") => {
     try {
+      if (navigator.vibrate) navigator.vibrate(kind === "start" ? [120, 60, 160] : 200);
+      if (await playBeep(kind)) return;
       const ctx = (audioRef.current ??= new AudioContext());
       if (ctx.state === "suspended") await ctx.resume();
       if (kind === "start")
         playTones(ctx, [
           { freq: 880, ms: 160, at: 0 },
-          { freq: 1320, ms: 260, at: 190 },
+          { freq: 1320, ms: 280, at: 190 },
         ]);
-      else playTones(ctx, [{ freq: 440, ms: 350, at: 0 }]);
-      if (navigator.vibrate) navigator.vibrate(kind === "start" ? [120, 60, 160] : 200);
+      else playTones(ctx, [{ freq: 440, ms: 380, at: 0 }]);
     } catch {
       // sin audio disponible: queda la señal visual
     }
@@ -485,6 +490,7 @@ export function CapturaStudio({
 
   // Arranque del estudio: cámara + modelo de pose (CDN) en paralelo
   const start = useCallback(async () => {
+    primeBeeps();
     setOpen(true);
     setPhase("init");
     setFatal(null);
@@ -576,9 +582,10 @@ export function CapturaStudio({
       setBeeped(false);
       beepTimerRef.current = setTimeout(() => {
         beepTimerRef.current = null;
-        setBeeped(true);
         void beep("start");
-      }, START_BEEP_DELAY_MS);
+        // la señal visual, alineada con el momento en que se oye el tono
+        setTimeout(() => setBeeped(true), BEEP_LEAD_MS);
+      }, Math.max(0, START_BEEP_DELAY_MS - BEEP_LEAD_MS));
       recStartRef.current = performance.now();
       setElapsed(0);
       setPhase("recording");
