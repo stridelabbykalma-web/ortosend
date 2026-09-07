@@ -6,6 +6,8 @@ import { alertasDe } from "@/lib/tests-podologicos";
 import { CAPTURA_VISUAL, FOTO_KINDS, MEDIA_LABEL, VIDEO_KINDS } from "@/lib/format";
 import { helbingResumen, type Helbing } from "@/lib/helbing";
 import { HelbingOverlay } from "@/components/caso/helbing-overlay";
+import { VideoAnalizado } from "@/components/caso/video-analizado";
+import type { MarchaInforme, MarchaTrack } from "@/lib/marcha";
 
 type CaseFull = Case & {
   patient: Patient & { owner: User };
@@ -150,6 +152,7 @@ function MediaGallery({ media }: { media: MediaAsset[] }) {
             validSeconds?: number;
             helbing?: Helbing;
             perthes?: Helbing;
+            marcha?: { track: MarchaTrack; informe: MarchaInforme };
           } | null;
           const isVideo = m.kind.startsWith("video_");
           const hb = meta?.helbing;
@@ -175,6 +178,18 @@ function MediaGallery({ media }: { media: MediaAsset[] }) {
                 </figcaption>
               </figure>
             ));
+          }
+          // Vídeo de marcha con puntos e informe preliminar: ocupa todo el ancho
+          if (isVideo && meta?.marcha) {
+            return (
+              <figure key={m.id} className="media-item" style={{ gridColumn: "1 / -1" }}>
+                <figcaption className="tiny" style={{ marginBottom: 4 }}>
+                  <b>{label}</b>
+                  {meta.seconds ? ` · ${meta.seconds} s` : ""} · con puntos de referencia e informe preliminar
+                </figcaption>
+                <VideoAnalizado src={m.url} track={meta.marcha.track} informe={meta.marcha.informe} />
+              </figure>
+            );
           }
           return (
             <figure key={m.id} className="media-item">

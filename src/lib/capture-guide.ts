@@ -46,6 +46,9 @@ export type CaptureGuide = {
   // vea cada vez más pequeño (zoom de la cámara si el móvil lo permite; si no,
   // recorte digital). El profesional puede desactivarlo.
   followZoom?: boolean;
+  // Guardar la trayectoria de los puntos de pose con el vídeo y generar el
+  // informe preliminar de marcha (vistas posterior y anterior).
+  analisis?: boolean;
   tips: string[]; // instrucciones de encuadre para el profesional
 };
 
@@ -109,6 +112,7 @@ export const CAPTURE_GUIDES: Record<string, CaptureGuide> = {
     checks: ["persona", "cintura_a_pies", "de_espaldas"],
     seconds: 10,
     followZoom: true,
+    analisis: true,
     tips: POSTERIOR_TIPS("descalzo", 10),
   },
   // Mismas reglas que la posterior (persona, de la cintura a los pies, 10 s),
@@ -118,6 +122,7 @@ export const CAPTURE_GUIDES: Record<string, CaptureGuide> = {
     checks: ["persona", "cintura_a_pies", "de_frente"],
     seconds: 10,
     followZoom: true,
+    analisis: true,
     tips: ANTERIOR_TIPS("descalzo", 10),
   },
   // Fotos: lo que debe verse son LOS DOS PIES DE CERCA. La app lo comprueba con

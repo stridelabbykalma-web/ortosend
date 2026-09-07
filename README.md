@@ -54,7 +54,13 @@ asociadas. Stack: **Next.js (App Router, server actions) + PostgreSQL (Prisma)**
   acierta todos los frames), y los segundos con encuadre válido se guardan solo como dato. Las fotos exigen ver
   **los dos pies de cerca** (talones y dedos detectados, llenando el encuadre, talones hacia la
   cámara en la posterior y dedos hacia la cámara en la anterior) y se disparan solas al
-  instante, sin cuenta atrás; si el modelo no ve los pies queda el disparo manual. La grabación es real (MediaRecorder) y la
+  instante, sin cuenta atrás; si el modelo no ve los pies queda el disparo manual. En la
+  foto posterior se calculan la **línea de Helbing** y el ángulo de la **regla de Perthes** por
+  pierna (dos imágenes a partir de la misma foto). En los vídeos posterior y anterior se guarda la
+  trayectoria de 12 puntos de pose con el vídeo y se genera un **informe preliminar de marcha**
+  (caída pélvica, rodilla en plano frontal, retropié, ángulo de progresión, base de marcha,
+  asimetrías) con hallazgos orientativos y **qué hacer en la plantilla** para cada uno; el
+  expediente reproduce el vídeo con los puntos superpuestos. Todo etiquetado como orientativo. La grabación es real (MediaRecorder) y la
   subida va a `/api/media`, que guarda el archivo (Postgres en el prototipo; R2/S3 en
   producción) y solo entonces confirma el check verde; `/api/media/[id]` lo sirve con el mismo
   control de acceso que el expediente y registro RGPD. El modelo (5,8 MB) va en `public/`; el

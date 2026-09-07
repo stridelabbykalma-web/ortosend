@@ -16,6 +16,8 @@ import {
 import { BEEP_LEAD_MS, playBeep, primeBeeps } from "@/lib/beeps";
 import { computeHelbing, computePerthes, helbingResumen, type Helbing } from "@/lib/helbing";
 import { HelbingOverlay } from "@/components/caso/helbing-overlay";
+import { MARCHA_IDX, analizarMarcha, type MarchaFrame, type MarchaInforme, type MarchaTrack } from "@/lib/marcha";
+import { InformeMarcha } from "@/components/caso/video-analizado";
 
 // El WASM del modelo pesa 12 MB y se sirve desde el CDN de jsDelivr; el modelo
 // de pose (5,8 MB) va con la app para no depender de terceros para lo clínico.
@@ -207,6 +209,7 @@ type Review = {
   validSeconds: number | null; // tiempo acumulado con todos los checks en verde
   helbing?: Helbing | null; // foto posterior: línea de Helbing calculada al disparar
   perthes?: Helbing | null; // foto posterior: ángulo del calcáneo (regla de Perthes)
+  marcha?: { track: MarchaTrack; informe: MarchaInforme } | null; // vídeos posterior/anterior
 };
 
 export function CapturaStudio({
@@ -281,6 +284,10 @@ export function CapturaStudio({
   const followRectRef = useRef<{ x: number; y: number; w: number; h: number } | null>(null);
   const followCanvasRef = useRef<HTMLCanvasElement>(null);
   const lastSeenRef = useRef(0);
+  // Trayectoria de puntos guardada con el vídeo (análisis de marcha)
+  const trackRef = useRef<MarchaFrame[]>([]);
+  const trackLastRef = useRef(0);
+  const trackDimsRef = useRef({ w: 0, h: 0, digital: false });
   useEffect(() => {
     followRef.current = follow;
   }, [follow]);
@@ -534,6 +541,24 @@ export function CapturaStudio({
             st.valid++;
             st.validMs += dt;
           }
+          // Trayectoria de puntos (≤ 15 fps) en coordenadas del vídeo GRABADO
+          if (guide.analisis && lms && now - trackLastRef.current >= 66) {
+            trackLastRef.current = now;
+            const td = trackDimsRef.current;
+            const cur = followRectRef.current;
+            const pts: number[] = [];
+            for (const idx of MARCHA_IDX) {
+              const q = lms[idx];
+              let x = q.x, y = q.y;
+              if (td.digital && cur && td.w && td.h) {
+                // el vídeo grabado es el recorte de seguimiento: reproyectar
+                x = (q.x * td.w - cur.x) / cur.w;
+                y = (q.y * td.h - cur.y) / cur.h;
+              }
+              pts.push(x, y, q.visibility ?? 0);
+            }
+            trackRef.current.push({ t: (now - recStartRef.current) / 1000, p: pts });
+          }
         }
         if (ctx) {
           const { width: w, height: h } = canvas;
@@ -773,6 +798,18 @@ export function CapturaStudio({
       const url = URL.createObjectURL(blob);
       if (reviewUrlRef.current) URL.revokeObjectURL(reviewUrlRef.current);
       reviewUrlRef.current = url;
+      // Análisis preliminar de marcha con la trayectoria guardada
+      let marcha: Review["marcha"] = null;
+      if (guide.analisis && trackRef.current.length >= 5) {
+        const td = trackDimsRef.current;
+        const track: MarchaTrack = {
+          vista: kind === "video_ant_descalzo" ? "anterior" : "posterior",
+          w: td.w || 1280,
+          h: td.h || 720,
+          frames: trackRef.current,
+        };
+        marcha = { track, informe: analizarMarcha(track) };
+      }
       setReview({
         blob,
         url,
@@ -780,10 +817,11 @@ export function CapturaStudio({
         seconds,
         validPct: total > 0 ? Math.round((100 * valid) / total) : null,
         validSeconds: total > 0 ? Math.round(validMs / 100) / 10 : null,
+        marcha,
       });
       setPhase("review");
     },
-    [beep]
+    [beep, guide.analisis, kind]
   );
 
   const record = useCallback(() => {
@@ -805,6 +843,15 @@ export function CapturaStudio({
         : rotRef.current.r !== 0 && rc
           ? rc.captureStream(30)
           : stream;
+      trackRef.current = [];
+      trackLastRef.current = 0;
+      {
+        const v = videoRef.current;
+        const r = rotRef.current.r;
+        const sw = v ? (r === 0 || r === 180 ? v.videoWidth : v.videoHeight) : 0;
+        const sh = v ? (r === 0 || r === 180 ? v.videoHeight : v.videoWidth) : 0;
+        trackDimsRef.current = { w: sw, h: sh, digital: !!digitalFollow };
+      }
       const rec = new MediaRecorder(src, { mimeType: mime, videoBitsPerSecond: 2_000_000 });
       recorderRef.current = rec;
       chunksRef.current = [];
@@ -940,6 +987,7 @@ export function CapturaStudio({
         pose: poseState === "activo" ? "pose_landmarker_lite" : "no_disponible",
         helbing: review.helbing ?? undefined,
         perthes: review.perthes ?? undefined,
+        marcha: review.marcha ?? undefined,
       })
     );
     fd.set("file", new File([review.blob], `${kind}.${ext}`, { type: review.mime }));
@@ -1247,6 +1295,16 @@ export function CapturaStudio({
                   )}
                   Tamaño: {(review.blob.size / 1024 / 1024).toFixed(2)} MB
                 </div>
+                {isVideo && guide.analisis && (
+                  review.marcha ? (
+                    <InformeMarcha informe={review.marcha.informe} />
+                  ) : (
+                    <div className="note a" style={{ marginTop: 8 }}>
+                      No se han detectado suficientes puntos durante la grabación para el informe
+                      preliminar de marcha. El vídeo se guarda igual.
+                    </div>
+                  )
+                )}
                 {kind === "foto_posterior" && (
                   <div className={`note ${review.helbing || review.perthes ? "" : "a"}`} style={{ marginTop: 8 }}>
                     {review.helbing || review.perthes ? (

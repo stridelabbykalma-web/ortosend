@@ -7,6 +7,7 @@ import { requireRole } from "@/lib/auth";
 import { audit, pushEvent } from "@/lib/cases";
 import { MEDIA_LABEL, FOTO_KINDS, VIDEO_KINDS } from "@/lib/format";
 import { sanitizeHelbing } from "@/lib/helbing";
+import { sanitizeMarcha } from "@/lib/marcha";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -70,6 +71,10 @@ export async function POST(req: Request) {
         pose: typeof raw.pose === "string" ? raw.pose.slice(0, 40) : undefined,
         helbing: kind === "foto_posterior" ? sanitizeHelbing(raw.helbing) : undefined,
         perthes: kind === "foto_posterior" ? sanitizeHelbing(raw.perthes) : undefined,
+        marcha:
+          kind === "video_post_descalzo" || kind === "video_ant_descalzo"
+            ? sanitizeMarcha(raw.marcha)
+            : undefined,
       };
   } catch {
     // meta inválida: se ignora
