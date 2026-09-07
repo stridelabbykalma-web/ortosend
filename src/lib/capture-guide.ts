@@ -126,26 +126,6 @@ export const CAPTURE_GUIDES: Record<string, CaptureGuide> = {
       "Temporizador de 5 s: apoya el móvil y mantenlo quieto hasta el disparo.",
     ],
   },
-  foto_dorsal: {
-    mode: "photo",
-    checks: [],
-    seconds: 5,
-    tips: [
-      "Paciente de pie, en carga, pies paralelos al ancho de caderas.",
-      "Foto cenital desde arriba: ambos pies completos y centrados.",
-      "Temporizador de 5 s: coloca el móvil encima y mantenlo quieto hasta el disparo.",
-    ],
-  },
-  foto_calzado: {
-    mode: "photo",
-    checks: [],
-    seconds: 3,
-    tips: [
-      "Suela del calzado habitual hacia la cámara, buena luz.",
-      "Que se aprecie el patrón de desgaste de ambas suelas.",
-      "Temporizador de 3 s hasta el disparo.",
-    ],
-  },
 };
 
 // Texto corto de la duración asignada, para la checklist del asistente.
