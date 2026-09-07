@@ -96,6 +96,12 @@ function evalChecks(lms: NormalizedLandmark[] | undefined): Checks {
   // De frente o de espaldas: la imagen no está espejada, así que de frente la
   // cadera izquierda del paciente cae a la derecha de la imagen (x mayor).
   const izqEnDerechaImagen = lms[L_HIP].x > lms[R_HIP].x;
+  // Pies (fotos de cerca): talones y dedos de los dos pies con buena confianza,
+  // y anchura que ocupan en la imagen (de cerca, los dos pies llenan el ancho).
+  const piesVisibles = Math.min(vis(L_HEEL), vis(R_HEEL), vis(L_FOOT), vis(R_FOOT)) > 0.5;
+  const feetXs = [lms[L_HEEL].x, lms[R_HEEL].x, lms[L_FOOT].x, lms[R_FOOT].x];
+  const footSpan = Math.max(...feetXs) - Math.min(...feetXs);
+  const feetBottom = Math.max(lms[L_HEEL].y, lms[R_HEEL].y, lms[L_FOOT].y, lms[R_FOOT].y);
   return {
     persona,
     cintura_a_pies: cinturaAPies,
@@ -104,7 +110,22 @@ function evalChecks(lms: NormalizedLandmark[] | undefined): Checks {
     lado_izq: perfil && zL < zR - sideMargin,
     de_frente: abierto && izqEnDerechaImagen,
     de_espaldas: abierto && !izqEnDerechaImagen,
-    pies_visibles: avg(vis(L_HEEL), vis(R_HEEL), vis(L_FOOT), vis(R_FOOT)) > 0.4,
+    pies_visibles: piesVisibles,
+    pies_de_cerca: piesVisibles && footSpan > 0.35 && feetBottom < 0.97,
+    // Perspectiva con la cámara a la altura del tobillo: lo que está más lejos
+    // sale más alto en la imagen. Desde atrás los dedos quedan por encima de los
+    // talones y el pie izquierdo del paciente cae a la izquierda de la imagen;
+    // desde delante, al revés.
+    pies_desde_atras:
+      piesVisibles &&
+      lms[L_FOOT].y < lms[L_HEEL].y &&
+      lms[R_FOOT].y < lms[R_HEEL].y &&
+      lms[L_HEEL].x < lms[R_HEEL].x,
+    pies_de_frente:
+      piesVisibles &&
+      lms[L_FOOT].y > lms[L_HEEL].y &&
+      lms[R_FOOT].y > lms[R_HEEL].y &&
+      lms[L_FOOT].x > lms[R_FOOT].x,
   };
 }
 
@@ -186,6 +207,7 @@ export function CapturaStudio({
   const stableOkRef = useRef(false);
   const armedRef = useRef(true); // listo para arrancar solo la próxima vez que todo esté en verde
   const autoRecordRef = useRef<() => void>(() => {});
+  const takePhotoRef = useRef<() => void>(() => {}); // takePhoto se define más abajo
   // valid/total: frames; validMs: tiempo real acumulado con encuadre válido
   const frameStatsRef = useRef({ valid: 0, total: 0, validMs: 0, lastTs: 0 });
   const recStartRef = useRef(0);
@@ -312,8 +334,8 @@ export function CapturaStudio({
           setStableOk(stable);
         }
         if (!stable) armedRef.current = true;
-        else if (armedRef.current && phaseRef.current === "live" && guide.mode === "video") {
-          // Todo en verde de forma estable: la cuenta atrás arranca sola
+        else if (armedRef.current && phaseRef.current === "live" && guide.checks.length > 0) {
+          // Todo en verde de forma estable: la cuenta atrás arranca sola (vídeo o foto)
           armedRef.current = false;
           autoRecordRef.current();
         }
@@ -597,8 +619,11 @@ export function CapturaStudio({
   }, [clearTimers]);
 
   useEffect(() => {
-    autoRecordRef.current = () => runCountdown(VIDEO_PREROLL_SECONDS, record);
-  }, [runCountdown, record]);
+    autoRecordRef.current = () =>
+      guide.mode === "video"
+        ? runCountdown(VIDEO_PREROLL_SECONDS, record)
+        : runCountdown(guide.seconds, takePhotoRef.current);
+  }, [guide.mode, guide.seconds, runCountdown, record]);
 
   const takePhoto = useCallback(() => {
     const video = videoRef.current;
@@ -624,14 +649,26 @@ export function CapturaStudio({
     );
   }, []);
 
-  // Fotos: no hay botón que pulsar. Al abrir la cámara (y tras "Repetir") la
-  // cuenta atrás arranca sola y dispara. Si se cancela, queda el botón manual.
+  // Fotos sin checks (o sin análisis de pose disponible): al abrir la cámara
+  // (y tras "Repetir") la cuenta atrás arranca sola. Con checks, arranca cuando
+  // la app ve los pies de cerca (mismo mecanismo que los vídeos).
   const photoArmedRef = useRef(true);
   useEffect(() => {
     if (guide.mode !== "photo" || phase !== "live" || !photoArmedRef.current) return;
-    photoArmedRef.current = false;
-    runCountdown(guide.seconds, takePhoto);
-  }, [guide.mode, guide.seconds, phase, runCountdown, takePhoto]);
+    if (guide.checks.length > 0 && poseState !== "sin_pose") return;
+    // Diferido al siguiente tick: la cuenta atrás cambia estado y no debe
+    // hacerse de forma síncrona dentro del efecto.
+    const t = setTimeout(() => {
+      if (!photoArmedRef.current) return;
+      photoArmedRef.current = false;
+      runCountdown(guide.seconds, takePhoto);
+    }, 0);
+    return () => clearTimeout(t);
+  }, [guide.checks.length, guide.mode, guide.seconds, phase, poseState, runCountdown, takePhoto]);
+
+  useEffect(() => {
+    takePhotoRef.current = takePhoto;
+  }, [takePhoto]);
 
   const upload = useCallback(async () => {
     if (!review) return;
@@ -819,7 +856,9 @@ export function CapturaStudio({
                 <div className="muted">
                   {isVideo
                     ? `Cuenta atrás de ${VIDEO_PREROLL_SECONDS} s y grabación fija de ${guide.seconds} s (corte automático). El pitido de salida suena medio segundo después de empezar a grabar, para captar el arranque desde parado; otro tono grave avisa del final. Los checks solo hacen falta para arrancar; durante la grabación no se exige nada.`
-                    : `La foto se dispara sola: cuenta atrás de ${guide.seconds} s al abrir la cámara.`}
+                    : guide.checks.length > 0
+                      ? `La foto se dispara sola (cuenta atrás de ${guide.seconds} s) en cuanto la app ve los dos pies de cerca con la orientación correcta.`
+                      : `La foto se dispara sola: cuenta atrás de ${guide.seconds} s al abrir la cámara.`}
                 </div>
                 <div className="sp" />
                 <div className="tiny">INSTRUCCIONES</div>
@@ -846,13 +885,23 @@ export function CapturaStudio({
                   </div>
                 )}
                 {phase === "live" && !isVideo && (
-                  <button
-                    type="button"
-                    className="pri wfull"
-                    onClick={() => runCountdown(guide.seconds, takePhoto)}
-                  >
-                    📷 Volver a lanzar la cuenta atrás ({guide.seconds} s)
-                  </button>
+                  <>
+                    <button
+                      type="button"
+                      className={allOk ? "pri wfull" : "wfull"}
+                      onClick={() => runCountdown(guide.seconds, takePhoto)}
+                    >
+                      {allOk
+                        ? `📷 Hacer la foto ahora (${guide.seconds} s)`
+                        : `📷 Hacer la foto sin comprobar (${guide.seconds} s)`}
+                    </button>
+                    {poseState === "activo" && guide.checks.length > 0 && (
+                      <div className="tiny" style={{ marginTop: 6 }}>
+                        Se dispara sola cuando ve los dos pies de cerca. Si no consigue detectarlos
+                        (poca luz, calcetines, encuadre muy cerrado), usa el botón.
+                      </div>
+                    )}
+                  </>
                 )}
                 {phase === "countdown" && (
                   <button type="button" className="wfull" onClick={cancelCountdown}>

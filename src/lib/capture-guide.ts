@@ -10,7 +10,10 @@ export type CheckId =
   | "lado_izq" // de perfil con el lado izquierdo del paciente hacia la cámara
   | "de_frente" // hombros abiertos y mirando a la cámara (viene hacia ella)
   | "de_espaldas" // hombros abiertos y de espaldas a la cámara (se aleja)
-  | "pies_visibles"; // tobillos/talones/antepié visibles
+  | "pies_visibles" // talones y dedos de los dos pies visibles
+  | "pies_de_cerca" // los dos pies llenan el encuadre (primer plano)
+  | "pies_desde_atras" // talones hacia la cámara (foto posterior)
+  | "pies_de_frente"; // dedos hacia la cámara (foto anterior)
 
 export const CHECK_LABEL: Record<CheckId, string> = {
   persona: "Persona detectada",
@@ -20,7 +23,10 @@ export const CHECK_LABEL: Record<CheckId, string> = {
   lado_izq: "Lado izquierdo hacia la cámara",
   de_frente: "De frente a la cámara",
   de_espaldas: "De espaldas a la cámara",
-  pies_visibles: "Pies visibles",
+  pies_visibles: "Se ven los dos pies (talones y dedos)",
+  pies_de_cerca: "Pies de cerca, llenando el encuadre",
+  pies_desde_atras: "Vistos desde atrás (talones hacia la cámara)",
+  pies_de_frente: "Vistos desde delante (dedos hacia la cámara)",
 };
 
 // Cuenta atrás previa a toda grabación de vídeo (el profesional suelta el móvil
@@ -106,24 +112,27 @@ export const CAPTURE_GUIDES: Record<string, CaptureGuide> = {
     seconds: 10,
     tips: ANTERIOR_TIPS("descalzo", 10),
   },
+  // Fotos: lo que debe verse son LOS DOS PIES DE CERCA. La app lo comprueba con
+  // los puntos de talones y dedos y dispara sola cuando está en verde; si el
+  // modelo no consigue ver los pies, queda el botón manual.
   foto_posterior: {
     mode: "photo",
-    checks: [],
-    seconds: 5,
+    checks: ["pies_visibles", "pies_de_cerca", "pies_desde_atras"],
+    seconds: 3,
     tips: [
       "Paciente de pie, en carga, descalzo, pies paralelos al ancho de caderas.",
-      "Móvil bajo, a la altura de los tobillos, a 40-60 cm por detrás: talones y tercio inferior de la pierna llenando el encuadre.",
-      "Temporizador de 5 s: apoya el móvil y mantenlo quieto hasta el disparo.",
+      "Móvil bajo, a la altura de los tobillos, a 40-60 cm por detrás y perpendicular al talón: los dos talones y el tercio inferior de la pierna llenando el encuadre, sin cortar los pies.",
+      "La foto se dispara sola en cuanto la app ve los dos pies de cerca y desde atrás (cuenta atrás de 3 s): mantén el móvil quieto.",
     ],
   },
   foto_anterior: {
     mode: "photo",
-    checks: [],
-    seconds: 5,
+    checks: ["pies_visibles", "pies_de_cerca", "pies_de_frente"],
+    seconds: 3,
     tips: [
       "Paciente de pie, en carga, descalzo, pies paralelos al ancho de caderas.",
-      "Móvil bajo, a la altura de los tobillos, a 40-60 cm por delante: dedos, antepié y tobillos llenando el encuadre.",
-      "Temporizador de 5 s: apoya el móvil y mantenlo quieto hasta el disparo.",
+      "Móvil bajo, a la altura de los tobillos, a 40-60 cm por delante: dedos, antepié y tobillos de los dos pies llenando el encuadre, sin cortar los pies.",
+      "La foto se dispara sola en cuanto la app ve los dos pies de cerca y desde delante (cuenta atrás de 3 s): mantén el móvil quieto.",
     ],
   },
 };
@@ -132,5 +141,7 @@ export const CAPTURE_GUIDES: Record<string, CaptureGuide> = {
 export function durationLabel(kind: string): string {
   const g = CAPTURE_GUIDES[kind];
   if (!g) return "";
-  return g.mode === "video" ? `${g.seconds} s de grabación` : `disparo a los ${g.seconds} s`;
+  return g.mode === "video"
+    ? `${g.seconds} s de grabación`
+    : `disparo automático al ver los pies de cerca (${g.seconds} s)`;
 }

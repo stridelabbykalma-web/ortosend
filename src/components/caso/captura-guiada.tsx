@@ -837,7 +837,7 @@ export function CapturaGuiada({ kase, paso }: { kase: CaseWithCapture; paso?: nu
                 {durationLabel(s.kind)}
                 {CAPTURE_GUIDES[s.kind]?.mode === "video"
                   ? " · los checks de encuadre solo hacen falta para arrancar"
-                  : ""}
+                  : " · deben verse los dos pies de cerca"}
               </div>
               <ul className="muted" style={{ margin: "0 0 12px 18px", padding: 0 }}>
                 {CAPTURE_GUIDES[s.kind]?.tips.map((t) => (

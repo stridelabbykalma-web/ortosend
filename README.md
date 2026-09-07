@@ -51,8 +51,10 @@ asociadas. Stack: **Next.js (App Router, server actions) + PostgreSQL (Prisma)**
   en verde de forma estable (~1 s) la cuenta atrás arranca sola (también hay botón); cada vídeo tiene **duración fija** (laterales 8 s,
   posterior y anterior 10 s) con cuenta atrás y corte automático, Los checks solo hacen falta
   para arrancar; durante la grabación no se exige nada (el paciente se mueve y el modelo no
-  acierta todos los frames), y los segundos con encuadre válido se guardan solo como dato. Las fotos usan el
-  mismo temporizador (5 s) con disparo automático. La grabación es real (MediaRecorder) y la
+  acierta todos los frames), y los segundos con encuadre válido se guardan solo como dato. Las fotos exigen ver
+  **los dos pies de cerca** (talones y dedos detectados, llenando el encuadre, talones hacia la
+  cámara en la posterior y dedos hacia la cámara en la anterior) y se disparan solas con una
+  cuenta atrás de 3 s; si el modelo no ve los pies queda el disparo manual. La grabación es real (MediaRecorder) y la
   subida va a `/api/media`, que guarda el archivo (Postgres en el prototipo; R2/S3 en
   producción) y solo entonces confirma el check verde; `/api/media/[id]` lo sirve con el mismo
   control de acceso que el expediente y registro RGPD. El modelo (5,8 MB) va en `public/`; el
