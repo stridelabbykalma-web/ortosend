@@ -4,7 +4,7 @@
 
 export type CheckId =
   | "persona" // hay una persona detectada con confianza suficiente
-  | "cuerpo_completo" // de cabeza a pies dentro del encuadre, con margen
+  | "cintura_a_pies" // caderas, rodillas y pies dentro del encuadre (la cabeza puede quedar fuera)
   | "perfil" // se le ve de lado (hombros alineados con la cámara)
   | "lado_dcho" // de perfil con el lado derecho del paciente hacia la cámara
   | "lado_izq" // de perfil con el lado izquierdo del paciente hacia la cámara
@@ -15,7 +15,7 @@ export type CheckId =
 
 export const CHECK_LABEL: Record<CheckId, string> = {
   persona: "Persona detectada",
-  cuerpo_completo: "Cuerpo completo en el encuadre",
+  cintura_a_pies: "De la cintura a los pies en el encuadre",
   perfil: "Se le ve de lado (perfil)",
   lado_dcho: "Lado derecho hacia la cámara",
   lado_izq: "Lado izquierdo hacia la cámara",
@@ -47,6 +47,7 @@ export type CaptureGuide = {
 // cámara el paciente cruza el encuadre de izquierda a derecha; con el izquierdo,
 // de derecha a izquierda.
 const LATERAL_TIPS = (lado: "derecho" | "izquierdo", calzado: string, seg: number) => [
+  "Debe verse de la cintura a los pies (la cabeza puede quedar fuera); los pies no pueden salir cortados por abajo.",
   "Piernas descubiertas de la rodilla para abajo (pantalón corto o remangado por encima de la rodilla): hay que ver la pierna y la reacción del cuerpo al andar. El estudio lo comprueba.",
   `Móvil en trípode, en horizontal, a la altura de la cadera, a un lado del pasillo (3-4 m) y perpendicular al recorrido.`,
   `El paciente camina recto hacia delante, ${calzado}, con su lado ${lado} hacia la cámara: cruza el encuadre ${
@@ -58,6 +59,7 @@ const LATERAL_TIPS = (lado: "derecho" | "izquierdo", calzado: string, seg: numbe
 
 // Marcha posterior: cámara detrás del paciente, en el eje del pasillo; se aleja.
 const POSTERIOR_TIPS = (calzado: string, seg: number) => [
+  "Basta con que se vea de la cintura a los pies: al principio, cerca de la cámara, la cabeza puede quedar fuera; al alejarse ya sale entero.",
   "Piernas descubiertas de la rodilla para abajo (pantalón corto o remangado por encima de la rodilla): hay que ver la pierna y la reacción del cuerpo al andar. El estudio lo comprueba.",
   "Móvil en trípode, en horizontal, a la altura de la cadera, en el eje del pasillo.",
   `El paciente parte junto a la cámara, de espaldas a ella, y camina recto alejándose 4-6 m, ${calzado}.`,
@@ -67,6 +69,7 @@ const POSTERIOR_TIPS = (calzado: string, seg: number) => [
 
 // Marcha anterior: misma posición de cámara; el paciente viene hacia ella.
 const ANTERIOR_TIPS = (calzado: string, seg: number) => [
+  "Basta con que se vea de la cintura a los pies: al acercarse a la cámara la cabeza puede quedar fuera; lo importante es la pierna y la reacción del cuerpo.",
   "Piernas descubiertas de la rodilla para abajo (pantalón corto o remangado por encima de la rodilla): hay que ver la pierna y la reacción del cuerpo al andar. El estudio lo comprueba.",
   "Móvil en trípode, en horizontal, a la altura de la cadera, en el eje del pasillo.",
   `El paciente parte a 4-6 m, de frente a la cámara, y camina recto hacia ella, ${calzado}; se detiene justo antes de salir del plano.`,
@@ -77,7 +80,7 @@ const ANTERIOR_TIPS = (calzado: string, seg: number) => [
 export const CAPTURE_GUIDES: Record<string, CaptureGuide> = {
   video_lat_dcha_descalzo: {
     mode: "video",
-    checks: ["persona", "cuerpo_completo", "piernas_descubiertas", "perfil", "lado_dcho"],
+    checks: ["persona", "cintura_a_pies", "piernas_descubiertas", "perfil", "lado_dcho"],
     seconds: 8,
     minValidSeconds: 3,
     direction: "ltr",
@@ -85,7 +88,7 @@ export const CAPTURE_GUIDES: Record<string, CaptureGuide> = {
   },
   video_lat_dcha_calzado: {
     mode: "video",
-    checks: ["persona", "cuerpo_completo", "piernas_descubiertas", "perfil", "lado_dcho"],
+    checks: ["persona", "cintura_a_pies", "piernas_descubiertas", "perfil", "lado_dcho"],
     seconds: 8,
     minValidSeconds: 3,
     direction: "ltr",
@@ -93,7 +96,7 @@ export const CAPTURE_GUIDES: Record<string, CaptureGuide> = {
   },
   video_lat_izq_descalzo: {
     mode: "video",
-    checks: ["persona", "cuerpo_completo", "piernas_descubiertas", "perfil", "lado_izq"],
+    checks: ["persona", "cintura_a_pies", "piernas_descubiertas", "perfil", "lado_izq"],
     seconds: 8,
     minValidSeconds: 3,
     direction: "rtl",
@@ -101,7 +104,7 @@ export const CAPTURE_GUIDES: Record<string, CaptureGuide> = {
   },
   video_lat_izq_calzado: {
     mode: "video",
-    checks: ["persona", "cuerpo_completo", "piernas_descubiertas", "perfil", "lado_izq"],
+    checks: ["persona", "cintura_a_pies", "piernas_descubiertas", "perfil", "lado_izq"],
     seconds: 8,
     minValidSeconds: 3,
     direction: "rtl",
@@ -109,28 +112,28 @@ export const CAPTURE_GUIDES: Record<string, CaptureGuide> = {
   },
   video_post_descalzo: {
     mode: "video",
-    checks: ["persona", "cuerpo_completo", "piernas_descubiertas", "de_espaldas"],
+    checks: ["persona", "cintura_a_pies", "piernas_descubiertas", "de_espaldas"],
     seconds: 10,
     minValidSeconds: 3,
     tips: POSTERIOR_TIPS("descalzo", 10),
   },
   video_post_calzado: {
     mode: "video",
-    checks: ["persona", "cuerpo_completo", "piernas_descubiertas", "de_espaldas"],
+    checks: ["persona", "cintura_a_pies", "piernas_descubiertas", "de_espaldas"],
     seconds: 10,
     minValidSeconds: 3,
     tips: POSTERIOR_TIPS("con su calzado habitual", 10),
   },
   video_ant_descalzo: {
     mode: "video",
-    checks: ["persona", "cuerpo_completo", "piernas_descubiertas", "de_frente"],
+    checks: ["persona", "cintura_a_pies", "piernas_descubiertas", "de_frente"],
     seconds: 10,
     minValidSeconds: 3,
     tips: ANTERIOR_TIPS("descalzo", 10),
   },
   video_ant_calzado: {
     mode: "video",
-    checks: ["persona", "cuerpo_completo", "piernas_descubiertas", "de_frente"],
+    checks: ["persona", "cintura_a_pies", "piernas_descubiertas", "de_frente"],
     seconds: 10,
     minValidSeconds: 3,
     tips: ANTERIOR_TIPS("con su calzado habitual", 10),

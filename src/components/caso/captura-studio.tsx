@@ -114,38 +114,42 @@ function legsBare(img: ImageData, lms: NormalizedLandmark[]): boolean | null {
 
 type Checks = Partial<Record<CheckId, boolean>>;
 
+// Los checks se basan en caderas, rodillas y tobillos, que son lo que siempre
+// está en plano en una marcha: la cabeza y los hombros pueden quedar fuera al
+// principio (paciente cerca de la cámara) y no debe bloquear la grabación.
 function evalChecks(lms: NormalizedLandmark[] | undefined, piernas: boolean | null): Checks {
   if (!lms || lms.length < 33) return {};
   const vis = (i: number) => lms[i]?.visibility ?? 0;
   const avg = (...v: number[]) => v.reduce((a, b) => a + b, 0) / v.length;
-  const persona = avg(vis(L_SHOULDER), vis(R_SHOULDER), vis(L_HIP), vis(R_HIP)) > 0.5;
-  const ys = lms.filter((p) => (p.visibility ?? 0) > 0.4).map((p) => p.y);
-  const minY = ys.length ? Math.min(...ys) : 1;
-  const maxY = ys.length ? Math.max(...ys) : 0;
-  const shoulderDx = Math.abs(lms[L_SHOULDER].x - lms[R_SHOULDER].x);
-  const torsoH = Math.abs(
-    (lms[L_SHOULDER].y + lms[R_SHOULDER].y) / 2 - (lms[L_HIP].y + lms[R_HIP].y) / 2
-  );
-  const perfil = persona && torsoH > 0 && shoulderDx < 0.5 * torsoH;
+  const persona = avg(vis(L_HIP), vis(R_HIP)) > 0.5 && avg(vis(L_KNEE), vis(R_KNEE)) > 0.4;
+  const hipMidY = (lms[L_HIP].y + lms[R_HIP].y) / 2;
+  const ankleMidY = (lms[L_ANKLE].y + lms[R_ANKLE].y) / 2;
+  // Escala del cuerpo: longitud de la pierna (cadera → tobillo), siempre visible
+  const legLen = Math.abs(ankleMidY - hipMidY);
+  const feetY = Math.max(lms[L_ANKLE].y, lms[R_ANKLE].y, lms[L_HEEL].y, lms[R_HEEL].y);
+  const cinturaAPies =
+    persona &&
+    Math.min(vis(L_ANKLE), vis(R_ANKLE)) > 0.4 &&
+    Math.min(lms[L_HIP].y, lms[R_HIP].y) > 0.02 && // caderas dentro por arriba
+    feetY < 0.98; // pies sin cortar por abajo
+  // Orientación por la anchura de caderas respecto a la pierna: de perfil las
+  // caderas se superponen; de frente o de espaldas se abren (~0,3 de la pierna).
+  const hipDx = Math.abs(lms[L_HIP].x - lms[R_HIP].x);
+  const perfil = persona && legLen > 0 && hipDx < 0.15 * legLen;
+  const abierto = persona && legLen > 0 && hipDx > 0.22 * legLen;
   // z de MediaPipe: menor = más cerca de la cámara. En perfil, el lado del
-  // paciente que da a la cámara tiene hombro y cadera con z más pequeña.
-  // (Los índices "L/R" de MediaPipe son el lado izquierdo/derecho del paciente.)
-  const zL = (lms[L_SHOULDER].z + lms[L_HIP].z) / 2;
-  const zR = (lms[R_SHOULDER].z + lms[R_HIP].z) / 2;
+  // paciente que da a la cámara tiene la cadera (y el hombro, si se ve) con z
+  // más pequeña. Los índices "L/R" son el lado izquierdo/derecho del paciente.
+  const shouldersOk = Math.min(vis(L_SHOULDER), vis(R_SHOULDER)) > 0.5;
+  const zL = shouldersOk ? (lms[L_SHOULDER].z + lms[L_HIP].z) / 2 : lms[L_HIP].z;
+  const zR = shouldersOk ? (lms[R_SHOULDER].z + lms[R_HIP].z) / 2 : lms[R_HIP].z;
   const sideMargin = 0.02;
-  // De frente o de espaldas: hombros abiertos. La imagen no está espejada, así
-  // que de frente el hombro izquierdo del paciente cae a la derecha de la
-  // imagen (x mayor) y de espaldas a la izquierda.
-  const abierto = persona && torsoH > 0 && shoulderDx > 0.45 * torsoH;
-  const izqEnDerechaImagen = lms[L_SHOULDER].x > lms[R_SHOULDER].x;
+  // De frente o de espaldas: la imagen no está espejada, así que de frente la
+  // cadera izquierda del paciente cae a la derecha de la imagen (x mayor).
+  const izqEnDerechaImagen = lms[L_HIP].x > lms[R_HIP].x;
   return {
     persona,
-    cuerpo_completo:
-      persona &&
-      vis(NOSE) > 0.4 &&
-      Math.min(vis(L_ANKLE), vis(R_ANKLE)) > 0.4 &&
-      minY > 0.02 &&
-      maxY < 0.98,
+    cintura_a_pies: cinturaAPies,
     perfil,
     lado_dcho: perfil && zR < zL - sideMargin,
     lado_izq: perfil && zL < zR - sideMargin,
@@ -215,6 +219,13 @@ export function CapturaStudio({
   const chunksRef = useRef<Blob[]>([]);
   const phaseRef = useRef<Phase>("init");
   const checksOkRef = useRef(false);
+  // Estabilidad de los checks: el botón y el arranque automático no dependen
+  // de un solo frame (parpadea) sino de la mayoría de los últimos.
+  const okHistRef = useRef<boolean[]>([]);
+  const [stableOk, setStableOk] = useState(false);
+  const stableOkRef = useRef(false);
+  const armedRef = useRef(true); // listo para arrancar solo la próxima vez que todo esté en verde
+  const autoRecordRef = useRef<() => void>(() => {});
   // valid/total: frames; validMs: tiempo real acumulado con encuadre válido
   const frameStatsRef = useRef({ valid: 0, total: 0, validMs: 0, lastTs: 0 });
   // Miniatura del frame para leer píxeles (check de piel) + historial para estabilizarlo
@@ -231,8 +242,7 @@ export function CapturaStudio({
     phaseRef.current = phase;
   }, [phase]);
 
-  const allOk =
-    poseState !== "activo" || guide.checks.every((c) => checks[c] === true);
+  const allOk = poseState !== "activo" || stableOk;
 
   const clearTimers = useCallback(() => {
     if (countdownRef.current) clearInterval(countdownRef.current);
@@ -333,6 +343,21 @@ export function CapturaStudio({
         setChecks(c);
         const ok = guide.checks.every((k) => c[k] === true);
         checksOkRef.current = ok;
+        // Mayoría de los últimos ~15 frames (≈ 1 s): estable en verde
+        const oh = okHistRef.current;
+        oh.push(ok);
+        if (oh.length > 15) oh.shift();
+        const stable = oh.length >= 12 && oh.filter(Boolean).length >= 0.8 * oh.length;
+        if (stable !== stableOkRef.current) {
+          stableOkRef.current = stable;
+          setStableOk(stable);
+        }
+        if (!stable) armedRef.current = true;
+        else if (armedRef.current && phaseRef.current === "live" && guide.mode === "video") {
+          // Todo en verde de forma estable: la cuenta atrás arranca sola
+          armedRef.current = false;
+          autoRecordRef.current();
+        }
         if (phaseRef.current === "recording") {
           const st = frameStatsRef.current;
           const now = performance.now();
@@ -542,8 +567,14 @@ export function CapturaStudio({
 
   const cancelCountdown = useCallback(() => {
     clearTimers();
+    // No vuelve a arrancar solo hasta que los checks pasen por rojo otra vez
+    armedRef.current = false;
     setPhase("live");
   }, [clearTimers]);
+
+  useEffect(() => {
+    autoRecordRef.current = () => runCountdown(VIDEO_PREROLL_SECONDS, record);
+  }, [runCountdown, record]);
 
   const takePhoto = useCallback(() => {
     const video = videoRef.current;
@@ -605,6 +636,9 @@ export function CapturaStudio({
 
   const retake = useCallback(() => {
     clearTimers();
+    // Vuelve a exigir ~1 s estable en verde antes de arrancar solo otra vez
+    okHistRef.current = [];
+    armedRef.current = true;
     if (reviewUrlRef.current) URL.revokeObjectURL(reviewUrlRef.current);
     reviewUrlRef.current = null;
     setReview(null);
@@ -742,8 +776,13 @@ export function CapturaStudio({
                     onClick={() => runCountdown(VIDEO_PREROLL_SECONDS, record)}
                     disabled={!allOk}
                   >
-                    {allOk ? `● Grabar ${guide.seconds} s` : "Ajusta el encuadre para grabar"}
+                    {allOk ? `● Grabar ${guide.seconds} s ahora` : "Ajusta el encuadre para grabar"}
                   </button>
+                )}
+                {phase === "live" && isVideo && poseState === "activo" && (
+                  <div className="tiny" style={{ marginTop: 6 }}>
+                    Con todos los checks en verde durante un segundo la cuenta atrás arranca sola.
+                  </div>
                 )}
                 {phase === "live" && !isVideo && (
                   <button

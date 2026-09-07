@@ -44,12 +44,13 @@ asociadas. Stack: **Next.js (App Router, server actions) + PostgreSQL (Prisma)**
 - **Estudio de captura guiado con MediaPipe** (`src/components/caso/captura-studio.tsx`,
   reglas en `src/lib/capture-guide.ts`): la cámara se abre a pantalla completa, un modelo de
   pose (MediaPipe Pose Landmarker) corre en el propio navegador —la imagen no sale del
-  dispositivo hasta la subida— y comprueba en vivo los checks de cada vídeo (persona, cuerpo
-  completo, de perfil con el lado correcto hacia la cámara, de frente o de espaldas, y **piernas
+  dispositivo hasta la subida— y comprueba en vivo los checks de cada vídeo (persona, de la
+  cintura a los pies en plano, de perfil con el lado correcto hacia la cámara, de frente o de
+  espaldas, y **piernas
   descubiertas de la rodilla al tobillo**: se leen los píxeles de la espinilla entre los puntos de
   rodilla y tobillo y se comparan con el tono de piel de la cara del paciente, para que no valga
-  un pantalón que tape la reacción de la pierna al andar). El botón
-  de grabar solo se activa con todo en verde; cada vídeo tiene **duración fija** (laterales 8 s,
+  un pantalón que tape la reacción de la pierna al andar). Con todo
+  en verde de forma estable (~1 s) la cuenta atrás arranca sola (también hay botón); cada vídeo tiene **duración fija** (laterales 8 s,
   posterior y anterior 10 s) con cuenta atrás y corte automático, y solo se acepta si acumula
   **al menos 3 s con encuadre válido** (regla aplicada también en el servidor). Las fotos usan el
   mismo temporizador (5 s) con disparo automático. La grabación es real (MediaRecorder) y la
