@@ -188,7 +188,6 @@ export function CapturaStudio({
   const autoRecordRef = useRef<() => void>(() => {});
   // valid/total: frames; validMs: tiempo real acumulado con encuadre válido
   const frameStatsRef = useRef({ valid: 0, total: 0, validMs: 0, lastTs: 0 });
-  const [validLive, setValidLive] = useState(0);
   const recStartRef = useRef(0);
   const lastVideoTimeRef = useRef(-1);
   const reviewUrlRef = useRef<string | null>(null);
@@ -327,7 +326,6 @@ export function CapturaStudio({
           if (ok || guide.checks.length === 0) {
             st.valid++;
             st.validMs += dt;
-            setValidLive(st.validMs / 1000);
           }
         }
         if (ctx) {
@@ -542,7 +540,6 @@ export function CapturaStudio({
       recorderRef.current = rec;
       chunksRef.current = [];
       frameStatsRef.current = { valid: 0, total: 0, validMs: 0, lastTs: 0 };
-      setValidLive(0);
       rec.ondataavailable = (e) => e.data.size && chunksRef.current.push(e.data);
       rec.onstop = () => finishRecording(mime);
       rec.start(250);
@@ -651,7 +648,6 @@ export function CapturaStudio({
         targetSeconds: guide.seconds,
         validPct: review.validPct,
         validSeconds: review.validSeconds,
-        minValidSeconds: guide.minValidSeconds ?? null,
         mime: review.mime,
         pose: poseState === "activo" ? "pose_landmarker_lite" : "no_disponible",
       })
@@ -668,7 +664,7 @@ export function CapturaStudio({
       setUploadErr(e instanceof Error ? e.message : "Fallo de red durante la subida");
       setPhase("review");
     }
-  }, [caseId, close, guide.seconds, guide.minValidSeconds, kind, nextHref, poseState, review, router]);
+  }, [caseId, close, guide.seconds, kind, nextHref, poseState, review, router]);
 
   const retake = useCallback(() => {
     clearTimers();
@@ -707,15 +703,6 @@ export function CapturaStudio({
   const tooBig = !!review && review.blob.size > MAX_UPLOAD_BYTES;
   // Parada manual antes de tiempo: el clip no cubre la duración asignada
   const tooShort = !!review && isVideo && review.seconds < guide.seconds - 1;
-  // Umbral de calidad: tiempo mínimo con todos los checks en verde. Solo se
-  // puede exigir cuando el análisis de pose ha funcionado durante el clip.
-  const tooFewValid =
-    !!review &&
-    isVideo &&
-    poseState === "activo" &&
-    !!guide.minValidSeconds &&
-    review.validSeconds !== null &&
-    review.validSeconds < guide.minValidSeconds;
 
   return (
     <div className="studio" role="dialog" aria-label={`Estudio de captura: ${label}`}>
@@ -761,9 +748,6 @@ export function CapturaStudio({
                   <div className="n">{Math.ceil(remaining)}</div>
                   <div className="t">
                     segundos · de {guide.seconds} s
-                    {poseState === "activo" && guide.minValidSeconds
-                      ? ` · encuadre válido ${validLive.toFixed(1)} s / mín. ${guide.minValidSeconds} s`
-                      : ""}
                   </div>
                 </div>
                 <div className="studio-bar">
@@ -834,11 +818,7 @@ export function CapturaStudio({
                 <div className="tiny">DURACIÓN ASIGNADA</div>
                 <div className="muted">
                   {isVideo
-                    ? `Cuenta atrás de ${VIDEO_PREROLL_SECONDS} s y grabación fija de ${guide.seconds} s (corte automático). El pitido de salida suena medio segundo después de empezar a grabar, para captar el arranque desde parado; otro tono grave avisa del final.${
-                        guide.minValidSeconds
-                          ? ` Para aceptar el clip: al menos ${guide.minValidSeconds} s con todos los checks en verde.`
-                          : ""
-                      }`
+                    ? `Cuenta atrás de ${VIDEO_PREROLL_SECONDS} s y grabación fija de ${guide.seconds} s (corte automático). El pitido de salida suena medio segundo después de empezar a grabar, para captar el arranque desde parado; otro tono grave avisa del final. Los checks solo hacen falta para arrancar; durante la grabación no se exige nada.`
                     : `La foto se dispara sola: cuenta atrás de ${guide.seconds} s al abrir la cámara.`}
                 </div>
                 <div className="sp" />
@@ -905,21 +885,13 @@ export function CapturaStudio({
                   )}
                   {review.validSeconds !== null && (
                     <>
-                      Encuadre válido: {review.validSeconds.toFixed(1)} s
-                      {guide.minValidSeconds ? ` (mín. ${guide.minValidSeconds} s)` : ""}
+                      Encuadre válido (informativo): {review.validSeconds.toFixed(1)} s
                       {review.validPct !== null ? ` · ${review.validPct}% de los frames` : ""} ·{" "}
                     </>
                   )}
                   Tamaño: {(review.blob.size / 1024 / 1024).toFixed(2)} MB
                 </div>
-                {tooFewValid && (
-                  <div className="note r">
-                    Solo {review.validSeconds?.toFixed(1)} s con el encuadre correcto; el protocolo
-                    exige al menos {guide.minValidSeconds} s con todos los checks en verde (unos 3
-                    pasos completos). Repite la grabación.
-                  </div>
-                )}
-                {tooShort && !tooFewValid && (
+                {tooShort && (
                   <div className="note a">
                     Clip incompleto: se paró antes de los {guide.seconds} s asignados. Comprueba
                     que se ven pasos completos o repite la grabación.
@@ -941,7 +913,7 @@ export function CapturaStudio({
                     type="button"
                     className="pri"
                     onClick={upload}
-                    disabled={tooBig || tooFewValid}
+                    disabled={tooBig}
                   >
                     ✓ Usar y subir
                   </button>

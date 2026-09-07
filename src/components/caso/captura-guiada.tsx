@@ -851,8 +851,8 @@ export function CapturaGuiada({ kase, paso }: { kase: CaseWithCapture; paso?: nu
               </p>
               <div className="tiny" style={{ marginBottom: 6 }}>
                 {durationLabel(s.kind)}
-                {CAPTURE_GUIDES[s.kind]?.minValidSeconds
-                  ? ` · se acepta con al menos ${CAPTURE_GUIDES[s.kind].minValidSeconds} s de encuadre válido`
+                {CAPTURE_GUIDES[s.kind]?.mode === "video"
+                  ? " · los checks de encuadre solo hacen falta para arrancar"
                   : ""}
               </div>
               <ul className="muted" style={{ margin: "0 0 12px 18px", padding: 0 }}>
