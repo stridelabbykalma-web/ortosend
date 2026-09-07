@@ -14,6 +14,8 @@ import {
   type CheckId,
 } from "@/lib/capture-guide";
 import { BEEP_LEAD_MS, playBeep, primeBeeps } from "@/lib/beeps";
+import { computeHelbing, helbingResumen, type Helbing } from "@/lib/helbing";
+import { HelbingOverlay } from "@/components/caso/helbing-overlay";
 
 // El WASM del modelo pesa 12 MB y se sirve desde el CDN de jsDelivr; el modelo
 // de pose (5,8 MB) va con la app para no depender de terceros para lo clínico.
@@ -150,6 +152,7 @@ type Review = {
   seconds: number;
   validPct: number | null; // % de frames con encuadre válido (null si sin pose)
   validSeconds: number | null; // tiempo acumulado con todos los checks en verde
+  helbing?: Helbing | null; // foto posterior: línea de Helbing calculada al disparar
 };
 
 export function CapturaStudio({
@@ -207,6 +210,7 @@ export function CapturaStudio({
   const stableOkRef = useRef(false);
   const armedRef = useRef(true); // listo para arrancar solo la próxima vez que todo esté en verde
   const autoRecordRef = useRef<() => void>(() => {});
+  const lastLmsRef = useRef<NormalizedLandmark[] | null>(null); // últimos puntos detectados
   const takePhotoRef = useRef<() => void>(() => {}); // takePhoto se define más abajo
   // valid/total: frames; validMs: tiempo real acumulado con encuadre válido
   const frameStatsRef = useRef({ valid: 0, total: 0, validMs: 0, lastTs: 0 });
@@ -317,6 +321,7 @@ export function CapturaStudio({
         try {
           const res = lm.detectForVideo(video, performance.now());
           lms = res.landmarks[0];
+          lastLmsRef.current = lms ?? null;
         } catch {
           // un frame fallido no rompe el estudio
         }
@@ -635,19 +640,30 @@ export function CapturaStudio({
     c.width = video.videoWidth;
     c.height = video.videoHeight;
     c.getContext("2d")?.drawImage(video, 0, 0);
+    // Foto posterior: línea de Helbing con los puntos del mismo frame
+    const helbing =
+      kind === "foto_posterior" ? computeHelbing(lastLmsRef.current, c.width, c.height) : null;
     c.toBlob(
       (blob) => {
         if (!blob) return;
         const url = URL.createObjectURL(blob);
         if (reviewUrlRef.current) URL.revokeObjectURL(reviewUrlRef.current);
         reviewUrlRef.current = url;
-        setReview({ blob, url, mime: "image/jpeg", seconds: 0, validPct: null, validSeconds: null });
+        setReview({
+          blob,
+          url,
+          mime: "image/jpeg",
+          seconds: 0,
+          validPct: null,
+          validSeconds: null,
+          helbing,
+        });
         setPhase("review");
       },
       "image/jpeg",
       0.85
     );
-  }, []);
+  }, [kind]);
 
   // Fotos: sin cuenta atrás. Disparan solas en cuanto la app ve los dos pies de
   // cerca (mismo mecanismo de estabilidad que los vídeos); si el análisis de
@@ -674,6 +690,7 @@ export function CapturaStudio({
         validSeconds: review.validSeconds,
         mime: review.mime,
         pose: poseState === "activo" ? "pose_landmarker_lite" : "no_disponible",
+        helbing: review.helbing ?? undefined,
       })
     );
     fd.set("file", new File([review.blob], `${kind}.${ext}`, { type: review.mime }));
@@ -785,8 +802,11 @@ export function CapturaStudio({
               {isVideo ? (
                 <video src={review.url} controls playsInline />
               ) : (
-                /* eslint-disable-next-line @next/next/no-img-element */
-                <img src={review.url} alt={`Previsualización: ${label}`} />
+                <div className="studio-photo">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={review.url} alt={`Previsualización: ${label}`} />
+                  {review.helbing && <HelbingOverlay hb={review.helbing} />}
+                </div>
               )}
             </div>
           )}
@@ -924,6 +944,19 @@ export function CapturaStudio({
                   )}
                   Tamaño: {(review.blob.size / 1024 / 1024).toFixed(2)} MB
                 </div>
+                {kind === "foto_posterior" && (
+                  <div className={`note ${review.helbing ? "" : "a"}`} style={{ marginTop: 8 }}>
+                    {review.helbing ? (
+                      <>
+                        <b>Línea de Helbing</b> (orientativa, calculada con los puntos de pose):{" "}
+                        {helbingResumen(review.helbing)}. Se guarda con la foto y la verán
+                        prescriptor y taller.
+                      </>
+                    ) : (
+                      "No se ha podido calcular la línea de Helbing (no se detectaron tobillos y talones al disparar). La foto se guarda igual; repite si quieres que salga."
+                    )}
+                  </div>
+                )}
                 {tooShort && (
                   <div className="note a">
                     Clip incompleto: se paró antes de los {guide.seconds} s asignados. Comprueba

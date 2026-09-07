@@ -4,6 +4,8 @@ import { questionnaireLines, type Questionnaire } from "@/lib/questionnaire";
 import { examLines, type Exam } from "@/lib/exploracion";
 import { alertasDe } from "@/lib/tests-podologicos";
 import { CAPTURA_VISUAL, FOTO_KINDS, MEDIA_LABEL, VIDEO_KINDS } from "@/lib/format";
+import { helbingResumen, type Helbing } from "@/lib/helbing";
+import { HelbingOverlay } from "@/components/caso/helbing-overlay";
 
 type CaseFull = Case & {
   patient: Patient & { owner: User };
@@ -146,18 +148,29 @@ function MediaGallery({ media }: { media: MediaAsset[] }) {
             targetSeconds?: number;
             validPct?: number;
             validSeconds?: number;
+            helbing?: Helbing;
           } | null;
           const isVideo = m.kind.startsWith("video_");
+          const hb = meta?.helbing;
           return (
             <figure key={m.id} className="media-item">
               {isVideo ? (
                 <video src={m.url} controls playsInline preload="metadata" />
               ) : (
-                /* eslint-disable-next-line @next/next/no-img-element */
-                <img src={m.url} alt={MEDIA_LABEL[m.kind] ?? m.kind} loading="lazy" />
+                <div className="photo-wrap">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={m.url} alt={MEDIA_LABEL[m.kind] ?? m.kind} loading="lazy" />
+                  {hb && <HelbingOverlay hb={hb} />}
+                </div>
               )}
               <figcaption className="tiny">
                 {MEDIA_LABEL[m.kind] ?? m.kind}
+                {hb ? (
+                  <>
+                    <br />
+                    <b>Línea de Helbing:</b> {helbingResumen(hb)} <span>(orientativa)</span>
+                  </>
+                ) : null}
                 {meta?.seconds
                   ? ` · ${meta.seconds} s${meta.targetSeconds ? ` de ${meta.targetSeconds} s` : ""}`
                   : ""}

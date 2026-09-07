@@ -6,6 +6,7 @@ import { prisma } from "@/lib/db";
 import { requireRole } from "@/lib/auth";
 import { audit, pushEvent } from "@/lib/cases";
 import { MEDIA_LABEL, FOTO_KINDS, VIDEO_KINDS } from "@/lib/format";
+import { sanitizeHelbing } from "@/lib/helbing";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -67,6 +68,7 @@ export async function POST(req: Request) {
         validSeconds: typeof raw.validSeconds === "number" ? raw.validSeconds : undefined,
         mime,
         pose: typeof raw.pose === "string" ? raw.pose.slice(0, 40) : undefined,
+        helbing: kind === "foto_posterior" ? sanitizeHelbing(raw.helbing) : undefined,
       };
   } catch {
     // meta inválida: se ignora
