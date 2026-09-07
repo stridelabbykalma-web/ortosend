@@ -42,6 +42,10 @@ export type CaptureGuide = {
   // al instante en cuanto los checks están en verde, sin cuenta atrás).
   seconds: number;
   direction?: "ltr" | "rtl"; // sentido en que el paciente cruza el encuadre (flecha guía)
+  // Marchas en el eje del pasillo: seguir al paciente con zoom para que no se
+  // vea cada vez más pequeño (zoom de la cámara si el móvil lo permite; si no,
+  // recorte digital). El profesional puede desactivarlo.
+  followZoom?: boolean;
   tips: string[]; // instrucciones de encuadre para el profesional
 };
 
@@ -70,6 +74,7 @@ const POSTERIOR_TIPS = (calzado: string, seg: number) => [
   `El paciente parte junto a la cámara, de espaldas a ella, y camina recto alejándose 4-6 m, ${calzado}.`,
   "Antes de grabar, que se coloque de espaldas en el punto de salida: el estudio comprueba la orientación.",
   `Grabación fija de ${seg} s: al menos 3 pasos completos alejándose (retropié visible). Si sobra tiempo, vuelve al punto de salida por fuera del plano y repite.`,
+  "Zoom de seguimiento: la app acerca la imagen a medida que el paciente se aleja para que se vea siempre al mismo tamaño (zoom de la cámara si el móvil lo permite; si no, recorte digital). Se puede desactivar en el panel.",
 ];
 
 // Marcha anterior: misma posición de cámara; el paciente viene hacia ella.
@@ -81,6 +86,7 @@ const ANTERIOR_TIPS = (calzado: string, seg: number) => [
   `El paciente parte a 4-6 m, de frente a la cámara, y camina recto hacia ella, ${calzado}; se detiene justo antes de salir del plano.`,
   "Antes de grabar, que se coloque de frente en el punto de salida: el estudio comprueba la orientación.",
   `Grabación fija de ${seg} s: al menos 3 pasos completos viniendo hacia la cámara. Si sobra tiempo, vuelve al punto de salida por fuera del plano y repite.`,
+  "Zoom de seguimiento: la app empieza acercada al paciente lejano y abre la imagen a medida que se acerca, para que se vea siempre al mismo tamaño (zoom de la cámara si el móvil lo permite; si no, recorte digital). Se puede desactivar en el panel.",
 ];
 
 export const CAPTURE_GUIDES: Record<string, CaptureGuide> = {
@@ -102,6 +108,7 @@ export const CAPTURE_GUIDES: Record<string, CaptureGuide> = {
     mode: "video",
     checks: ["persona", "cintura_a_pies", "de_espaldas"],
     seconds: 10,
+    followZoom: true,
     tips: POSTERIOR_TIPS("descalzo", 10),
   },
   // Mismas reglas que la posterior (persona, de la cintura a los pies, 10 s),
@@ -110,6 +117,7 @@ export const CAPTURE_GUIDES: Record<string, CaptureGuide> = {
     mode: "video",
     checks: ["persona", "cintura_a_pies", "de_frente"],
     seconds: 10,
+    followZoom: true,
     tips: ANTERIOR_TIPS("descalzo", 10),
   },
   // Fotos: lo que debe verse son LOS DOS PIES DE CERCA. La app lo comprueba con

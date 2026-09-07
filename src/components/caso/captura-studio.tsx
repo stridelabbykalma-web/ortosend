@@ -269,6 +269,21 @@ export function CapturaStudio({
   const rotRef = useRef<{ r: Rot; missingSince: number; flipVotes: number }>({ r: 0, missingSince: 0, flipVotes: 0 });
   const rotCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const [rotation, setRotation] = useState<Rot>(0);
+  // Zoom de seguimiento (marchas en el eje del pasillo). "camara": zoom real de
+  // la cámara vía applyConstraints; "digital": recorte del frame alrededor del
+  // paciente, reescalado, que es lo que se graba.
+  const [follow, setFollow] = useState<boolean>(!!guide.followZoom);
+  const [zoomMode, setZoomMode] = useState<"camara" | "digital">("digital");
+  const followRef = useRef(!!guide.followZoom);
+  const zoomCapsRef = useRef<{ min: number; max: number; step: number } | null>(null);
+  const zoomCurRef = useRef(1);
+  const zoomLastApplyRef = useRef(0);
+  const followRectRef = useRef<{ x: number; y: number; w: number; h: number } | null>(null);
+  const followCanvasRef = useRef<HTMLCanvasElement>(null);
+  const lastSeenRef = useRef(0);
+  useEffect(() => {
+    followRef.current = follow;
+  }, [follow]);
   // Linterna (flash en modo antorcha, encendido continuo). Solo donde el
   // navegador lo permite (Android/Chrome con cámara trasera); iOS no lo expone.
   const [torchAvailable, setTorchAvailable] = useState(false);
@@ -427,6 +442,69 @@ export function CapturaStudio({
             }
           } else rot.flipVotes = 0;
         }
+        // Zoom de seguimiento: el paciente debe ocupar ~3/4 del alto del cuadro
+        if (followRef.current && guide.followZoom && ["live", "countdown", "recording"].includes(phaseRef.current)) {
+          const pts = lms?.filter((q) => (q.visibility ?? 0) > 0.4) ?? [];
+          if (pts.length >= 4) lastSeenRef.current = now;
+          const caps = zoomCapsRef.current;
+          if (caps) {
+            // Zoom real: control proporcional suavizado sobre el zoom actual
+            let target = caps.min;
+            if (pts.length >= 4) {
+              const hFrac = Math.max(...pts.map((q) => q.y)) - Math.min(...pts.map((q) => q.y));
+              const ratio = hFrac > 0.02 ? 0.75 / hFrac : 1;
+              target = Math.min(caps.max, Math.max(caps.min, zoomCurRef.current * (1 + 0.5 * (ratio - 1))));
+            } else if (now - lastSeenRef.current < 1500) target = zoomCurRef.current; // breve pérdida: mantener
+            zoomCurRef.current += (target - zoomCurRef.current) * 0.2;
+            const track = streamRef.current?.getVideoTracks()[0];
+            if (track && now - zoomLastApplyRef.current > 150) {
+              const settings = track.getSettings() as MediaTrackSettings & { zoom?: number };
+              const applied = settings.zoom ?? caps.min;
+              if (Math.abs(zoomCurRef.current - applied) >= caps.step) {
+                zoomLastApplyRef.current = now;
+                track
+                  .applyConstraints({ advanced: [{ zoom: zoomCurRef.current } as MediaTrackConstraintSet] })
+                  .catch(() => {});
+              }
+            }
+          } else {
+            // Zoom digital: recorte alrededor del paciente (mín. 35 % del cuadro)
+            const srcW = rot.r === 0 || rot.r === 180 ? video.videoWidth : video.videoHeight;
+            const srcH = rot.r === 0 || rot.r === 180 ? video.videoHeight : video.videoWidth;
+            const aspect = srcW / srcH;
+            let tw = srcW, th = srcH, tx = 0, ty = 0;
+            if (pts.length >= 4) {
+              const xs = pts.map((q) => q.x), ys = pts.map((q) => q.y);
+              const bh = (Math.max(...ys) - Math.min(...ys)) * srcH;
+              th = Math.min(srcH, Math.max(bh * 1.35, srcH * 0.35));
+              tw = th * aspect;
+              if (tw > srcW) { tw = srcW; th = tw / aspect; }
+              const cx = ((Math.max(...xs) + Math.min(...xs)) / 2) * srcW;
+              const cy = ((Math.max(...ys) + Math.min(...ys)) / 2) * srcH;
+              tx = Math.min(srcW - tw, Math.max(0, cx - tw / 2));
+              ty = Math.min(srcH - th, Math.max(0, cy - th / 2));
+            } else if (now - lastSeenRef.current < 1500 && followRectRef.current) {
+              ({ x: tx, y: ty, w: tw, h: th } = followRectRef.current);
+            }
+            const cur = followRectRef.current ?? { x: tx, y: ty, w: tw, h: th };
+            const k = pts.length >= 4 ? 0.15 : 0.04;
+            cur.x += (tx - cur.x) * k;
+            cur.y += (ty - cur.y) * k;
+            cur.w += (tw - cur.w) * k;
+            cur.h += (th - cur.h) * k;
+            followRectRef.current = cur;
+            const fc = followCanvasRef.current;
+            if (fc) {
+              if (fc.width !== srcW || fc.height !== srcH) {
+                fc.width = srcW;
+                fc.height = srcH;
+              }
+              const fctx = fc.getContext("2d");
+              const src: CanvasImageSource = rot.r === 0 ? video : rotCanvasRef.current ?? video;
+              fctx?.drawImage(src, cur.x, cur.y, cur.w, cur.h, 0, 0, srcW, srcH);
+            }
+          }
+        }
         const c = evalChecks(lms);
         setChecks(c);
         const ok = guide.checks.every((k) => c[k] === true);
@@ -555,8 +633,22 @@ export function CapturaStudio({
     const track = stream.getVideoTracks()[0];
     if (track) {
       // ¿Permite linterna? (torch en getCapabilities). Si la tenía activada, se reactiva.
-      const caps = (track.getCapabilities?.() ?? {}) as MediaTrackCapabilities & { torch?: boolean };
+      const caps = (track.getCapabilities?.() ?? {}) as MediaTrackCapabilities & {
+        torch?: boolean;
+        zoom?: { min: number; max: number; step?: number };
+      };
       const hasTorch = !!caps.torch;
+      // Zoom real de la cámara, si el navegador lo expone (Android/Chrome)
+      if (caps.zoom && caps.zoom.max > caps.zoom.min) {
+        zoomCapsRef.current = { min: caps.zoom.min, max: caps.zoom.max, step: caps.zoom.step || 0.1 };
+        const settings = track.getSettings() as MediaTrackSettings & { zoom?: number };
+        zoomCurRef.current = settings.zoom ?? caps.zoom.min;
+        setZoomMode("camara");
+      } else {
+        zoomCapsRef.current = null;
+        setZoomMode("digital");
+      }
+      followRectRef.current = null;
       setTorchAvailable(hasTorch);
       let wantTorch = false;
       try {
@@ -706,7 +798,13 @@ export function CapturaStudio({
       // Con el móvil girado se graba el frame enderezado (canvas) en vez del
       // flujo crudo; con el móvil derecho, el flujo de la cámara tal cual.
       const rc = rotCanvasRef.current;
-      const src = rotRef.current.r !== 0 && rc ? rc.captureStream(30) : stream;
+      const fc = followCanvasRef.current;
+      const digitalFollow = followRef.current && guide.followZoom && !zoomCapsRef.current && fc;
+      const src = digitalFollow
+        ? fc.captureStream(30) // recorte de seguimiento (zoom digital)
+        : rotRef.current.r !== 0 && rc
+          ? rc.captureStream(30)
+          : stream;
       const rec = new MediaRecorder(src, { mimeType: mime, videoBitsPerSecond: 2_000_000 });
       recorderRef.current = rec;
       chunksRef.current = [];
@@ -731,7 +829,7 @@ export function CapturaStudio({
     } catch {
       setFatal("No se pudo iniciar la grabación en este dispositivo.");
     }
-  }, [beep, finishRecording, guide.seconds]);
+  }, [beep, finishRecording, guide.followZoom, guide.seconds]);
 
   const stopRecording = useCallback(() => {
     clearTimers();
@@ -919,6 +1017,14 @@ export function CapturaStudio({
           >
             <video ref={videoRef} playsInline muted />
             <canvas ref={canvasRef} />
+            {/* Zoom digital de seguimiento: lo que realmente se graba */}
+            <div
+              className="studio-follow"
+              hidden={!(follow && guide.followZoom && zoomMode === "digital" && phase !== "review")}
+            >
+              <canvas ref={followCanvasRef} />
+              <span>Lo que se graba</span>
+            </div>
             {phase === "countdown" && (
               <div className="studio-count" aria-live="assertive">
                 <div className="n">{countdown}</div>
@@ -1000,6 +1106,18 @@ export function CapturaStudio({
                     style={{ marginBottom: 10 }}
                   >
                     🔦 Linterna {torchOn ? "encendida (se queda fija)" : "apagada"}
+                  </button>
+                )}
+                {guide.followZoom && (
+                  <button
+                    type="button"
+                    className={`wfull studio-torch ${follow ? "on" : ""}`}
+                    onClick={() => setFollow((f) => !f)}
+                    disabled={phase === "recording"}
+                    style={{ marginBottom: 10 }}
+                  >
+                    🔍 Zoom de seguimiento {follow ? "activado" : "desactivado"}
+                    {follow ? (zoomMode === "camara" ? " · zoom de la cámara" : " · digital") : ""}
                   </button>
                 )}
                 {rotation !== 0 && (
