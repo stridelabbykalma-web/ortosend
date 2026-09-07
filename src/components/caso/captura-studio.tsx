@@ -238,6 +238,18 @@ export function CapturaStudio({
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  // Selección de cámara (PC con varias cámaras o con cámaras virtuales) y
+  // aviso cuando la fuente no envía imagen (tecla/interruptor de privacidad,
+  // bloqueo en los ajustes del sistema, cámara ocupada por otro programa).
+  const [devices, setDevices] = useState<{ id: string; label: string }[]>([]);
+  const [deviceId, setDeviceId] = useState<string>(() => {
+    try {
+      return localStorage.getItem("ortosend.cameraId") ?? "";
+    } catch {
+      return "";
+    }
+  });
+  const [camMuted, setCamMuted] = useState(false);
   const landmarkerRef = useRef<PoseLandmarker | null>(null);
   const rafRef = useRef(0);
   const recorderRef = useRef<MediaRecorder | null>(null);
@@ -489,6 +501,72 @@ export function CapturaStudio({
   }, [guide]);
 
   // Arranque del estudio: cámara + modelo de pose (CDN) en paralelo
+  // Abre (o cambia) la cámara. Con deviceId vacío deja elegir al navegador
+  // (en móvil, la trasera). Rellena la lista de cámaras disponibles.
+  const openCamera = useCallback(async (id: string) => {
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    setCamMuted(false);
+    const video: MediaTrackConstraints = { width: { ideal: 1280 }, height: { ideal: 720 } };
+    if (id) video.deviceId = { exact: id };
+    else video.facingMode = "environment";
+    let stream: MediaStream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ video, audio: false });
+    } catch (e) {
+      // la cámara guardada ya no existe: se vuelve a la elección automática
+      if (id) {
+        try {
+          localStorage.removeItem("ortosend.cameraId");
+        } catch {}
+        setDeviceId("");
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } },
+          audio: false,
+        });
+      } else throw e;
+    }
+    streamRef.current = stream;
+    const track = stream.getVideoTracks()[0];
+    if (track) {
+      setCamMuted(track.muted);
+      track.onmute = () => setCamMuted(true);
+      track.onunmute = () => setCamMuted(false);
+      track.onended = () => setCamMuted(true);
+    }
+    const el = videoRef.current;
+    if (!el) throw new Error("sin vídeo");
+    el.srcObject = stream;
+    await el.play();
+    lastVideoTimeRef.current = -1;
+    // Con permiso concedido, las etiquetas de las cámaras ya son legibles
+    try {
+      const all = await navigator.mediaDevices.enumerateDevices();
+      setDevices(
+        all
+          .filter((d) => d.kind === "videoinput")
+          .map((d, i) => ({ id: d.deviceId, label: d.label || `Cámara ${i + 1}` }))
+      );
+    } catch {
+      // sin lista: se sigue con la cámara actual
+    }
+  }, []);
+
+  const switchCamera = useCallback(
+    async (id: string) => {
+      setDeviceId(id);
+      try {
+        if (id) localStorage.setItem("ortosend.cameraId", id);
+        else localStorage.removeItem("ortosend.cameraId");
+      } catch {}
+      try {
+        await openCamera(id);
+      } catch {
+        setFatal("No se pudo abrir esa cámara. Prueba con otra de la lista.");
+      }
+    },
+    [openCamera]
+  );
+
   const start = useCallback(async () => {
     primeBeeps();
     setOpen(true);
@@ -496,15 +574,7 @@ export function CapturaStudio({
     setFatal(null);
     setPoseState("cargando");
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } },
-        audio: false,
-      });
-      streamRef.current = stream;
-      const video = videoRef.current;
-      if (!video) throw new Error("sin vídeo");
-      video.srcObject = stream;
-      await video.play();
+      await openCamera(deviceId);
       setPhase("live");
       loop();
     } catch {
@@ -528,7 +598,7 @@ export function CapturaStudio({
     } catch {
       setPoseState("sin_pose");
     }
-  }, [loop]);
+  }, [deviceId, loop, openCamera]);
 
   // Protocolo guiado: la cámara se abre sola al entrar en la pantalla
   const startedRef = useRef(false);
@@ -820,6 +890,32 @@ export function CapturaStudio({
           <div className="studio-side">
             {phase !== "review" && (
               <>
+                {camMuted && (
+                  <div className="note r" style={{ marginBottom: 10 }}>
+                    <b>La cámara no envía imagen.</b> Suele ser la tecla o el interruptor de
+                    privacidad de la cámara, el bloqueo en los ajustes de privacidad del sistema,
+                    o que otro programa la está usando. Si aparece un icono de cámara tachada, el
+                    navegador ha elegido una cámara virtual: escoge la webcam real abajo.
+                  </div>
+                )}
+                {devices.length > 1 && (
+                  <div style={{ marginBottom: 12 }}>
+                    <div className="tiny">CÁMARA</div>
+                    <select
+                      className="studio-select"
+                      value={deviceId}
+                      onChange={(e) => void switchCamera(e.target.value)}
+                      disabled={phase === "recording" || phase === "countdown"}
+                    >
+                      <option value="">Automática (trasera en el móvil)</option>
+                      {devices.map((d) => (
+                        <option key={d.id} value={d.id}>
+                          {d.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
                 <div className="tiny">ENCUADRE</div>
                 {poseState === "cargando" && (
                   <div className="muted">Cargando análisis de pose (MediaPipe)…</div>
