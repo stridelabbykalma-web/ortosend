@@ -692,8 +692,11 @@ export function CapturaStudio({
 
   return (
     <div className="studio" role="dialog" aria-label={`Estudio de captura: ${label}`}>
-      <div className="studio-head">
-        <b>{label}</b>
+      <div className={`studio-head ${phase === "recording" ? "recording" : ""}`}>
+        <b>
+          {phase === "recording" && <span className="studio-rec-badge">● GRABANDO</span>}
+          {label}
+        </b>
         <button type="button" className="studio-x" onClick={close}>
           ✕ Cerrar
         </button>
@@ -705,7 +708,10 @@ export function CapturaStudio({
         </div>
       ) : (
         <div className="studio-body">
-          <div className="studio-stage" style={{ display: phase === "review" ? "none" : undefined }}>
+          <div
+            className={`studio-stage ${phase === "recording" ? "recording" : ""}`}
+            style={{ display: phase === "review" ? "none" : undefined }}
+          >
             <video ref={videoRef} playsInline muted />
             <canvas ref={canvasRef} />
             {phase === "countdown" && (
@@ -716,11 +722,17 @@ export function CapturaStudio({
             )}
             {phase === "recording" && (
               <>
-                <div className="studio-rec">
-                  ● REC · quedan {Math.ceil(remaining)} s de {guide.seconds} s
-                  {poseState === "activo" && guide.minValidSeconds
-                    ? ` · válido ${validLive.toFixed(1)} s / mín. ${guide.minValidSeconds} s`
-                    : ""}
+                <div className="studio-rec" aria-live="polite">
+                  <span className="dot" /> GRABANDO
+                </div>
+                <div className="studio-remaining">
+                  <div className="n">{Math.ceil(remaining)}</div>
+                  <div className="t">
+                    segundos · de {guide.seconds} s
+                    {poseState === "activo" && guide.minValidSeconds
+                      ? ` · encuadre válido ${validLive.toFixed(1)} s / mín. ${guide.minValidSeconds} s`
+                      : ""}
+                  </div>
                 </div>
                 <div className="studio-bar">
                   <div style={{ width: `${Math.min(100, (100 * elapsed) / guide.seconds)}%` }} />
@@ -810,9 +822,16 @@ export function CapturaStudio({
                   </button>
                 )}
                 {phase === "recording" && (
-                  <button type="button" className="dang wfull" onClick={stopRecording}>
-                    ■ Parar antes de tiempo
-                  </button>
+                  <>
+                    <div className="note r studio-rec-note">
+                      <b>● Grabando…</b> quedan {Math.ceil(remaining)} s. No toques el móvil: se corta
+                      sola al llegar a {guide.seconds} s.
+                    </div>
+                    <div className="sp" />
+                    <button type="button" className="dang wfull" onClick={stopRecording}>
+                      ■ Parar antes de tiempo
+                    </button>
+                  </>
                 )}
               </>
             )}
