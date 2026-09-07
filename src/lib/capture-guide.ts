@@ -47,6 +47,7 @@ export type CaptureGuide = {
 // cámara el paciente cruza el encuadre de izquierda a derecha; con el izquierdo,
 // de derecha a izquierda.
 const LATERAL_TIPS = (lado: "derecho" | "izquierdo", calzado: string, seg: number) => [
+  "El paciente espera QUIETO en el punto de salida y echa a andar al oír el pitido (suena medio segundo después de empezar a grabar, para que quede la salida desde parado). Un tono grave avisa del final.",
   "Debe verse de la cintura a los pies (la cabeza puede quedar fuera); los pies no pueden salir cortados por abajo.",
   "Piernas descubiertas de la rodilla para abajo (pantalón corto o remangado por encima de la rodilla): hay que ver la pierna y la reacción del cuerpo al andar. El estudio lo comprueba.",
   `Móvil en trípode, en horizontal, a la altura de la cadera, a un lado del pasillo (3-4 m) y perpendicular al recorrido.`,
@@ -59,6 +60,7 @@ const LATERAL_TIPS = (lado: "derecho" | "izquierdo", calzado: string, seg: numbe
 
 // Marcha posterior: cámara detrás del paciente, en el eje del pasillo; se aleja.
 const POSTERIOR_TIPS = (calzado: string, seg: number) => [
+  "El paciente espera QUIETO en el punto de salida y echa a andar al oír el pitido (suena medio segundo después de empezar a grabar, para que quede la salida desde parado). Un tono grave avisa del final.",
   "Basta con que se vea de la cintura a los pies: al principio, cerca de la cámara, la cabeza puede quedar fuera; al alejarse ya sale entero.",
   "Piernas descubiertas de la rodilla para abajo (pantalón corto o remangado por encima de la rodilla): hay que ver la pierna y la reacción del cuerpo al andar. El estudio lo comprueba.",
   "Móvil en trípode, en horizontal, a la altura de la cadera, en el eje del pasillo.",
@@ -69,6 +71,7 @@ const POSTERIOR_TIPS = (calzado: string, seg: number) => [
 
 // Marcha anterior: misma posición de cámara; el paciente viene hacia ella.
 const ANTERIOR_TIPS = (calzado: string, seg: number) => [
+  "El paciente espera QUIETO en el punto de salida y echa a andar al oír el pitido (suena medio segundo después de empezar a grabar, para que quede la salida desde parado). Un tono grave avisa del final.",
   "Basta con que se vea de la cintura a los pies: al acercarse a la cámara la cabeza puede quedar fuera; lo importante es la pierna y la reacción del cuerpo.",
   "Piernas descubiertas de la rodilla para abajo (pantalón corto o remangado por encima de la rodilla): hay que ver la pierna y la reacción del cuerpo al andar. El estudio lo comprueba.",
   "Móvil en trípode, en horizontal, a la altura de la cadera, en el eje del pasillo.",

@@ -21,6 +21,29 @@ const WASM_CDN =
   "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/wasm";
 const POSE_MODEL = "/mediapipe/pose_landmarker_lite.task";
 const MAX_UPLOAD_BYTES = 4 * 1024 * 1024; // límite del servidor (4 MB)
+// La grabación arranca en silencio y el pitido de salida suena este tiempo
+// después, para que quede grabado el arranque del paciente desde parado.
+const START_BEEP_DELAY_MS = 500;
+
+// Tonos con Web Audio (sin archivos). Devuelve false si el navegador no deja
+// sonar (política de autoplay) para poder avisar visualmente.
+function playTones(ctx: AudioContext, tones: { freq: number; ms: number; at: number }[]) {
+  const t0 = ctx.currentTime;
+  for (const { freq, ms, at } of tones) {
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.type = "sine";
+    o.frequency.value = freq;
+    const t = t0 + at / 1000;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.5, t + 0.015);
+    g.gain.setValueAtTime(0.5, t + ms / 1000 - 0.03);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + ms / 1000);
+    o.connect(g).connect(ctx.destination);
+    o.start(t);
+    o.stop(t + ms / 1000 + 0.02);
+  }
+}
 
 // Índices de landmarks de MediaPipe Pose
 const NOSE = 0,
@@ -237,6 +260,27 @@ export function CapturaStudio({
   const reviewUrlRef = useRef<string | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const stopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const beepTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const audioRef = useRef<AudioContext | null>(null);
+  const [beeped, setBeeped] = useState(false); // ya ha sonado la salida en esta grabación
+
+  // Pitidos: salida (dos tonos ascendentes) y fin (un tono grave). Si el
+  // navegador bloquea el audio, la señal visual "¡YA!" sigue apareciendo.
+  const beep = useCallback(async (kind: "start" | "stop") => {
+    try {
+      const ctx = (audioRef.current ??= new AudioContext());
+      if (ctx.state === "suspended") await ctx.resume();
+      if (kind === "start")
+        playTones(ctx, [
+          { freq: 880, ms: 160, at: 0 },
+          { freq: 1320, ms: 260, at: 190 },
+        ]);
+      else playTones(ctx, [{ freq: 440, ms: 350, at: 0 }]);
+      if (navigator.vibrate) navigator.vibrate(kind === "start" ? [120, 60, 160] : 200);
+    } catch {
+      // sin audio disponible: queda la señal visual
+    }
+  }, []);
 
   useEffect(() => {
     phaseRef.current = phase;
@@ -248,6 +292,8 @@ export function CapturaStudio({
     if (countdownRef.current) clearInterval(countdownRef.current);
     countdownRef.current = null;
     if (stopTimerRef.current) clearTimeout(stopTimerRef.current);
+    if (beepTimerRef.current) clearTimeout(beepTimerRef.current);
+    beepTimerRef.current = null;
     stopTimerRef.current = null;
   }, []);
 
@@ -489,6 +535,7 @@ export function CapturaStudio({
 
   const finishRecording = useCallback(
     (mime: string) => {
+      void beep("stop");
       const blob = new Blob(chunksRef.current, { type: mime.split(";")[0] });
       chunksRef.current = [];
       const seconds = (performance.now() - recStartRef.current) / 1000;
@@ -506,7 +553,7 @@ export function CapturaStudio({
       });
       setPhase("review");
     },
-    []
+    [beep]
   );
 
   const record = useCallback(() => {
@@ -526,6 +573,12 @@ export function CapturaStudio({
       rec.ondataavailable = (e) => e.data.size && chunksRef.current.push(e.data);
       rec.onstop = () => finishRecording(mime);
       rec.start(250);
+      setBeeped(false);
+      beepTimerRef.current = setTimeout(() => {
+        beepTimerRef.current = null;
+        setBeeped(true);
+        void beep("start");
+      }, START_BEEP_DELAY_MS);
       recStartRef.current = performance.now();
       setElapsed(0);
       setPhase("recording");
@@ -536,7 +589,7 @@ export function CapturaStudio({
     } catch {
       setFatal("No se pudo iniciar la grabación en este dispositivo.");
     }
-  }, [finishRecording, guide.seconds]);
+  }, [beep, finishRecording, guide.seconds]);
 
   const stopRecording = useCallback(() => {
     clearTimers();
@@ -717,7 +770,11 @@ export function CapturaStudio({
             {phase === "countdown" && (
               <div className="studio-count" aria-live="assertive">
                 <div className="n">{countdown}</div>
-                <div className="t">{isVideo ? "La grabación empieza en…" : "Foto en… mantén el móvil quieto"}</div>
+                <div className="t">
+                  {isVideo
+                    ? "La grabación empieza en… el paciente espera quieto y arranca con el pitido"
+                    : "Foto en… mantén el móvil quieto"}
+                </div>
               </div>
             )}
             {phase === "recording" && (
@@ -725,6 +782,7 @@ export function CapturaStudio({
                 <div className="studio-rec" aria-live="polite">
                   <span className="dot" /> GRABANDO
                 </div>
+                {beeped && elapsed < 2.2 && <div className="studio-go">¡YA! · a andar</div>}
                 <div className="studio-remaining">
                   <div className="n">{Math.ceil(remaining)}</div>
                   <div className="t">
@@ -776,7 +834,7 @@ export function CapturaStudio({
                 <div className="tiny">DURACIÓN ASIGNADA</div>
                 <div className="muted">
                   {isVideo
-                    ? `Cuenta atrás de ${VIDEO_PREROLL_SECONDS} s y grabación fija de ${guide.seconds} s (corte automático).${
+                    ? `Cuenta atrás de ${VIDEO_PREROLL_SECONDS} s y grabación fija de ${guide.seconds} s (corte automático). El pitido de salida suena medio segundo después de empezar a grabar, para captar el arranque desde parado; otro tono grave avisa del final.${
                         guide.minValidSeconds
                           ? ` Para aceptar el clip: al menos ${guide.minValidSeconds} s con todos los checks en verde.`
                           : ""
