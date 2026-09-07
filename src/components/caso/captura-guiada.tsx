@@ -113,17 +113,9 @@ const CAPTURA_META: Record<string, { grupo: string; help: string }> = {
     grupo: "Vídeos de marcha",
     help: "El paciente se aleja de la cámara, descalzo: retropié en dinámica (valgo/varo), eversión del calcáneo y compensaciones desde atrás.",
   },
-  video_post_calzado: {
-    grupo: "Vídeos de marcha",
-    help: "Misma vista posterior con su calzado habitual: comportamiento del retropié dentro del zapato.",
-  },
   video_ant_descalzo: {
     grupo: "Vídeos de marcha",
     help: "El paciente viene hacia la cámara, descalzo: antepié, ángulo de paso, rótulas y alineamiento desde delante.",
-  },
-  video_ant_calzado: {
-    grupo: "Vídeos de marcha",
-    help: "Misma vista anterior con su calzado habitual.",
   },
   foto_posterior: {
     grupo: "Fotos",

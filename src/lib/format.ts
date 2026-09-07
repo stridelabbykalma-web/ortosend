@@ -59,19 +59,18 @@ export function fmtEUR(cents: number) {
   return (cents / 100).toLocaleString("es-ES", { style: "currency", currency: "EUR" });
 }
 
-// Vídeos obligatorios del protocolo: 8 de marcha. El paciente camina recto;
-// la cámara va a su lado (laterales, un vídeo por lado), detrás (posterior,
-// se aleja) o delante (anterior, viene hacia ella); cada vista descalzo y
-// con su calzado. Duraciones y checks de encuadre en src/lib/capture-guide.ts.
+// Vídeos obligatorios del protocolo: 6 de marcha. El paciente camina recto;
+// la cámara va a su lado (laterales: un vídeo por lado, descalzo y con su
+// calzado), detrás (posterior, se aleja, solo descalzo) o delante (anterior,
+// viene hacia ella, solo descalzo; mismas reglas que la posterior).
+// Duraciones y checks de encuadre en src/lib/capture-guide.ts.
 export const VIDEO_KINDS = [
   ["video_lat_dcha_descalzo", "Marcha lateral dcha. — descalzo"],
   ["video_lat_dcha_calzado", "Marcha lateral dcha. — calzado"],
   ["video_lat_izq_descalzo", "Marcha lateral izq. — descalzo"],
   ["video_lat_izq_calzado", "Marcha lateral izq. — calzado"],
   ["video_post_descalzo", "Marcha posterior (alejándose) — descalzo"],
-  ["video_post_calzado", "Marcha posterior (alejándose) — calzado"],
   ["video_ant_descalzo", "Marcha anterior (viniendo hacia la cámara) — descalzo"],
-  ["video_ant_calzado", "Marcha anterior (viniendo hacia la cámara) — calzado"],
 ] as const;
 
 // Fotos obligatorias: los pies de cerca, en carga, desde atrás (retropié) y

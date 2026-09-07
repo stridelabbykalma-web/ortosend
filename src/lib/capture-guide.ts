@@ -112,23 +112,13 @@ export const CAPTURE_GUIDES: Record<string, CaptureGuide> = {
     seconds: 10,
     tips: POSTERIOR_TIPS("descalzo", 10),
   },
-  video_post_calzado: {
-    mode: "video",
-    checks: ["persona", "cintura_a_pies", "de_espaldas"],
-    seconds: 10,
-    tips: POSTERIOR_TIPS("con su calzado habitual", 10),
-  },
+  // Mismas reglas que la posterior (persona, de la cintura a los pies, 10 s),
+  // solo cambia la orientación: de frente en vez de espaldas.
   video_ant_descalzo: {
     mode: "video",
     checks: ["persona", "cintura_a_pies", "de_frente"],
     seconds: 10,
     tips: ANTERIOR_TIPS("descalzo", 10),
-  },
-  video_ant_calzado: {
-    mode: "video",
-    checks: ["persona", "cintura_a_pies", "de_frente"],
-    seconds: 10,
-    tips: ANTERIOR_TIPS("con su calzado habitual", 10),
   },
   foto_posterior: {
     mode: "photo",
