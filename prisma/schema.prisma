@@ -209,8 +209,8 @@ model Capture {
   completedAt DateTime? // checklist superada → envío
 }
 
-// Capturas de la cámara de la app: 6 vídeos de marcha (lateral dcha./izq.
-// descalzo y calzado; posterior y anterior solo descalzo) + 2 fotos de los pies de cerca
+// Capturas de la cámara de la app: 4 vídeos de marcha descalzo (lateral dcha.,
+// lateral izq., posterior y anterior) + 2 fotos de los pies de cerca
 // (desde atrás y desde delante). El escaneo de espumas y la baropodometría se
 // marcan como hechos porque los produce su propia plataforma.
 model MediaAsset {

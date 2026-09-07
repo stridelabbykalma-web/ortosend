@@ -3,12 +3,10 @@ const bcrypt = require("bcryptjs");
 
 const PASS = "ortosend123";
 
-// Lo que se captura con la cámara de la app: 6 vídeos de marcha + 2 fotos de los pies de cerca
+// Lo que se captura con la cámara de la app: 4 vídeos de marcha (descalzo) + 2 fotos de los pies de cerca
 const CAPTURA_VISUAL = [
   "video_lat_dcha_descalzo",
-  "video_lat_dcha_calzado",
   "video_lat_izq_descalzo",
-  "video_lat_izq_calzado",
   "video_post_descalzo",
   "video_ant_descalzo",
   "foto_posterior",

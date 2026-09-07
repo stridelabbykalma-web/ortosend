@@ -97,17 +97,9 @@ const CAPTURA_META: Record<string, { grupo: string; help: string }> = {
     grupo: "Vídeos de marcha",
     help: "Marcha de perfil con el lado derecho hacia la cámara, descalzo: ciclo completo del pie derecho (contacto, apoyo medio y despegue).",
   },
-  video_lat_dcha_calzado: {
-    grupo: "Vídeos de marcha",
-    help: "Misma vista lateral derecha con su calzado habitual: cómo cambia el ciclo con el zapato que usa a diario.",
-  },
   video_lat_izq_descalzo: {
     grupo: "Vídeos de marcha",
     help: "Marcha de perfil con el lado izquierdo hacia la cámara, descalzo: ciclo completo del pie izquierdo.",
-  },
-  video_lat_izq_calzado: {
-    grupo: "Vídeos de marcha",
-    help: "Misma vista lateral izquierda con su calzado habitual.",
   },
   video_post_descalzo: {
     grupo: "Vídeos de marcha",

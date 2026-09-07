@@ -85,26 +85,12 @@ export const CAPTURE_GUIDES: Record<string, CaptureGuide> = {
     direction: "ltr",
     tips: LATERAL_TIPS("derecho", "descalzo", 8),
   },
-  video_lat_dcha_calzado: {
-    mode: "video",
-    checks: ["persona", "cintura_a_pies", "perfil", "lado_dcho"],
-    seconds: 8,
-    direction: "ltr",
-    tips: LATERAL_TIPS("derecho", "con su calzado habitual", 8),
-  },
   video_lat_izq_descalzo: {
     mode: "video",
     checks: ["persona", "cintura_a_pies", "perfil", "lado_izq"],
     seconds: 8,
     direction: "rtl",
     tips: LATERAL_TIPS("izquierdo", "descalzo", 8),
-  },
-  video_lat_izq_calzado: {
-    mode: "video",
-    checks: ["persona", "cintura_a_pies", "perfil", "lado_izq"],
-    seconds: 8,
-    direction: "rtl",
-    tips: LATERAL_TIPS("izquierdo", "con su calzado habitual", 8),
   },
   video_post_descalzo: {
     mode: "video",
