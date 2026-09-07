@@ -65,6 +65,59 @@ const L_SHOULDER = 11,
 
 type Checks = Partial<Record<CheckId, boolean>>;
 
+// Orientación de la imagen. Con la cámara en el extremo superior del móvil, para
+// dejarla a la altura del suelo el teléfono acaba boca abajo o de lado, y el
+// modelo de pose no detecta bien personas giradas. Se prueban las cuatro
+// rotaciones hasta detectar, y la anatomía (tobillos por encima de talones,
+// caderas por encima de tobillos) decide cuál es "arriba". Todo el análisis y la
+// foto guardada van ya enderezados.
+type Rot = 0 | 90 | 180 | 270;
+const ROT_RETRY_MS = 800; // sin detección durante este tiempo → probar la siguiente rotación
+
+// Pinta el frame girado `r` grados en sentido horario en un canvas de tamaño
+// (w,h) ya intercambiado si procede.
+function drawRotated(ctx: CanvasRenderingContext2D, video: HTMLVideoElement, r: Rot, w: number, h: number) {
+  ctx.save();
+  ctx.clearRect(0, 0, w, h);
+  ctx.translate(w / 2, h / 2);
+  ctx.rotate((r * Math.PI) / 180);
+  ctx.drawImage(video, -video.videoWidth / 2, -video.videoHeight / 2);
+  ctx.restore();
+}
+
+// Punto normalizado del frame enderezado → coordenadas del frame original
+// (para dibujar el esqueleto sobre el vídeo tal y como lo da la cámara).
+function toOriginal(p: { x: number; y: number }, r: Rot): { x: number; y: number } {
+  switch (r) {
+    case 90:
+      return { x: p.y, y: 1 - p.x };
+    case 180:
+      return { x: 1 - p.x, y: 1 - p.y };
+    case 270:
+      return { x: 1 - p.y, y: p.x };
+    default:
+      return p;
+  }
+}
+
+// > 0 si la persona está cabeza arriba en el frame analizado, < 0 si está
+// invertida. Suma de pares (arriba, abajo) visibles: cadera→tobillo, rodilla→
+// tobillo, tobillo→talón.
+function uprightScore(lms: NormalizedLandmark[]): number {
+  const vis = (i: number) => lms[i]?.visibility ?? 0;
+  const pares: [number, number][] = [
+    [L_HIP, L_ANKLE], [R_HIP, R_ANKLE],
+    [L_KNEE, L_ANKLE], [R_KNEE, R_ANKLE],
+    [L_ANKLE, L_HEEL], [R_ANKLE, R_HEEL],
+  ];
+  let s = 0;
+  for (const [up, down] of pares) {
+    if (vis(up) < 0.4 || vis(down) < 0.4) continue;
+    s += Math.sign(lms[down].y - lms[up].y);
+  }
+  return s;
+}
+
 // Los checks se basan en caderas, rodillas y tobillos, que son lo que siempre
 // está en plano en una marcha: la cabeza y los hombros pueden quedar fuera al
 // principio (paciente cerca de la cámara) y no debe bloquear la grabación.
@@ -212,6 +265,14 @@ export function CapturaStudio({
   const armedRef = useRef(true); // listo para arrancar solo la próxima vez que todo esté en verde
   const autoRecordRef = useRef<() => void>(() => {});
   const lastLmsRef = useRef<NormalizedLandmark[] | null>(null); // últimos puntos detectados
+  // Rotación del frame para el análisis y la foto (ver drawRotated)
+  const rotRef = useRef<{ r: Rot; missingSince: number; flipVotes: number }>({ r: 0, missingSince: 0, flipVotes: 0 });
+  const rotCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [rotation, setRotation] = useState<Rot>(0);
+  // Linterna (flash en modo antorcha, encendido continuo). Solo donde el
+  // navegador lo permite (Android/Chrome con cámara trasera); iOS no lo expone.
+  const [torchAvailable, setTorchAvailable] = useState(false);
+  const [torchOn, setTorchOn] = useState(false);
   const takePhotoRef = useRef<() => void>(() => {}); // takePhoto se define más abajo
   // valid/total: frames; validMs: tiempo real acumulado con encuadre válido
   const frameStatsRef = useRef({ valid: 0, total: 0, validMs: 0, lastTs: 0 });
@@ -317,14 +378,54 @@ export function CapturaStudio({
       const ctx = canvas.getContext("2d");
       let lms: NormalizedLandmark[] | undefined;
       const lm = landmarkerRef.current;
+      const rot = rotRef.current;
       if (lm && video.currentTime !== lastVideoTimeRef.current) {
         lastVideoTimeRef.current = video.currentTime;
+        const now = performance.now();
         try {
-          const res = lm.detectForVideo(video, performance.now());
+          // Fuente del análisis: el vídeo tal cual, o el frame girado si hace falta
+          let source: HTMLVideoElement | HTMLCanvasElement = video;
+          if (rot.r !== 0) {
+            const rc = (rotCanvasRef.current ??= document.createElement("canvas"));
+            const rw = rot.r === 180 ? video.videoWidth : video.videoHeight;
+            const rh = rot.r === 180 ? video.videoHeight : video.videoWidth;
+            if (rc.width !== rw || rc.height !== rh) {
+              rc.width = rw;
+              rc.height = rh;
+            }
+            const rctx = rc.getContext("2d");
+            if (rctx) {
+              drawRotated(rctx, video, rot.r, rw, rh);
+              source = rc;
+            }
+          }
+          const res = lm.detectForVideo(source, now);
           lms = res.landmarks[0];
           lastLmsRef.current = lms ?? null;
         } catch {
           // un frame fallido no rompe el estudio
+        }
+        // Búsqueda de la orientación correcta
+        if (!lms) {
+          if (!rot.missingSince) rot.missingSince = now;
+          else if (now - rot.missingSince > ROT_RETRY_MS && phaseRef.current === "live") {
+            rot.r = ((rot.r + 90) % 360) as Rot;
+            rot.missingSince = now;
+            rot.flipVotes = 0;
+            setRotation(rot.r);
+          }
+        } else {
+          rot.missingSince = 0;
+          if (uprightScore(lms) < 0) {
+            rot.flipVotes++;
+            if (rot.flipVotes >= 4 && phaseRef.current === "live") {
+              rot.r = ((rot.r + 180) % 360) as Rot;
+              rot.flipVotes = 0;
+              okHistRef.current = [];
+              setRotation(rot.r);
+              lms = undefined; // este frame estaba invertido: no se evalúa
+            }
+          } else rot.flipVotes = 0;
         }
         const c = evalChecks(lms);
         setChecks(c);
@@ -385,8 +486,10 @@ export function CapturaStudio({
             ctx.closePath();
             ctx.fill();
           }
-          // esqueleto detectado sobre el paciente real (fino y translúcido)
+          // esqueleto detectado sobre el paciente real (fino y translúcido),
+          // devuelto a las coordenadas del vídeo tal y como lo da la cámara
           if (lms) {
+            const orig = lms.map((p) => ({ ...toOriginal(p, rot.r), visibility: p.visibility }));
             const col = ok ? "rgba(55,199,143,.8)" : "rgba(240,168,72,.8)";
             ctx.strokeStyle = col;
             ctx.fillStyle = col;
@@ -399,14 +502,14 @@ export function CapturaStudio({
               [28, 30], [30, 32], [28, 32],
             ];
             for (const [a, b] of CONN) {
-              const pa = lms[a], pb = lms[b];
+              const pa = orig[a], pb = orig[b];
               if ((pa?.visibility ?? 0) < 0.4 || (pb?.visibility ?? 0) < 0.4) continue;
               ctx.beginPath();
               ctx.moveTo(pa.x * w, pa.y * h);
               ctx.lineTo(pb.x * w, pb.y * h);
               ctx.stroke();
             }
-            for (const p of lms) {
+            for (const p of orig) {
               if ((p.visibility ?? 0) < 0.4) continue;
               ctx.beginPath();
               ctx.arc(p.x * w, p.y * h, 3, 0, Math.PI * 2);
@@ -451,6 +554,20 @@ export function CapturaStudio({
     streamRef.current = stream;
     const track = stream.getVideoTracks()[0];
     if (track) {
+      // ¿Permite linterna? (torch en getCapabilities). Si la tenía activada, se reactiva.
+      const caps = (track.getCapabilities?.() ?? {}) as MediaTrackCapabilities & { torch?: boolean };
+      const hasTorch = !!caps.torch;
+      setTorchAvailable(hasTorch);
+      let wantTorch = false;
+      try {
+        wantTorch = localStorage.getItem("ortosend.torch") === "1";
+      } catch {}
+      if (hasTorch && wantTorch) {
+        track
+          .applyConstraints({ advanced: [{ torch: true } as MediaTrackConstraintSet] })
+          .then(() => setTorchOn(true))
+          .catch(() => setTorchOn(false));
+      } else setTorchOn(false);
       setCamMuted(track.muted);
       track.onmute = () => setCamMuted(true);
       track.onunmute = () => setCamMuted(false);
@@ -461,6 +578,8 @@ export function CapturaStudio({
     el.srcObject = stream;
     await el.play();
     lastVideoTimeRef.current = -1;
+    rotRef.current = { r: 0, missingSince: 0, flipVotes: 0 };
+    setRotation(0);
     // Con permiso concedido, las etiquetas de las cámaras ya son legibles
     try {
       const all = await navigator.mediaDevices.enumerateDevices();
@@ -473,6 +592,21 @@ export function CapturaStudio({
       // sin lista: se sigue con la cámara actual
     }
   }, []);
+
+  const toggleTorch = useCallback(async () => {
+    const track = streamRef.current?.getVideoTracks()[0];
+    if (!track) return;
+    const next = !torchOn;
+    try {
+      await track.applyConstraints({ advanced: [{ torch: next } as MediaTrackConstraintSet] });
+      setTorchOn(next);
+      try {
+        localStorage.setItem("ortosend.torch", next ? "1" : "0");
+      } catch {}
+    } catch {
+      setTorchAvailable(false);
+    }
+  }, [torchOn]);
 
   const switchCamera = useCallback(
     async (id: string) => {
@@ -569,7 +703,11 @@ export function CapturaStudio({
       return;
     }
     try {
-      const rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 2_000_000 });
+      // Con el móvil girado se graba el frame enderezado (canvas) en vez del
+      // flujo crudo; con el móvil derecho, el flujo de la cámara tal cual.
+      const rc = rotCanvasRef.current;
+      const src = rotRef.current.r !== 0 && rc ? rc.captureStream(30) : stream;
+      const rec = new MediaRecorder(src, { mimeType: mime, videoBitsPerSecond: 2_000_000 });
       recorderRef.current = rec;
       chunksRef.current = [];
       frameStatsRef.current = { valid: 0, total: 0, validMs: 0, lastTs: 0 };
@@ -642,10 +780,13 @@ export function CapturaStudio({
       setPhase("live");
       return;
     }
+    // La foto se guarda ya enderezada (misma rotación con la que se analizó)
+    const r = rotRef.current.r;
     const c = document.createElement("canvas");
-    c.width = video.videoWidth;
-    c.height = video.videoHeight;
-    c.getContext("2d")?.drawImage(video, 0, 0);
+    c.width = r === 0 || r === 180 ? video.videoWidth : video.videoHeight;
+    c.height = r === 0 || r === 180 ? video.videoHeight : video.videoWidth;
+    const cctx = c.getContext("2d");
+    if (cctx) drawRotated(cctx, video, r, c.width, c.height);
     // Foto posterior: línea de Helbing y ángulo de Perthes con los puntos del mismo frame
     const helbing =
       kind === "foto_posterior" ? computeHelbing(lastLmsRef.current, c.width, c.height) : null;
@@ -849,6 +990,21 @@ export function CapturaStudio({
                     privacidad de la cámara, el bloqueo en los ajustes de privacidad del sistema,
                     o que otro programa la está usando. Si aparece un icono de cámara tachada, el
                     navegador ha elegido una cámara virtual: escoge la webcam real abajo.
+                  </div>
+                )}
+                {torchAvailable && (
+                  <button
+                    type="button"
+                    className={`wfull studio-torch ${torchOn ? "on" : ""}`}
+                    onClick={() => void toggleTorch()}
+                    style={{ marginBottom: 10 }}
+                  >
+                    🔦 Linterna {torchOn ? "encendida (se queda fija)" : "apagada"}
+                  </button>
+                )}
+                {rotation !== 0 && (
+                  <div className="tiny" style={{ marginBottom: 8 }}>
+                    Móvil girado {rotation}°: la app analiza y guarda la imagen enderezada.
                   </div>
                 )}
                 {devices.length > 1 && (

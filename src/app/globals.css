@@ -197,6 +197,7 @@ tr.click:hover { background: var(--paper); }
 .studio-side button.pri { background: var(--teal); border-color: var(--teal); }
 .studio-side button.pri:disabled { background: rgba(255,255,255,.12); border-color: transparent; }
 .studio-side button.dang { background: var(--red); border-color: var(--red); color: #fff; }
+.studio-side .studio-torch.on { background: #f0a848; border-color: #f0a848; color: #17262e; font-weight: 600; }
 .studio-select { background: rgba(255,255,255,.08); color: #fff; border-color: rgba(255,255,255,.3); margin-top: 4px; }
 .studio-select option { color: var(--ink); }
 .studio-tips { margin: 6px 0 0; padding-left: 18px; font-size: 13px; color: rgba(255,255,255,.8); }
