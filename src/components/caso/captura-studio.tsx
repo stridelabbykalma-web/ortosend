@@ -14,7 +14,7 @@ import {
   type CheckId,
 } from "@/lib/capture-guide";
 import { BEEP_LEAD_MS, playBeep, primeBeeps } from "@/lib/beeps";
-import { computeHelbing, helbingResumen, type Helbing } from "@/lib/helbing";
+import { computeHelbing, computePerthes, helbingResumen, type Helbing } from "@/lib/helbing";
 import { HelbingOverlay } from "@/components/caso/helbing-overlay";
 
 // El WASM del modelo pesa 12 MB y se sirve desde el CDN de jsDelivr; el modelo
@@ -153,6 +153,7 @@ type Review = {
   validPct: number | null; // % de frames con encuadre válido (null si sin pose)
   validSeconds: number | null; // tiempo acumulado con todos los checks en verde
   helbing?: Helbing | null; // foto posterior: línea de Helbing calculada al disparar
+  perthes?: Helbing | null; // foto posterior: ángulo del calcáneo (regla de Perthes)
 };
 
 export function CapturaStudio({
@@ -640,9 +641,11 @@ export function CapturaStudio({
     c.width = video.videoWidth;
     c.height = video.videoHeight;
     c.getContext("2d")?.drawImage(video, 0, 0);
-    // Foto posterior: línea de Helbing con los puntos del mismo frame
+    // Foto posterior: línea de Helbing y ángulo de Perthes con los puntos del mismo frame
     const helbing =
       kind === "foto_posterior" ? computeHelbing(lastLmsRef.current, c.width, c.height) : null;
+    const perthes =
+      kind === "foto_posterior" ? computePerthes(lastLmsRef.current, c.width, c.height) : null;
     c.toBlob(
       (blob) => {
         if (!blob) return;
@@ -657,6 +660,7 @@ export function CapturaStudio({
           validPct: null,
           validSeconds: null,
           helbing,
+          perthes,
         });
         setPhase("review");
       },
@@ -691,6 +695,7 @@ export function CapturaStudio({
         mime: review.mime,
         pose: poseState === "activo" ? "pose_landmarker_lite" : "no_disponible",
         helbing: review.helbing ?? undefined,
+        perthes: review.perthes ?? undefined,
       })
     );
     fd.set("file", new File([review.blob], `${kind}.${ext}`, { type: review.mime }));
@@ -798,14 +803,33 @@ export function CapturaStudio({
           </div>
 
           {phase === "review" && review && (
-            <div className="studio-stage">
+            <div className={`studio-stage ${review.helbing && review.perthes ? "dual" : ""}`}>
               {isVideo ? (
                 <video src={review.url} controls playsInline />
+              ) : review.helbing || review.perthes ? (
+                // De la única foto salen dos imágenes: Helbing y Perthes por separado
+                <>
+                  {review.helbing && (
+                    <div className="studio-photo">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={review.url} alt="Línea de Helbing" />
+                      <HelbingOverlay hb={review.helbing} />
+                      <div className="studio-photo-cap">Línea de Helbing</div>
+                    </div>
+                  )}
+                  {review.perthes && (
+                    <div className="studio-photo">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={review.url} alt="Regla de Perthes" />
+                      <HelbingOverlay pt={review.perthes} />
+                      <div className="studio-photo-cap">Regla de Perthes</div>
+                    </div>
+                  )}
+                </>
               ) : (
                 <div className="studio-photo">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={review.url} alt={`Previsualización: ${label}`} />
-                  {review.helbing && <HelbingOverlay hb={review.helbing} />}
                 </div>
               )}
             </div>
@@ -945,15 +969,28 @@ export function CapturaStudio({
                   Tamaño: {(review.blob.size / 1024 / 1024).toFixed(2)} MB
                 </div>
                 {kind === "foto_posterior" && (
-                  <div className={`note ${review.helbing ? "" : "a"}`} style={{ marginTop: 8 }}>
-                    {review.helbing ? (
+                  <div className={`note ${review.helbing || review.perthes ? "" : "a"}`} style={{ marginTop: 8 }}>
+                    {review.helbing || review.perthes ? (
                       <>
-                        <b>Línea de Helbing</b> (orientativa, calculada con los puntos de pose):{" "}
-                        {helbingResumen(review.helbing)}. Se guarda con la foto y la verán
-                        prescriptor y taller.
+                        <b>Retropié</b> (orientativo, con los puntos de pose):
+                        {review.helbing && (
+                          <>
+                            <br />
+                            Línea de Helbing (tendón de Aquiles): {helbingResumen(review.helbing)}
+                          </>
+                        )}
+                        {review.perthes && (
+                          <>
+                            <br />
+                            Regla de Perthes (eje del calcáneo): {helbingResumen(review.perthes)}
+                          </>
+                        )}
+                        <br />
+                        De esta única foto salen las dos imágenes (Helbing y Perthes); se guardan
+                        con ella y las verán prescriptor y taller.
                       </>
                     ) : (
-                      "No se ha podido calcular la línea de Helbing (no se detectaron tobillos y talones al disparar). La foto se guarda igual; repite si quieres que salga."
+                      "No se han podido calcular las líneas del retropié (no se detectaron tobillos y talones al disparar). La foto se guarda igual; repite si quieres que salgan."
                     )}
                   </div>
                 )}

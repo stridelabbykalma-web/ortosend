@@ -69,6 +69,7 @@ export async function POST(req: Request) {
         mime,
         pose: typeof raw.pose === "string" ? raw.pose.slice(0, 40) : undefined,
         helbing: kind === "foto_posterior" ? sanitizeHelbing(raw.helbing) : undefined,
+        perthes: kind === "foto_posterior" ? sanitizeHelbing(raw.perthes) : undefined,
       };
   } catch {
     // meta inválida: se ignora

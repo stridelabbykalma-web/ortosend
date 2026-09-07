@@ -149,28 +149,43 @@ function MediaGallery({ media }: { media: MediaAsset[] }) {
             validPct?: number;
             validSeconds?: number;
             helbing?: Helbing;
+            perthes?: Helbing;
           } | null;
           const isVideo = m.kind.startsWith("video_");
           const hb = meta?.helbing;
+          const pt = meta?.perthes;
+          const label = MEDIA_LABEL[m.kind] ?? m.kind;
+          // La única foto posterior se presenta DOS veces: una con la línea de
+          // Helbing y otra con la regla de Perthes. No hace falta otra foto.
+          if (!isVideo && (hb || pt)) {
+            const vistas: { key: string; titulo: string; hb?: Helbing; pt?: Helbing; resumen: string }[] = [];
+            if (hb) vistas.push({ key: "hb", titulo: "Línea de Helbing (tendón de Aquiles)", hb, resumen: helbingResumen(hb) });
+            if (pt) vistas.push({ key: "pt", titulo: "Regla de Perthes (eje del calcáneo)", pt, resumen: helbingResumen(pt) });
+            return vistas.map((v) => (
+              <figure key={`${m.id}-${v.key}`} className="media-item">
+                <div className="photo-wrap">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={m.url} alt={`${label} — ${v.titulo}`} loading="lazy" />
+                  <HelbingOverlay hb={v.hb} pt={v.pt} />
+                </div>
+                <figcaption className="tiny">
+                  <b>{v.titulo}</b>
+                  <br />
+                  {v.resumen} <span>(orientativa · sobre la {label.toLowerCase()})</span>
+                </figcaption>
+              </figure>
+            ));
+          }
           return (
             <figure key={m.id} className="media-item">
               {isVideo ? (
                 <video src={m.url} controls playsInline preload="metadata" />
               ) : (
-                <div className="photo-wrap">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={m.url} alt={MEDIA_LABEL[m.kind] ?? m.kind} loading="lazy" />
-                  {hb && <HelbingOverlay hb={hb} />}
-                </div>
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img src={m.url} alt={label} loading="lazy" />
               )}
               <figcaption className="tiny">
-                {MEDIA_LABEL[m.kind] ?? m.kind}
-                {hb ? (
-                  <>
-                    <br />
-                    <b>Línea de Helbing:</b> {helbingResumen(hb)} <span>(orientativa)</span>
-                  </>
-                ) : null}
+                {label}
                 {meta?.seconds
                   ? ` · ${meta.seconds} s${meta.targetSeconds ? ` de ${meta.targetSeconds} s` : ""}`
                   : ""}

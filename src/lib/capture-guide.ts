@@ -123,6 +123,7 @@ export const CAPTURE_GUIDES: Record<string, CaptureGuide> = {
       "Paciente de pie, en carga, descalzo, pies paralelos al ancho de caderas.",
       "Móvil bajo, a la altura de los tobillos, a 40-60 cm por detrás y perpendicular al talón: los dos talones y el tercio inferior de la pierna llenando el encuadre, sin cortar los pies.",
       "La foto se dispara sola, al instante, en cuanto la app ve los dos pies de cerca y desde atrás: mantén el móvil quieto.",
+      "Sobre esta foto la app traza la línea de Helbing (tendón de Aquiles) y el ángulo del calcáneo de la regla de Perthes, con sus grados y valgo/varo, para el prescriptor y el taller. Cámara nivelada y los dos talones apoyados.",
     ],
   },
   foto_anterior: {
