@@ -753,7 +753,9 @@ export function CapturaGuiada({
     : null;
 
   // Receta propia: para enviar basta el motivo de consulta (primera pantalla).
-  const motivoDone = slideDone(SLIDES[0], q, e, has);
+  // El autoguardado crea la clave «motivo» con la primera tecla, así que se exige
+  // que tenga texto: es lo mismo que comprueba el servidor al enviar.
+  const motivoDone = !!q?.motivo?.trim();
   const puedeEnviar = propio ? motivoDone : cl.completa;
 
   const doneFlags = SLIDES.map((s) => (s.t === "envio" ? puedeEnviar : slideDone(s, q, e, has)));

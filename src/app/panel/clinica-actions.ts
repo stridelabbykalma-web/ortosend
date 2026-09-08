@@ -415,8 +415,19 @@ export async function sendCaseAction(formData: FormData) {
         nota: "Tu estudio está completo y en valoración. Te avisaremos en un máximo de 48 h laborables.",
       });
   }
-  if (rxRoute === "CLINICA")
-    redirect(`/caso/${caseId}?ok=` + encodeURIComponent(`Caso #${kase!.number} en tu cola: ya puedes recetarlo`));
+  if (rxRoute === "CLINICA") {
+    // Si quien envía es prescriptor, aterriza en la receta; si no (p. ej. el
+    // administrador), el caso queda en la cola de prescripciones de la clínica.
+    const firma = await esPrescriptorVerificado(u.id);
+    redirect(
+      `/caso/${caseId}?ok=` +
+        encodeURIComponent(
+          firma
+            ? `Caso #${kase!.number} enviado: ya puedes rellenar y firmar la receta`
+            : `Caso #${kase!.number} enviado: queda en la cola de prescripciones de vuestra clínica`
+        )
+    );
+  }
   redirect(
     "/panel?ok=" +
       encodeURIComponent(

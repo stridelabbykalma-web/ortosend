@@ -9,10 +9,10 @@ export const TRANSITIONS: Record<CaseState, T[]> = {
     { to: "ESTUDIO_EN_CURSO", roles: ["PROFESIONAL", "ADMIN_CLINICA"] },
   ],
   ESTUDIO_EN_CURSO: [
-    { to: "ESTUDIO_COMPLETO", roles: ["PROFESIONAL", "ADMIN_CLINICA"], guard: "checklistCompleta" },
-    // Receta directa: quien rellena es prescriptor verificado y firma en la misma visita
-    // (tests opcionales; obligatorios el motivo registrado y el escrito de la receta)
-    { to: "PENDIENTE_PAGO", roles: ["PROFESIONAL", "ADMIN_CLINICA"], guard: "esPrescriptorVerificado + motivoRegistrado" },
+    // Vía Ortosend: checklist completa. Receta propia (con o sin segunda opinión):
+    // basta el motivo de consulta; el caso pasa igualmente a EN_PRESCRIPCION y lo
+    // firma el prescriptor de la clínica desde su cola.
+    { to: "ESTUDIO_COMPLETO", roles: ["PROFESIONAL", "ADMIN_CLINICA"], guard: "checklistCompleta | motivoRegistrado" },
   ],
   ESTUDIO_COMPLETO: [
     { to: "EN_PRESCRIPCION", roles: ["PROFESIONAL", "ADMIN_CLINICA"] }, // automático al enviar
@@ -50,8 +50,6 @@ export const TRANSITIONS: Record<CaseState, T[]> = {
   CERRADO: [],
   DEVUELTO_CLINICA: [
     { to: "EN_PRESCRIPCION", roles: ["PROFESIONAL", "ADMIN_CLINICA"] }, // prueba repetida
-    // Receta directa tras repetir prueba (solo si el caso aún no tiene receta firmada)
-    { to: "PENDIENTE_PAGO", roles: ["PROFESIONAL", "ADMIN_CLINICA"], guard: "esPrescriptorVerificado + motivoRegistrado" },
   ],
   NO_PRESCRITO: [],
 };
