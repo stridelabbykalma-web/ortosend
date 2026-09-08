@@ -86,12 +86,19 @@ function leerConfig() {
 
 // Lo ya subido, por firma (ruta + tamaño + fecha): no se repite al reiniciar y
 // un escaneo que cambie después se vuelve a subir como versión nueva.
+// La primera vez (sin estado) se anota cuándo se instaló: lo escaneado más
+// de PRIMERA_VEZ_HORAS antes se da por visto y no se sube, para no volcar de
+// golpe todo el historial de la clínica.
+const PRIMERA_VEZ_HORAS = 24;
 function leerEstado() {
   try {
-    return JSON.parse(fs.readFileSync(ESTADO_PATH, "utf8"));
+    return JSON.parse(fs.readFileSync(ESTADO_PATH, "utf8").replace(/^\uFEFF/, ""));
   } catch {
-    return { subidos: {} };
+    return { subidos: {}, instaladoEn: Date.now() };
   }
+}
+function demasiadoAntiguo(estado, mtime) {
+  return !!estado.instaladoEn && mtime < estado.instaladoEn - PRIMERA_VEZ_HORAS * 3600 * 1000;
 }
 function guardarEstado(estado) {
   try {
@@ -147,6 +154,14 @@ async function firmaCarpeta(dir) {
   let bytes = 0;
   let mtime = 0;
   let archivos = 0;
+  // Un proyecto copiado o duplicado conserva la fecha de sus archivos, pero la
+  // carpeta nueva tiene fecha de creación de ahora: cuenta como reciente.
+  let creado = 0;
+  try {
+    creado = (await fsp.stat(dir)).birthtimeMs || 0;
+  } catch {
+    // sin fecha de creación
+  }
   async function rec(d) {
     let entradas;
     try {
@@ -170,7 +185,7 @@ async function firmaCarpeta(dir) {
     }
   }
   await rec(dir);
-  return { bytes, mtime: Math.round(mtime), archivos };
+  return { bytes, mtime: Math.round(mtime), archivos, reciente: Math.max(mtime, creado) };
 }
 
 // Escaneos en bruto en la carpeta de Revo Scan: proyectos (carpetas con .revo)
@@ -285,6 +300,11 @@ async function cicloMesh(cfg, estado, tamanos) {
     }
     const clave = `${ruta}|${st.size}|${Math.round(st.mtimeMs)}`;
     if (estado.subidos[clave]) continue;
+    if (demasiadoAntiguo(estado, Math.max(st.mtimeMs, st.birthtimeMs || 0))) {
+      estado.subidos[clave] = { at: new Date().toISOString(), descartado: "anterior a la instalación" };
+      guardarEstado(estado);
+      continue;
+    }
     if (tamanos.get(ruta) !== st.size) {
       tamanos.set(ruta, st.size);
       continue;
@@ -311,6 +331,11 @@ async function cicloBruto(cfg, estado, vistos) {
     if (!firma || firma.bytes === 0) continue;
     const clave = `${esc.ruta}|${firma.bytes}|${firma.mtime}`;
     if (estado.subidos[clave]) continue;
+    if (demasiadoAntiguo(estado, firma.reciente)) {
+      estado.subidos[clave] = { at: new Date().toISOString(), descartado: "anterior a la instalación" };
+      guardarEstado(estado);
+      continue;
+    }
     // Espera a que nada cambie durante ESTABLE_BRUTO_MS.
     const visto = vistos.get(esc.ruta);
     if (!visto || visto.clave !== clave) {
@@ -348,7 +373,7 @@ async function cicloBruto(cfg, estado, vistos) {
 async function firmaArchivo(ruta) {
   try {
     const st = await fsp.stat(ruta);
-    return { bytes: st.size, mtime: Math.round(st.mtimeMs), archivos: 1 };
+    return { bytes: st.size, mtime: Math.round(st.mtimeMs), archivos: 1, reciente: Math.max(st.mtimeMs, st.birthtimeMs || 0) };
   } catch {
     return null;
   }
@@ -357,6 +382,7 @@ async function firmaArchivo(ruta) {
 async function main() {
   const cfg = leerConfig();
   const estado = leerEstado();
+  guardarEstado(estado); // fija instaladoEn la primera vez
   const tamanos = new Map();
   const vistos = new Map();
   log(`Puente de escaneo Ortosend`);
@@ -367,7 +393,12 @@ async function main() {
     await fsp.mkdir(cfg.carpeta, { recursive: true });
   }
 
-  const hola = await saludar(cfg);
+  let hola = null;
+  try {
+    hola = await saludar(cfg);
+  } catch (e) {
+    log(`Sin conexión con el servidor (${e.message}). Se sigue intentando.`);
+  }
   if (hola)
     log(
       `Clínica: ${hola.clinica} · modo ${hola.modo === "directo" ? "directo al almacén (sin límite de tamaño)" : `servidor (máx. ${(hola.maxBytes / 1048576).toFixed(0)} MB)`}`

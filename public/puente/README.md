@@ -86,6 +86,9 @@ También valen las variables de entorno `ORTOSEND_URL`, `ORTOSEND_TOKEN`,
 - **Token revocado**: el servidor lo rechaza; se genera otro en el panel.
 - Lo ya subido se anota en `puente-estado.json` (por ruta, tamaño y fecha)
   para no repetirlo al reiniciar.
+- **Primera vez**: solo sube lo escaneado en las últimas 24 h; los escaneos
+  anteriores a la instalación se dan por vistos (para subir uno antiguo,
+  hazlo a mano desde el asistente del caso).
 
 ## Privacidad (RGPD)
 
