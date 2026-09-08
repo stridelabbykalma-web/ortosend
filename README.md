@@ -41,7 +41,7 @@ asociadas. Stack: **Next.js (App Router, server actions) + PostgreSQL (Prisma)**
   escaneo de las espumas fenólicas como último paso. La baropodometría se hace en su
   propia plataforma y aquí solo se marca como hecha (el informe llega desde Podisense y no
   se adjunta). El **escaneo llega solo desde Revo Scan al taller**: el profesional escanea
-  y pulsa Parar; el puente instalado en el PC del escáner (`tools/puente-escaneo/`) sube el
+  y pulsa Parar; el puente instalado en el PC del escáner (`public/puente/`, instalador de un clic desde el panel) sube el
   escaneo en bruto entero (archivo de Revo Scan 6 o proyecto de Revo Scan 5 en ZIP) directo al
   almacén común (Cloudflare R2, sin límite de tamaño) y se asocia al caso que está abierto en
   el paso del escaneo; con duda, la app pregunta «¿es de este paciente?». El taller lo

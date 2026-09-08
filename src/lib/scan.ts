@@ -2,7 +2,7 @@
 // Escaneo de las espumas — helpers puros (sin base de datos)
 // ============================================================
 // RevoScan no sabe nada de Ortosend: el profesional escanea y guarda como
-// siempre. El puente del PC del escáner (tools/puente-escaneo) sube cada
+// siempre. El puente del PC del escáner (public/puente) sube cada
 // modelo 3D nuevo y el servidor lo asocia al caso que está en el paso del
 // escaneo del asistente de captura. Aquí, lo que comparten servidor,
 // interfaz y puente.

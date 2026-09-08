@@ -15,8 +15,8 @@ const eslintConfig = defineConfig([
     // Script CJS de seed (se ejecuta con node, fuera del bundle):
     "prisma/seed.js",
     "prisma/seed-data.js",
-    // Puente de escaneo: script CJS que corre con node en el PC del escáner:
-    "tools/**",
+    // Puente de escaneo: scripts CJS que corren con node en el PC del escáner:
+    "public/puente/**",
     // WASM de MediaPipe copiado en local para pruebas (en producción va por CDN):
     "public/mediapipe/wasm/**",
   ]),
