@@ -65,3 +65,4 @@ export function checklistOf(capture: {
       cuestionario && exploracion && escaneos && capturas >= CAPTURA_VISUAL.length && baro,
   };
 }
+

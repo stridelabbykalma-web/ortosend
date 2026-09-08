@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Capture, Case, Incident, MediaAsset, Patient } from "@prisma/client";
 import { checklistOf } from "@/lib/cases";
+import { bandejaDe, marcarEsperando, puenteActivo } from "@/lib/escaneos";
 import { BARO_KINDS, CAPTURA_VISUAL, FOTO_KINDS, SCAN_KIND, VIDEO_KINDS } from "@/lib/format";
 import {
   ACTIVIDAD_OPTS,
@@ -74,6 +75,7 @@ import {
   sendCaseAction,
 } from "@/app/panel/clinica-actions";
 import { CapturaStudio } from "./captura-studio";
+import { EscaneoPuente } from "./escaneo-puente";
 import { CAPTURE_GUIDES, durationLabel } from "@/lib/capture-guide";
 import { AutosaveForm } from "./autosave-form";
 
@@ -157,7 +159,7 @@ function buildSlides(): Slide[] {
       kind: SCAN_KIND,
       title: "Escaneo de las espumas fenólicas",
       grupo: "Escaneo",
-      help: "Toma el molde en las espumas fenólicas y escanéalo en su plataforma. Cuando esté hecho, márcalo aquí — es el último paso del estudio.",
+      help: "Toma el molde en las espumas fenólicas y escanéalo con Revo Scan: escanear y Parar, nada más. Con esta pantalla abierta, el escaneo se sube solo y queda asociado a este paciente; el taller lo procesa. Es el último paso del estudio.",
       boton: "Marcar escaneo como hecho",
       hecho: "Escaneo de las espumas registrado.",
     },
@@ -731,7 +733,7 @@ function ElegirQuienReceta({
   );
 }
 
-export function CapturaGuiada({
+export async function CapturaGuiada({
   kase,
   paso,
   puedeRecetar = false,
@@ -859,6 +861,29 @@ export function CapturaGuiada({
   const next = paso < total ? paso + 1 : null;
   const done = doneFlags[i];
 
+  // Escaneo de las espumas: estado inicial de la espera (el resto lo va
+  // refrescando la propia pantalla cada pocos segundos).
+  if (s.t === "file" && s.kind === SCAN_KIND) await marcarEsperando(kase.id);
+  const escaneo =
+    s.t === "file" && s.kind === SCAN_KIND
+      ? {
+          hecho: done,
+          escaneos: media
+            .filter((m) => m.kind === SCAN_KIND)
+            .map((m) => ({
+              id: m.id,
+              archivo: (m.meta as { archivo?: string } | null)?.archivo ?? "escaneo",
+              bytes: m.sizeBytes ?? 0,
+              at: (m.confirmedAt ?? new Date()).toISOString(),
+            })),
+          bandeja: (await bandejaDe(kase.clinicId)).map((b) => ({
+            ...b,
+            receivedAt: (b.receivedAt ?? new Date()).toISOString(),
+          })),
+          puente: await puenteActivo(kase.clinicId),
+        }
+      : null;
+
   const navFooter = (
     <div className="row between" style={{ marginTop: 14 }}>
       <Link className="tiny" href={prev ? `/caso/${kase.id}?paso=${prev}` : `/caso/${kase.id}`}>
@@ -970,7 +995,40 @@ export function CapturaGuiada({
             </>
           ))}
 
-        {s.t === "file" &&
+        {s.t === "file" && escaneo && (
+          <>
+            <p className="muted" style={{ margin: "4px 0 10px" }}>
+              {s.help}
+            </p>
+            <EscaneoPuente caseId={kase.id} paciente={kase.patient.name} caso={kase.number} inicial={escaneo} />
+            <div className="sp" />
+            {done ? (
+              <Link href={`/caso/${kase.id}?paso=${next ?? total}`}>
+                <button className="pri wfull" type="button">
+                  Siguiente →
+                </button>
+              </Link>
+            ) : (
+              <>
+                {/* Último recurso: sin modelo 3D el taller no puede diseñar. */}
+                <form action={markMediaAction}>
+                  <input type="hidden" name="caseId" value={kase.id} />
+                  <input type="hidden" name="kind" value={s.kind} />
+                  <input type="hidden" name="next" value={next ?? ""} />
+                  <button type="submit" className="wfull">
+                    El escaneo está hecho, subirlo más tarde
+                  </button>
+                </form>
+                <div className="tiny" style={{ marginTop: 8 }}>
+                  Solo si el escáner no puede subirlo ahora: el modelo 3D tiene que llegar antes de
+                  que el taller diseñe la plantilla de <b>{kase.patient.name}</b>.
+                </div>
+              </>
+            )}
+          </>
+        )}
+
+        {s.t === "file" && !escaneo &&
           (done ? (
             <>
               <div className="note g">

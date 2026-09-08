@@ -1,9 +1,18 @@
 import Link from "next/link";
+import { headers } from "next/headers";
 import type { User } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { StatePill } from "@/components/ui";
 import { fmtd, fmtdt } from "@/lib/format";
-import { addSlotAction, delSlotAction, newCaseBAction, requestProfessionalAction } from "@/app/panel/clinica-actions";
+import {
+  addSlotAction,
+  crearPuenteAction,
+  delSlotAction,
+  newCaseBAction,
+  requestProfessionalAction,
+  revocarPuenteAction,
+} from "@/app/panel/clinica-actions";
+import { createScanToken } from "@/lib/auth";
 import { openCaseAction } from "@/app/panel/rx-actions";
 import { REVISION_PREFIJO, esCentral } from "@/lib/rx-route";
 
@@ -25,6 +34,7 @@ export async function PanelClinica({ user, tab }: { user: User; tab?: string }) 
     ...(user.role === "ADMIN_CLINICA"
       ? ([
           ["prof", "Profesionales"],
+          ["puente", "Puente de escaneo"],
           ["liq", "Liquidaciones"],
         ] as [string, string][])
       : []),
@@ -420,6 +430,91 @@ export async function PanelClinica({ user, tab }: { user: User; tab?: string }) 
               activación (72 h). Después deberá completar la formación (5 módulos).
             </div>
           </form>
+        </div>
+      </>
+    );
+  }
+  // Puente de escaneo: el PC donde corre RevoScan sube los escaneos solo y
+  // quedan asociados al paciente por la carpeta del caso.
+  if (t === "puente" && user.role === "ADMIN_CLINICA") {
+    const agents = await prisma.scanAgent.findMany({
+      where: { clinicId: clinic.id },
+      orderBy: { createdAt: "desc" },
+    });
+    const activos = agents.filter((a) => !a.revokedAt);
+    const tokens = await Promise.all(activos.map((a) => createScanToken(a.id)));
+    const h = await headers();
+    const base =
+      process.env.NEXT_PUBLIC_APP_URL ??
+      `${h.get("x-forwarded-proto") ?? "https"}://${h.get("host") ?? "app.ortosend.com"}`;
+    body = (
+      <>
+        <h3>Puente de escaneo (RevoScan)</h3>
+        <div className="sp" />
+        <div className="card">
+          <p className="muted" style={{ marginTop: 0 }}>
+            El puente es un programa pequeño que se instala en el PC del escáner. Vigila la carpeta
+            donde Revo Scan guarda los escaneos y sube cada uno, entero, al almacén común de
+            Ortosend. El profesional solo escanea y pulsa Parar: el escaneo se asocia al paciente
+            cuyo caso está abierto en el paso «Escaneo de las espumas» del asistente, y el taller
+            lo descarga desde el expediente y lo procesa. No hay que exportar, crear carpetas ni
+            renombrar archivos.
+          </p>
+          <form action={crearPuenteAction} className="row" style={{ gap: 8 }}>
+            <input name="name" placeholder="Nombre del equipo (ej.: PC escáner consulta 1)" />
+            <button type="submit" className="pri">
+              Dar de alta un puente
+            </button>
+          </form>
+        </div>
+        <div className="sp" />
+        {activos.length ? (
+          activos.map((a, i) => (
+            <div className="card" key={a.id} style={{ marginBottom: 12 }}>
+              <div className="row between">
+                <b>{a.name}</b>
+                <span className={`pill ${a.lastSeenAt ? "g" : "b"}`}>
+                  {a.lastSeenAt ? `Última señal: ${fmtdt(a.lastSeenAt)}` : "Sin estrenar"}
+                </span>
+              </div>
+              <div className="sp" />
+              <label>Servidor</label>
+              <input readOnly value={base} />
+              <label>Token del puente (pégalo en puente.config.json)</label>
+              <textarea readOnly rows={3} value={tokens[i]} style={{ fontFamily: "monospace" }} />
+              <div className="tiny muted">
+                El token da acceso a subir escaneos de esta clínica: guárdalo solo en el PC del
+                escáner. Si se pierde el equipo, revócalo aquí y da de alta otro.
+              </div>
+              <div className="sp" />
+              <form action={revocarPuenteAction}>
+                <input type="hidden" name="agentId" value={a.id} />
+                <button type="submit">Revocar este puente</button>
+              </form>
+            </div>
+          ))
+        ) : (
+          <div className="card muted">
+            Todavía no hay ningún puente dado de alta. Mientras tanto, el escaneo se puede adjuntar
+            a mano desde el propio asistente de captura.
+          </div>
+        )}
+        <div className="sp" />
+        <div className="card">
+          <b>Instalación en el PC del escáner</b>
+          <ol className="muted" style={{ margin: "8px 0 0 18px", padding: 0 }}>
+            <li>Copia la carpeta <code>tools/puente-escaneo</code> al PC (necesita Node 18 o superior).</li>
+            <li>
+              Rellena <code>puente.config.json</code> con el servidor y el token de arriba y con la
+              carpeta de escaneos de Revo Scan (por defecto{" "}
+              <code>C:\Users\USUARIO\AppData\Roaming\RevoScan5\Projects</code>).
+            </li>
+            <li>Ejecútalo con <code>node puente.js</code> (o el acceso directo <code>iniciar-puente.bat</code>).</li>
+            <li>
+              Con el caso abierto en el paso del escaneo, escanea y pulsa Parar: llega solo al
+              paciente. Si no había caso abierto, se confirma con un toque en el asistente.
+            </li>
+          </ol>
         </div>
       </>
     );

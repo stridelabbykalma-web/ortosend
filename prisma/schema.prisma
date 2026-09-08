@@ -95,6 +95,8 @@ model Clinic {
   equipment    Equipment[]
   settlements  Settlement[]
   professionalApplications ProfessionalApplication[]
+  scanAgents   ScanAgent[]
+  scanUploads  ScanUpload[]
   createdAt    DateTime     @default(now())
 }
 
@@ -117,6 +119,48 @@ model Equipment {
   serial    String   @unique
   deliveredAt DateTime?
   returnedAt  DateTime?
+}
+
+// Puente de escaneo: agente instalado en el PC del escáner de la clínica.
+// Vigila la carpeta de RevoScan y sube cada escaneo al caso que indica el
+// nombre de la carpeta. Se autentica con un token firmado (kind "scan") que
+// se puede revocar aquí sin tocar la contraseña de nadie.
+model ScanAgent {
+  id         String    @id @default(cuid())
+  clinicId   String
+  clinic     Clinic    @relation(fields: [clinicId], references: [id])
+  name       String    @default("Puente de escaneo")
+  createdBy  String              // userId del admin de clínica que lo dio de alta
+  createdAt  DateTime  @default(now())
+  lastSeenAt DateTime?           // último contacto del agente (diagnóstico)
+  revokedAt  DateTime?
+  uploads    ScanUpload[]
+}
+
+// Bandeja de escaneos de la clínica: cada modelo 3D que sube el puente (o el
+// navegador). Se asocia al caso que está esperando en el asistente de captura
+// o, si hay duda, el profesional lo confirma con un toque. El binario va a
+// R2/S3 (key) sin límite de tamaño; sin R2 configurado, a Postgres (bytes).
+model ScanUpload {
+  id         String     @id @default(cuid())
+  clinicId   String
+  clinic     Clinic     @relation(fields: [clinicId], references: [id])
+  agentId    String?
+  agent      ScanAgent? @relation(fields: [agentId], references: [id])
+  uploadedBy String                 // puente (nombre del equipo) o usuario
+  filename   String
+  mime       String
+  sizeBytes  Int                    // tamaño original del mesh
+  encoding   String?                // "gzip": se guarda comprimido y se sirve con Content-Encoding
+  storedBytes Int?                  // bytes realmente almacenados (comprimidos)
+  storage    String                 // "r2" | "db"
+  key        String?                // objeto en R2/S3
+  bytes      Bytes?                 // solo storage "db"
+  status     String     @default("pendiente") // pendiente (URL emitida) | recibido
+  receivedAt DateTime?
+  caseId     String?                // asociado a este caso
+  mediaId    String?    @unique     // MediaAsset scan_espumas creado al asociar
+  createdAt  DateTime   @default(now())
 }
 
 // ---------- Pacientes y casos ----------
@@ -194,6 +238,10 @@ model Case {
   // ORTOSEND (cola central) | REVISION (Ortosend revisa y devuelve; firma la clínica)
   rxRoute      String?
   rxRequestedBy String?  // User de la clínica que envió el estudio
+  // Último momento en que el asistente de captura de este caso estaba en el
+  // paso del escaneo: el escaneo que llegue del puente se asocia solo al caso
+  // que está esperando (si hay uno solo esperando en la clínica).
+  scanWaitingAt DateTime?
   qcPhotoUrl   String?   // foto obligatoria del par en calidad
   payLinkExpiresAt DateTime? // 30 días; recordatorios días 0/3/7/15
   incidents    Incident[]
