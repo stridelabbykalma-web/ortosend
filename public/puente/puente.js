@@ -442,8 +442,43 @@ async function firmaArchivo(ruta) {
   }
 }
 
+// Autoactualización: al arrancar se compara este archivo con el que sirve el
+// servidor; si ha cambiado, se descargan puente.js y zip.js y el proceso
+// termina para que iniciar-puente.bat lo vuelva a lanzar ya actualizado.
+async function autoactualizar(cfg) {
+  const archivos = ["puente.js", "zip.js"];
+  const nuevos = {};
+  for (const f of archivos) {
+    const res = await fetch(`${cfg.servidor}/puente/${f}`);
+    if (!res.ok) return false;
+    nuevos[f] = await res.text();
+  }
+  const cambiado = archivos.some((f) => {
+    try {
+      return fs.readFileSync(path.join(__dirname, f), "utf8") !== nuevos[f];
+    } catch {
+      return true;
+    }
+  });
+  if (!cambiado) return false;
+  for (const f of archivos) {
+    const destino = path.join(__dirname, f);
+    fs.writeFileSync(`${destino}.tmp`, nuevos[f]);
+    fs.renameSync(`${destino}.tmp`, destino);
+  }
+  return true;
+}
+
 async function main() {
   const cfg = leerConfig();
+  try {
+    if (await autoactualizar(cfg)) {
+      log("Puente actualizado a la última versión. Reiniciando...");
+      process.exit(0); // iniciar-puente.bat lo vuelve a lanzar
+    }
+  } catch (e) {
+    log(`No se pudo comprobar si hay versión nueva (${e.message}). Se sigue con la actual.`);
+  }
   const estado = leerEstado();
   guardarEstado(estado); // fija instaladoEn la primera vez
   const tamanos = new Map();
