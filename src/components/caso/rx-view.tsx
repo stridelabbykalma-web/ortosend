@@ -4,14 +4,53 @@ import {
   draftAction,
   noPrescribeAction,
   repeatAction,
+  reviewBackAction,
   signRxAction,
 } from "@/app/panel/rx-actions";
+import { REVISION_PREFIJO } from "@/lib/rx-route";
 
 // Vista de valoración y prescripción (prescriptor de clínica o recetador central).
-export function RxView({ kase, collegiateNum }: { kase: Case; collegiateNum: string | null }) {
+export function RxView({
+  kase,
+  collegiateNum,
+  central = false,
+  requestedBy = null,
+}: {
+  kase: Case;
+  collegiateNum: string | null;
+  central?: boolean; // quien mira es el recetador de Ortosend
+  requestedBy?: string | null; // profesional de la clínica que envió el caso
+}) {
+  const revisionPedida = central && kase.rxRoute === "REVISION";
+  const revisionRecibida = !central && !!kase.rxDraft?.startsWith(REVISION_PREFIJO);
   return (
     <div className="card">
       <b style={{ fontFamily: "var(--font-sora)" }}>Valoración y prescripción</b>
+      {revisionPedida && (
+        <form action={reviewBackAction} className="note a" style={{ marginTop: 10 }}>
+          <input type="hidden" name="caseId" value={kase.id} />
+          <b>Segunda opinión pedida por {requestedBy ?? "la clínica"}</b> — receta propia de la clínica: la firma es suya.
+          Escribe tu valoración y devuélveselo; te lo puedes quedar y firmarlo tú solo si la clínica
+          lo pide expresamente.
+          <label>Tu valoración para la clínica</label>
+          <textarea
+            name="review"
+            rows={3}
+            required
+            placeholder="Hallazgos, diagnóstico que ves y pauta de fabricación que recomiendas…"
+          />
+          <div className="sp" />
+          <button type="submit" className="pri">
+            Devolver la segunda opinión a la clínica
+          </button>
+        </form>
+      )}
+      {revisionRecibida && (
+        <div className="note g" style={{ marginTop: 10 }}>
+          <b>Segunda opinión de Ortosend recibida</b> — la tienes abajo, en la valoración clínica, lista
+          para completarla y firmar.
+        </div>
+      )}
       <form action={signRxAction} id={`rx-${kase.id}`}>
         <input type="hidden" name="caseId" value={kase.id} />
         <label>Valoración clínica (hallazgos relevantes)</label>
@@ -33,11 +72,14 @@ export function RxView({ kase, collegiateNum }: { kase: Case; collegiateNum: str
           </select>
           <input name="diagnosisDetail" placeholder="Matiz o detalle" style={{ flex: 1, minWidth: 160 }} />
         </div>
-        <label>Pauta de fabricación (orden de trabajo para el taller)</label>
+        <label>
+          Receta: cómo deben ser las plantillas, qué deben llevar y qué función tienen (orden de
+          trabajo para el taller)
+        </label>
         <textarea
           name="fabricationOrder"
-          rows={2}
-          placeholder="Tipo de plantilla, correcciones, cuñas, descargas, alza en mm…"
+          rows={3}
+          placeholder="Cómo deben ser (tipo, material, rigidez)… qué deben llevar (cuñas, descargas, alza en mm)… y qué función tienen (objetivo del tratamiento)."
         />
         <label>Pauta de uso para el paciente</label>
         <textarea

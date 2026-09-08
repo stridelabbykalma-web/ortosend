@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { Capture, Case, Incident, MediaAsset, Patient } from "@prisma/client";
 import { checklistOf } from "@/lib/cases";
-import { CAPTURA_VISUAL, FOTO_KINDS, SCAN_KIND, VIDEO_KINDS } from "@/lib/format";
+import { BARO_KINDS, CAPTURA_VISUAL, FOTO_KINDS, SCAN_KIND, VIDEO_KINDS } from "@/lib/format";
 import {
   ACTIVIDAD_OPTS,
   ANTECEDENTES_OPTS,
@@ -64,8 +64,10 @@ import {
   type TestId,
 } from "@/lib/tests-podologicos";
 import { CheckLine } from "@/components/ui";
+import { RX_ROUTES, RX_ROUTE_HELP, RX_ROUTE_LABEL, type RxRoute } from "@/lib/rx-route";
 import {
   autosaveSectionAction,
+  chooseRxRouteAction,
   markMediaAction,
   saveExamSectionAction,
   saveQuestionnaireSectionAction,
@@ -93,14 +95,6 @@ type Slide =
 // Para qué sirve cada captura de cámara. Cómo se hace (colocación, duración,
 // checks de encuadre que valida MediaPipe) está en src/lib/capture-guide.ts.
 const CAPTURA_META: Record<string, { grupo: string; help: string }> = {
-  video_lat_dcha_descalzo: {
-    grupo: "Vídeos de marcha",
-    help: "Marcha de perfil con el lado derecho hacia la cámara, descalzo: ciclo completo del pie derecho (contacto, apoyo medio y despegue).",
-  },
-  video_lat_izq_descalzo: {
-    grupo: "Vídeos de marcha",
-    help: "Marcha de perfil con el lado izquierdo hacia la cámara, descalzo: ciclo completo del pie izquierdo.",
-  },
   video_post_descalzo: {
     grupo: "Vídeos de marcha",
     help: "El paciente se aleja de la cámara, descalzo: retropié en dinámica (valgo/varo), eversión del calcáneo y compensaciones desde atrás.",
@@ -686,7 +680,76 @@ function ESection({ section, e, q }: { section: string; e: Exam | null; q: Quest
 
 // --- Componente principal: una prueba por pantalla ---
 
-export function CapturaGuiada({ kase, paso }: { kase: CaseWithCapture; paso?: number }) {
+// Primera pantalla del caso: quién receta. De ello depende el protocolo.
+function ElegirQuienReceta({
+  kase,
+  puedeRecetar,
+}: {
+  kase: CaseWithCapture;
+  puedeRecetar: boolean;
+}) {
+  const actual = (kase.rxRoute as RxRoute | null) ?? null;
+  return (
+    <div className="slide-wrap">
+      <div className="card slide-card">
+        <h3 style={{ margin: "0 0 4px", fontFamily: "var(--font-sora)" }}>¿Quién receta este caso?</h3>
+        <p className="muted" style={{ margin: "4px 0 10px" }}>
+          Se decide antes de empezar, porque el estudio que hay que hacer depende de ello.
+        </p>
+        <form action={chooseRxRouteAction}>
+          <input type="hidden" name="caseId" value={kase.id} />
+          {puedeRecetar ? (
+            RX_ROUTES.map((r) => (
+              <label className="chk" key={r} style={{ alignItems: "flex-start" }}>
+                <input type="radio" name="rxRoute" value={r} defaultChecked={(actual ?? "ORTOSEND") === r} required />{" "}
+                <span>
+                  {RX_ROUTE_LABEL[r]}
+                  <span className="tiny" style={{ display: "block" }}>{RX_ROUTE_HELP[r]}</span>
+                </span>
+              </label>
+            ))
+          ) : (
+            <>
+              <input type="hidden" name="rxRoute" value="ORTOSEND" />
+              <div className="note">Receta por parte del equipo de Ortosend.</div>
+            </>
+          )}
+          <div className="sp" />
+          <button type="submit" className="pri wfull">
+            {actual ? "Guardar y continuar →" : "Empezar →"}
+          </button>
+        </form>
+        {actual && (
+          <div className="row between" style={{ marginTop: 14 }}>
+            <Link className="tiny" href={`/caso/${kase.id}`}>
+              ← Volver sin cambiar
+            </Link>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export function CapturaGuiada({
+  kase,
+  paso,
+  puedeRecetar = false,
+  elegir = false,
+}: {
+  kase: CaseWithCapture;
+  paso?: number;
+  puedeRecetar?: boolean; // la clínica tiene un prescriptor con colegiación verificada
+  elegir?: boolean; // volver a la pantalla de quién receta
+}) {
+  // Sin decidir quién receta no hay protocolo.
+  if (!kase.rxRoute || elegir) return <ElegirQuienReceta kase={kase} puedeRecetar={puedeRecetar} />;
+  // Receta propia (con o sin segunda opinión de Ortosend): mismo protocolo guiado,
+  // pero cualquier prueba es elegible — solo el motivo de consulta es obligatorio.
+  // El estudio completo con checklist bloqueante es el de la vía Ortosend.
+  const propio = kase.rxRoute !== "ORTOSEND";
+  const ruta = RX_ROUTE_LABEL[kase.rxRoute as RxRoute];
+
   const cp = kase.capture;
   const q = (cp?.questionnaire as Questionnaire | null) ?? null;
   const e = (cp?.physicalExam as Exam | null) ?? null;
@@ -699,9 +762,21 @@ export function CapturaGuiada({ kase, paso }: { kase: CaseWithCapture; paso?: nu
     ? [...kase.incidents].sort((a, b) => +b.createdAt - +a.createdAt).find((i) => i.type === "CAPTURA_INVALIDA")
     : null;
 
-  const doneFlags = SLIDES.map((s) => (s.t === "envio" ? cl.completa : slideDone(s, q, e, has)));
+  // Receta propia: para enviar basta el motivo de consulta (primera pantalla).
+  // El autoguardado crea la clave «motivo» con la primera tecla, así que se exige
+  // que tenga texto: es lo mismo que comprueba el servidor al enviar.
+  const motivoDone = !!q?.motivo?.trim();
+  // Receta propia: obligatorios el motivo de consulta, la baropodometría (estática y
+  // dinámica) y el escaneo de las espumas; el resto de pruebas son elegibles.
+  const obligatoria = (s: Slide, i: number) =>
+    i === 0 || (s.t === "file" && (s.kind === SCAN_KIND || BARO_KINDS.some(([k]) => k === s.kind)));
+  const puedeEnviar = propio ? motivoDone && cl.baro && cl.escaneos : cl.completa;
+
+  const doneFlags = SLIDES.map((s) => (s.t === "envio" ? puedeEnviar : slideDone(s, q, e, has)));
   const total = SLIDES.length;
-  const firstPending = doneFlags.findIndex((d, i) => !d && SLIDES[i].t !== "envio");
+  const firstPending = doneFlags.findIndex(
+    (d, i) => !d && SLIDES[i].t !== "envio" && (!propio || obligatoria(SLIDES[i], i))
+  );
   const continueAt = firstPending === -1 ? total : firstPending + 1;
 
   // --- Índice (sin ?paso): resumen del protocolo y continuar donde se quedó ---
@@ -713,6 +788,14 @@ export function CapturaGuiada({ kase, paso }: { kase: CaseWithCapture; paso?: nu
             <b>Caso devuelto:</b> {lastIncident?.reason ?? "repetir prueba indicada"}. Repite la
             prueba señalada y reenvía el estudio.
           </div>
+        ) : propio ? (
+          <div className="note">
+            <b>{ruta}.</b> Obligatorios: el <b>motivo de consulta</b>, la{" "}
+            <b>baropodometría</b> (estática y dinámica múltiple) y el <b>escaneo de las espumas</b>.
+            El resto de pruebas son elegibles — haz únicamente las que necesites para tu valoración
+            (vídeos guiados de 8-10 s como máximo). Al enviar, la receta la rellena y firma el prescriptor de vuestra
+            clínica{kase.rxRoute === "REVISION" ? ", con la segunda opinión de Ortosend recibida" : ""}.
+          </div>
         ) : (
           <div className="note">
             Protocolo guiado: una prueba por pantalla, con guardado automático mientras escribes
@@ -723,7 +806,12 @@ export function CapturaGuiada({ kase, paso }: { kase: CaseWithCapture; paso?: nu
         <div className="sp" />
         <div className="card">
           <div className="row between">
-            <b style={{ fontFamily: "var(--font-sora)" }}>Protocolo de captura</b>
+            <b style={{ fontFamily: "var(--font-sora)" }}>
+              {propio ? "Protocolo de receta propia" : "Protocolo de captura"}
+            </b>
+            <span className="tiny">
+              {ruta} · <Link href={`/caso/${kase.id}?elegir=1`}>cambiar</Link>
+            </span>
             <span className="pill n">
               {doneFlags.filter((d, j) => d && SLIDES[j].t !== "envio").length}/{total - 1} pruebas
             </span>
@@ -742,7 +830,12 @@ export function CapturaGuiada({ kase, paso }: { kase: CaseWithCapture; paso?: nu
                 <Link href={`/caso/${kase.id}?paso=${i + 1}`} style={{ textDecoration: "none", color: "inherit" }}>
                   <CheckLine ok={doneFlags[i]}>
                     {s.title}
-                    <span className="push tiny">{doneFlags[i] ? "revisar" : "hacer →"}</span>
+                    {propio && obligatoria(s, i) && !doneFlags[i] && (
+                      <span className="pill a">obligatorio</span>
+                    )}
+                    <span className="push tiny">
+                      {doneFlags[i] ? "revisar" : propio && !obligatoria(s, i) ? "elegible →" : "hacer →"}
+                    </span>
                   </CheckLine>
                 </Link>
               </div>
@@ -913,16 +1006,34 @@ export function CapturaGuiada({ kase, paso }: { kase: CaseWithCapture; paso?: nu
         {s.t === "envio" && (
           <>
             <p className="muted" style={{ margin: "4px 0 10px" }}>
-              Checklist bloqueante del protocolo: sin todo en verde no hay envío a prescripción.
+              {propio
+                ? "Receta propia: son obligatorios el motivo de consulta, la baropodometría y el escaneo de las espumas. Las demás pruebas son elegibles y se adjuntan las que hayas hecho."
+                : "Checklist bloqueante del protocolo: sin todo en verde no hay envío a prescripción."}
             </p>
-            <CheckLine ok={cl.cuestionario}>Cuestionario clínico (5 pantallas)</CheckLine>
-            <CheckLine ok={cl.exploracion}>Exploración y tests (6 pantallas)</CheckLine>
-            <CheckLine ok={cl.capturas >= CAPTURA_VISUAL.length}>
-              Vídeos y fotos {cl.capturas}/{CAPTURA_VISUAL.length} ({VIDEO_KINDS.length} vídeos de
-              marcha + {FOTO_KINDS.length} fotos de los pies de cerca)
-            </CheckLine>
-            <CheckLine ok={cl.baro}>Baropodometría (estática + dinámica múltiple)</CheckLine>
-            <CheckLine ok={cl.escaneos}>Escaneo de las espumas fenólicas</CheckLine>
+            {propio ? (
+              <>
+                <CheckLine ok={motivoDone}>Motivo de consulta y dolor (obligatorio)</CheckLine>
+                <CheckLine ok={cl.cuestionario}>Cuestionario clínico completo (elegible)</CheckLine>
+                <CheckLine ok={cl.exploracion}>Exploración y tests (elegible)</CheckLine>
+                <CheckLine ok={cl.capturas > 0}>
+                  Vídeos y fotos adjuntos: {cl.capturas}/{CAPTURA_VISUAL.length} (elegibles, máx. 10
+                  s por vídeo)
+                </CheckLine>
+                <CheckLine ok={cl.baro}>Baropodometría estática + dinámica múltiple (obligatoria)</CheckLine>
+                <CheckLine ok={cl.escaneos}>Escaneo de las espumas fenólicas (obligatorio)</CheckLine>
+              </>
+            ) : (
+              <>
+                <CheckLine ok={cl.cuestionario}>Cuestionario clínico (5 pantallas)</CheckLine>
+                <CheckLine ok={cl.exploracion}>Exploración y tests (6 pantallas)</CheckLine>
+                <CheckLine ok={cl.capturas >= CAPTURA_VISUAL.length}>
+                  Vídeos y fotos {cl.capturas}/{CAPTURA_VISUAL.length} ({VIDEO_KINDS.length} vídeos de
+                  marcha + {FOTO_KINDS.length} fotos de los pies de cerca)
+                </CheckLine>
+                <CheckLine ok={cl.baro}>Baropodometría (estática + dinámica múltiple)</CheckLine>
+                <CheckLine ok={cl.escaneos}>Escaneo de las espumas fenólicas</CheckLine>
+              </>
+            )}
             {alertas.length > 0 && (
               <div className="note r" style={{ marginTop: 10 }}>
                 <b>Hallazgos de alerta en la exploración</b> — se envían destacados al prescriptor,
@@ -934,12 +1045,28 @@ export function CapturaGuiada({ kase, paso }: { kase: CaseWithCapture; paso?: nu
                 </ul>
               </div>
             )}
-            {cl.completa ? (
+            {puedeEnviar ? (
               <form action={sendCaseAction}>
                 <input type="hidden" name="caseId" value={kase.id} />
+                <input type="hidden" name="paso" value={paso} />
+                <div className="sp" />
+                <div className="tiny">
+                  Vía elegida al empezar: <b>{ruta.toLowerCase()}</b> (·{" "}
+                  <Link href={`/caso/${kase.id}?elegir=1`}>cambiar</Link>).
+                  {propio &&
+                    (kase.rxRoute === "REVISION"
+                      ? " Ortosend valorará el estudio y devolverá su segunda opinión; después la receta la rellena y firma el prescriptor de vuestra clínica, con su identidad y colegiación puestas automáticamente desde su perfil."
+                      : " Al enviar, la receta (cómo deben ser las plantillas, qué deben llevar y qué función tienen) la rellena y firma el prescriptor de vuestra clínica, con su identidad y colegiación puestas automáticamente desde su perfil.")}
+                </div>
                 <div className="sp" />
                 <button type="submit" className="pri wfull">
-                  {repeat ? "Reenviar caso a prescripción" : "Enviar caso a prescripción"}
+                  {repeat
+                    ? "Reenviar caso a prescripción"
+                    : propio
+                      ? kase.rxRoute === "REVISION"
+                        ? "Enviar a Ortosend para la segunda opinión"
+                        : "Enviar y pasar a la receta"
+                      : "Enviar caso a prescripción"}
                 </button>
               </form>
             ) : (
@@ -947,7 +1074,7 @@ export function CapturaGuiada({ kase, paso }: { kase: CaseWithCapture; paso?: nu
                 <div className="sp" />
                 <Link href={`/caso/${kase.id}?paso=${continueAt}`}>
                   <button className="wfull" type="button">
-                    Ir a la primera prueba pendiente →
+                    {propio ? "Ir a la primera prueba obligatoria pendiente →" : "Ir a la primera prueba pendiente →"}
                   </button>
                 </Link>
               </>

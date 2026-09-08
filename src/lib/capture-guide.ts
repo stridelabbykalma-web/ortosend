@@ -52,22 +52,6 @@ export type CaptureGuide = {
   tips: string[]; // instrucciones de encuadre para el profesional
 };
 
-// Marcha lateral: el paciente camina recto hacia delante y la cámara está a un
-// lado del pasillo, perpendicular al recorrido. Con el lado derecho hacia la
-// cámara el paciente cruza el encuadre de izquierda a derecha; con el izquierdo,
-// de derecha a izquierda.
-const LATERAL_TIPS = (lado: "derecho" | "izquierdo", calzado: string, seg: number) => [
-  "El paciente espera QUIETO en el punto de salida y echa a andar al oír el pitido (suena medio segundo después de empezar a grabar, para que quede la salida desde parado). Un tono grave avisa del final.",
-  "Debe verse de la cintura a los pies (la cabeza puede quedar fuera); los pies no pueden salir cortados por abajo.",
-  "Piernas descubiertas de la rodilla para abajo (pantalón corto o remangado por encima de la rodilla): hay que ver la pierna y la reacción del cuerpo al andar. Lo comprueba el profesional; la app no lo valida.",
-  `Móvil en trípode, en horizontal, a la altura de la cadera, a un lado del pasillo (3-4 m) y perpendicular al recorrido.`,
-  `El paciente camina recto hacia delante, ${calzado}, con su lado ${lado} hacia la cámara: cruza el encuadre ${
-    lado === "derecho" ? "de izquierda a derecha" : "de derecha a izquierda"
-  }.`,
-  "Antes de grabar, que se coloque de perfil en el punto de salida: el estudio comprueba que sea el lado correcto.",
-  `Grabación fija de ${seg} s: si sale del plano, vuelve al punto de salida por fuera del encuadre y repite el paso.`,
-];
-
 // Marcha posterior: cámara detrás del paciente, en el eje del pasillo; se aleja.
 const POSTERIOR_TIPS = (calzado: string, seg: number) => [
   "El paciente espera QUIETO en el punto de salida y echa a andar al oír el pitido (suena medio segundo después de empezar a grabar, para que quede la salida desde parado). Un tono grave avisa del final.",
@@ -93,20 +77,6 @@ const ANTERIOR_TIPS = (calzado: string, seg: number) => [
 ];
 
 export const CAPTURE_GUIDES: Record<string, CaptureGuide> = {
-  video_lat_dcha_descalzo: {
-    mode: "video",
-    checks: ["persona", "cintura_a_pies", "perfil", "lado_dcho"],
-    seconds: 8,
-    direction: "ltr",
-    tips: LATERAL_TIPS("derecho", "descalzo", 8),
-  },
-  video_lat_izq_descalzo: {
-    mode: "video",
-    checks: ["persona", "cintura_a_pies", "perfil", "lado_izq"],
-    seconds: 8,
-    direction: "rtl",
-    tips: LATERAL_TIPS("izquierdo", "descalzo", 8),
-  },
   video_post_descalzo: {
     mode: "video",
     checks: ["persona", "cintura_a_pies", "de_espaldas"],

@@ -34,8 +34,8 @@ asociadas. Stack: **Next.js (App Router, server actions) + PostgreSQL (Prisma)**
   con tope de sugerencias y aviso de volumen), y **hallazgos de alerta** (Thompson, Tinel,
   compresión del calcáneo) destacados para el prescriptor porque no se resuelven con una
   plantilla; dismetría valorada con nivel pélvico y láminas calibradas, análisis observacional de la
-  marcha, 4 vídeos de marcha, todos descalzo (lateral derecha, lateral izquierda, posterior
-  alejándose y anterior viniendo hacia la cámara) más 2 fotos de los pies de
+  marcha, 2 vídeos de marcha, descalzo (posterior alejándose y anterior viniendo hacia la
+  cámara) más 2 fotos de los pies de
   cerca en carga (desde atrás para el retropié y desde delante para el antepié),
   baropodometría Podisense (estática + dinámica múltiple) y
   escaneo de las espumas fenólicas como último paso — estas tres se hacen en su propia
@@ -48,8 +48,7 @@ asociadas. Stack: **Next.js (App Router, server actions) + PostgreSQL (Prisma)**
   cintura a los pies en plano, de perfil con el lado correcto hacia la cámara, de frente o de
   espaldas). Que el paciente lleve las piernas descubiertas de la rodilla al tobillo es
   responsabilidad del profesional (va en las instrucciones, la app no lo valida). Con todo
-  en verde de forma estable (~1 s) la cuenta atrás arranca sola (también hay botón); cada vídeo tiene **duración fija** (laterales 8 s,
-  posterior y anterior 10 s) con cuenta atrás y corte automático, Los checks solo hacen falta
+  en verde de forma estable (~1 s) la cuenta atrás arranca sola (también hay botón); cada vídeo tiene **duración fija** (10 s) con cuenta atrás y corte automático, Los checks solo hacen falta
   para arrancar; durante la grabación no se exige nada (el paciente se mueve y el modelo no
   acierta todos los frames), y los segundos con encuadre válido se guardan solo como dato. Las fotos exigen ver
   **los dos pies de cerca** (talones y dedos detectados, llenando el encuadre, talones hacia la
@@ -70,7 +69,19 @@ asociadas. Stack: **Next.js (App Router, server actions) + PostgreSQL (Prisma)**
   WASM se sirve desde el CDN de jsDelivr (o desde la app con `NEXT_PUBLIC_MEDIAPIPE_WASM`).
 
 **Prescripción**
-- Cola del prescriptor de clínica y **cola central Ortosend** (clínicas sin prescriptor) con
+- **Quién receta se elige al abrir cada caso**, antes del estudio, y lo elige quien lo lleva
+  (profesional o administrador de la clínica). Si la clínica tiene un prescriptor con
+  colegiación verificada: **receta propia**, **receta por parte del equipo de Ortosend** o
+  **receta propia con segunda opinión de Ortosend**; si no, solo la receta por parte de Ortosend.
+  El estudio completo con checklist bloqueante es el de la vía Ortosend. En las vías de
+  **receta propia** (con o sin segunda opinión) el protocolo es el mismo pero **elegible**: son
+  obligatorios el motivo de consulta, la baropodometría (estática + dinámica múltiple) y el
+  escaneo de las espumas; el resto (cuestionario completo, exploración, vídeos guiados de 8-10 s,
+  fotos) se hace solo si el profesional lo necesita. Al enviar, la receta — cómo deben ser las plantillas, qué deben llevar y qué función
+  tienen — la rellena y firma el prescriptor de la clínica, con identidad y colegiación puestas
+  automáticamente desde su perfil; en la vía con segunda opinión, Ortosend valora antes el
+  estudio y devuelve su opinión al borrador, y firma la clínica.
+- Cola del prescriptor de clínica y **cola central Ortosend** con
   **reparto automático** por antigüedad: al abrir un caso queda asociado; se libera al soltarlo,
   cerrar sesión o a los 45 min de inactividad.
 - Firma solo por prescriptor con **colegiación verificada** (guarda dura). Salidas: prescribir

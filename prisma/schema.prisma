@@ -94,6 +94,7 @@ model Clinic {
   cases        Case[]
   equipment    Equipment[]
   settlements  Settlement[]
+  professionalApplications ProfessionalApplication[]
   createdAt    DateTime     @default(now())
 }
 
@@ -189,6 +190,10 @@ model Case {
   material     String?   // trazabilidad: lote de material en confección
   designFileUrl String?  // CAD archivado (reposiciones / revisión anual)
   rxDraft      String?   // borrador de valoración guardado al soltar el caso
+  // Quién receta, elegido al enviar: CLINICA (lo firma quien envió) |
+  // ORTOSEND (cola central) | REVISION (Ortosend revisa y devuelve; firma la clínica)
+  rxRoute      String?
+  rxRequestedBy String?  // User de la clínica que envió el estudio
   qcPhotoUrl   String?   // foto obligatoria del par en calidad
   payLinkExpiresAt DateTime? // 30 días; recordatorios días 0/3/7/15
   incidents    Incident[]
@@ -217,7 +222,7 @@ model MediaAsset {
   id        String  @id @default(cuid())
   captureId String
   capture   Capture @relation(fields: [captureId], references: [id])
-  kind      String  // video_lat_dcha_descalzo | ... | video_ant_descalzo | foto_posterior | foto_anterior | baro_est | baro_din_multi | scan_espumas
+  kind      String  // video_post_descalzo | video_ant_descalzo | foto_posterior | foto_anterior | baro_est | baro_din_multi | scan_espumas
   url       String
   sizeBytes Int?
   meta      Json?     // métricas del estudio de captura: duración, s con encuadre válido (MediaPipe), mime…
@@ -355,4 +360,26 @@ model AuditLog {
   action  String   // p.ej. "case.view", "prescription.download"
   target  String
   at      DateTime @default(now())
+}
+
+// Solicitud de alta de profesional presentada por el admin de una clínica.
+// Ortosend valida la ficha (y la colegiación si prescribe) y crea la cuenta.
+model ProfessionalApplication {
+  id            String   @id @default(cuid())
+  clinicId      String
+  clinic        Clinic   @relation(fields: [clinicId], references: [id])
+  requestedBy   String              // userId del admin de clínica solicitante
+  fullName      String
+  dni           String
+  email         String
+  phone         String
+  degree        String              // titulación
+  canPrescribe  Boolean  @default(false)
+  collegiateNum String?             // obligatorio si canPrescribe
+  college       String?             // colegio profesional y provincia
+  notes         String?
+  status        String   @default("recibida") // recibida | aprobada | rechazada
+  resolutionNote String?
+  resolvedAt    DateTime?
+  createdAt     DateTime @default(now())
 }

@@ -9,7 +9,10 @@ export const TRANSITIONS: Record<CaseState, T[]> = {
     { to: "ESTUDIO_EN_CURSO", roles: ["PROFESIONAL", "ADMIN_CLINICA"] },
   ],
   ESTUDIO_EN_CURSO: [
-    { to: "ESTUDIO_COMPLETO", roles: ["PROFESIONAL", "ADMIN_CLINICA"], guard: "checklistCompleta" },
+    // Vía Ortosend: checklist completa. Receta propia (con o sin segunda opinión):
+    // basta el motivo de consulta; el caso pasa igualmente a EN_PRESCRIPCION y lo
+    // firma el prescriptor de la clínica desde su cola.
+    { to: "ESTUDIO_COMPLETO", roles: ["PROFESIONAL", "ADMIN_CLINICA"], guard: "checklistCompleta | motivoRegistrado" },
   ],
   ESTUDIO_COMPLETO: [
     { to: "EN_PRESCRIPCION", roles: ["PROFESIONAL", "ADMIN_CLINICA"] }, // automático al enviar
