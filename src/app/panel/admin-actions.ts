@@ -133,3 +133,62 @@ export async function runJobs() {
   }
   return { expired: expiredCases.length, reminders };
 }
+
+// --- Altas de profesionales solicitadas por las clínicas ---
+// Aprobar valida la ficha: crea la cuenta (con invitación de activación 72 h)
+// y el perfil profesional; si prescribe, la colegiación queda verificada.
+export async function professionalApplicationAction(formData: FormData) {
+  const admin = await requireRole("ADMIN");
+  const id = String(formData.get("applicationId"));
+  const decision = String(formData.get("decision"));
+  const note = String(formData.get("note") ?? "").trim();
+  const back = "/panel?tab=usr";
+  const app = await prisma.professionalApplication.findUnique({ where: { id }, include: { clinic: true } });
+  if (!app || app.status !== "recibida") fail(back, "Solicitud no encontrada o ya resuelta");
+
+  if (decision === "rechazada") {
+    await prisma.professionalApplication.update({
+      where: { id },
+      data: { status: "rechazada", resolutionNote: note || null, resolvedAt: new Date() },
+    });
+    redirect(back + "&ok=" + encodeURIComponent(`Solicitud de ${app.fullName} rechazada`));
+  }
+  if (decision !== "aprobada") fail(back, "Decisión no válida");
+
+  const dup = await prisma.user.findFirst({ where: { OR: [{ email: app.email }, { phone: app.phone }] } });
+  if (dup) fail(back, "Ya existe una cuenta con ese email o móvil");
+  const user = await prisma.user.create({
+    data: {
+      email: app.email,
+      phone: app.phone,
+      role: "PROFESIONAL",
+      name: app.fullName,
+      clinicId: app.clinicId,
+      invitedAt: new Date(),
+      professional: {
+        create: {
+          dni: app.dni,
+          degree: app.degree,
+          canPrescribe: app.canPrescribe,
+          collegiateNum: app.collegiateNum,
+          college: app.college,
+          // La aprobación de Ortosend implica colegiación validada.
+          verifiedAt: app.canPrescribe ? new Date() : null,
+        },
+      },
+    },
+  });
+  await prisma.professionalApplication.update({
+    where: { id },
+    data: { status: "aprobada", resolutionNote: note || null, resolvedAt: new Date() },
+  });
+  const { createInviteToken } = await import("@/lib/auth");
+  const token = await createInviteToken(user.id);
+  await notify(app.phone, "invitacion_profesional", {
+    enlace: `/activar?token=${token}`,
+    validez: "72 h",
+    nota: `Bienvenido/a al equipo de ${app.clinic.name} en Ortosend. Activa tu cuenta y completa la formación (5 módulos).`,
+  });
+  void admin;
+  redirect(back + "&ok=" + encodeURIComponent(`Cuenta de ${app.fullName} creada e invitación enviada`));
+}
