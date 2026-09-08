@@ -487,10 +487,20 @@ export async function PanelClinica({ user, tab }: { user: User; tab?: string }) 
                 escáner. Si se pierde el equipo, revócalo aquí y da de alta otro.
               </div>
               <div className="sp" />
-              <form action={revocarPuenteAction}>
-                <input type="hidden" name="agentId" value={a.id} />
-                <button type="submit">Revocar este puente</button>
-              </form>
+              <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+                <a href={`/api/puente/instalador?agent=${a.id}`} className="btn pri" download>
+                  Descargar instalador para el PC del escáner
+                </a>
+                <form action={revocarPuenteAction}>
+                  <input type="hidden" name="agentId" value={a.id} />
+                  <button type="submit">Revocar este puente</button>
+                </form>
+              </div>
+              <div className="tiny muted" style={{ marginTop: 6 }}>
+                El instalador ya lleva el servidor y este token: en el PC del escáner, doble clic y
+                listo (instala Node si falta, detecta la carpeta de Revo Scan y lo deja arrancando
+                solo con Windows).
+              </div>
             </div>
           ))
         ) : (
@@ -501,20 +511,33 @@ export async function PanelClinica({ user, tab }: { user: User; tab?: string }) 
         )}
         <div className="sp" />
         <div className="card">
-          <b>Instalación en el PC del escáner</b>
+          <b>Instalación en el PC del escáner (Windows)</b>
           <ol className="muted" style={{ margin: "8px 0 0 18px", padding: 0 }}>
-            <li>Copia la carpeta <code>tools/puente-escaneo</code> al PC (necesita Node 18 o superior).</li>
             <li>
-              Rellena <code>puente.config.json</code> con el servidor y el token de arriba y con la
-              carpeta de escaneos de Revo Scan (por defecto{" "}
-              <code>C:\Users\USUARIO\AppData\Roaming\RevoScan5\Projects</code>).
+              Da de alta el puente arriba y pulsa <b>Descargar instalador</b>. Pasa el archivo al
+              PC del escáner (USB, correo, lo que sea).
             </li>
-            <li>Ejecútalo con <code>node puente.js</code> (o el acceso directo <code>iniciar-puente.bat</code>).</li>
             <li>
-              Con el caso abierto en el paso del escaneo, escanea y pulsa Parar: llega solo al
-              paciente. Si no había caso abierto, se confirma con un toque en el asistente.
+              Doble clic en el archivo <code>.bat</code>. Si Windows avisa («Windows protegió su
+              PC»), pulsa <i>Más información → Ejecutar de todas formas</i>. Si pide permiso para
+              instalar Node, acepta.
+            </li>
+            <li>
+              Al terminar se abre una ventana negra que dice <i>modo directo al almacén (sin límite
+              de tamaño)</i>. Déjala abierta o minimizada: es el puente. Arrancará solo cada vez que
+              se encienda el PC.
+            </li>
+            <li>
+              Desde entonces: abre el caso en el paso «Escaneo de las espumas», escanea con Revo
+              Scan y pulsa Parar. El escaneo llega solo al paciente; si no había ningún caso
+              abierto, se confirma con un toque en el asistente.
             </li>
           </ol>
+          <div className="tiny muted" style={{ marginTop: 8 }}>
+            Instalación manual (Mac o sin instalador): descarga <code>/puente/puente.js</code>,{" "}
+            <code>/puente/zip.js</code> y <code>/puente/puente.config.example.json</code> de esta
+            misma web y sigue <code>/puente/README.md</code>.
+          </div>
         </div>
       </>
     );

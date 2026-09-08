@@ -46,7 +46,7 @@ Asistente (tablet)                       + evento en el historial
 | `GET /api/media/[id]` | servidor | Descarga autenticada + `AuditLog`; para escaneos redirige a la URL firmada de R2. |
 | `EscaneoPuente` | `src/components/caso/escaneo-puente.tsx` | Paso del escaneo: espera, bandeja para confirmar, subida a mano con progreso. |
 | `Escaneos` | `src/components/caso/expediente.tsx` | En el expediente: «Descargar escaneo» por cada archivo (taller, prescriptor, clínica). |
-| `tools/puente-escaneo/` | PC del escáner | Vigila la carpeta de Revo Scan (proyectos RS5 → ZIP propio sin dependencias; archivos RS6) y, opcionalmente, una carpeta de mesh exportados (gzip). Node 18, sin dependencias. |
+| `public/puente/` | PC del escáner | Vigila la carpeta de Revo Scan (proyectos RS5 → ZIP propio sin dependencias; archivos RS6) y, opcionalmente, una carpeta de mesh exportados (gzip). Node 18, sin dependencias. |
 
 ## Reglas de asociación
 

@@ -67,7 +67,8 @@ function leerConfig() {
     console.error("Copia puente.config.example.json a puente.config.json y rellénalo.");
     process.exit(1);
   }
-  const cfg = JSON.parse(raw);
+  // El Bloc de notas y PowerShell pueden guardar el JSON con BOM: se quita.
+  const cfg = JSON.parse(raw.replace(/^\uFEFF/, ""));
   const servidor = (process.env.ORTOSEND_URL || cfg.servidor || "").replace(/\/+$/, "");
   const token = process.env.ORTOSEND_TOKEN || cfg.token || "";
   const carpeta = process.env.ORTOSEND_CARPETA || cfg.carpeta || "";

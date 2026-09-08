@@ -33,12 +33,26 @@ confirma con un toque. Nunca se asigna a ciegas.
 - `carpeta` (opcional) — carpeta de mesh exportados a mano (`.stl`, `.obj`,
   `.ply`…), por si el profesional prefiere exportar. Van comprimidos con gzip.
 
-## Instalación
+## Instalación (Windows, un clic)
 
-Requisitos: **Node 18 o superior** en el PC del escáner.
+1. En Ortosend, como administrador de clínica: **Panel → Puente de escaneo → Dar de alta un
+   puente → Descargar instalador**. El archivo `.bat` ya lleva el servidor y el token.
+2. En el PC del escáner: doble clic. Si Windows avisa («Windows protegió su PC»), *Más
+   información → Ejecutar de todas formas*. El instalador (`instalar.ps1`):
+   - instala Node LTS si no está (winget o MSI oficial);
+   - copia `puente.js`, `zip.js` e `iniciar-puente.bat` a `C:\Ortosend\puente-escaneo`;
+   - detecta la carpeta de escaneos de Revo Scan (`%APPDATA%\RevoScan5\Projects` o similar)
+     y escribe `puente.config.json`;
+   - crea un acceso directo en la carpeta Inicio (arranca solo al iniciar sesión) y lo arranca.
+3. La ventana del puente debe decir `modo directo al almacén (sin límite de tamaño)`.
 
-1. Copia esta carpeta al PC (por ejemplo `C:\Ortosend\puente-escaneo`).
-2. `copy puente.config.example.json puente.config.json` y rellénalo:
+## Instalación manual (Mac, o si el instalador no puede usarse)
+
+Requisitos: **Node 18 o superior**.
+
+1. Descarga de la propia web `/puente/puente.js`, `/puente/zip.js` y
+   `/puente/puente.config.example.json` a una carpeta (por ejemplo `C:\Ortosend\puente-escaneo`).
+2. Copia el ejemplo a `puente.config.json` y rellénalo:
 
 ```json
 {
@@ -49,14 +63,11 @@ Requisitos: **Node 18 o superior** en el PC del escáner.
 }
 ```
 
-El token se saca en **Panel de clínica → Puente de escaneo** (solo administrador
-de clínica), donde también se revoca si se pierde el equipo. También se pueden
-usar las variables de entorno `ORTOSEND_URL`, `ORTOSEND_TOKEN`,
+También valen las variables de entorno `ORTOSEND_URL`, `ORTOSEND_TOKEN`,
 `ORTOSEND_CARPETA_REVOSCAN` y `ORTOSEND_CARPETA`.
 
-3. Arranca con `node puente.js` o con el acceso directo `iniciar-puente.bat`.
-   Déjalo abierto mientras se usa el escáner (para que arranque solo con el
-   equipo: Programador de tareas de Windows → al iniciar sesión → `iniciar-puente.bat`).
+3. Arranca con `node puente.js` (o `iniciar-puente.bat`, que lo reinicia si se cierra) y déjalo
+   abierto mientras se use el escáner.
 
 ## En el taller
 
