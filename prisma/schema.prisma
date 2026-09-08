@@ -222,7 +222,7 @@ model MediaAsset {
   id        String  @id @default(cuid())
   captureId String
   capture   Capture @relation(fields: [captureId], references: [id])
-  kind      String  // video_lat_dcha_descalzo | ... | video_ant_descalzo | foto_posterior | foto_anterior | baro_est | baro_din_multi | scan_espumas
+  kind      String  // video_post_descalzo | video_ant_descalzo | foto_posterior | foto_anterior | baro_est | baro_din_multi | scan_espumas
   url       String
   sizeBytes Int?
   meta      Json?     // métricas del estudio de captura: duración, s con encuadre válido (MediaPipe), mime…

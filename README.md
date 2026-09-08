@@ -34,8 +34,8 @@ asociadas. Stack: **Next.js (App Router, server actions) + PostgreSQL (Prisma)**
   con tope de sugerencias y aviso de volumen), y **hallazgos de alerta** (Thompson, Tinel,
   compresión del calcáneo) destacados para el prescriptor porque no se resuelven con una
   plantilla; dismetría valorada con nivel pélvico y láminas calibradas, análisis observacional de la
-  marcha, 4 vídeos de marcha, todos descalzo (lateral derecha, lateral izquierda, posterior
-  alejándose y anterior viniendo hacia la cámara) más 2 fotos de los pies de
+  marcha, 2 vídeos de marcha, descalzo (posterior alejándose y anterior viniendo hacia la
+  cámara) más 2 fotos de los pies de
   cerca en carga (desde atrás para el retropié y desde delante para el antepié),
   baropodometría Podisense (estática + dinámica múltiple) y
   escaneo de las espumas fenólicas como último paso — estas tres se hacen en su propia
@@ -48,8 +48,7 @@ asociadas. Stack: **Next.js (App Router, server actions) + PostgreSQL (Prisma)**
   cintura a los pies en plano, de perfil con el lado correcto hacia la cámara, de frente o de
   espaldas). Que el paciente lleve las piernas descubiertas de la rodilla al tobillo es
   responsabilidad del profesional (va en las instrucciones, la app no lo valida). Con todo
-  en verde de forma estable (~1 s) la cuenta atrás arranca sola (también hay botón); cada vídeo tiene **duración fija** (laterales 8 s,
-  posterior y anterior 10 s) con cuenta atrás y corte automático, Los checks solo hacen falta
+  en verde de forma estable (~1 s) la cuenta atrás arranca sola (también hay botón); cada vídeo tiene **duración fija** (10 s) con cuenta atrás y corte automático, Los checks solo hacen falta
   para arrancar; durante la grabación no se exige nada (el paciente se mueve y el modelo no
   acierta todos los frames), y los segundos con encuadre válido se guardan solo como dato. Las fotos exigen ver
   **los dos pies de cerca** (talones y dedos detectados, llenando el encuadre, talones hacia la
