@@ -95,14 +95,6 @@ type Slide =
 // Para qué sirve cada captura de cámara. Cómo se hace (colocación, duración,
 // checks de encuadre que valida MediaPipe) está en src/lib/capture-guide.ts.
 const CAPTURA_META: Record<string, { grupo: string; help: string }> = {
-  video_lat_dcha_descalzo: {
-    grupo: "Vídeos de marcha",
-    help: "Marcha de perfil con el lado derecho hacia la cámara, descalzo: ciclo completo del pie derecho (contacto, apoyo medio y despegue).",
-  },
-  video_lat_izq_descalzo: {
-    grupo: "Vídeos de marcha",
-    help: "Marcha de perfil con el lado izquierdo hacia la cámara, descalzo: ciclo completo del pie izquierdo.",
-  },
   video_post_descalzo: {
     grupo: "Vídeos de marcha",
     help: "El paciente se aleja de la cámara, descalzo: retropié en dinámica (valgo/varo), eversión del calcáneo y compensaciones desde atrás.",
