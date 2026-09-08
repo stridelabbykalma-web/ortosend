@@ -61,7 +61,7 @@ const POSTERIOR_TIPS = (calzado: string, seg: number) => [
   `El paciente parte junto a la cámara, de espaldas a ella, y camina recto alejándose 4-6 m, ${calzado}.`,
   "Antes de grabar, que se coloque de espaldas en el punto de salida: el estudio comprueba la orientación.",
   `Grabación fija de ${seg} s: al menos 3 pasos completos alejándose (retropié visible). Si sobra tiempo, vuelve al punto de salida por fuera del plano y repite.`,
-  "Zoom de seguimiento: la app acerca la imagen a medida que el paciente se aleja para que se vea siempre al mismo tamaño (zoom de la cámara si el móvil lo permite; si no, recorte digital). Se puede desactivar en el panel.",
+  "Zoom de seguimiento: antes de grabar la imagen queda en plano general (así el modelo detecta bien al paciente). En cuanto arranca la grabación la app va acercando la imagen de forma progresiva, sin tirones, para que el paciente ocupe el máximo del cuadro mientras se aleja (zoom de la cámara si el móvil lo permite; si no, recorte digital). Se puede desactivar en el panel.",
 ];
 
 // Marcha anterior: misma posición de cámara; el paciente viene hacia ella.
@@ -73,7 +73,7 @@ const ANTERIOR_TIPS = (calzado: string, seg: number) => [
   `El paciente parte a 4-6 m, de frente a la cámara, y camina recto hacia ella, ${calzado}; se detiene justo antes de salir del plano.`,
   "Antes de grabar, que se coloque de frente en el punto de salida: el estudio comprueba la orientación.",
   `Grabación fija de ${seg} s: al menos 3 pasos completos viniendo hacia la cámara. Si sobra tiempo, vuelve al punto de salida por fuera del plano y repite.`,
-  "Zoom de seguimiento: la app empieza acercada al paciente lejano y abre la imagen a medida que se acerca, para que se vea siempre al mismo tamaño (zoom de la cámara si el móvil lo permite; si no, recorte digital). Se puede desactivar en el panel.",
+  "Zoom de seguimiento: antes de grabar la imagen queda en plano general (así el modelo detecta bien al paciente lejano). En cuanto arranca la grabación la app acerca la imagen de forma progresiva, sin tirones, para que ocupe el máximo del cuadro, y la va abriendo a medida que se acerca (zoom de la cámara si el móvil lo permite; si no, recorte digital). Se puede desactivar en el panel.",
 ];
 
 export const CAPTURE_GUIDES: Record<string, CaptureGuide> = {

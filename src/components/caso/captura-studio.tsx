@@ -30,6 +30,13 @@ const MAX_UPLOAD_BYTES = 4 * 1024 * 1024; // límite del servidor (4 MB)
 // después, para que quede grabado el arranque del paciente desde parado.
 // (El WAV lleva un silencio inicial de BEEP_LEAD_MS que se descuenta.)
 const START_BEEP_DELAY_MS = 500;
+// Zoom de seguimiento (solo durante la grabación): fracción del alto del
+// cuadro que debe ocupar el paciente, constante de tiempo del suavizado y
+// velocidad máxima de cambio del zoom (relativa, por segundo) para que la
+// imagen se acerque de forma progresiva, sin tirones.
+const ZOOM_FILL = 0.85;
+const ZOOM_TAU_S = 0.6;
+const ZOOM_MAX_RATE = 0.7;
 
 // Tonos con Web Audio (sin archivos). Devuelve false si el navegador no deja
 // sonar (política de autoplay) para poder avisar visualmente.
@@ -281,6 +288,8 @@ export function CapturaStudio({
   const zoomCapsRef = useRef<{ min: number; max: number; step: number } | null>(null);
   const zoomCurRef = useRef(1);
   const zoomLastApplyRef = useRef(0);
+  const zoomLastTickRef = useRef(0);
+  const zoomBusyRef = useRef(false); // applyConstraints pendiente
   const followRectRef = useRef<{ x: number; y: number; w: number; h: number } | null>(null);
   const followCanvasRef = useRef<HTMLCanvasElement>(null);
   const lastSeenRef = useRef(0);
@@ -449,56 +458,90 @@ export function CapturaStudio({
             }
           } else rot.flipVotes = 0;
         }
-        // Zoom de seguimiento: el paciente debe ocupar ~3/4 del alto del cuadro
+        // Zoom de seguimiento. ANTES de grabar no se toca el zoom: con la imagen
+        // acercada el modelo no detecta bien a la persona y los checks fallan.
+        // Al empezar a grabar el zoom entra de forma progresiva (suavizado con
+        // constante de tiempo y tope de velocidad, sin tirones) para que el
+        // paciente ocupe el máximo posible del cuadro; si se pierde, se abre
+        // despacio. Al volver al directo se vuelve al plano general.
         if (followRef.current && guide.followZoom && ["live", "countdown", "recording"].includes(phaseRef.current)) {
           const pts = lms?.filter((q) => (q.visibility ?? 0) > 0.4) ?? [];
           if (pts.length >= 4) lastSeenRef.current = now;
+          const rec = phaseRef.current === "recording";
+          const dt = Math.min(0.1, zoomLastTickRef.current ? (now - zoomLastTickRef.current) / 1000 : 0.033);
+          zoomLastTickRef.current = now;
+          const tau = rec ? ZOOM_TAU_S : 0.35;
+          const alpha = 1 - Math.exp(-dt / tau);
+          const maxRel = (rec ? ZOOM_MAX_RATE : 1.5) * dt;
+          // Acercamiento suavizado con tope de cambio relativo por segundo
+          const approach = (cur: number, target: number) => {
+            const d = (target - cur) * alpha;
+            const lim = Math.max(1e-6, Math.abs(cur)) * maxRel;
+            return cur + Math.max(-lim, Math.min(lim, d));
+          };
           const caps = zoomCapsRef.current;
           if (caps) {
-            // Zoom real: control proporcional suavizado sobre el zoom actual
+            // Zoom real de la cámara
             let target = caps.min;
-            if (pts.length >= 4) {
+            if (rec && pts.length >= 4) {
               const hFrac = Math.max(...pts.map((q) => q.y)) - Math.min(...pts.map((q) => q.y));
-              const ratio = hFrac > 0.02 ? 0.75 / hFrac : 1;
-              target = Math.min(caps.max, Math.max(caps.min, zoomCurRef.current * (1 + 0.5 * (ratio - 1))));
-            } else if (now - lastSeenRef.current < 1500) target = zoomCurRef.current; // breve pérdida: mantener
-            zoomCurRef.current += (target - zoomCurRef.current) * 0.2;
+              if (hFrac > 0.02) {
+                // zona muerta alrededor del tamaño objetivo: el zoom no "caza"
+                const fuera = hFrac < ZOOM_FILL - 0.06 || hFrac > ZOOM_FILL + 0.06;
+                const wanted = fuera ? zoomCurRef.current * (ZOOM_FILL / hFrac) : zoomCurRef.current;
+                target = Math.min(caps.max, Math.max(caps.min, wanted));
+              } else target = zoomCurRef.current;
+            } else if (rec && now - lastSeenRef.current < 1500) target = zoomCurRef.current; // breve pérdida: mantener
+            zoomCurRef.current = approach(zoomCurRef.current, target);
             const track = streamRef.current?.getVideoTracks()[0];
-            if (track && now - zoomLastApplyRef.current > 150) {
+            if (track && !zoomBusyRef.current && now - zoomLastApplyRef.current > 100) {
               const settings = track.getSettings() as MediaTrackSettings & { zoom?: number };
               const applied = settings.zoom ?? caps.min;
-              if (Math.abs(zoomCurRef.current - applied) >= caps.step) {
+              // en múltiplos del paso de la cámara, para no pedir valores inválidos
+              const q = Math.min(caps.max, Math.max(caps.min, Math.round((zoomCurRef.current - caps.min) / caps.step) * caps.step + caps.min));
+              if (Math.abs(q - applied) >= caps.step * 0.99) {
                 zoomLastApplyRef.current = now;
+                zoomBusyRef.current = true;
                 track
-                  .applyConstraints({ advanced: [{ zoom: zoomCurRef.current } as MediaTrackConstraintSet] })
-                  .catch(() => {});
+                  .applyConstraints({ advanced: [{ zoom: q } as MediaTrackConstraintSet] })
+                  .catch(() => {})
+                  .finally(() => {
+                    zoomBusyRef.current = false;
+                  });
               }
             }
           } else {
-            // Zoom digital: recorte alrededor del paciente (mín. 35 % del cuadro)
+            // Zoom digital: recorte alrededor del paciente (lo que se graba)
             const srcW = rot.r === 0 || rot.r === 180 ? video.videoWidth : video.videoHeight;
             const srcH = rot.r === 0 || rot.r === 180 ? video.videoHeight : video.videoWidth;
             const aspect = srcW / srcH;
+            const cur = followRectRef.current ?? { x: 0, y: 0, w: srcW, h: srcH };
             let tw = srcW, th = srcH, tx = 0, ty = 0;
-            if (pts.length >= 4) {
+            if (rec && pts.length >= 4) {
               const xs = pts.map((q) => q.x), ys = pts.map((q) => q.y);
               const bh = (Math.max(...ys) - Math.min(...ys)) * srcH;
-              th = Math.min(srcH, Math.max(bh * 1.35, srcH * 0.35));
+              // zona muerta: si ya ocupa aprox. el objetivo, se mantiene el tamaño
+              const fillNow = cur.h > 0 ? bh / cur.h : 0;
+              const fuera = fillNow < ZOOM_FILL - 0.06 || fillNow > ZOOM_FILL + 0.06;
+              th = fuera ? Math.min(srcH, Math.max(bh / ZOOM_FILL, srcH * 0.25)) : cur.h;
               tw = th * aspect;
               if (tw > srcW) { tw = srcW; th = tw / aspect; }
               const cx = ((Math.max(...xs) + Math.min(...xs)) / 2) * srcW;
               const cy = ((Math.max(...ys) + Math.min(...ys)) / 2) * srcH;
               tx = Math.min(srcW - tw, Math.max(0, cx - tw / 2));
               ty = Math.min(srcH - th, Math.max(0, cy - th / 2));
-            } else if (now - lastSeenRef.current < 1500 && followRectRef.current) {
+            } else if (rec && now - lastSeenRef.current < 1500 && followRectRef.current) {
               ({ x: tx, y: ty, w: tw, h: th } = followRectRef.current);
             }
-            const cur = followRectRef.current ?? { x: tx, y: ty, w: tw, h: th };
-            const k = pts.length >= 4 ? 0.15 : 0.04;
-            cur.x += (tx - cur.x) * k;
-            cur.y += (ty - cur.y) * k;
-            cur.w += (tw - cur.w) * k;
-            cur.h += (th - cur.h) * k;
+            // tamaño con tope de velocidad; el centro sigue al paciente suavizado
+            const nh = Math.min(srcH, approach(cur.h, th));
+            const nw = Math.min(srcW, nh * aspect);
+            const ccx = cur.x + cur.w / 2 + (tx + tw / 2 - (cur.x + cur.w / 2)) * alpha;
+            const ccy = cur.y + cur.h / 2 + (ty + th / 2 - (cur.y + cur.h / 2)) * alpha;
+            cur.w = nw;
+            cur.h = nw / aspect;
+            cur.x = Math.min(srcW - cur.w, Math.max(0, ccx - cur.w / 2));
+            cur.y = Math.min(srcH - cur.h, Math.max(0, ccy - cur.h / 2));
             followRectRef.current = cur;
             const fc = followCanvasRef.current;
             if (fc) {

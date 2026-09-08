@@ -55,7 +55,10 @@ asociadas. Stack: **Next.js (App Router, server actions) + PostgreSQL (Prisma)**
   cámara en la posterior y dedos hacia la cámara en la anterior) y se disparan solas al
   instante, sin cuenta atrás; si el modelo no ve los pies queda el disparo manual. En la
   foto posterior se calculan la **línea de Helbing** y el ángulo de la **regla de Perthes** por
-  pierna (dos imágenes a partir de la misma foto). En los vídeos posterior y anterior se guarda la
+  pierna (dos imágenes a partir de la misma foto). En los vídeos posterior y anterior hay **zoom de seguimiento**: antes de grabar la
+  imagen queda en plano general (para que el modelo detecte bien) y, al arrancar la grabación,
+  se acerca de forma progresiva y sin tirones para que el paciente ocupe el máximo del cuadro
+  (zoom real de la cámara si el móvil lo permite; si no, recorte digital). Se guarda la
   trayectoria de 12 puntos de pose con el vídeo y se genera un **informe preliminar de marcha**
   (caída pélvica, rodilla en plano frontal, retropié, ángulo de progresión, base de marcha,
   asimetrías) con hallazgos orientativos y **qué hacer en la plantilla** para cada uno; el
