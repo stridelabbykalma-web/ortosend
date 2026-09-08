@@ -752,7 +752,7 @@ export function CapturaGuiada({
 }: {
   kase: CaseWithCapture;
   paso?: number;
-  puedeRecetar?: boolean; // quien lo lleva es prescriptor con colegiación verificada
+  puedeRecetar?: boolean; // la clínica tiene un prescriptor con colegiación verificada
   elegir?: boolean; // volver a la pantalla de quién receta
 }) {
   // Sin decidir quién receta no hay protocolo; y solo la vía de Ortosend usa este.

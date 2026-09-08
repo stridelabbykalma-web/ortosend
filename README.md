@@ -67,12 +67,11 @@ asociadas. Stack: **Next.js (App Router, server actions) + PostgreSQL (Prisma)**
   WASM se sirve desde el CDN de jsDelivr (o desde la app con `NEXT_PUBLIC_MEDIAPIPE_WASM`).
 
 **Prescripción**
-- **Quién receta se elige al abrir cada caso, antes de empezar el estudio**, porque el protocolo
-  depende de ello: un prescriptor verificado de la clínica puede elegir **receta propia**, **receta
-  por parte del equipo de Ortosend** o **receta propia con segunda opinión** (Ortosend valora, devuelve su opinión
-  y firma la clínica); un profesional sin capacidad de prescribir solo puede enviarlo a Ortosend.
-  El estudio completo descrito arriba es el de la vía Ortosend; el formulario de las otras dos vías
-  está pendiente de definir (la app lo indica y permite cambiar la elección).
+- **Quién receta se elige al abrir cada caso**, antes del estudio, y lo elige quien lo lleva
+  (profesional o administrador de la clínica). Si la clínica tiene un prescriptor con
+  colegiación verificada: **receta propia**, **receta por parte del equipo de Ortosend** o
+  **receta propia con segunda opinión de Ortosend**; si no, solo la receta por parte de Ortosend.
+  El estudio completo es el de la vía Ortosend; el formulario de la receta propia está por definir.
 - Cola del prescriptor de clínica y **cola central Ortosend** con
   **reparto automático** por antigüedad: al abrir un caso queda asociado; se libera al soltarlo,
   cerrar sesión o a los 45 min de inactividad.

@@ -21,10 +21,12 @@ export const RX_ROUTE_LABEL: Record<RxRoute, string> = {
   REVISION: "Receta propia con segunda opinión de Ortosend",
 };
 
+// La «receta propia» es de la clínica: la firma su prescriptor verificado, que
+// no tiene por qué ser quien rellena el estudio (puede ser el administrador).
 export const RX_ROUTE_HELP: Record<RxRoute, string> = {
-  CLINICA: "La valoración y la firma son tuyas.",
+  CLINICA: "La valoración y la firma las hace el prescriptor de vuestra clínica.",
   ORTOSEND: "El equipo de Ortosend valora el estudio y firma la prescripción.",
-  REVISION: "El equipo de Ortosend valora el estudio y te devuelve su opinión; la firma es tuya.",
+  REVISION: "El equipo de Ortosend valora el estudio y devuelve su opinión; firma el prescriptor de vuestra clínica.",
 };
 
 // Prefijo con el que Ortosend deja su segunda opinión en el borrador de valoración.

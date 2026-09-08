@@ -379,7 +379,12 @@ export async function sendCaseAction(formData: FormData) {
     data: {
       state: "EN_PRESCRIPCION",
       rxRequestedBy: kase!.rxRequestedBy ?? u.id,
-      assignedTo: rxRoute === "CLINICA" ? (kase!.rxRequestedBy ?? u.id) : null,
+      // Receta propia: queda asignado a quien lo envió solo si es prescriptor; si lo
+      // envió el administrador, lo coge cualquier prescriptor de la clínica desde su cola.
+      assignedTo:
+        rxRoute === "CLINICA" && (await esPrescriptorVerificado(kase!.rxRequestedBy ?? u.id))
+          ? (kase!.rxRequestedBy ?? u.id)
+          : null,
       openBy: null,
       openAt: null,
     },
@@ -416,6 +421,20 @@ export async function sendCaseAction(formData: FormData) {
 // la clínica o pide una segunda opinión, el formulario es otro (pendiente).
 // Solo un prescriptor con colegiación verificada puede quedárselo o pedir
 // revisión; el resto envía a Ortosend.
+// ¿Tiene la clínica algún prescriptor con colegiación verificada?
+async function clinicaPuedeRecetar(clinicId: string) {
+  const n = await prisma.professionalProfile.count({
+    where: { canPrescribe: true, verifiedAt: { not: null }, user: { clinicId, active: true } },
+  });
+  return n > 0;
+}
+
+// ¿Es este usuario un prescriptor con colegiación verificada?
+async function esPrescriptorVerificado(userId: string) {
+  const p = await prisma.professionalProfile.findUnique({ where: { userId } });
+  return !!p?.canPrescribe && !!p.verifiedAt;
+}
+
 export async function chooseRxRouteAction(formData: FormData) {
   const u = await requireClinicStaff();
   const caseId = String(formData.get("caseId"));
@@ -423,11 +442,11 @@ export async function chooseRxRouteAction(formData: FormData) {
   if (!kase || kase.clinicId !== u.clinicId) fail("/panel", "Caso no accesible");
   if (!["CITA_RESERVADA", "ESTUDIO_EN_CURSO", "DEVUELTO_CLINICA"].includes(kase!.state))
     fail(`/caso/${caseId}`, "El caso ya está enviado: no se puede cambiar quién receta");
-  const profile = await prisma.professionalProfile.findUnique({ where: { userId: u.id } });
-  const puedeRecetar = !!profile?.canPrescribe && !!profile.verifiedAt;
+  // Las opciones de receta propia dependen de la clínica (que tenga un prescriptor
+  // verificado), no de quien rellena: el administrador también puede elegirlas.
   const pedida = String(formData.get("rxRoute") ?? "");
   let rxRoute: RxRoute;
-  if (!puedeRecetar) rxRoute = "ORTOSEND";
+  if (!(await clinicaPuedeRecetar(u.clinicId!))) rxRoute = "ORTOSEND";
   else if (RX_ROUTES.includes(pedida as RxRoute)) rxRoute = pedida as RxRoute;
   else fail(`/caso/${caseId}?elegir=1`, "Elige quién receta este caso");
   if (kase!.rxRoute !== rxRoute) {

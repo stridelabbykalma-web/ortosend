@@ -61,6 +61,14 @@ export default async function CasoPage({
       : null;
   const puedeRecetar = !!profile?.canPrescribe && !!profile.verifiedAt;
   const canPrescribeHere = puedeRecetar && (isCentral || (isClinicStaff && !central));
+  // Las opciones de «receta propia» dependen de la clínica, no de quien rellena el
+  // estudio: basta con que la clínica tenga un prescriptor con colegiación verificada
+  // (lo puede enviar el administrador y firmarlo el prescriptor).
+  const clinicaReceta =
+    isClinicStaff &&
+    (await prisma.professionalProfile.count({
+      where: { canPrescribe: true, verifiedAt: { not: null }, user: { clinicId: k.clinicId, active: true } },
+    })) > 0;
   const requestedBy = k.rxRequestedBy
     ? await prisma.user.findUnique({ where: { id: k.rxRequestedBy }, select: { name: true } })
     : null;
@@ -74,7 +82,7 @@ export default async function CasoPage({
     const pasoNum = paso ? Number(paso) || undefined : undefined;
     inner = (
       <>
-        <CapturaGuiada kase={k} paso={pasoNum} puedeRecetar={puedeRecetar} elegir={elegir === "1"} />
+        <CapturaGuiada kase={k} paso={pasoNum} puedeRecetar={clinicaReceta} elegir={elegir === "1"} />
         {!pasoNum && <Historial events={k.events} />}
       </>
     );
