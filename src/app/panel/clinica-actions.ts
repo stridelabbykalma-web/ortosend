@@ -374,11 +374,14 @@ export async function sendCaseAction(formData: FormData) {
     const cl = checklistOf(kase!.capture);
     if (!cl.completa) fail(`/caso/${caseId}`, "La checklist del protocolo debe estar completa (todo en verde)");
   } else {
-    // Receta propia (con o sin segunda opinión): las pruebas son elegibles; lo único
-    // obligatorio es que el motivo de consulta quede registrado en el caso.
+    // Receta propia (con o sin segunda opinión): las pruebas son elegibles salvo el
+    // motivo de consulta, la baropodometría y el escaneo de las espumas.
     const q = kase!.capture?.questionnaire as { motivo?: string } | null;
     if (!q?.motivo?.trim())
       fail(`/caso/${caseId}?paso=1`, "El motivo de consulta es obligatorio: regístralo antes de enviar");
+    const cl = checklistOf(kase!.capture);
+    if (!cl.baro) fail(`/caso/${caseId}`, "La baropodometría (estática y dinámica múltiple) es obligatoria también en la receta propia");
+    if (!cl.escaneos) fail(`/caso/${caseId}`, "El escaneo de las espumas fenólicas es obligatorio también en la receta propia");
   }
   void back;
 
