@@ -94,6 +94,7 @@ model Clinic {
   cases        Case[]
   equipment    Equipment[]
   settlements  Settlement[]
+  professionalApplications ProfessionalApplication[]
   createdAt    DateTime     @default(now())
 }
 
@@ -355,4 +356,26 @@ model AuditLog {
   action  String   // p.ej. "case.view", "prescription.download"
   target  String
   at      DateTime @default(now())
+}
+
+// Solicitud de alta de profesional presentada por el admin de una clínica.
+// Ortosend valida la ficha (y la colegiación si prescribe) y crea la cuenta.
+model ProfessionalApplication {
+  id            String   @id @default(cuid())
+  clinicId      String
+  clinic        Clinic   @relation(fields: [clinicId], references: [id])
+  requestedBy   String              // userId del admin de clínica solicitante
+  fullName      String
+  dni           String
+  email         String
+  phone         String
+  degree        String              // titulación
+  canPrescribe  Boolean  @default(false)
+  collegiateNum String?             // obligatorio si canPrescribe
+  college       String?             // colegio profesional y provincia
+  notes         String?
+  status        String   @default("recibida") // recibida | aprobada | rechazada
+  resolutionNote String?
+  resolvedAt    DateTime?
+  createdAt     DateTime @default(now())
 }

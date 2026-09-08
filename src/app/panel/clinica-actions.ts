@@ -383,3 +383,41 @@ export async function sendCaseAction(formData: FormData) {
   }
   redirect("/panel?ok=" + encodeURIComponent(`Caso #${kase!.number} enviado a prescripción`));
 }
+
+// --- Solicitud de alta de profesional (solo ADMIN_CLINICA) ---
+// La cuenta la crea Ortosend tras validar la ficha (colegiación incluida si prescribe).
+export async function requestProfessionalAction(formData: FormData) {
+  const u = await requireRole("ADMIN_CLINICA");
+  if (!u.clinicId) throw new Error("Usuario sin clínica asignada");
+  const back = "/panel?tab=prof";
+  const fullName = String(formData.get("fullName") ?? "").trim();
+  const dni = String(formData.get("dni") ?? "").trim();
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  const phone = String(formData.get("phone") ?? "").trim();
+  const degree = String(formData.get("degree") ?? "").trim();
+  const canPrescribe = formData.get("canPrescribe") === "on";
+  const collegiateNum = String(formData.get("collegiateNum") ?? "").trim();
+  const college = String(formData.get("college") ?? "").trim();
+  if (!fullName || !dni || !email || !phone || !degree)
+    fail(back, "Nombre completo, DNI, email, móvil y titulación son obligatorios");
+  if (canPrescribe && (!collegiateNum || !college))
+    fail(back, "Para un prescriptor, el nº de colegiado y el colegio profesional son obligatorios");
+  const dup = await prisma.user.findFirst({ where: { OR: [{ email }, { phone }] } });
+  if (dup) fail(back, "Ya existe una cuenta con ese email o móvil");
+  await prisma.professionalApplication.create({
+    data: {
+      clinicId: u.clinicId,
+      requestedBy: u.id,
+      fullName,
+      dni,
+      email,
+      phone,
+      degree,
+      canPrescribe,
+      collegiateNum: collegiateNum || null,
+      college: college || null,
+      notes: String(formData.get("notes") ?? "").trim() || null,
+    },
+  });
+  redirect(back + "&ok=" + encodeURIComponent("Solicitud enviada. Ortosend validará la ficha y creará la cuenta."));
+}

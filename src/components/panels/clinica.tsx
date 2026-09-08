@@ -3,7 +3,7 @@ import type { User } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { StatePill } from "@/components/ui";
 import { fmtd, fmtdt } from "@/lib/format";
-import { addSlotAction, delSlotAction, newCaseBAction } from "@/app/panel/clinica-actions";
+import { addSlotAction, delSlotAction, newCaseBAction, requestProfessionalAction } from "@/app/panel/clinica-actions";
 import { openCaseAction } from "@/app/panel/rx-actions";
 
 export async function PanelClinica({ user, tab }: { user: User; tab?: string }) {
@@ -230,24 +230,37 @@ export async function PanelClinica({ user, tab }: { user: User; tab?: string }) 
     );
   }
   if (t === "prof" && user.role === "ADMIN_CLINICA") {
-    const pros = await prisma.user.findMany({
-      where: { clinicId: clinic.id, role: { in: ["PROFESIONAL", "ADMIN_CLINICA"] } },
-      include: { professional: { include: { training: true } } },
-    });
+    const [pros, applications] = await Promise.all([
+      prisma.user.findMany({
+        where: { clinicId: clinic.id, role: { in: ["PROFESIONAL", "ADMIN_CLINICA"] } },
+        include: { professional: { include: { training: true } } },
+        orderBy: { name: "asc" },
+      }),
+      prisma.professionalApplication.findMany({
+        where: { clinicId: clinic.id },
+        orderBy: { createdAt: "desc" },
+      }),
+    ]);
     body = (
       <>
         <h3>Profesionales de la clínica</h3>
         <div className="muted">
           Las cuentas las crea Ortosend tras validar la ficha (colegiación incluida si prescribe).
+          Desde aquí solicitas el alta y sigues el estado de tus solicitudes.
         </div>
         <div className="sp" />
         <div className="card">
           <table>
             <thead>
               <tr>
-                <th>Nombre</th>
+                <th>Nombre completo</th>
                 <th>Rol</th>
+                <th>Titulación</th>
+                <th>Nº colegiado</th>
+                <th>Colegio</th>
+                <th>Colegiación</th>
                 <th>Formación</th>
+                <th>Cuenta</th>
               </tr>
             </thead>
             <tbody>
@@ -261,15 +274,133 @@ export async function PanelClinica({ user, tab }: { user: User; tab?: string }) 
                         ? "Prescriptor"
                         : "Técnico"}
                   </td>
+                  <td>{p.professional?.degree ?? "—"}</td>
+                  <td>{p.professional?.collegiateNum ?? "—"}</td>
+                  <td className="tiny">{p.professional?.college ?? "—"}</td>
+                  <td>
+                    {p.professional?.canPrescribe ? (
+                      p.professional.verifiedAt ? (
+                        <span className="pill g">Verificada</span>
+                      ) : (
+                        <span className="pill a">Pendiente</span>
+                      )
+                    ) : (
+                      "—"
+                    )}
+                  </td>
                   <td>
                     <span className={`pill ${(p.professional?.training.length ?? 0) >= 5 ? "g" : "a"}`}>
-                      {p.professional?.training.length ?? 0}/5 módulos
+                      {p.professional?.training.length ?? 0}/5
                     </span>
+                  </td>
+                  <td>
+                    {p.activatedAt ? (
+                      <span className="pill g">Activa</span>
+                    ) : (
+                      <span className="pill a">Invitación enviada</span>
+                    )}
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
+        </div>
+        {applications.length > 0 && (
+          <>
+            <div className="sp" />
+            <div className="card">
+              <b>Solicitudes de alta enviadas</b>
+              <table style={{ marginTop: 8 }}>
+                <thead>
+                  <tr>
+                    <th>Fecha</th>
+                    <th>Nombre</th>
+                    <th>Perfil</th>
+                    <th>Nº colegiado</th>
+                    <th>Estado</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {applications.map((a) => (
+                    <tr key={a.id}>
+                      <td className="tiny">{fmtd(a.createdAt)}</td>
+                      <td>{a.fullName}</td>
+                      <td>
+                        {a.degree}
+                        {a.canPrescribe ? " · prescriptor" : " · técnico"}
+                      </td>
+                      <td>{a.collegiateNum ?? "—"}</td>
+                      <td>
+                        <span
+                          className={`pill ${a.status === "recibida" ? "a" : a.status === "aprobada" ? "g" : "r"}`}
+                        >
+                          {a.status}
+                        </span>
+                        {a.resolutionNote && <div className="tiny">{a.resolutionNote}</div>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+        <div className="sp" />
+        <div className="card">
+          <b style={{ fontFamily: "var(--font-sora)" }}>Solicitar alta de profesional</b>
+          <form action={requestProfessionalAction}>
+            <div className="grid g2">
+              <div>
+                <label>Nombre y apellidos</label>
+                <input name="fullName" required />
+              </div>
+              <div>
+                <label>DNI/NIE</label>
+                <input name="dni" required />
+              </div>
+              <div>
+                <label>Email (recibirá la invitación)</label>
+                <input name="email" type="email" required />
+              </div>
+              <div>
+                <label>Móvil</label>
+                <input name="phone" required />
+              </div>
+            </div>
+            <label>Titulación</label>
+            <select name="degree" defaultValue="Podología">
+              <option>Podología</option>
+              <option>Medicina</option>
+              <option>Fisioterapia</option>
+              <option>Enfermería</option>
+              <option>Técnico ortopédico</option>
+              <option>Otra</option>
+            </select>
+            <label className="chk">
+              <input type="checkbox" name="canPrescribe" /> Puede prescribir (podólogo o médico
+              colegiado — Ortosend verificará la colegiación)
+            </label>
+            <div className="grid g2">
+              <div>
+                <label>Nº de colegiado (si prescribe)</label>
+                <input name="collegiateNum" placeholder="Ej.: COL-1234" />
+              </div>
+              <div>
+                <label>Colegio profesional y provincia (si prescribe)</label>
+                <input name="college" placeholder="Ej.: Col·legi de Podòlegs de Catalunya (Girona)" />
+              </div>
+            </div>
+            <label>Comentarios (opcional)</label>
+            <textarea name="notes" rows={2} />
+            <div className="sp" />
+            <button type="submit" className="pri">
+              Enviar solicitud a Ortosend
+            </button>
+            <div className="tiny" style={{ marginTop: 8 }}>
+              Ortosend valida la ficha, crea la cuenta y el profesional recibe su invitación de
+              activación (72 h). Después deberá completar la formación (5 módulos).
+            </div>
+          </form>
         </div>
       </>
     );
