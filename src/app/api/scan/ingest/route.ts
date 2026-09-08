@@ -5,7 +5,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { actorOf, autoasociar } from "@/lib/escaneos";
-import { SCAN_EXTS, SCAN_MIME, SCAN_SERVER_MAX_BYTES, fmtMB, safeFilename, scanExt } from "@/lib/scan";
+import { SCAN_EXTS, SCAN_MIME, SCAN_SERVER_MAX_BYTES, fmtMB, safeFilename, safeLabel, scanExt } from "@/lib/scan";
 import { r2Configured } from "@/lib/storage";
 
 export const runtime = "nodejs";
@@ -48,6 +48,7 @@ export async function POST(req: Request) {
       agentId: actor.agentId,
       uploadedBy: actor.name,
       filename: nombre,
+      label: safeLabel(form.get("proyecto")),
       mime: SCAN_MIME[ext],
       sizeBytes: Number.isInteger(original) && original > 0 ? original : bytes.length,
       encoding,

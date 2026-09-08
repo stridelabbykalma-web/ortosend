@@ -11,6 +11,8 @@ un archivo por escaneo; Revo Scan 5: una carpeta de proyecto). El puente del
 PC del escáner sube ese escaneo en bruto entero y el **taller** lo abre en su
 Revo Scan, lo procesa («Edición con un clic») y exporta. Como Revo Scan no
 sabe nada de Ortosend, la asociación no depende de carpetas ni de nombres:
+primero manda **el nombre del proyecto que tecleó el profesional en Revo Scan** (número
+de caso o nombre del paciente, leído del índice `.revo` por el puente) y, si no decide,
 **el caso abierto en el paso del escaneo es el que recibe el archivo.**
 
 ```

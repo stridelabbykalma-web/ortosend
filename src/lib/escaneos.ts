@@ -56,13 +56,13 @@ export async function bandejaDe(clinicId: string) {
       receivedAt: { gt: new Date(Date.now() - INBOX_HOURS * 3600 * 1000) },
     },
     orderBy: { receivedAt: "desc" },
-    select: { id: true, filename: true, sizeBytes: true, receivedAt: true, uploadedBy: true },
+    select: { id: true, filename: true, label: true, sizeBytes: true, receivedAt: true, uploadedBy: true },
   });
 }
 
 // Asocia un escaneo de la bandeja a un caso: crea el MediaAsset scan_espumas
 // confirmado (check verde) y deja constancia en el historial.
-export async function asociarEscaneo(upload: ScanUpload, caseId: string, actor: Actor) {
+export async function asociarEscaneo(upload: ScanUpload, caseId: string, actor: Actor, motivo = "confirmado a mano") {
   const kase = await prisma.case.findUnique({ where: { id: caseId }, include: { capture: true, patient: true } });
   if (!kase || kase.clinicId !== upload.clinicId) throw new Error("Caso no accesible");
   if (!CAPTURE_STATES.includes(kase.state as (typeof CAPTURE_STATES)[number]))
@@ -90,24 +90,58 @@ export async function asociarEscaneo(upload: ScanUpload, caseId: string, actor: 
   await prisma.case.update({ where: { id: caseId }, data: { scanWaitingAt: null } });
   await pushEvent(
     caseId,
-    `Escaneo de las espumas recibido y asociado al paciente: ${upload.filename} (${fmtMB(upload.sizeBytes)})`,
+    `Escaneo de las espumas recibido y asociado al paciente: ${upload.filename} (${fmtMB(upload.sizeBytes)})${upload.label ? ` · proyecto «${upload.label}»` : ""} · ${motivo}`,
     actor.name
   );
   if (actor.userId) await audit(actor.userId, "media.upload", `case:${kase.number}:${SCAN_KIND}`);
   return { caso: kase.number, paciente: kase.patient.name, mediaId: media.id };
 }
 
-// Al recibir un escaneo: si en la clínica hay exactamente UN caso esperando en
-// el paso del escaneo, es suyo. Con cero o varios, se queda en la bandeja y el
+// Texto comparable: minúsculas, sin acentos ni signos.
+function normaliza(t: string) {
+  return t
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+// Al recibir un escaneo, de qué caso es. Por orden:
+//   1. El nombre del proyecto en Revo Scan lleva el número de un caso abierto.
+//   2. El nombre del proyecto es el nombre de un paciente con estudio abierto.
+//   3. Hay exactamente UN caso de la clínica esperando en el paso del escaneo.
+// Si nada de eso decide sin ambigüedad, se queda en la bandeja y el
 // profesional lo confirma con un toque desde el asistente.
 export async function autoasociar(upload: ScanUpload, actor: Actor) {
-  const desde = new Date(Date.now() - SCAN_WAIT_MIN * 60 * 1000);
-  const esperando = await prisma.case.findMany({
-    where: { clinicId: upload.clinicId, scanWaitingAt: { gt: desde }, state: { in: [...CAPTURE_STATES] } },
-    select: { id: true },
+  const abiertos = await prisma.case.findMany({
+    where: { clinicId: upload.clinicId, state: { in: [...CAPTURE_STATES] } },
+    select: { id: true, number: true, scanWaitingAt: true, patient: { select: { name: true } } },
   });
-  if (esperando.length !== 1) return null;
-  return asociarEscaneo(upload, esperando[0].id, actor);
+  const etiqueta = normaliza(upload.label ?? "");
+
+  if (etiqueta) {
+    const numeros = new Set((etiqueta.match(/\d{1,7}/g) ?? []).map(Number));
+    const porNumero = abiertos.filter((c) => numeros.has(c.number));
+    if (porNumero.length === 1)
+      return asociarEscaneo(upload, porNumero[0].id, actor, "número de caso en el nombre del proyecto");
+
+    // Nombre del paciente dentro del nombre del proyecto (o al revés, si el
+    // proyecto lleva solo parte del nombre). Mínimo 5 letras para no acertar
+    // por casualidad.
+    const porNombre = abiertos.filter((c) => {
+      const n = normaliza(c.patient.name);
+      return n.length >= 5 && (etiqueta.includes(n) || (etiqueta.length >= 5 && n.includes(etiqueta)));
+    });
+    if (porNombre.length === 1)
+      return asociarEscaneo(upload, porNombre[0].id, actor, "nombre del paciente en el proyecto");
+  }
+
+  const desde = Date.now() - SCAN_WAIT_MIN * 60 * 1000;
+  const esperando = abiertos.filter((c) => c.scanWaitingAt && +c.scanWaitingAt > desde);
+  if (esperando.length === 1)
+    return asociarEscaneo(upload, esperando[0].id, actor, "caso abierto en el paso del escaneo");
+  return null;
 }
 
 // Dónde está el binario de un escaneo ya asociado: URL firmada de R2 o bytes.
