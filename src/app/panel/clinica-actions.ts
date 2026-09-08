@@ -517,3 +517,31 @@ export async function requestProfessionalAction(formData: FormData) {
   });
   redirect(back + "&ok=" + encodeURIComponent("Solicitud enviada. Ortosend validará la ficha y creará la cuenta."));
 }
+
+// --- Puente de escaneo (PC del escáner RevoScan) ---
+// Alta y baja del agente local que sube los escaneos. El token se firma a
+// partir del id del agente, así que se puede volver a mostrar en el panel
+// cuantas veces haga falta y se corta revocando el agente.
+export async function crearPuenteAction(formData: FormData) {
+  const u = await requireRole("ADMIN_CLINICA");
+  if (!u.clinicId) fail("/panel", "Usuario sin clínica asignada");
+  const back = "/panel?tab=puente";
+  const name = String(formData.get("name") ?? "").trim() || "PC del escáner";
+  const activos = await prisma.scanAgent.count({ where: { clinicId: u.clinicId!, revokedAt: null } });
+  if (activos >= 3) fail(back, "Máximo 3 puentes activos por clínica: revoca alguno antes");
+  await prisma.scanAgent.create({
+    data: { clinicId: u.clinicId!, name: name.slice(0, 60), createdBy: u.id },
+  });
+  redirect(back);
+}
+
+export async function revocarPuenteAction(formData: FormData) {
+  const u = await requireRole("ADMIN_CLINICA");
+  if (!u.clinicId) fail("/panel", "Usuario sin clínica asignada");
+  const id = String(formData.get("agentId"));
+  await prisma.scanAgent.updateMany({
+    where: { id, clinicId: u.clinicId!, revokedAt: null },
+    data: { revokedAt: new Date() },
+  });
+  redirect("/panel?tab=puente");
+}

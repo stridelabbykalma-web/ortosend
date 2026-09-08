@@ -2,6 +2,7 @@
 import { prisma } from "./db";
 import { OPEN_CASE_TIMEOUT_MIN } from "./states";
 import { BARO_KINDS, CAPTURA_VISUAL, SCAN_KIND } from "./format";
+import { PUENTE_VIVO_MIN, newScanCode } from "./scan";
 
 export async function pushEvent(caseId: string, text: string, actor: string) {
   await prisma.caseEvent.create({ data: { caseId, text, actor } });
@@ -64,4 +65,33 @@ export function checklistOf(capture: {
     completa:
       cuestionario && exploracion && escaneos && capturas >= CAPTURA_VISUAL.length && baro,
   };
+}
+
+// Código de la carpeta del escáner para un caso. Se crea la primera vez que
+// alguien lo necesita (asistente de captura o puente) y ya no cambia: es lo
+// que asocia el archivo que guarda RevoScan con este paciente.
+export async function ensureScanCode(caseId: string): Promise<string> {
+  const kase = await prisma.case.findUnique({ where: { id: caseId }, select: { scanCode: true } });
+  if (kase?.scanCode) return kase.scanCode;
+  for (let i = 0; i < 5; i++) {
+    const code = newScanCode();
+    try {
+      const updated = await prisma.case.update({ where: { id: caseId }, data: { scanCode: code } });
+      return updated.scanCode!;
+    } catch {
+      // Colisión del índice único (improbable): se reintenta con otro código.
+      const again = await prisma.case.findUnique({ where: { id: caseId }, select: { scanCode: true } });
+      if (again?.scanCode) return again.scanCode;
+    }
+  }
+  throw new Error("No se pudo generar el código de escaneo");
+}
+
+// ¿Hay algún puente de escaneo dando señal en esta clínica?
+export async function puenteActivo(clinicId: string): Promise<boolean> {
+  const desde = new Date(Date.now() - PUENTE_VIVO_MIN * 60 * 1000);
+  const n = await prisma.scanAgent.count({
+    where: { clinicId, revokedAt: null, lastSeenAt: { gt: desde } },
+  });
+  return n > 0;
 }

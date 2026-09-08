@@ -95,6 +95,7 @@ model Clinic {
   equipment    Equipment[]
   settlements  Settlement[]
   professionalApplications ProfessionalApplication[]
+  scanAgents   ScanAgent[]
   createdAt    DateTime     @default(now())
 }
 
@@ -117,6 +118,21 @@ model Equipment {
   serial    String   @unique
   deliveredAt DateTime?
   returnedAt  DateTime?
+}
+
+// Puente de escaneo: agente instalado en el PC del escáner de la clínica.
+// Vigila la carpeta de RevoScan y sube cada escaneo al caso que indica el
+// nombre de la carpeta. Se autentica con un token firmado (kind "scan") que
+// se puede revocar aquí sin tocar la contraseña de nadie.
+model ScanAgent {
+  id         String    @id @default(cuid())
+  clinicId   String
+  clinic     Clinic    @relation(fields: [clinicId], references: [id])
+  name       String    @default("Puente de escaneo")
+  createdBy  String              // userId del admin de clínica que lo dio de alta
+  createdAt  DateTime  @default(now())
+  lastSeenAt DateTime?           // último contacto del agente (diagnóstico)
+  revokedAt  DateTime?
 }
 
 // ---------- Pacientes y casos ----------
@@ -194,6 +210,9 @@ model Case {
   // ORTOSEND (cola central) | REVISION (Ortosend revisa y devuelve; firma la clínica)
   rxRoute      String?
   rxRequestedBy String?  // User de la clínica que envió el estudio
+  // Código de la carpeta del escáner (RevoScan): el puente de escaneo lo lee
+  // de la ruta del archivo guardado y asocia el modelo 3D a este caso.
+  scanCode     String?   @unique
   qcPhotoUrl   String?   // foto obligatoria del par en calidad
   payLinkExpiresAt DateTime? // 30 días; recordatorios días 0/3/7/15
   incidents    Incident[]

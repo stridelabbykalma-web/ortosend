@@ -82,3 +82,21 @@ export async function verifyInviteToken(token: string): Promise<string | null> {
     return null;
   }
 }
+
+// Token del puente de escaneo (agente local de la clínica). No caduca: se
+// revoca desde el panel poniendo revokedAt en el ScanAgent.
+export async function createScanToken(agentId: string) {
+  return new SignJWT({ aid: agentId, kind: "scan" })
+    .setProtectedHeader({ alg: "HS256" })
+    .setIssuedAt()
+    .sign(secret());
+}
+export async function verifyScanToken(token: string): Promise<string | null> {
+  try {
+    const { payload } = await jwtVerify(token, secret());
+    if (payload.kind !== "scan") return null;
+    return payload.aid as string;
+  } catch {
+    return null;
+  }
+}
