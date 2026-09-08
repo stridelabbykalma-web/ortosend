@@ -1,0 +1,225 @@
+import { TEST_POR_ID, normalizaId } from "./tests-podologicos";
+
+// Exploración biomecánica (paso 2 del protocolo de captura): la valoración que
+// necesita el prescriptor para recetar la plantilla. Definición compartida entre
+// el formulario de la clínica, la acción de guardado y las vistas del expediente.
+
+// --- A · Movilidad y flexibilidad (en camilla) ---
+export const TOBILLO_OPTS = [
+  "Normal",
+  "Limitada rodilla extendida (gastrocnemios)",
+  "Limitada también con rodilla flexionada (sóleo)",
+] as const;
+
+export const HALLUX_OPTS = ["Normal", "Hallux limitus", "Hallux rigidus", "Hallux valgus"] as const;
+
+export const SUBASTRAGALINA_OPTS = ["Normal", "Limitada", "Hipermóvil"] as const;
+
+export const PRIMER_RADIO_OPTS = [
+  "Normal",
+  "Hipomóvil",
+  "Hipermóvil",
+  "Dorsiflexionado",
+  "Plantarflexionado",
+] as const;
+
+export const CADENA_POSTERIOR_OPTS = [
+  "Normal",
+  "Acortamiento leve",
+  "Acortamiento marcado",
+] as const;
+
+// --- B · Tests podológicos en carga (el catálogo vive en tests-podologicos.ts) ---
+export const TIPO_PIE_OPTS = [
+  "Neutro",
+  "Plano flexible",
+  "Plano rígido",
+  "Cavo",
+  "Cavo-varo",
+] as const;
+
+// --- C · Dismetría (nivel pélvico + láminas calibradas) ---
+export const LADO_CORTO_OPTS = ["Izquierda", "Derecha"] as const;
+
+export const LAMINA_OPTS = ["3 mm", "5 mm", "7 mm", "10 mm", "Más de 10 mm"] as const;
+
+// --- D · Análisis observacional de la marcha ---
+export const MARCHA_PATRON_OPTS = ["Neutro", "Pronador", "Supinador", "Mixto / asimétrico"] as const;
+
+export const CONTACTO_OPTS = ["Talón (normal)", "Planta completa", "Antepié"] as const;
+
+export const ANGULO_PASO_OPTS = [
+  "Normal",
+  "Aumentado (marcha en abducción)",
+  "Disminuido (marcha convergente)",
+] as const;
+
+export const RETROPIE_OPTS = ["Neutro", "Valgo", "Varo", "Asimétrico"] as const;
+
+export const DESPEGUE_OPTS = [
+  "Normal",
+  "Despegue precoz de talón",
+  "Propulsión insuficiente del primer dedo",
+] as const;
+
+// v2 = exploración biomecánica completa. Los casos antiguos (v1) solo tienen
+// tobillo/hallux/dismetria/alza y se siguen mostrando sin romper nada.
+export type Exam = {
+  v?: number;
+  done?: boolean; // true cuando la clínica completó la última sección (modo guiado)
+  // A · Tipo de pie y observaciones (tipoPie y FPI-6 están más abajo, en «general»)
+  movilidadObs?: string; // texto libre: algo de movilidad/flexibilidad relevante para la plantilla
+  // Campos de la antigua pantalla de movilidad: se siguen mostrando si existen.
+  // tobillo (Silfverskiöld) y primerRadio los rellenan ahora los tests complementarios.
+  tobillo?: string;
+  lungeIzq?: string; // cm a la pared (núcleo)
+  lungeDcha?: string;
+  subastragalina?: string;
+  primerRadio?: string;
+  hallux?: string;
+  cadenaPosterior?: string;
+  // B · Núcleo: los 5 tests que se hacen siempre
+  jackIzq?: string;
+  jackDcho?: string;
+  navDropIzq?: string; // mm
+  navDropDcho?: string;
+  resistSupIzq?: string;
+  resistSupDcho?: string;
+  singleHeelIzq?: string;
+  singleHeelDcho?: string;
+  // (lungeIzq / lungeDcha están arriba: se miden en la misma camilla)
+  // C · Complementarios elegidos según la rama del cuadro
+  testsSel?: string[]; // ids de los complementarios realizados
+  heelRise?: string; // double heel rise
+  maxPronIzq?: string;
+  maxPronDcho?: string;
+  navDriftIzq?: string; // mm
+  navDriftDcho?: string;
+  tooManyToes?: string;
+  resistInversion?: string;
+  coleman?: string;
+  balanceIzq?: string; // segundos
+  balanceDcho?: string;
+  singleLegSquat?: string;
+  stepDown?: string;
+  trendelenburg?: string;
+  rotCadera?: string;
+  dorsi1mtfIzq?: string; // grados
+  dorsi1mtfDcho?: string;
+  formulaMetatarsal?: string;
+  formulaDigital?: string;
+  compresionMtt?: string;
+  mulder?: string;
+  compresionCalcaneo?: string;
+  palpacionCalcaneo?: string;
+  palpacionAquiles?: string;
+  thompson?: string;
+  tinel?: string;
+  estabilidadTobillo?: string;
+  territorioSensitivo?: string;
+  // Exploración general
+  fpiIzq?: string; // FPI-6, -12..+12
+  fpiDcho?: string;
+  tipoPie?: string;
+  // D · Dismetría
+  dismetria?: string; // "No" | "Sí" (v1: "Sí — izq. más corta")
+  ladoCorto?: string;
+  lamina?: string; // lámina que nivela la pelvis
+  alza?: string; // alza recomendada en plantilla (mm); v1: texto libre
+  // E · Marcha
+  marchaPatron?: string;
+  contactoInicial?: string;
+  anguloPaso?: string;
+  retropieApoyo?: string;
+  despegue?: string;
+  marchaObs?: string;
+};
+
+// Categoría clínica del FPI-6 para mostrar junto al número.
+export function fpiLabel(score: string | undefined): string {
+  if (!score || score.trim() === "") return "";
+  const n = Number(score);
+  if (isNaN(n)) return score;
+  const cat =
+    n <= -5 ? "muy supinado" : n <= -1 ? "supinado" : n <= 5 ? "neutro" : n <= 9 ? "pronado" : "muy pronado";
+  return `${n} (${cat})`;
+}
+
+const pair = (izq?: string, dcha?: string, unit = "") => {
+  const l = izq && izq.trim() ? `Izq ${izq.trim()}${unit}` : "";
+  const r = dcha && dcha.trim() ? `Dcha ${dcha.trim()}${unit}` : "";
+  return [l, r].filter(Boolean).join(" · ");
+};
+
+// Líneas [etiqueta, valor] para pintar la exploración en el expediente.
+// Omite lo vacío y es compatible con el formato antiguo (v1).
+export function examLines(e: Exam | null | undefined): [string, string][] {
+  if (!e) return [];
+  const lines: [string, string][] = [];
+  const add = (label: string, value?: string) => {
+    if (value && value.trim()) lines.push([label, value.trim()]);
+  };
+  // A · Tipo de pie y observaciones
+  add("Tipo de pie", e.tipoPie);
+  add("FPI-6", pair(fpiLabel(e.fpiIzq), fpiLabel(e.fpiDcho)));
+  add("Movilidad / flexibilidad relevante", e.movilidadObs);
+  add("Subastragalina", e.subastragalina);
+  add("Hallux en descarga", e.hallux);
+  add("Cadena posterior", e.cadenaPosterior);
+  // B · Núcleo (siempre) — los 5 salen aunque estén a medias, para que se vea qué falta
+  add("Jack / Hubscher", pair(e.jackIzq, e.jackDcho));
+  add("Navicular drop", pair(e.navDropIzq, e.navDropDcho, " mm"));
+  add("Resistencia a la supinación", pair(e.resistSupIzq, e.resistSupDcho));
+  add("Lunge test", pair(e.lungeIzq, e.lungeDcha, " cm"));
+  add("Single heel rise", pair(e.singleHeelIzq, e.singleHeelDcho));
+  // C · Complementarios (solo los que se eligieron y se hicieron)
+  const sel = (e.testsSel ?? []).map(normalizaId);
+  if (sel.length)
+    add(
+      "Tests complementarios",
+      sel.map((id) => TEST_POR_ID[id]?.nombre ?? id).join(" · ")
+    );
+  add("Double heel rise", e.heelRise);
+  add("Máxima pronación", pair(e.maxPronIzq, e.maxPronDcho));
+  add("Navicular drift", pair(e.navDriftIzq, e.navDriftDcho, " mm"));
+  add("Too many toes", e.tooManyToes);
+  add("Resistencia a la inversión", e.resistInversion);
+  add("Coleman block test", e.coleman);
+  add("Balance monopodal", pair(e.balanceIzq, e.balanceDcho, " s"));
+  add("Single leg squat", e.singleLegSquat);
+  add("Step down test", e.stepDown);
+  add("Trendelenburg", e.trendelenburg);
+  add("Rotación de cadera", e.rotCadera);
+  add("Dorsiflexión 1.ª MTF", pair(e.dorsi1mtfIzq, e.dorsi1mtfDcho, "°"));
+  add("Silfverskiöld", e.tobillo);
+  add("Primer radio", e.primerRadio);
+  add(
+    "Fórmula metatarsal / digital",
+    [e.formulaMetatarsal, e.formulaDigital].filter(Boolean).join(" · ") || undefined
+  );
+  add("Compresión metatarsal", e.compresionMtt);
+  add("Signo de Mulder", e.mulder);
+  add("Compresión lateral del calcáneo", e.compresionCalcaneo);
+  add("Palpación del calcáneo", e.palpacionCalcaneo);
+  add("Palpación del tendón de Aquiles", e.palpacionAquiles);
+  add("Thompson", e.thompson);
+  add("Tinel túnel tarsiano", e.tinel);
+  add("Estabilidad de tobillo", e.estabilidadTobillo);
+  add("Exploración sensitiva", e.territorioSensitivo);
+  // D · Dismetría
+  if (e.dismetria === "Sí" && e.ladoCorto) {
+    add("Dismetría", `Sí — ${e.ladoCorto.toLowerCase()} más corta`);
+  } else {
+    add("Dismetría", e.dismetria); // v1 ya guardaba el lado en el texto
+  }
+  add("Lámina que nivela la pelvis", e.lamina);
+  if (e.alza && e.alza !== "No") add("Alza recomendada en plantilla", /^\d/.test(e.alza) ? `${e.alza} mm` : e.alza);
+  // E · Marcha
+  add("Patrón de pisada", e.marchaPatron);
+  add("Contacto inicial", e.contactoInicial);
+  add("Ángulo de paso", e.anguloPaso);
+  add("Retropié en apoyo", e.retropieApoyo);
+  add("Despegue", e.despegue);
+  add("Observaciones de la marcha", e.marchaObs);
+  return lines;
+}

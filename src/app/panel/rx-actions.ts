@@ -9,13 +9,15 @@ import { audit, notify, pushEvent, releaseStale } from "@/lib/cases";
 import { PAY_LINK_DAYS } from "@/lib/states";
 import { PRICE_CENTS } from "@/lib/format";
 import type { Case } from "@prisma/client";
+import { CENTRAL_WHERE, REVISION_PREFIJO, esCentral } from "@/lib/rx-route";
 
 function fail(path: string, msg: string): never {
   redirect(`${path}${path.includes("?") ? "&" : "?"}error=` + encodeURIComponent(msg));
 }
 
-// El usuario puede valorar este caso: recetador central (clínicas sin prescriptor)
-// o profesional prescriptor de la clínica del caso.
+// El usuario puede valorar este caso: recetador central (casos enviados a
+// Ortosend o para revisión) o profesional prescriptor de la clínica del caso
+// (casos que la clínica se quedó).
 async function requirePrescriberFor(caseId: string) {
   const u = await requireRole("RECETADOR", "PROFESIONAL");
   const kase = await prisma.case.findUnique({
@@ -24,9 +26,10 @@ async function requirePrescriberFor(caseId: string) {
   });
   if (!kase) throw new Error("Caso no encontrado");
   if (u.role === "RECETADOR") {
-    if (kase.clinic.hasPrescriber) throw new Error("Este caso lo valora el prescriptor de su clínica");
+    if (!esCentral(kase)) throw new Error("Este caso lo receta el prescriptor de su clínica");
   } else {
     if (u.clinicId !== kase.clinicId) throw new Error("Caso de otra clínica");
+    if (esCentral(kase)) throw new Error("Este caso lo está valorando el equipo de Ortosend");
   }
   const profile = await prisma.professionalProfile.findUnique({ where: { userId: u.id } });
   return { u, kase, profile };
@@ -38,7 +41,7 @@ export async function nextRxAction() {
   const u = await requireRole("RECETADOR");
   await releaseStale();
   const candidates = await prisma.case.findMany({
-    where: { state: "EN_PRESCRIPCION", openBy: null, clinic: { hasPrescriber: false } },
+    where: { state: "EN_PRESCRIPCION", openBy: null, ...CENTRAL_WHERE },
     orderBy: { createdAt: "asc" },
     take: 5,
   });
@@ -112,111 +115,6 @@ export async function signRxAction(formData: FormData) {
       nota: "Tu prescripción está lista. Entra en tu panel para verla y completar el pago (199,99 €, enlace válido 30 días).",
     });
   redirect("/panel?ok=" + encodeURIComponent(`Caso #${kase.number} prescrito y enviado a pago`));
-}
-
-// Receta directa: quien rellena el estudio es prescriptor verificado y firma la receta
-// en la misma visita, sin pasar por la cola de revisión. Los tests son opcionales
-// (elige los que necesite); lo obligatorio es el motivo de consulta registrado (paso 1)
-// y el escrito de la receta. La identidad y colegiación salen del perfil, no del formulario.
-export async function signDirectRxAction(formData: FormData) {
-  const caseId = String(formData.get("caseId"));
-  const back = `/caso/${caseId}`;
-  const u = await requireRole("PROFESIONAL", "ADMIN_CLINICA");
-  const kase = await prisma.case.findUnique({
-    where: { id: caseId },
-    include: { capture: true, patient: true, clinic: true, prescription: true },
-  });
-  if (!kase || kase.clinicId !== u.clinicId) fail("/panel", "Caso no accesible");
-  if (!["DIRECTA", "DIRECTA_REVISION"].includes(kase.rxMode ?? ""))
-    fail(back, "Este caso se creó para valoración de Ortosend: completa el estudio y envíalo a la cola");
-  if (!["ESTUDIO_EN_CURSO", "DEVUELTO_CLINICA"].includes(kase.state))
-    fail(back, "El estudio no está en curso");
-  if (kase.prescription)
-    fail(back, "Este caso ya tiene receta firmada");
-  // Guardas duras: misma exigencia de colegiación que la firma en cola.
-  const profile = await prisma.professionalProfile.findUnique({ where: { userId: u.id } });
-  if (!profile?.canPrescribe || !profile.verifiedAt || !profile.collegiateNum)
-    fail(back, "Solo un prescriptor con colegiación verificada puede firmar la receta directa");
-  const q = kase.capture?.questionnaire as { motivo?: string } | null;
-  const motivo = q?.motivo?.trim();
-  if (!motivo)
-    fail(back, "Registra el motivo de consulta (paso 1) antes de firmar: debe quedar en el caso");
-  const diagnosis =
-    String(formData.get("diagnosis") ?? "") +
-    (formData.get("diagnosisDetail") ? ` — ${String(formData.get("diagnosisDetail")).trim()}` : "");
-  const fabricationOrder = String(formData.get("fabricationOrder") ?? "").trim();
-  const usageGuidelines = String(formData.get("usageGuidelines") ?? "").trim();
-  if (!fabricationOrder)
-    fail(back, "El escrito de la receta es obligatorio: cómo deben ser las plantillas, qué deben llevar y qué función tienen");
-  // 2ª opinión de Ortosend: solo en la modalidad elegida al crear el caso. Se pide siempre
-  // al firmar; si el prescriptor no concreta una consulta, se pide una revisión general.
-  const withReview = kase.rxMode === "DIRECTA_REVISION";
-  const reviewQuestion = withReview
-    ? String(formData.get("reviewQuestion") ?? "").trim() ||
-      "2ª opinión general sobre la receta firmada"
-    : "";
-  const expires = new Date(Date.now() + PAY_LINK_DAYS * 24 * 3600 * 1000);
-  await prisma.$transaction([
-    prisma.capture.update({ where: { caseId }, data: { completedAt: new Date() } }),
-    prisma.prescription.create({
-      data: {
-        caseId,
-        prescriberId: u.id,
-        prescriberName: u.name,
-        collegiateNum: profile.collegiateNum,
-        assessment: `Motivo de consulta: ${motivo}`, // el motivo queda registrado en la receta
-        diagnosis,
-        fabricationOrder,
-        usageGuidelines,
-        pdfUrl: `prescripciones/${kase.number}.pdf`, // PDF firmado e inmutable (generación real pendiente)
-      },
-    }),
-    prisma.payment.create({ data: { caseId, amountCents: PRICE_CENTS } }),
-    prisma.case.update({
-      where: { id: caseId },
-      data: {
-        state: "PENDIENTE_PAGO",
-        openBy: null,
-        openAt: null,
-        rxDraft: null,
-        payLinkExpiresAt: expires,
-        ...(reviewQuestion ? { reviewQuestion, reviewRequestedAt: new Date() } : {}),
-      },
-    }),
-  ]);
-  await pushEvent(
-    caseId,
-    `Receta directa firmada en la visita por ${u.name} (${profile.degree ?? "colegiado"}, col. ${profile.collegiateNum})`,
-    u.name
-  );
-  if (reviewQuestion)
-    await pushEvent(caseId, `2ª opinión solicitada a Ortosend: ${reviewQuestion}`, u.name);
-  await audit(u.id, "prescription.sign_direct", `case:${kase.number}`);
-  const phone = await ownerPhone(kase);
-  if (phone)
-    await notify(phone, "rx_lista_pago", {
-      nota: "Tu prescripción está lista, firmada por el profesional que te ha atendido. Entra en tu panel para verla y completar el pago (199,99 €, enlace válido 30 días).",
-    });
-  redirect("/panel?ok=" + encodeURIComponent(`Caso #${kase.number} prescrito directamente y enviado a pago`));
-}
-
-// Respuesta a una revisión de receta directa: uno de nuestros profesionales (recetador
-// central) da su opinión. Es consultiva — no bloquea ni modifica la receta ya firmada.
-export async function answerReviewAction(formData: FormData) {
-  const u = await requireRole("RECETADOR");
-  const caseId = String(formData.get("caseId"));
-  const answer = String(formData.get("answer") ?? "").trim();
-  if (!answer) fail("/panel", "Escribe tu opinión para responder la revisión");
-  const kase = await prisma.case.findUnique({ where: { id: caseId } });
-  if (!kase || !kase.reviewRequestedAt) fail("/panel", "Este caso no tiene revisión solicitada");
-  if (kase.reviewAnswer) fail("/panel", "La revisión ya está respondida");
-  await prisma.case.update({
-    where: { id: caseId },
-    data: { reviewAnswer: answer, reviewAnsweredBy: u.name, reviewAnsweredAt: new Date() },
-  });
-  await pushEvent(caseId, `Revisión respondida por ${u.name}: ${answer}`, u.name);
-  await audit(u.id, "review.answer", `case:${kase.number}`);
-  redirect("/panel?ok=" + encodeURIComponent(`Revisión del caso #${kase.number} respondida`));
 }
 
 // El prescriptor quiere hablar con el paciente → asignación pegajosa.
@@ -295,4 +193,31 @@ export async function draftAction(formData: FormData) {
   await pushEvent(caseId, "Borrador guardado; caso devuelto a la cola (conserva antigüedad)", u.name);
   void kase;
   redirect("/panel");
+}
+
+// Segunda opinión pedida por la clínica: Ortosend deja su valoración y devuelve el
+// caso al profesional que lo envió, que es quien firma.
+export async function reviewBackAction(formData: FormData) {
+  const caseId = String(formData.get("caseId"));
+  const { u, kase } = await requirePrescriberFor(caseId);
+  const back = `/caso/${caseId}`;
+  if (u.role !== "RECETADOR") fail(back, "Solo el equipo de Ortosend devuelve revisiones");
+  if (kase.rxRoute !== "REVISION") fail(back, "Este caso no tiene una segunda opinión pedida");
+  if (!["EN_PRESCRIPCION", "EN_CONTACTO"].includes(kase.state)) fail(back, "El caso no está en valoración");
+  const review = String(formData.get("review") ?? "").trim();
+  if (!review) fail(back, "Escribe la segunda opinión que devuelves a la clínica");
+  await prisma.case.update({
+    where: { id: caseId },
+    data: {
+      state: "EN_PRESCRIPCION",
+      rxRoute: "CLINICA",
+      assignedTo: kase.rxRequestedBy,
+      openBy: null,
+      openAt: null,
+      rxDraft: `${REVISION_PREFIJO} (${u.name}): ${review}`,
+    },
+  });
+  await pushEvent(caseId, `Segunda opinión devuelta a la clínica para que firme: ${review}`, u.name);
+  await audit(u.id, "prescription.review", `case:${kase.number}`);
+  redirect("/panel?ok=" + encodeURIComponent(`Segunda opinión del caso #${kase.number} devuelta a la clínica`));
 }

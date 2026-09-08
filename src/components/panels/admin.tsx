@@ -6,6 +6,7 @@ import {
   applicationSetAction,
   clinicStatusAction,
   closeCaseAction,
+  professionalApplicationAction,
   reactivatePayAction,
   runJobsAction,
 } from "@/app/panel/admin-actions";
@@ -175,13 +176,96 @@ export async function PanelAdmin({ tab }: { tab?: string }) {
     );
   }
   if (t === "usr") {
-    const users = await prisma.user.findMany({
-      where: { role: { not: "CLIENTE" } },
-      include: { clinic: true, professional: true },
-      orderBy: { name: "asc" },
-    });
+    const [users, proApps] = await Promise.all([
+      prisma.user.findMany({
+        where: { role: { not: "CLIENTE" } },
+        include: { clinic: true, professional: true },
+        orderBy: { name: "asc" },
+      }),
+      prisma.professionalApplication.findMany({
+        where: { status: "recibida" },
+        include: { clinic: true },
+        orderBy: { createdAt: "asc" },
+      }),
+    ]);
     body = (
       <>
+        {proApps.length > 0 && (
+          <>
+            <h3>Solicitudes de alta de profesionales</h3>
+            <div className="muted">
+              Presentadas por los admins de clínica. Aprobar valida la ficha, crea la cuenta y
+              envía la invitación de activación (72 h); si prescribe, la colegiación queda
+              verificada.
+            </div>
+            <div className="sp" />
+            {proApps.map((a) => (
+              <div className="card" key={a.id} style={{ marginBottom: 12 }}>
+                <div className="row between">
+                  <b style={{ fontFamily: "var(--font-sora)" }}>{a.fullName}</b>
+                  <span className={`pill ${a.canPrescribe ? "g" : "b"}`}>
+                    {a.canPrescribe ? "Prescriptor" : "Técnico"}
+                  </span>
+                </div>
+                <div className="grid g3" style={{ marginTop: 8 }}>
+                  <div>
+                    <div className="tiny">CLÍNICA</div>
+                    <div className="muted">{a.clinic.name}</div>
+                  </div>
+                  <div>
+                    <div className="tiny">DNI</div>
+                    <div className="muted">{a.dni}</div>
+                  </div>
+                  <div>
+                    <div className="tiny">TITULACIÓN</div>
+                    <div className="muted">{a.degree}</div>
+                  </div>
+                  <div>
+                    <div className="tiny">CONTACTO</div>
+                    <div className="muted">
+                      {a.email} · {a.phone}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="tiny">Nº COLEGIADO</div>
+                    <div className="muted">{a.collegiateNum ?? "—"}</div>
+                  </div>
+                  <div>
+                    <div className="tiny">COLEGIO PROFESIONAL</div>
+                    <div className="muted">{a.college ?? "—"}</div>
+                  </div>
+                </div>
+                {a.notes && (
+                  <div className="tiny" style={{ marginTop: 6 }}>
+                    Comentarios: {a.notes}
+                  </div>
+                )}
+                <div className="row" style={{ marginTop: 10 }}>
+                  <form action={professionalApplicationAction} className="row">
+                    <input type="hidden" name="applicationId" value={a.id} />
+                    <input type="hidden" name="decision" value="aprobada" />
+                    <button type="submit" className="pri">
+                      Aprobar y crear cuenta
+                    </button>
+                  </form>
+                  <form action={professionalApplicationAction} className="row">
+                    <input type="hidden" name="applicationId" value={a.id} />
+                    <input type="hidden" name="decision" value="rechazada" />
+                    <input name="note" placeholder="Motivo del rechazo" style={{ maxWidth: 220 }} />
+                    <button type="submit" className="dang">
+                      Rechazar
+                    </button>
+                  </form>
+                </div>
+                <div className="tiny" style={{ marginTop: 6 }}>
+                  Solicitada el {fmtd(a.createdAt)} · Verifica la colegiación en el registro del
+                  colegio antes de aprobar.
+                </div>
+              </div>
+            ))}
+            <div className="sp" />
+          </>
+        )}
         <h3>Profesionales y cuentas</h3>
         <div className="sp" />
         <div className="card">

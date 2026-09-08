@@ -5,10 +5,24 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { requireRole, createInviteToken } from "@/lib/auth";
 import { checklistOf, notify, pushEvent } from "@/lib/cases";
-import { VIDEO_KINDS, BARO_KINDS } from "@/lib/format";
+import { BARO_KINDS, SCAN_KIND } from "@/lib/format";
+import type { Questionnaire } from "@/lib/questionnaire";
+import type { Exam } from "@/lib/exploracion";
+import { nucleoCompleto, ramasSinCubrir } from "@/lib/tests-podologicos";
+import { RX_ROUTES, type RxRoute } from "@/lib/rx-route";
 import type { User } from "@prisma/client";
 
 const MAX_SLOTS = 5;
+
+// Nombre seguro para rutas de archivo a partir del nombre del paciente.
+function slugify(t: string) {
+  return t
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+}
 
 function fail(path: string, msg: string): never {
   redirect(`${path}${path.includes("?") ? "&" : "?"}error=` + encodeURIComponent(msg));
@@ -52,15 +66,6 @@ export async function newCaseBAction(formData: FormData) {
   const email = String(formData.get("email") ?? "").trim().toLowerCase() || null;
   const birth = String(formData.get("birth") ?? "");
   if (!name || !phone) fail(back, "Nombre y móvil del paciente son obligatorios");
-  // Elección de quién hará la receta: propia, propia con 2ª opinión de Ortosend, u Ortosend.
-  // Solo un prescriptor verificado puede quedarse la receta (con o sin 2ª opinión).
-  let rxMode = String(formData.get("rxMode") ?? "ORTOSEND");
-  if (!["DIRECTA", "DIRECTA_REVISION", "ORTOSEND"].includes(rxMode)) rxMode = "ORTOSEND";
-  if (rxMode !== "ORTOSEND") {
-    const profile = await prisma.professionalProfile.findUnique({ where: { userId: u.id } });
-    if (!profile?.canPrescribe || !profile.verifiedAt || !profile.collegiateNum)
-      fail(back, "Solo un prescriptor con colegiación verificada puede elegir la receta propia");
-  }
   const dup = await prisma.user.findFirst({
     where: { OR: [{ phone }, ...(email ? [{ email }] : [])] },
   });
@@ -80,23 +85,13 @@ export async function newCaseBAction(formData: FormData) {
       },
     });
     const kase = await tx.case.create({
-      data: { patientId: patient.id, clinicId: u.clinicId, state: "ESTUDIO_EN_CURSO", flow: "B", rxMode },
+      data: { patientId: patient.id, clinicId: u.clinicId, state: "ESTUDIO_EN_CURSO", flow: "B" },
     });
     await tx.capture.create({ data: { caseId: kase.id } });
     return { kase, owner };
   });
   const token = await createInviteToken(owner.id);
-  await pushEvent(
-    kase.id,
-    `Caso creado en clínica (Flujo B) por ${u.name}${
-      rxMode === "DIRECTA"
-        ? " — receta propia: la firmará el propio profesional"
-        : rxMode === "DIRECTA_REVISION"
-          ? " — receta propia con 2ª opinión de Ortosend"
-          : ""
-    }`,
-    u.name
-  );
+  await pushEvent(kase.id, `Caso creado en clínica (Flujo B) por ${u.name}`, u.name);
   await notify(phone, "invitacion_cuenta", {
     enlace: `/activar?token=${token}`,
     validez: "72 h",
@@ -120,41 +115,212 @@ async function captureFor(caseId: string, u: User) {
   return { kase, capture };
 }
 
-export async function saveQuestionnaireAction(formData: FormData) {
-  const u = await requireClinicStaff();
-  const caseId = String(formData.get("caseId"));
-  const motivo = String(formData.get("motivo") ?? "").trim();
-  if (!motivo) fail(`/caso/${caseId}`, "Falta el motivo de consulta");
-  const { capture } = await captureFor(caseId, u);
-  await prisma.capture.update({
-    where: { id: capture.id },
-    data: {
-      questionnaire: {
-        motivo,
-        dolor: String(formData.get("dolor") ?? ""),
-        actividad: String(formData.get("actividad") ?? ""),
-      },
-    },
-  });
-  redirect(`/caso/${caseId}`);
+// --- Guardado por secciones del modo guiado (una pantalla = una sección) ---
+// Cada sección hace merge sobre el JSON existente; el bloque se marca done al
+// guardar su última sección. Así el estudio puede continuarse desde cualquier
+// dispositivo por la pantalla en la que se quedó.
+
+const Q_FIELDS: Record<string, { strs: (keyof Questionnaire)[]; lists: (keyof Questionnaire)[]; last?: boolean }> = {
+  motivo: { strs: ["motivo", "evolucion", "dolor", "lado"], lists: [] },
+  zonas: { strs: ["tipoSintoma"], lists: ["zonas", "momentos"] },
+  actividad: { strs: ["actividad", "deporte", "horasPie", "profesion", "peso", "altura", "tallaCalzado"], lists: [] },
+  calzado: { strs: ["desgaste", "plantillasPrevias"], lists: ["calzado"] },
+  antecedentes: {
+    strs: ["antecedentesDetalle", "medicacion", "observaciones"],
+    lists: ["antecedentes", "tratamientosPrevios"],
+    last: true,
+  },
+};
+
+const E_FIELDS: Record<string, { strs: (keyof Exam)[]; lists: (keyof Exam)[]; last?: boolean }> = {
+  movilidad: { strs: ["tipoPie", "fpiIzq", "fpiDcho", "movilidadObs"], lists: [] },
+  // Los 5 generales, que se hacen siempre
+  nucleo: {
+    strs: [
+      "jackIzq",
+      "jackDcho",
+      "navDropIzq",
+      "navDropDcho",
+      "resistSupIzq",
+      "resistSupDcho",
+      "lungeIzq",
+      "lungeDcha",
+      "singleHeelIzq",
+      "singleHeelDcho",
+    ],
+    lists: [],
+  },
+  comp_sel: { strs: [], lists: ["testsSel"] },
+  comp_res: {
+    strs: [
+      "heelRise",
+      "maxPronIzq",
+      "maxPronDcho",
+      "navDriftIzq",
+      "navDriftDcho",
+      "tooManyToes",
+      "resistInversion",
+      "coleman",
+      "balanceIzq",
+      "balanceDcho",
+      "singleLegSquat",
+      "stepDown",
+      "trendelenburg",
+      "rotCadera",
+      "dorsi1mtfIzq",
+      "dorsi1mtfDcho",
+      "tobillo",
+      "primerRadio",
+      "formulaMetatarsal",
+      "formulaDigital",
+      "compresionMtt",
+      "mulder",
+      "compresionCalcaneo",
+      "palpacionCalcaneo",
+      "palpacionAquiles",
+      "thompson",
+      "tinel",
+      "estabilidadTobillo",
+      "territorioSensitivo",
+    ],
+    lists: [],
+  },
+  dismetria: { strs: ["dismetria", "ladoCorto", "lamina", "alza"], lists: [] },
+  marcha: {
+    strs: ["marchaPatron", "contactoInicial", "anguloPaso", "retropieApoyo", "despegue", "marchaObs"],
+    lists: [],
+    last: true,
+  },
+};
+
+function sectionValues(formData: FormData, def: { strs: string[]; lists: string[] }) {
+  const out: Record<string, unknown> = {};
+  for (const k of def.strs) out[k] = String(formData.get(k) ?? "").trim();
+  for (const k of def.lists)
+    out[k] = formData.getAll(k).map((v) => String(v).trim()).filter(Boolean);
+  return out;
 }
 
-export async function saveExamAction(formData: FormData) {
+// Autoguardado (estilo Drive): cada pulsación guarda la sección en curso, sin
+// validar ni redirigir. La validación dura queda para el botón «Continuar»,
+// que además marca el bloque como completo en su última sección.
+export async function autosaveSectionAction(
+  formData: FormData
+): Promise<{ ok: boolean }> {
+  try {
+    const u = await requireClinicStaff();
+    const caseId = String(formData.get("caseId"));
+    const block = String(formData.get("block"));
+    const section = String(formData.get("section"));
+    const def = block === "q" ? Q_FIELDS[section] : block === "e" ? E_FIELDS[section] : null;
+    if (!def) return { ok: false };
+    const { capture } = await captureFor(caseId, u);
+    const prev = ((block === "q" ? capture.questionnaire : capture.physicalExam) ?? {}) as Record<
+      string,
+      unknown
+    >;
+    const merged = {
+      ...prev,
+      ...sectionValues(formData, def as { strs: string[]; lists: string[] }),
+      v: 2,
+      done: prev.done === true,
+    };
+    await prisma.capture.update({
+      where: { id: capture.id },
+      data: block === "q" ? { questionnaire: merged } : { physicalExam: merged },
+    });
+    return { ok: true };
+  } catch {
+    return { ok: false };
+  }
+}
+
+export async function saveQuestionnaireSectionAction(formData: FormData) {
   const u = await requireClinicStaff();
   const caseId = String(formData.get("caseId"));
+  const paso = String(formData.get("paso") ?? "");
+  const next = String(formData.get("next") ?? "");
+  const back = `/caso/${caseId}${paso ? `?paso=${paso}` : ""}`;
+  const section = String(formData.get("section"));
+  const def = Q_FIELDS[section];
+  if (!def) fail(back, "Sección desconocida");
+
   const { capture } = await captureFor(caseId, u);
-  await prisma.capture.update({
-    where: { id: capture.id },
-    data: {
-      physicalExam: {
-        tobillo: String(formData.get("tobillo") ?? ""),
-        hallux: String(formData.get("hallux") ?? ""),
-        dismetria: String(formData.get("dismetria") ?? ""),
-        alza: String(formData.get("alza") ?? "").trim() || "No",
-      },
-    },
-  });
-  redirect(`/caso/${caseId}`);
+  const prev = (capture.questionnaire ?? {}) as Record<string, unknown>;
+  const merged = { ...prev, ...sectionValues(formData, def as { strs: string[]; lists: string[] }) };
+
+  if (section === "motivo" && !String(merged.motivo ?? "").trim())
+    fail(back, "Falta el motivo de consulta");
+  if (
+    section === "zonas" &&
+    merged.lado !== "Sin dolor localizado" &&
+    (merged.zonas as string[]).length === 0
+  )
+    fail(back, "Marca al menos una zona de dolor (o vuelve atrás y elige «Sin dolor localizado»)");
+
+  const questionnaire = {
+    ...merged,
+    v: 2,
+    done: def.last ? true : prev.done === true,
+  } as Questionnaire;
+  await prisma.capture.update({ where: { id: capture.id }, data: { questionnaire } });
+  redirect(`/caso/${caseId}${next ? `?paso=${next}` : ""}`);
+}
+
+export async function saveExamSectionAction(formData: FormData) {
+  const u = await requireClinicStaff();
+  const caseId = String(formData.get("caseId"));
+  const paso = String(formData.get("paso") ?? "");
+  const next = String(formData.get("next") ?? "");
+  const back = `/caso/${caseId}${paso ? `?paso=${paso}` : ""}`;
+  const section = String(formData.get("section"));
+  const def = E_FIELDS[section];
+  if (!def) fail(back, "Sección desconocida");
+
+  const { capture } = await captureFor(caseId, u);
+  const prev = (capture.physicalExam ?? {}) as Record<string, unknown>;
+  const values = sectionValues(formData, def);
+
+  const merged = { ...prev, ...values } as Exam;
+
+  // Los 5 generales son obligatorios para todos.
+  if (section === "nucleo" && !nucleoCompleto(merged))
+    fail(back, "Faltan resultados: los 5 tests generales se hacen en todos los pacientes");
+
+  // Cada rama activa necesita al menos un test que la valore. Guardamos antes
+  // de avisar, para que al volver esté marcado lo que ya había elegido.
+  if (section === "comp_sel") {
+    const q = (capture.questionnaire ?? null) as Questionnaire | null;
+    const sinCubrir = ramasSinCubrir(q, merged);
+    if (sinCubrir.length) {
+      await prisma.capture.update({
+        where: { id: capture.id },
+        data: { physicalExam: { ...merged, v: 2, done: prev.done === true } as Exam },
+      });
+      fail(back, `Marca al menos un test para: ${sinCubrir.join(", ")}`);
+    }
+  }
+
+  if (section === "dismetria") {
+    if (values.dismetria === "Sí" && (!values.ladoCorto || !values.lamina))
+      fail(back, "Con dismetría marcada indica el lado corto y la lámina que nivela la pelvis");
+    if (values.dismetria !== "Sí") {
+      values.ladoCorto = "";
+      values.lamina = "";
+      values.alza = "No";
+    } else if (!values.alza) {
+      values.alza = "No";
+    }
+  }
+
+  const physicalExam = {
+    ...prev,
+    ...values,
+    v: 2,
+    done: def.last ? true : prev.done === true,
+  } as Exam;
+  await prisma.capture.update({ where: { id: capture.id }, data: { physicalExam } });
+  redirect(`/caso/${caseId}${next ? `?paso=${next}` : ""}`);
 }
 
 // Marca un elemento de captura como subido y CONFIRMADO por el servidor.
@@ -163,27 +329,34 @@ export async function markMediaAction(formData: FormData) {
   const u = await requireClinicStaff();
   const caseId = String(formData.get("caseId"));
   const kind = String(formData.get("kind"));
-  const valid = ["scan_L", "scan_R", ...VIDEO_KINDS.map(([k]) => k), ...BARO_KINDS.map(([k]) => k)];
+  const next = String(formData.get("next") ?? "");
+  // Los vídeos y fotos NO pasan por aquí: suben de verdad vía /api/media.
+  const valid = [SCAN_KIND, ...BARO_KINDS.map(([k]) => k)];
   if (!valid.includes(kind)) fail(`/caso/${caseId}`, "Elemento de captura desconocido");
-  const { capture } = await captureFor(caseId, u);
+  const { kase, capture } = await captureFor(caseId, u);
   const exists = await prisma.mediaAsset.findFirst({ where: { captureId: capture.id, kind } });
   if (!exists) {
+    // Carpeta por caso identificada con el nombre del paciente, para que el archivo
+    // del escáner o del dashboard quede asociado sin depender de su nombre original.
+    const carpeta = `estudios/${String(kase.number).padStart(5, "0")}-${slugify(kase.patient.name)}`;
     await prisma.mediaAsset.create({
       data: {
         captureId: capture.id,
         kind,
-        url: `media/${caseId}/${kind}`,
+        url: `${carpeta}/${kind}`,
         confirmedAt: new Date(), // check verde SOLO con confirmación del servidor
       },
     });
   }
-  redirect(`/caso/${caseId}`);
+  redirect(`/caso/${caseId}${next ? `?paso=${next}` : ""}`);
 }
 
 // Envío del estudio: checklist bloqueante → ESTUDIO_COMPLETO → EN_PRESCRIPCION.
 export async function sendCaseAction(formData: FormData) {
   const u = await requireClinicStaff();
   const caseId = String(formData.get("caseId"));
+  const paso = String(formData.get("paso") ?? "");
+  const back = `/caso/${caseId}${paso ? `?paso=${paso}` : ""}`;
   const kase = await prisma.case.findUnique({
     where: { id: caseId },
     include: { capture: { include: { media: true } }, patient: true, clinic: true },
@@ -194,14 +367,36 @@ export async function sendCaseAction(formData: FormData) {
     fail(`/caso/${caseId}`, "El estudio no está en curso");
   const cl = checklistOf(kase!.capture);
   if (!cl.completa) fail(`/caso/${caseId}`, "La checklist del protocolo debe estar completa (todo en verde)");
+
+  // Quién receta se eligió antes de empezar el estudio (chooseRxRouteAction).
+  const rxRoute = kase!.rxRoute as RxRoute | null;
+  if (!rxRoute) fail(`/caso/${caseId}?elegir=1`, "Antes de enviar hay que elegir quién receta el caso");
+  void back;
+
   await prisma.capture.update({ where: { caseId }, data: { completedAt: new Date() } });
-  await prisma.case.update({ where: { id: caseId }, data: { state: "EN_PRESCRIPCION" } });
-  const central = !kase!.clinic.hasPrescriber;
+  await prisma.case.update({
+    where: { id: caseId },
+    data: {
+      state: "EN_PRESCRIPCION",
+      rxRequestedBy: kase!.rxRequestedBy ?? u.id,
+      // Receta propia: queda asignado a quien lo envió solo si es prescriptor; si lo
+      // envió el administrador, lo coge cualquier prescriptor de la clínica desde su cola.
+      assignedTo:
+        rxRoute === "CLINICA" && (await esPrescriptorVerificado(kase!.rxRequestedBy ?? u.id))
+          ? (kase!.rxRequestedBy ?? u.id)
+          : null,
+      openBy: null,
+      openAt: null,
+    },
+  });
+  const destino = {
+    CLINICA: `receta propia de ${u.name}`,
+    ORTOSEND: "receta por parte del equipo de Ortosend",
+    REVISION: `receta propia de ${u.name} con segunda opinión de Ortosend`,
+  }[rxRoute];
   await pushEvent(
     caseId,
-    fromRepeat
-      ? "Prueba repetida y reenviada a prescripción"
-      : `Estudio completo. Enviado a ${central ? "cola central Ortosend" : "prescriptor de la clínica"}`,
+    fromRepeat ? `Prueba repetida y reenviada a prescripción: ${destino}` : `Estudio completo. Enviado a prescripción: ${destino}`,
     u.name
   );
   if (kase!.patient) {
@@ -211,5 +406,91 @@ export async function sendCaseAction(formData: FormData) {
         nota: "Tu estudio está completo y en valoración. Te avisaremos en un máximo de 48 h laborables.",
       });
   }
-  redirect("/panel?ok=" + encodeURIComponent(`Caso #${kase!.number} enviado a prescripción`));
+  if (rxRoute === "CLINICA")
+    redirect(`/caso/${caseId}?ok=` + encodeURIComponent(`Caso #${kase!.number} en tu cola: ya puedes recetarlo`));
+  redirect(
+    "/panel?ok=" +
+      encodeURIComponent(
+        `Caso #${kase!.number} enviado a ${rxRoute === "REVISION" ? "Ortosend para revisión" : "prescripción de Ortosend"}`
+      )
+  );
+}
+
+// Quién receta se decide ANTES de empezar el estudio, porque el protocolo
+// depende de ello: si receta Ortosend se hace el estudio completo; si receta
+// la clínica o pide una segunda opinión, el formulario es otro (pendiente).
+// Solo un prescriptor con colegiación verificada puede quedárselo o pedir
+// revisión; el resto envía a Ortosend.
+// ¿Tiene la clínica algún prescriptor con colegiación verificada?
+async function clinicaPuedeRecetar(clinicId: string) {
+  const n = await prisma.professionalProfile.count({
+    where: { canPrescribe: true, verifiedAt: { not: null }, user: { clinicId, active: true } },
+  });
+  return n > 0;
+}
+
+// ¿Es este usuario un prescriptor con colegiación verificada?
+async function esPrescriptorVerificado(userId: string) {
+  const p = await prisma.professionalProfile.findUnique({ where: { userId } });
+  return !!p?.canPrescribe && !!p.verifiedAt;
+}
+
+export async function chooseRxRouteAction(formData: FormData) {
+  const u = await requireClinicStaff();
+  const caseId = String(formData.get("caseId"));
+  const kase = await prisma.case.findUnique({ where: { id: caseId } });
+  if (!kase || kase.clinicId !== u.clinicId) fail("/panel", "Caso no accesible");
+  if (!["CITA_RESERVADA", "ESTUDIO_EN_CURSO", "DEVUELTO_CLINICA"].includes(kase!.state))
+    fail(`/caso/${caseId}`, "El caso ya está enviado: no se puede cambiar quién receta");
+  // Las opciones de receta propia dependen de la clínica (que tenga un prescriptor
+  // verificado), no de quien rellena: el administrador también puede elegirlas.
+  const pedida = String(formData.get("rxRoute") ?? "");
+  let rxRoute: RxRoute;
+  if (!(await clinicaPuedeRecetar(u.clinicId!))) rxRoute = "ORTOSEND";
+  else if (RX_ROUTES.includes(pedida as RxRoute)) rxRoute = pedida as RxRoute;
+  else fail(`/caso/${caseId}?elegir=1`, "Elige quién receta este caso");
+  if (kase!.rxRoute !== rxRoute) {
+    await prisma.case.update({ where: { id: caseId }, data: { rxRoute, rxRequestedBy: u.id } });
+    const texto = { CLINICA: `receta propia de ${u.name}`, ORTOSEND: "receta por parte del equipo de Ortosend", REVISION: `receta propia de ${u.name} con segunda opinión de Ortosend` }[rxRoute];
+    await pushEvent(caseId, `Quién receta: ${texto}`, u.name);
+  }
+  redirect(`/caso/${caseId}`);
+}
+
+// --- Solicitud de alta de profesional (solo ADMIN_CLINICA) ---
+// La cuenta la crea Ortosend tras validar la ficha (colegiación incluida si prescribe).
+export async function requestProfessionalAction(formData: FormData) {
+  const u = await requireRole("ADMIN_CLINICA");
+  if (!u.clinicId) throw new Error("Usuario sin clínica asignada");
+  const back = "/panel?tab=prof";
+  const fullName = String(formData.get("fullName") ?? "").trim();
+  const dni = String(formData.get("dni") ?? "").trim();
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  const phone = String(formData.get("phone") ?? "").trim();
+  const degree = String(formData.get("degree") ?? "").trim();
+  const canPrescribe = formData.get("canPrescribe") === "on";
+  const collegiateNum = String(formData.get("collegiateNum") ?? "").trim();
+  const college = String(formData.get("college") ?? "").trim();
+  if (!fullName || !dni || !email || !phone || !degree)
+    fail(back, "Nombre completo, DNI, email, móvil y titulación son obligatorios");
+  if (canPrescribe && (!collegiateNum || !college))
+    fail(back, "Para un prescriptor, el nº de colegiado y el colegio profesional son obligatorios");
+  const dup = await prisma.user.findFirst({ where: { OR: [{ email }, { phone }] } });
+  if (dup) fail(back, "Ya existe una cuenta con ese email o móvil");
+  await prisma.professionalApplication.create({
+    data: {
+      clinicId: u.clinicId,
+      requestedBy: u.id,
+      fullName,
+      dni,
+      email,
+      phone,
+      degree,
+      canPrescribe,
+      collegiateNum: collegiateNum || null,
+      college: college || null,
+      notes: String(formData.get("notes") ?? "").trim() || null,
+    },
+  });
+  redirect(back + "&ok=" + encodeURIComponent("Solicitud enviada. Ortosend validará la ficha y creará la cuenta."));
 }

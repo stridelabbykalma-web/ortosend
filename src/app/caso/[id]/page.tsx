@@ -5,12 +5,13 @@ import { getSessionUser } from "@/lib/auth";
 import { audit } from "@/lib/cases";
 import { Flash, StatePill, Steps } from "@/components/ui";
 import { Expediente, Historial } from "@/components/caso/expediente";
-import { Wizard } from "@/components/caso/wizard";
+import { CapturaGuiada } from "@/components/caso/captura-guiada";
 import { RxView } from "@/components/caso/rx-view";
 import { TallerView } from "@/components/caso/taller-view";
 import { unlockRxAction } from "@/app/panel/cliente-actions";
 import { verifyDocToken } from "@/app/panel/cliente-actions";
 import { fmtd } from "@/lib/format";
+import { esCentral } from "@/lib/rx-route";
 
 export const dynamic = "force-dynamic";
 
@@ -19,12 +20,12 @@ export default async function CasoPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string; ok?: string; doc?: string }>;
+  searchParams: Promise<{ error?: string; ok?: string; doc?: string; paso?: string; elegir?: string }>;
 }) {
   const user = await getSessionUser();
   if (!user) redirect("/login");
   const { id } = await params;
-  const { error, ok, doc } = await searchParams;
+  const { error, ok, doc, paso, elegir } = await searchParams;
   const kase = await prisma.case.findUnique({
     where: { id },
     include: {
@@ -45,9 +46,8 @@ export default async function CasoPage({
   const isOwner = user.role === "CLIENTE" && k.patient.ownerId === user.id;
   const isClinicStaff =
     (user.role === "PROFESIONAL" || user.role === "ADMIN_CLINICA") && user.clinicId === k.clinicId;
-  // El recetador central ve las clínicas sin prescriptor y, además, cualquier caso
-  // con revisión de receta directa solicitada (para poder dar su opinión).
-  const isCentral = user.role === "RECETADOR" && (!k.clinic.hasPrescriber || !!k.reviewRequestedAt);
+  const central = esCentral(k); // lo valora Ortosend (enviado a Ortosend o para revisión)
+  const isCentral = user.role === "RECETADOR" && central;
   const isTaller = user.role === "TALLER";
   const isAdmin = user.role === "ADMIN";
   if (!isOwner && !isClinicStaff && !isCentral && !isTaller && !isAdmin) redirect("/panel");
@@ -59,22 +59,19 @@ export default async function CasoPage({
     isClinicStaff || isCentral
       ? await prisma.professionalProfile.findUnique({ where: { userId: user.id } })
       : null;
-  const canPrescribeHere =
-    !!profile?.canPrescribe &&
-    !!profile.verifiedAt &&
-    (isCentral || (isClinicStaff && k.clinic.hasPrescriber));
-  // Modo receta directa del asistente: al crear el caso se eligió que la receta el propio
-  // profesional (rxMode DIRECTA) y quien lo abre es prescriptor verificado.
-  // No se ofrece si el caso ya tiene receta firmada (p. ej. devuelto por el taller).
-  const directRx =
+  const puedeRecetar = !!profile?.canPrescribe && !!profile.verifiedAt;
+  const canPrescribeHere = puedeRecetar && (isCentral || (isClinicStaff && !central));
+  // Las opciones de «receta propia» dependen de la clínica, no de quien rellena el
+  // estudio: basta con que la clínica tenga un prescriptor con colegiación verificada
+  // (lo puede enviar el administrador y firmarlo el prescriptor).
+  const clinicaReceta =
     isClinicStaff &&
-    (k.rxMode === "DIRECTA" || k.rxMode === "DIRECTA_REVISION") &&
-    !k.prescription &&
-    !!profile?.canPrescribe &&
-    !!profile.verifiedAt &&
-    !!profile.collegiateNum
-      ? { name: user.name, degree: profile.degree, collegiateNum: profile.collegiateNum }
-      : null;
+    (await prisma.professionalProfile.count({
+      where: { canPrescribe: true, verifiedAt: { not: null }, user: { clinicId: k.clinicId, active: true } },
+    })) > 0;
+  const requestedBy = k.rxRequestedBy
+    ? await prisma.user.findUnique({ where: { id: k.rxRequestedBy }, select: { name: true } })
+    : null;
 
   const inCapture = ["CITA_RESERVADA", "ESTUDIO_EN_CURSO", "DEVUELTO_CLINICA"].includes(k.state);
   const inRx = ["EN_PRESCRIPCION", "EN_CONTACTO"].includes(k.state);
@@ -82,10 +79,11 @@ export default async function CasoPage({
 
   let inner: React.ReactNode;
   if (isClinicStaff && inCapture) {
+    const pasoNum = paso ? Number(paso) || undefined : undefined;
     inner = (
       <>
-        <Wizard kase={k} directRx={directRx} />
-        <Historial events={k.events} />
+        <CapturaGuiada kase={k} paso={pasoNum} puedeRecetar={clinicaReceta} elegir={elegir === "1"} />
+        {!pasoNum && <Historial events={k.events} />}
       </>
     );
   } else if (canPrescribeHere && inRx) {
@@ -93,7 +91,12 @@ export default async function CasoPage({
       <>
         <Expediente kase={k} />
         <div className="sp" />
-        <RxView kase={k} collegiateNum={profile?.collegiateNum ?? null} />
+        <RxView
+          kase={k}
+          collegiateNum={profile?.collegiateNum ?? null}
+          central={isCentral}
+          requestedBy={requestedBy?.name ?? null}
+        />
         <Historial events={k.events} />
       </>
     );
@@ -155,28 +158,6 @@ export default async function CasoPage({
   } else {
     inner = (
       <>
-        {k.reviewQuestion && (
-          <>
-            <div className="card">
-              <b>2ª opinión de Ortosend</b>
-              <div className="muted" style={{ margin: "6px 0" }}>
-                «{k.reviewQuestion}»
-              </div>
-              {k.reviewAnswer ? (
-                <div className="note g">
-                  <b>Opinión de {k.reviewAnsweredBy}</b> ({fmtd(k.reviewAnsweredAt!)}):{" "}
-                  {k.reviewAnswer}
-                </div>
-              ) : (
-                <div className="tiny">
-                  Pendiente de respuesta de uno de nuestros profesionales. Es consultiva: no
-                  bloquea el caso ni modifica la receta firmada.
-                </div>
-              )}
-            </div>
-            <div className="sp" />
-          </>
-        )}
         <Expediente kase={k} />
         <Historial events={k.events} />
       </>

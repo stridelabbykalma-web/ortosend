@@ -1,6 +1,7 @@
 // Utilidades sobre casos: eventos, notificaciones simuladas, reparto y liberación.
 import { prisma } from "./db";
 import { OPEN_CASE_TIMEOUT_MIN } from "./states";
+import { BARO_KINDS, CAPTURA_VISUAL, SCAN_KIND } from "./format";
 
 export async function pushEvent(caseId: string, text: string, actor: string) {
   await prisma.caseEvent.create({ data: { caseId, text, actor } });
@@ -33,8 +34,8 @@ export async function releaseStale() {
 export type Checklist = {
   cuestionario: boolean;
   exploracion: boolean;
-  escaneos: boolean;
-  videos: number; // confirmados de 7
+  escaneos: boolean; // escaneo de las espumas fenólicas
+  capturas: number; // vídeos + fotos confirmados, de CAPTURA_VISUAL.length
   baro: boolean;
   completa: boolean;
 };
@@ -46,17 +47,21 @@ export function checklistOf(capture: {
 } | null): Checklist {
   const media = capture?.media.filter((m) => m.confirmedAt) ?? [];
   const has = (k: string) => media.some((m) => m.kind === k);
-  const videos = media.filter((m) => m.kind.startsWith("video_")).length;
-  const cuestionario = !!capture?.questionnaire;
-  const exploracion = !!capture?.physicalExam;
-  const escaneos = has("scan_L") && has("scan_R");
-  const baro = has("baro_est_1") && has("baro_est_2") && has("baro_din") && has("baro_informe");
+  const capturas = CAPTURA_VISUAL.filter(([k]) => has(k)).length;
+  // El modo guiado guarda por secciones con done:false hasta terminar el bloque;
+  // los datos antiguos (sin done) cuentan como completos.
+  const blockDone = (x: unknown) => !!x && (x as { done?: boolean }).done !== false;
+  const cuestionario = blockDone(capture?.questionnaire);
+  const exploracion = blockDone(capture?.physicalExam);
+  const escaneos = has(SCAN_KIND);
+  const baro = BARO_KINDS.every(([k]) => has(k));
   return {
     cuestionario,
     exploracion,
     escaneos,
-    videos,
+    capturas,
     baro,
-    completa: cuestionario && exploracion && escaneos && videos >= 7 && baro,
+    completa:
+      cuestionario && exploracion && escaneos && capturas >= CAPTURA_VISUAL.length && baro,
   };
 }

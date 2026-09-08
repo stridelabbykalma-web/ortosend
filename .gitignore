@@ -39,3 +39,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Autogenerados por next dev (agent rules)
+/AGENTS.md
+/CLAUDE.md
+
+# WASM de MediaPipe: en producción se sirve desde el CDN, aquí solo para pruebas locales
+public/mediapipe/wasm/

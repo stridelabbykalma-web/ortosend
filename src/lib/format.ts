@@ -59,20 +59,41 @@ export function fmtEUR(cents: number) {
   return (cents / 100).toLocaleString("es-ES", { style: "currency", currency: "EUR" });
 }
 
-// Vídeos obligatorios del protocolo de captura (6 de marcha + heel rise)
+// Vídeos obligatorios del protocolo: 4 de marcha, todos descalzo. El paciente
+// camina recto; la cámara va a su lado (un vídeo por lado), detrás (posterior,
+// se aleja) o delante (anterior, viene hacia ella; mismas reglas que la
+// posterior). Duraciones y checks de encuadre en src/lib/capture-guide.ts.
 export const VIDEO_KINDS = [
   ["video_lat_dcha_descalzo", "Marcha lateral dcha. — descalzo"],
-  ["video_lat_dcha_calzado", "Marcha lateral dcha. — calzado"],
   ["video_lat_izq_descalzo", "Marcha lateral izq. — descalzo"],
-  ["video_lat_izq_calzado", "Marcha lateral izq. — calzado"],
-  ["video_post_descalzo", "Marcha posterior — descalzo"],
-  ["video_post_calzado", "Marcha posterior — calzado"],
-  ["video_heel_rise", "Heel rise test — descalzo"],
+  ["video_post_descalzo", "Marcha posterior (alejándose) — descalzo"],
+  ["video_ant_descalzo", "Marcha anterior (viniendo hacia la cámara) — descalzo"],
 ] as const;
 
-export const BARO_KINDS = [
-  ["baro_est_1", "Estática — captura 1 (10 s)"],
-  ["baro_est_2", "Estática — captura 2 (10 s)"],
-  ["baro_din", "Dinámica — 3 pasos válidos"],
-  ["baro_informe", "Informe del dashboard Podisense"],
+// Fotos obligatorias: los pies de cerca, en carga, desde atrás (retropié) y
+// desde delante (antepié). Con temporizador y disparo automático.
+export const FOTO_KINDS = [
+  ["foto_posterior", "Pies de cerca desde atrás (retropié) — en carga"],
+  ["foto_anterior", "Pies de cerca desde delante (antepié) — en carga"],
 ] as const;
+
+// Todo lo que se captura con la cámara de la app, en el orden del protocolo.
+export const CAPTURA_VISUAL = [...VIDEO_KINDS, ...FOTO_KINDS] as const;
+
+// Baropodometría con Podisense: estática + dinámica múltiple. El informe lo
+// genera y entrega la propia plataforma, la clínica no lo adjunta.
+export const BARO_KINDS = [
+  ["baro_est", "Estática (10 s)"],
+  ["baro_din_multi", "Dinámica múltiple"],
+] as const;
+
+// Escaneo de las espumas fenólicas: una sola pieza (ambos pies), hecha en la
+// plataforma del escáner; aquí solo se marca si está hecha.
+export const SCAN_KIND = "scan_espumas";
+
+// Etiqueta legible de cualquier elemento de captura (expediente, visor, historial)
+export const MEDIA_LABEL: Record<string, string> = Object.fromEntries([
+  ...CAPTURA_VISUAL,
+  ...BARO_KINDS,
+  [SCAN_KIND, "Escaneo de las espumas fenólicas"],
+]);

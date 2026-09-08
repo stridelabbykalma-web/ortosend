@@ -23,28 +23,61 @@ asociadas. Stack: **Next.js (App Router, server actions) + PostgreSQL (Prisma)**
 **Panel clínica**
 - Agenda (citas Flujo A + casos Flujo B), disponibilidad (máx. 5 huecos), profesionales y
   formación 5/5, liquidaciones (placeholder).
-- **Asistente de captura** de 6 pasos con guardado continuo: cuestionario, exploración física,
-  escaneo 3D (2), vídeos (7: 6 de marcha + heel rise), baropodometría (2 estáticas + dinámica +
-  informe) y **checklist bloqueante** — sin todo en verde no hay envío.
+- **Asistente de captura** guiado con guardado continuo: cuestionario clínico completo
+  (motivo/dolor, actividad y datos físicos, calzado, antecedentes y tratamientos previos —
+  visible entero en el expediente que llega al prescriptor), tipo de pie y FPI-6 más una
+  pregunta abierta sobre movilidad/flexibilidad relevante para la plantilla,
+  **núcleo de 5 tests obligatorios** (Jack/Hubscher, navicular drop, resistencia a la
+  supinación, lunge/knee-to-wall y single heel rise) más los **complementarios que activa cada
+  rama** según la zona y el tipo de dolor, el morfotipo del pie y los resultados del propio
+  núcleo (13 ramas, 24 tests, sin repetir nada que ya esté en el núcleo o en la exploración,
+  con tope de sugerencias y aviso de volumen), y **hallazgos de alerta** (Thompson, Tinel,
+  compresión del calcáneo) destacados para el prescriptor porque no se resuelven con una
+  plantilla; dismetría valorada con nivel pélvico y láminas calibradas, análisis observacional de la
+  marcha, 4 vídeos de marcha, todos descalzo (lateral derecha, lateral izquierda, posterior
+  alejándose y anterior viniendo hacia la cámara) más 2 fotos de los pies de
+  cerca en carga (desde atrás para el retropié y desde delante para el antepié),
+  baropodometría Podisense (estática + dinámica múltiple) y
+  escaneo de las espumas fenólicas como último paso — estas tres se hacen en su propia
+  plataforma y aquí solo se marcan como hechas; el informe llega desde Podisense y no se
+  adjunta. **Checklist bloqueante**: sin todo en verde no hay envío.
+- **Estudio de captura guiado con MediaPipe** (`src/components/caso/captura-studio.tsx`,
+  reglas en `src/lib/capture-guide.ts`): la cámara se abre a pantalla completa, un modelo de
+  pose (MediaPipe Pose Landmarker) corre en el propio navegador —la imagen no sale del
+  dispositivo hasta la subida— y comprueba en vivo los checks de cada vídeo (persona, de la
+  cintura a los pies en plano, de perfil con el lado correcto hacia la cámara, de frente o de
+  espaldas). Que el paciente lleve las piernas descubiertas de la rodilla al tobillo es
+  responsabilidad del profesional (va en las instrucciones, la app no lo valida). Con todo
+  en verde de forma estable (~1 s) la cuenta atrás arranca sola (también hay botón); cada vídeo tiene **duración fija** (laterales 8 s,
+  posterior y anterior 10 s) con cuenta atrás y corte automático, Los checks solo hacen falta
+  para arrancar; durante la grabación no se exige nada (el paciente se mueve y el modelo no
+  acierta todos los frames), y los segundos con encuadre válido se guardan solo como dato. Las fotos exigen ver
+  **los dos pies de cerca** (talones y dedos detectados, llenando el encuadre, talones hacia la
+  cámara en la posterior y dedos hacia la cámara en la anterior) y se disparan solas al
+  instante, sin cuenta atrás; si el modelo no ve los pies queda el disparo manual. En la
+  foto posterior se calculan la **línea de Helbing** y el ángulo de la **regla de Perthes** por
+  pierna (dos imágenes a partir de la misma foto). En los vídeos posterior y anterior se guarda la
+  trayectoria de 12 puntos de pose con el vídeo y se genera un **informe preliminar de marcha**
+  (caída pélvica, rodilla en plano frontal, retropié, ángulo de progresión, base de marcha,
+  asimetrías) con hallazgos orientativos y **qué hacer en la plantilla** para cada uno; el
+  expediente reproduce el vídeo con los puntos superpuestos. Todo etiquetado como orientativo. La grabación es real (MediaRecorder) y la
+  subida va a `/api/media`, que guarda el archivo (Postgres en el prototipo; R2/S3 en
+  producción) y solo entonces confirma el check verde; `/api/media/[id]` lo sirve con el mismo
+  control de acceso que el expediente y registro RGPD. El modelo (5,8 MB) va en `public/`; el
+  WASM se sirve desde el CDN de jsDelivr (o desde la app con `NEXT_PUBLIC_MEDIAPIPE_WASM`).
 
 **Prescripción**
-- Cola del prescriptor de clínica y **cola central Ortosend** (clínicas sin prescriptor) con
+- **Quién receta se elige al abrir cada caso**, antes del estudio, y lo elige quien lo lleva
+  (profesional o administrador de la clínica). Si la clínica tiene un prescriptor con
+  colegiación verificada: **receta propia**, **receta por parte del equipo de Ortosend** o
+  **receta propia con segunda opinión de Ortosend**; si no, solo la receta por parte de Ortosend.
+  El estudio completo es el de la vía Ortosend; el formulario de la receta propia está por definir.
+- Cola del prescriptor de clínica y **cola central Ortosend** con
   **reparto automático** por antigüedad: al abrir un caso queda asociado; se libera al soltarlo,
   cerrar sesión o a los 45 min de inactividad.
 - Firma solo por prescriptor con **colegiación verificada** (guarda dura). Salidas: prescribir
   (→ pago), contactar con el paciente (asignación pegajosa), devolver a clínica para repetir
   prueba (sin coste), no prescribir (el cliente no paga) y guardar borrador.
-- **Receta propia**: al crear el caso (Flujo B), un prescriptor verificado elige entre tres
-  modalidades — **receta propia** (la firma él/ella en la visita), **receta propia + 2ª opinión
-  de Ortosend**, o que la valore Ortosend (flujo normal: estudio completo a la cola). Con receta
-  propia el asistente cambia de modo: cualquier test es elegible (nada bloquea; vídeos de máx.
-  10 s), el motivo de consulta debe quedar registrado y en el paso 6 escribe la receta (cómo
-  deben ser las plantillas, qué deben llevar y qué función tienen) y la firma en la misma
-  visita, con identidad y colegiación puestas automáticamente desde su perfil. El caso salta
-  directo a pago, sin cola de revisión. En la modalidad con **2ª opinión**, al firmar se pide
-  automáticamente la valoración de uno de nuestros profesionales (recetador central), que
-  responde desde su panel — consultiva, no bloquea el caso — y el prescriptor la ve en la
-  página del caso.
 
 **Pago y panel del cliente**
 - Sin prescripción no hay pago; enlace válido 30 días con caducidad → NO_CONVERTIDO y
@@ -93,8 +126,8 @@ Cuentas de demo (contraseña `ortosend123`):
 ## Pendiente (siguientes fases)
 
 - **Stripe real** (PaymentIntent + webhook; Bizum) y facturas.
-- **Subida real de media** por fragmentos a Cloudflare R2/S3 con URLs firmadas; grabación de
-  vídeo con getUserMedia + MediaRecorder; visor del escaneo 3D.
+- **Media en Cloudflare R2/S3** por fragmentos con URLs firmadas (hoy los vídeos y fotos se
+  guardan en Postgres, con tope de 4 MB por archivo); visor del escaneo 3D.
 - **WhatsApp Business API** (360dialog/Twilio) para la cola de `Notification`; email de respaldo.
 - Mapa Leaflet/OSM con radio 50 km real en `/buscar` (lat/lng ya en el modelo).
 - Envíos (Sendcloud/Packlink) con webhook de entrega; PDF real de la prescripción.
