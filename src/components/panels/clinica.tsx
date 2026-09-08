@@ -5,6 +5,7 @@ import { StatePill } from "@/components/ui";
 import { fmtd, fmtdt } from "@/lib/format";
 import { addSlotAction, delSlotAction, newCaseBAction } from "@/app/panel/clinica-actions";
 import { openCaseAction } from "@/app/panel/rx-actions";
+import { REVISION_PREFIJO, esCentral } from "@/lib/rx-route";
 
 export async function PanelClinica({ user, tab }: { user: User; tab?: string }) {
   const clinic = await prisma.clinic.findUnique({
@@ -13,7 +14,8 @@ export async function PanelClinica({ user, tab }: { user: User; tab?: string }) 
   });
   if (!clinic) return <div className="note r">Usuario sin clínica asignada.</div>;
   const profile = await prisma.professionalProfile.findUnique({ where: { userId: user.id } });
-  const isPrescriber = !!profile?.canPrescribe && !!profile.verifiedAt && clinic.hasPrescriber;
+  // Cualquier prescriptor verificado de la clínica ve la cola de los casos que la clínica se quedó
+  const isPrescriber = !!profile?.canPrescribe && !!profile.verifiedAt;
 
   const tabsDef: [string, string][] = [
     ["agenda", "Agenda"],
@@ -153,7 +155,12 @@ export async function PanelClinica({ user, tab }: { user: User; tab?: string }) 
     );
   }
   if (t === "rx" && isPrescriber) {
-    const queue = cases.filter((c) => ["EN_PRESCRIPCION", "EN_CONTACTO"].includes(c.state));
+    const queue = cases.filter(
+      (c) => ["EN_PRESCRIPCION", "EN_CONTACTO"].includes(c.state) && !esCentral({ rxRoute: c.rxRoute, clinic })
+    );
+    const enOrtosend = cases.filter(
+      (c) => ["EN_PRESCRIPCION", "EN_CONTACTO"].includes(c.state) && esCentral({ rxRoute: c.rxRoute, clinic })
+    );
     body = (
       <>
         <h3>Casos pendientes de tu prescripción</h3>
@@ -175,7 +182,10 @@ export async function PanelClinica({ user, tab }: { user: User; tab?: string }) 
                     <td>#{c.number}</td>
                     <td>{c.patient.name}</td>
                     <td>
-                      <StatePill state={c.state} />
+                      <StatePill state={c.state} />{" "}
+                      {c.rxDraft?.startsWith(REVISION_PREFIJO) && (
+                        <span className="pill g">Revisión de Ortosend recibida</span>
+                      )}
                     </td>
                     <td>
                       <form action={openCaseAction}>
@@ -193,6 +203,15 @@ export async function PanelClinica({ user, tab }: { user: User; tab?: string }) 
             <div className="muted">Nada pendiente de prescribir.</div>
           )}
         </div>
+        {enOrtosend.length > 0 && (
+          <div className="tiny" style={{ marginTop: 10 }}>
+            En manos de Ortosend ahora mismo:{" "}
+            {enOrtosend
+              .map((c) => `#${c.number}${c.rxRoute === "REVISION" ? " (revisión pedida)" : ""}`)
+              .join(" · ")}
+            . Los que pediste revisar volverán a esta cola con la valoración de Ortosend.
+          </div>
+        )}
       </>
     );
   }

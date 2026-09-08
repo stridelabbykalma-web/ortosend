@@ -9,6 +9,7 @@ import { BARO_KINDS, SCAN_KIND } from "@/lib/format";
 import type { Questionnaire } from "@/lib/questionnaire";
 import type { Exam } from "@/lib/exploracion";
 import { nucleoCompleto, ramasSinCubrir } from "@/lib/tests-podologicos";
+import { RX_ROUTES, type RxRoute } from "@/lib/rx-route";
 import type { User } from "@prisma/client";
 
 const MAX_SLOTS = 5;
@@ -354,6 +355,8 @@ export async function markMediaAction(formData: FormData) {
 export async function sendCaseAction(formData: FormData) {
   const u = await requireClinicStaff();
   const caseId = String(formData.get("caseId"));
+  const paso = String(formData.get("paso") ?? "");
+  const back = `/caso/${caseId}${paso ? `?paso=${paso}` : ""}`;
   const kase = await prisma.case.findUnique({
     where: { id: caseId },
     include: { capture: { include: { media: true } }, patient: true, clinic: true },
@@ -364,14 +367,37 @@ export async function sendCaseAction(formData: FormData) {
     fail(`/caso/${caseId}`, "El estudio no está en curso");
   const cl = checklistOf(kase!.capture);
   if (!cl.completa) fail(`/caso/${caseId}`, "La checklist del protocolo debe estar completa (todo en verde)");
+
+  // Quién receta: lo elige quien envía. Solo un prescriptor con colegiación
+  // verificada puede quedárselo o pedir revisión; el resto envía a Ortosend.
+  const profile = await prisma.professionalProfile.findUnique({ where: { userId: u.id } });
+  const puedeRecetar = !!profile?.canPrescribe && !!profile.verifiedAt;
+  const pedida = String(formData.get("rxRoute") ?? "");
+  let rxRoute: RxRoute;
+  if (!puedeRecetar) rxRoute = "ORTOSEND";
+  else if (RX_ROUTES.includes(pedida as RxRoute)) rxRoute = pedida as RxRoute;
+  else fail(back, "Elige quién receta este caso");
+
   await prisma.capture.update({ where: { caseId }, data: { completedAt: new Date() } });
-  await prisma.case.update({ where: { id: caseId }, data: { state: "EN_PRESCRIPCION" } });
-  const central = !kase!.clinic.hasPrescriber;
+  await prisma.case.update({
+    where: { id: caseId },
+    data: {
+      state: "EN_PRESCRIPCION",
+      rxRoute,
+      rxRequestedBy: u.id,
+      assignedTo: rxRoute === "CLINICA" ? u.id : null,
+      openBy: null,
+      openAt: null,
+    },
+  });
+  const destino = {
+    CLINICA: `lo receta ${u.name} (clínica)`,
+    ORTOSEND: "prescriptor de Ortosend",
+    REVISION: `revisión de Ortosend pedida por ${u.name}; firmará la clínica`,
+  }[rxRoute];
   await pushEvent(
     caseId,
-    fromRepeat
-      ? "Prueba repetida y reenviada a prescripción"
-      : `Estudio completo. Enviado a ${central ? "cola central Ortosend" : "prescriptor de la clínica"}`,
+    fromRepeat ? `Prueba repetida y reenviada a prescripción: ${destino}` : `Estudio completo. Enviado a prescripción: ${destino}`,
     u.name
   );
   if (kase!.patient) {
@@ -381,5 +407,12 @@ export async function sendCaseAction(formData: FormData) {
         nota: "Tu estudio está completo y en valoración. Te avisaremos en un máximo de 48 h laborables.",
       });
   }
-  redirect("/panel?ok=" + encodeURIComponent(`Caso #${kase!.number} enviado a prescripción`));
+  if (rxRoute === "CLINICA")
+    redirect(`/caso/${caseId}?ok=` + encodeURIComponent(`Caso #${kase!.number} en tu cola: ya puedes recetarlo`));
+  redirect(
+    "/panel?ok=" +
+      encodeURIComponent(
+        `Caso #${kase!.number} enviado a ${rxRoute === "REVISION" ? "Ortosend para revisión" : "prescripción de Ortosend"}`
+      )
+  );
 }

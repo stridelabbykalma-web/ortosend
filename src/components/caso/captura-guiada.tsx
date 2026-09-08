@@ -64,6 +64,7 @@ import {
   type TestId,
 } from "@/lib/tests-podologicos";
 import { CheckLine } from "@/components/ui";
+import { RX_ROUTES, RX_ROUTE_HELP, RX_ROUTE_LABEL, type RxRoute } from "@/lib/rx-route";
 import {
   autosaveSectionAction,
   markMediaAction,
@@ -668,7 +669,15 @@ function ESection({ section, e, q }: { section: string; e: Exam | null; q: Quest
 
 // --- Componente principal: una prueba por pantalla ---
 
-export function CapturaGuiada({ kase, paso }: { kase: CaseWithCapture; paso?: number }) {
+export function CapturaGuiada({
+  kase,
+  paso,
+  puedeRecetar = false,
+}: {
+  kase: CaseWithCapture;
+  paso?: number;
+  puedeRecetar?: boolean; // quien envía es prescriptor con colegiación verificada
+}) {
   const cp = kase.capture;
   const q = (cp?.questionnaire as Questionnaire | null) ?? null;
   const e = (cp?.physicalExam as Exam | null) ?? null;
@@ -919,6 +928,33 @@ export function CapturaGuiada({ kase, paso }: { kase: CaseWithCapture; paso?: nu
             {cl.completa ? (
               <form action={sendCaseAction}>
                 <input type="hidden" name="caseId" value={kase.id} />
+                <input type="hidden" name="paso" value={paso} />
+                <div className="sp" />
+                <b style={{ fontSize: 14 }}>¿Quién receta este caso?</b>
+                {puedeRecetar ? (
+                  RX_ROUTES.map((r) => (
+                    <label className="chk" key={r} style={{ alignItems: "flex-start" }}>
+                      <input
+                        type="radio"
+                        name="rxRoute"
+                        value={r}
+                        defaultChecked={((kase.rxRoute as RxRoute | null) ?? "CLINICA") === r}
+                        required
+                      />{" "}
+                      <span>
+                        {RX_ROUTE_LABEL[r]}
+                        <span className="tiny" style={{ display: "block" }}>{RX_ROUTE_HELP[r]}</span>
+                      </span>
+                    </label>
+                  ))
+                ) : (
+                  <>
+                    <input type="hidden" name="rxRoute" value="ORTOSEND" />
+                    <div className="note" style={{ marginTop: 6 }}>
+                      Lo recetará el prescriptor de Ortosend.
+                    </div>
+                  </>
+                )}
                 <div className="sp" />
                 <button type="submit" className="pri wfull">
                   {repeat ? "Reenviar caso a prescripción" : "Enviar caso a prescripción"}

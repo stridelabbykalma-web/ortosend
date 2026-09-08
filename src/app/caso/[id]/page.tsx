@@ -11,6 +11,7 @@ import { TallerView } from "@/components/caso/taller-view";
 import { unlockRxAction } from "@/app/panel/cliente-actions";
 import { verifyDocToken } from "@/app/panel/cliente-actions";
 import { fmtd } from "@/lib/format";
+import { esCentral } from "@/lib/rx-route";
 
 export const dynamic = "force-dynamic";
 
@@ -45,7 +46,8 @@ export default async function CasoPage({
   const isOwner = user.role === "CLIENTE" && k.patient.ownerId === user.id;
   const isClinicStaff =
     (user.role === "PROFESIONAL" || user.role === "ADMIN_CLINICA") && user.clinicId === k.clinicId;
-  const isCentral = user.role === "RECETADOR" && !k.clinic.hasPrescriber;
+  const central = esCentral(k); // lo valora Ortosend (enviado a Ortosend o para revisión)
+  const isCentral = user.role === "RECETADOR" && central;
   const isTaller = user.role === "TALLER";
   const isAdmin = user.role === "ADMIN";
   if (!isOwner && !isClinicStaff && !isCentral && !isTaller && !isAdmin) redirect("/panel");
@@ -57,10 +59,11 @@ export default async function CasoPage({
     isClinicStaff || isCentral
       ? await prisma.professionalProfile.findUnique({ where: { userId: user.id } })
       : null;
-  const canPrescribeHere =
-    !!profile?.canPrescribe &&
-    !!profile.verifiedAt &&
-    (isCentral || (isClinicStaff && k.clinic.hasPrescriber));
+  const puedeRecetar = !!profile?.canPrescribe && !!profile.verifiedAt;
+  const canPrescribeHere = puedeRecetar && (isCentral || (isClinicStaff && !central));
+  const requestedBy = k.rxRequestedBy
+    ? await prisma.user.findUnique({ where: { id: k.rxRequestedBy }, select: { name: true } })
+    : null;
 
   const inCapture = ["CITA_RESERVADA", "ESTUDIO_EN_CURSO", "DEVUELTO_CLINICA"].includes(k.state);
   const inRx = ["EN_PRESCRIPCION", "EN_CONTACTO"].includes(k.state);
@@ -71,7 +74,7 @@ export default async function CasoPage({
     const pasoNum = paso ? Number(paso) || undefined : undefined;
     inner = (
       <>
-        <CapturaGuiada kase={k} paso={pasoNum} />
+        <CapturaGuiada kase={k} paso={pasoNum} puedeRecetar={puedeRecetar} />
         {!pasoNum && <Historial events={k.events} />}
       </>
     );
@@ -80,7 +83,12 @@ export default async function CasoPage({
       <>
         <Expediente kase={k} />
         <div className="sp" />
-        <RxView kase={k} collegiateNum={profile?.collegiateNum ?? null} />
+        <RxView
+          kase={k}
+          collegiateNum={profile?.collegiateNum ?? null}
+          central={isCentral}
+          requestedBy={requestedBy?.name ?? null}
+        />
         <Historial events={k.events} />
       </>
     );

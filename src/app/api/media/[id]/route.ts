@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getSessionUser } from "@/lib/auth";
 import { audit } from "@/lib/cases";
+import { esCentral } from "@/lib/rx-route";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -26,7 +27,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     user.role === "TALLER" ||
     ((user.role === "PROFESIONAL" || user.role === "ADMIN_CLINICA") &&
       user.clinicId === kase.clinicId) ||
-    (user.role === "RECETADOR" && !kase.clinic.hasPrescriber);
+    (user.role === "RECETADOR" && esCentral(kase));
   if (!allowed) return NextResponse.json({ error: "Sin permiso" }, { status: 403 });
 
   await audit(user.id, "media.view", `case:${kase.number}:${asset.kind}`);
