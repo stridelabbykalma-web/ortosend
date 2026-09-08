@@ -79,10 +79,10 @@ export async function PanelRecetador({ user }: { user: User }) {
         <>
           <div className="sp" />
           <div className="card">
-            <b>Revisiones de recetas directas pendientes</b>
+            <b>2ª opinión de recetas propias — pendientes</b>
             <div className="tiny" style={{ marginBottom: 6 }}>
-              Un prescriptor de clínica ya ha firmado su receta y pide tu opinión. Es consultiva:
-              no bloquea ni modifica el caso.
+              Un prescriptor de clínica ha firmado su receta propia con 2ª opinión de Ortosend y
+              espera tu valoración. Es consultiva: no bloquea ni modifica el caso.
             </div>
             {reviews.map((c) => (
               <div className="card" key={c.id} style={{ padding: 14, marginTop: 8 }}>

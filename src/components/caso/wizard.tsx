@@ -25,6 +25,8 @@ export type DirectRx = { name: string; degree: string | null; collegiateNum: str
 //   10 s), el motivo debe quedar registrado y abajo rellena y firma la receta en la misma visita.
 export function Wizard({ kase, directRx }: { kase: CaseWithCapture; directRx?: DirectRx | null }) {
   const direct = !!directRx;
+  // Modalidad elegida al crear el caso: receta propia sola, o con 2ª opinión de Ortosend.
+  const withReview = kase.rxMode === "DIRECTA_REVISION";
   const opc = direct ? <span className="tiny" style={{ fontWeight: 400 }}> (opcional)</span> : null;
   const cp = kase.capture;
   const q = cp?.questionnaire as { motivo?: string; dolor?: string; actividad?: string } | null;
@@ -53,8 +55,11 @@ export function Wizard({ kase, directRx }: { kase: CaseWithCapture; directRx?: D
         </div>
       ) : direct ? (
         <div className="note">
-          Modo receta directa · eres prescriptor verificado: registra el motivo, elige solo los
-          tests que necesites (vídeos de máx. 10 s) y firma la receta abajo, en la misma visita.
+          Modo receta propia{withReview ? " + 2ª opinión de Ortosend" : ""} · eres prescriptor
+          verificado: registra el motivo, elige solo los tests que necesites (vídeos de máx. 10 s)
+          y firma la receta abajo, en la misma visita.
+          {withReview &&
+            " Al firmar pediremos la 2ª opinión a uno de los profesionales de Ortosend."}
         </div>
       ) : (
         <div className="note">
@@ -195,7 +200,7 @@ export function Wizard({ kase, directRx }: { kase: CaseWithCapture; directRx?: D
         </div>
         {direct ? (
           <div className="card">
-            <b>6 · Receta directa</b>
+            <b>6 · Receta propia{withReview ? " + 2ª opinión de Ortosend" : ""}</b>
             {!cl.cuestionario ? (
               <div className="tiny" style={{ marginTop: 6 }}>
                 Registra primero el motivo de consulta (paso 1): debe quedar registrado en el caso
@@ -231,12 +236,16 @@ export function Wizard({ kase, directRx }: { kase: CaseWithCapture; directRx?: D
                   rows={2}
                   defaultValue="Adaptación progresiva 2-3 semanas, con calzado cerrado. Revisión anual incluida."
                 />
-                <label>Revisión de Ortosend (opcional)</label>
-                <textarea
-                  name="reviewQuestion"
-                  rows={2}
-                  placeholder="Si quieres una segunda opinión, escribe aquí tu consulta: uno de nuestros profesionales te responderá con la suya. No bloquea el caso."
-                />
+                {withReview && (
+                  <>
+                    <label>Consulta para la 2ª opinión de Ortosend (opcional)</label>
+                    <textarea
+                      name="reviewQuestion"
+                      rows={2}
+                      placeholder="Al firmar pediremos la 2ª opinión a nuestro equipo. Si quieres, concreta aquí tu duda; si lo dejas vacío pedimos una revisión general de la receta. No bloquea el caso."
+                    />
+                  </>
+                )}
                 <div className="sp" />
                 <button type="submit" className="pri wfull">
                   Firmar y prescribir

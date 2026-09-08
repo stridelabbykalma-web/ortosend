@@ -52,13 +52,14 @@ export async function newCaseBAction(formData: FormData) {
   const email = String(formData.get("email") ?? "").trim().toLowerCase() || null;
   const birth = String(formData.get("birth") ?? "");
   if (!name || !phone) fail(back, "Nombre y móvil del paciente son obligatorios");
-  // Elección de quién hará la receta: solo un prescriptor verificado puede quedarse la receta.
+  // Elección de quién hará la receta: propia, propia con 2ª opinión de Ortosend, u Ortosend.
+  // Solo un prescriptor verificado puede quedarse la receta (con o sin 2ª opinión).
   let rxMode = String(formData.get("rxMode") ?? "ORTOSEND");
-  if (!["DIRECTA", "ORTOSEND"].includes(rxMode)) rxMode = "ORTOSEND";
-  if (rxMode === "DIRECTA") {
+  if (!["DIRECTA", "DIRECTA_REVISION", "ORTOSEND"].includes(rxMode)) rxMode = "ORTOSEND";
+  if (rxMode !== "ORTOSEND") {
     const profile = await prisma.professionalProfile.findUnique({ where: { userId: u.id } });
     if (!profile?.canPrescribe || !profile.verifiedAt || !profile.collegiateNum)
-      fail(back, "Solo un prescriptor con colegiación verificada puede elegir la receta directa");
+      fail(back, "Solo un prescriptor con colegiación verificada puede elegir la receta propia");
   }
   const dup = await prisma.user.findFirst({
     where: { OR: [{ phone }, ...(email ? [{ email }] : [])] },
@@ -88,7 +89,11 @@ export async function newCaseBAction(formData: FormData) {
   await pushEvent(
     kase.id,
     `Caso creado en clínica (Flujo B) por ${u.name}${
-      rxMode === "DIRECTA" ? " — receta directa: la firmará el propio profesional" : ""
+      rxMode === "DIRECTA"
+        ? " — receta propia: la firmará el propio profesional"
+        : rxMode === "DIRECTA_REVISION"
+          ? " — receta propia con 2ª opinión de Ortosend"
+          : ""
     }`,
     u.name
   );

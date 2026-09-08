@@ -104,12 +104,17 @@ export async function PanelClinica({ user, tab }: { user: User; tab?: string }) 
               <>
                 <label>¿Quién hará la receta?</label>
                 <select name="rxMode" defaultValue="DIRECTA">
-                  <option value="DIRECTA">La receto yo en la visita (receta directa)</option>
+                  <option value="DIRECTA">Receta propia — la firmo yo en la visita</option>
+                  <option value="DIRECTA_REVISION">
+                    Receta propia + 2ª opinión de Ortosend
+                  </option>
                   <option value="ORTOSEND">Que la valore Ortosend (estudio completo a la cola)</option>
                 </select>
                 <div className="tiny" style={{ marginTop: 4 }}>
-                  Con receta directa los tests son opcionales y firmas tú en la visita; si la
-                  valora Ortosend, el estudio completo pasa por la cola de prescripción.
+                  Con receta propia los tests son opcionales y firmas tú en la visita; con 2ª
+                  opinión, además, uno de los profesionales de Ortosend te dará su valoración al
+                  firmar. Si la valora Ortosend, el estudio completo pasa por la cola de
+                  prescripción.
                 </div>
               </>
             )}

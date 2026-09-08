@@ -127,7 +127,7 @@ export async function signDirectRxAction(formData: FormData) {
     include: { capture: true, patient: true, clinic: true, prescription: true },
   });
   if (!kase || kase.clinicId !== u.clinicId) fail("/panel", "Caso no accesible");
-  if (kase.rxMode !== "DIRECTA")
+  if (!["DIRECTA", "DIRECTA_REVISION"].includes(kase.rxMode ?? ""))
     fail(back, "Este caso se creó para valoración de Ortosend: completa el estudio y envíalo a la cola");
   if (!["ESTUDIO_EN_CURSO", "DEVUELTO_CLINICA"].includes(kase.state))
     fail(back, "El estudio no está en curso");
@@ -148,8 +148,13 @@ export async function signDirectRxAction(formData: FormData) {
   const usageGuidelines = String(formData.get("usageGuidelines") ?? "").trim();
   if (!fabricationOrder)
     fail(back, "El escrito de la receta es obligatorio: cómo deben ser las plantillas, qué deben llevar y qué función tienen");
-  // Revisión opcional: consulta al equipo de Ortosend, que responderá con su opinión.
-  const reviewQuestion = String(formData.get("reviewQuestion") ?? "").trim();
+  // 2ª opinión de Ortosend: solo en la modalidad elegida al crear el caso. Se pide siempre
+  // al firmar; si el prescriptor no concreta una consulta, se pide una revisión general.
+  const withReview = kase.rxMode === "DIRECTA_REVISION";
+  const reviewQuestion = withReview
+    ? String(formData.get("reviewQuestion") ?? "").trim() ||
+      "2ª opinión general sobre la receta firmada"
+    : "";
   const expires = new Date(Date.now() + PAY_LINK_DAYS * 24 * 3600 * 1000);
   await prisma.$transaction([
     prisma.capture.update({ where: { caseId }, data: { completedAt: new Date() } }),
@@ -185,7 +190,7 @@ export async function signDirectRxAction(formData: FormData) {
     u.name
   );
   if (reviewQuestion)
-    await pushEvent(caseId, `Revisión solicitada a Ortosend: ${reviewQuestion}`, u.name);
+    await pushEvent(caseId, `2ª opinión solicitada a Ortosend: ${reviewQuestion}`, u.name);
   await audit(u.id, "prescription.sign_direct", `case:${kase.number}`);
   const phone = await ownerPhone(kase);
   if (phone)

@@ -68,7 +68,7 @@ export default async function CasoPage({
   // No se ofrece si el caso ya tiene receta firmada (p. ej. devuelto por el taller).
   const directRx =
     isClinicStaff &&
-    k.rxMode === "DIRECTA" &&
+    (k.rxMode === "DIRECTA" || k.rxMode === "DIRECTA_REVISION") &&
     !k.prescription &&
     !!profile?.canPrescribe &&
     !!profile.verifiedAt &&
@@ -158,7 +158,7 @@ export default async function CasoPage({
         {k.reviewQuestion && (
           <>
             <div className="card">
-              <b>Revisión solicitada a Ortosend</b>
+              <b>2ª opinión de Ortosend</b>
               <div className="muted" style={{ margin: "6px 0" }}>
                 «{k.reviewQuestion}»
               </div>
