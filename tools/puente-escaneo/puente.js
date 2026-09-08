@@ -2,11 +2,10 @@
 // ============================================================
 // Puente de escaneo Ortosend — PC del escáner (RevoScan)
 // ============================================================
-// RevoScan deja elegir la carpeta donde se guarda cada escaneo. Este programa
-// vigila una carpeta base, mantiene dentro una carpeta por caso abierto
-// (ORT-00123-XXXXXXXX-nombre) y sube a Ortosend cualquier modelo 3D que
-// aparezca en ellas. El caso —y por tanto el paciente— sale del nombre de la
-// carpeta, así que el profesional solo tiene que guardar donde le dice la app.
+// Vigila la carpeta donde RevoScan exporta los mesh y sube cada modelo 3D
+// nuevo al almacén común de Ortosend. Quién es el paciente lo decide el
+// servidor: el caso que está abierto en el paso del escaneo del asistente
+// de captura. Aquí no hay carpetas por paciente ni nombres que respetar.
 //
 //   node puente.js              (lee puente.config.json de esta misma carpeta)
 //   node puente.js otro.json
@@ -16,7 +15,10 @@
 
 const fs = require("fs");
 const fsp = require("fs/promises");
+const os = require("os");
 const path = require("path");
+const zlib = require("zlib");
+const { pipeline } = require("stream/promises");
 
 const CONFIG_PATH = path.resolve(process.argv[2] || path.join(__dirname, "puente.config.json"));
 const ESTADO_PATH = path.join(__dirname, "puente-estado.json");
@@ -26,7 +28,7 @@ const EXTS = [".stl", ".obj", ".ply", ".glb", ".gltf", ".3mf", ".asc", ".zip"];
 // Un archivo se sube cuando lleva dos vueltas con el mismo tamaño: así no se
 // envía a medias mientras RevoScan todavía está escribiéndolo.
 const CICLO_MS = 5000;
-const SINCRONIZA_CARPETAS_MS = 60000;
+const SALUDO_MS = 60000;
 
 function log(...args) {
   console.log(new Date().toLocaleTimeString("es-ES"), ...args);
@@ -82,24 +84,15 @@ async function api(cfg, ruta, opciones = {}) {
   return { ok: res.ok, status: res.status, cuerpo };
 }
 
-// Crea en la carpeta base una carpeta por caso abierto, para que en el diálogo
-// de guardar de RevoScan ya estén ahí y solo haya que elegirla.
-async function sincronizarCarpetas(cfg) {
+// Saludo: comprueba el token y deja constancia en el panel de que el puente
+// está en marcha (el asistente avisa al profesional si no da señal).
+async function saludar(cfg) {
   const { ok, status, cuerpo } = await api(cfg, "/api/scan/ingest");
   if (!ok) {
-    log(`No se pudo leer la lista de casos (HTTP ${status}${cuerpo?.error ? `: ${cuerpo.error}` : ""})`);
-    return;
+    log(`El servidor no acepta el token (HTTP ${status}${cuerpo?.error ? `: ${cuerpo.error}` : ""})`);
+    return null;
   }
-  await fsp.mkdir(cfg.carpeta, { recursive: true });
-  let nuevas = 0;
-  for (const c of cuerpo.carpetas || []) {
-    const dir = path.join(cfg.carpeta, c.folder);
-    if (!fs.existsSync(dir)) {
-      await fsp.mkdir(dir, { recursive: true });
-      nuevas++;
-    }
-  }
-  if (nuevas) log(`Carpetas de casos nuevas: ${nuevas} (clínica: ${cuerpo.clinica})`);
+  return cuerpo;
 }
 
 async function* recorrer(dir) {
@@ -116,24 +109,66 @@ async function* recorrer(dir) {
   }
 }
 
-async function subir(cfg, archivo) {
-  // La ruta completa lleva el nombre de la carpeta del caso: el servidor saca
-  // de ahí el código y asocia el escaneo al paciente.
-  const datos = await fsp.readFile(archivo);
-  const form = new FormData();
-  form.append("code", archivo);
-  form.append("nombre", path.basename(archivo));
-  form.append("file", new Blob([datos]), path.basename(archivo));
-  const { ok, status, cuerpo } = await api(cfg, "/api/scan/ingest", { method: "POST", body: form });
-  return { ok, status, cuerpo };
+// Los mesh pesan mucho y se repiten los vértices: comprimidos con gzip se
+// quedan en una fracción. Se comprime a un temporal (hace falta saber el
+// tamaño final para la subida) y el almacén los sirve descomprimidos solos.
+async function comprimir(archivo) {
+  const tmp = path.join(os.tmpdir(), `ortosend-${process.pid}-${Date.now()}.gz`);
+  await pipeline(fs.createReadStream(archivo), zlib.createGzip({ level: 6 }), fs.createWriteStream(tmp));
+  return { tmp, bytes: (await fsp.stat(tmp)).size };
+}
+
+// Subida directa al almacén (R2) con URL firmada: el archivo no pasa por el
+// servidor de Ortosend, así que no hay límite de tamaño. Si el servidor no
+// tiene R2, lo manda entero por /api/scan/ingest.
+async function subir(cfg, archivo, tamano) {
+  const nombre = path.basename(archivo);
+  const gz = await comprimir(archivo);
+  try {
+    log(`  comprimido: ${(tamano / 1048576).toFixed(1)} MB → ${(gz.bytes / 1048576).toFixed(1)} MB`);
+    const plan = await api(cfg, "/api/scan/subida", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nombre, bytes: tamano, encoding: "gzip", storedBytes: gz.bytes }),
+    });
+    if (!plan.ok) return plan;
+
+    if (plan.cuerpo.modo === "directo") {
+      const res = await fetch(plan.cuerpo.url, {
+        method: "PUT",
+        headers: { ...(plan.cuerpo.headers || {}), "Content-Length": String(gz.bytes) },
+        body: fs.createReadStream(gz.tmp),
+        duplex: "half",
+      });
+      if (!res.ok)
+        return { ok: false, status: res.status, cuerpo: { error: `El almacén rechazó el archivo (HTTP ${res.status})` } };
+      return api(cfg, "/api/scan/confirmar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ uploadId: plan.cuerpo.uploadId }),
+      });
+    }
+
+    if (gz.bytes > plan.cuerpo.maxBytes)
+      return {
+        ok: false,
+        status: 413,
+        cuerpo: { error: `Sin almacén R2 el servidor no admite más de ${(plan.cuerpo.maxBytes / 1048576).toFixed(0)} MB` },
+      };
+    const form = new FormData();
+    form.append("nombre", nombre);
+    form.append("bytes", String(tamano));
+    form.append("encoding", "gzip");
+    form.append("file", new Blob([await fsp.readFile(gz.tmp)]), nombre);
+    return api(cfg, "/api/scan/ingest", { method: "POST", body: form });
+  } finally {
+    await fsp.rm(gz.tmp, { force: true });
+  }
 }
 
 async function ciclo(cfg, estado, tamanos) {
   for await (const archivo of recorrer(cfg.carpeta)) {
     const ruta = path.resolve(archivo);
-    // Sin código de caso en la ruta no se toca el archivo (carpetas sueltas).
-    if (!/ORT-\d{1,9}-[A-HJ-NP-Z2-9]{8}/i.test(ruta)) continue;
-
     let st;
     try {
       st = await fsp.stat(archivo);
@@ -141,7 +176,7 @@ async function ciclo(cfg, estado, tamanos) {
       continue;
     }
     // La clave incluye tamaño y fecha: si se repite el escaneo y se guarda con
-    // el mismo nombre, se vuelve a subir y sustituye al anterior en el caso.
+    // el mismo nombre, se vuelve a subir como un escaneo más del caso.
     const clave = `${ruta}|${st.size}|${Math.round(st.mtimeMs)}`;
     if (estado.subidos[clave]) continue;
     // Se espera a que el tamaño se estabilice: RevoScan puede seguir escribiendo.
@@ -153,7 +188,7 @@ async function ciclo(cfg, estado, tamanos) {
     log(`Subiendo ${path.basename(archivo)} (${(st.size / 1048576).toFixed(1)} MB)…`);
     let r;
     try {
-      r = await subir(cfg, archivo);
+      r = await subir(cfg, archivo, st.size);
     } catch (e) {
       log(`Fallo de red al subir ${path.basename(archivo)}: ${e.message}. Se reintenta.`);
       continue;
@@ -161,15 +196,16 @@ async function ciclo(cfg, estado, tamanos) {
     if (r.ok) {
       estado.subidos[clave] = { at: new Date().toISOString(), caso: r.cuerpo?.caso ?? null };
       guardarEstado(estado);
-      log(`✓ Asociado al caso #${r.cuerpo?.caso} — ${r.cuerpo?.paciente}`);
-    } else if (r.status === 400 || r.status === 404 || r.status === 415) {
-      // Carpeta o formato que este servidor nunca va a aceptar: no se reintenta.
+      if (r.cuerpo?.caso) log(`✓ Asociado al caso #${r.cuerpo.caso} — ${r.cuerpo.paciente}`);
+      else log("✓ Subido. Nadie esperaba escaneo: queda en la bandeja para confirmarlo desde el asistente.");
+    } else if (r.status === 400 || r.status === 413 || r.status === 415) {
+      // Formato o tamaño que este servidor nunca va a aceptar: no se reintenta.
       estado.subidos[clave] = { at: new Date().toISOString(), descartado: r.cuerpo?.error ?? r.status };
       guardarEstado(estado);
       log(`✗ Descartado ${path.basename(archivo)}: ${r.cuerpo?.error ?? `HTTP ${r.status}`}`);
     } else {
-      // 401 (token revocado), 409 (estudio ya enviado), 413, 5xx: se reintenta
-      // en la siguiente vuelta por si es algo pasajero.
+      // 401 (token revocado), 409 (llegó incompleto), 5xx: se reintenta en la
+      // siguiente vuelta por si es algo pasajero.
       log(`✗ ${path.basename(archivo)}: ${r.cuerpo?.error ?? `HTTP ${r.status}`}. Se reintenta.`);
     }
   }
@@ -182,9 +218,14 @@ async function main() {
   log(`Puente de escaneo Ortosend`);
   log(`Servidor: ${cfg.servidor}`);
   log(`Carpeta vigilada: ${cfg.carpeta}`);
+  await fsp.mkdir(cfg.carpeta, { recursive: true });
 
-  await sincronizarCarpetas(cfg);
-  setInterval(() => sincronizarCarpetas(cfg).catch((e) => log("Error:", e.message)), SINCRONIZA_CARPETAS_MS);
+  const hola = await saludar(cfg);
+  if (hola)
+    log(
+      `Clínica: ${hola.clinica} · modo ${hola.modo === "directo" ? "directo al almacén (sin límite de tamaño)" : `servidor (máx. ${(hola.maxBytes / 1048576).toFixed(0)} MB)`}`
+    );
+  setInterval(() => saludar(cfg).catch((e) => log("Error:", e.message)), SALUDO_MS);
 
   // Bucle secuencial: nunca hay dos subidas a la vez desde el mismo PC.
   for (;;) {

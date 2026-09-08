@@ -1,12 +1,13 @@
-// Estado del escaneo de un caso para el asistente de captura: qué carpeta hay
-// que elegir en RevoScan y si el archivo ya ha llegado. La pantalla consulta
-// esta ruta cada pocos segundos mientras el profesional escanea.
+// Lo que consulta el paso del escaneo del asistente cada pocos segundos.
+// Cada consulta renueva scanWaitingAt: mientras esta pantalla esté abierta,
+// el escaneo que llegue del puente es de este caso. Devuelve los escaneos ya
+// asociados, la bandeja de la clínica (por si hay que confirmar a mano) y si
+// el puente da señal.
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireRole } from "@/lib/auth";
-import { ensureScanCode, puenteActivo } from "@/lib/cases";
+import { CAPTURE_STATES, bandejaDe, puenteActivo } from "@/lib/escaneos";
 import { SCAN_KIND } from "@/lib/format";
-import { scanFolder } from "@/lib/scan";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,24 +22,27 @@ export async function GET(req: Request) {
   const caseId = new URL(req.url).searchParams.get("caseId") ?? "";
   const kase = await prisma.case.findUnique({
     where: { id: caseId },
-    include: { patient: true, capture: { include: { media: true } } },
+    include: { patient: true, capture: { include: { media: { where: { kind: SCAN_KIND, confirmedAt: { not: null } } } } } },
   });
   if (!kase || kase.clinicId !== user.clinicId)
     return NextResponse.json({ error: "Caso no accesible" }, { status: 404 });
 
-  const code = kase.scanCode ?? (await ensureScanCode(kase.id));
-  const scan = kase.capture?.media.find((m) => m.kind === SCAN_KIND && m.confirmedAt);
-  const puente = await puenteActivo(user.clinicId);
+  if (CAPTURE_STATES.includes(kase.state as (typeof CAPTURE_STATES)[number]))
+    await prisma.case.update({ where: { id: caseId }, data: { scanWaitingAt: new Date() } });
 
+  const escaneos = (kase.capture?.media ?? []).map((m) => ({
+    id: m.id,
+    archivo: (m.meta as { archivo?: string } | null)?.archivo ?? "escaneo",
+    bytes: m.sizeBytes ?? 0,
+    at: m.confirmedAt,
+  }));
   return NextResponse.json({
     ok: true,
-    code,
-    folder: scanFolder(kase.number, code, kase.patient.name),
     paciente: kase.patient.name,
     caso: kase.number,
-    hecho: !!scan,
-    archivo: (scan?.meta as { archivo?: string } | null)?.archivo ?? null,
-    bytes: scan?.sizeBytes ?? null,
-    puente,
+    hecho: escaneos.length > 0,
+    escaneos,
+    bandeja: await bandejaDe(user.clinicId),
+    puente: await puenteActivo(user.clinicId),
   });
 }

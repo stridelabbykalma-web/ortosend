@@ -454,9 +454,10 @@ export async function PanelClinica({ user, tab }: { user: User; tab?: string }) 
         <div className="card">
           <p className="muted" style={{ marginTop: 0 }}>
             El puente es un programa pequeño que se instala en el PC del escáner. Vigila la carpeta
-            de escaneos y sube cada modelo al caso que indica el nombre de la carpeta, así que el
-            profesional solo tiene que elegir esa carpeta al guardar en RevoScan: el escaneo queda
-            asociado al paciente sin subir nada a mano.
+            donde RevoScan exporta los mesh y sube cada escaneo nuevo al almacén común de Ortosend.
+            El escaneo se asocia solo al paciente cuyo caso está abierto en el paso «Escaneo de las
+            espumas» del asistente; el taller lo descarga desde el expediente. No hay que crear
+            carpetas ni renombrar archivos.
           </p>
           <form action={crearPuenteAction} className="row" style={{ gap: 8 }}>
             <input name="name" placeholder="Nombre del equipo (ej.: PC escáner consulta 1)" />
@@ -504,13 +505,12 @@ export async function PanelClinica({ user, tab }: { user: User; tab?: string }) 
             <li>Copia la carpeta <code>tools/puente-escaneo</code> al PC (necesita Node 18 o superior).</li>
             <li>
               Rellena <code>puente.config.json</code> con el servidor y el token de arriba, y con la
-              carpeta base de escaneos (por ejemplo <code>C:\Ortosend\Escaneos</code>).
+              carpeta donde RevoScan exporta los mesh (por ejemplo <code>C:\Ortosend\Escaneos</code>).
             </li>
             <li>Ejecútalo con <code>node puente.js</code> (o el acceso directo <code>iniciar-puente.bat</code>).</li>
             <li>
-              En RevoScan, al guardar o exportar el escaneo, elige la carpeta del caso —{" "}
-              <code>ORT-00123-XXXXXXXX-nombre</code> — que el puente crea sola dentro de esa carpeta
-              base.
+              En RevoScan, al exportar el mesh, guárdalo en esa carpeta. Con el caso abierto en el
+              paso del escaneo, llega solo al paciente.
             </li>
           </ol>
         </div>

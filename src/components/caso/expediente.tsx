@@ -3,7 +3,7 @@ import { checklistOf } from "@/lib/cases";
 import { questionnaireLines, type Questionnaire } from "@/lib/questionnaire";
 import { examLines, type Exam } from "@/lib/exploracion";
 import { alertasDe } from "@/lib/tests-podologicos";
-import { CAPTURA_VISUAL, FOTO_KINDS, MEDIA_LABEL, VIDEO_KINDS } from "@/lib/format";
+import { CAPTURA_VISUAL, FOTO_KINDS, MEDIA_LABEL, SCAN_KIND, VIDEO_KINDS, fmtdt } from "@/lib/format";
 import { helbingResumen, type Helbing } from "@/lib/helbing";
 import { HelbingOverlay } from "@/components/caso/helbing-overlay";
 import { VideoAnalizado } from "@/components/caso/video-analizado";
@@ -76,7 +76,7 @@ export function Expediente({ kase }: { kase: CaseFull }) {
         </div>
         <div>
           <div className="tiny">ESCANEO DE ESPUMAS</div>
-          <div className="muted">{cl.escaneos ? "Hecho ✓ (llega desde la plataforma del escáner)" : "Pendiente"}</div>
+          <Escaneos media={cp?.media ?? []} hecho={cl.escaneos} />
         </div>
         <div>
           <div className="tiny">BAROPODOMETRÍA</div>
@@ -131,6 +131,33 @@ export function Historial({ events }: { events: { id: string; at: Date; text: st
         </table>
       </div>
     </>
+  );
+}
+
+// Modelos 3D de las espumas: llegan desde el PC del escáner al almacén común y
+// desde aquí el taller (o quien receta) los descarga con la URL autenticada.
+function Escaneos({ media, hecho }: { media: MediaAsset[]; hecho: boolean }) {
+  const scans = media.filter((m) => m.kind === SCAN_KIND && m.confirmedAt && m.url.startsWith("/api/media/"));
+  if (scans.length === 0)
+    return <div className="muted">{hecho ? "Marcado como hecho, sin archivo todavía" : "Pendiente"}</div>;
+  return (
+    <div className="muted">
+      {scans.map((m) => {
+        const meta = m.meta as { archivo?: string } | null;
+        return (
+          <div key={m.id} className="row" style={{ gap: 8, alignItems: "center" }}>
+            <a href={m.url} className="btn" download>
+              Descargar escaneo
+            </a>
+            <span>
+              {meta?.archivo ?? "escaneo"}
+              {m.sizeBytes ? ` · ${(m.sizeBytes / 1048576).toLocaleString("es-ES", { maximumFractionDigits: 1 })} MB` : ""}
+              {m.confirmedAt ? ` · ${fmtdt(m.confirmedAt)}` : ""}
+            </span>
+          </div>
+        );
+      })}
+    </div>
   );
 }
 

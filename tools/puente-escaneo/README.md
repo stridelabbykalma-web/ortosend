@@ -1,20 +1,20 @@
 # Puente de escaneo Ortosend (RevoScan)
 
-Programa pequeño que se instala en el PC del escáner. Vigila una carpeta, sube a
-Ortosend los escaneos que aparecen dentro y cada uno queda **asociado solo al
-paciente** del caso: el profesional no renombra ni sube nada.
+Programa pequeño que se instala en el PC del escáner. Vigila la carpeta donde
+RevoScan exporta los mesh y sube cada escaneo nuevo al **almacén común de
+Ortosend** (Cloudflare R2), sin límite de tamaño. El escaneo queda asociado
+solo al paciente y el taller lo descarga desde el expediente del caso.
 
-## Cómo funciona
+No hay carpetas por paciente ni nombres que respetar: RevoScan exporta el mesh
+con el nombre que quiera (pierde el del proyecto) y da igual.
 
-1. Ortosend da a cada caso una carpeta con su código: `ORT-00123-4K7Q2M9X-juan-perez`.
-2. El puente crea esas carpetas dentro de la carpeta base (por ejemplo
-   `C:\Ortosend\Escaneos`) y las mantiene al día con los casos abiertos de la clínica.
-3. En RevoScan, al **Guardar / Exportar** el escaneo, se elige esa carpeta. El
-   asistente de captura enseña el nombre exacto y tiene botón de copiar.
-4. El puente detecta el archivo nuevo (`.stl`, `.obj`, `.ply`, `.glb`, `.gltf`,
-   `.3mf`, `.asc`, `.zip`), espera a que RevoScan termine de escribirlo y lo sube.
-5. El servidor lee el código de la ruta, lo asocia al caso y el check del
-   escaneo se pone en verde en la pantalla del profesional, sin recargar.
+## Cómo sabe de qué paciente es
+
+El profesional tiene abierto en la app el caso del paciente, en el paso
+«Escaneo de las espumas». Ese caso está *esperando escaneo*; el archivo que
+llega en ese momento es suyo. Si en la clínica hay dos casos abiertos en ese
+paso a la vez —o el escaneo llegó sin nadie esperando—, se queda en la bandeja
+y la app pregunta «¿este escaneo es de Pere Vidal?»: se confirma con un toque.
 
 ## Instalación
 
@@ -41,26 +41,23 @@ usar las variables de entorno `ORTOSEND_URL`, `ORTOSEND_TOKEN` y `ORTOSEND_CARPE
 
 ## Configurar RevoScan
 
-RevoScan pregunta la ubicación al guardar o exportar el modelo. Basta con
-navegar a la carpeta base y elegir la carpeta del caso que indica la app. Si
-RevoScan está configurado con una carpeta de proyectos fija, se puede apuntar
-`carpeta` del puente a esa misma ruta: el puente solo mira las subcarpetas que
-llevan código de Ortosend e ignora todo lo demás.
+Al exportar el mesh (`.stl`, `.ply`, `.obj`…), guárdalo en la carpeta que
+vigila el puente. Si RevoScan ya tiene una carpeta de exportación fija, apunta
+`carpeta` a esa misma ruta. El puente mira también las subcarpetas.
 
 ## Qué pasa si algo falla
 
 - **Archivo a medias**: no se sube hasta que el tamaño deja de crecer.
 - **Sin red o servidor caído**: se reintenta en cada vuelta (cada 5 s).
-- **Carpeta sin código de caso**: se ignora, no se sube nada.
-- **Estudio ya enviado o token revocado**: el servidor lo rechaza y queda en el log.
+- **Formato no admitido**: se descarta y queda en el log.
+- **Token revocado**: el servidor lo rechaza; se genera otro en el panel.
 - Lo ya subido se anota en `puente-estado.json` para no repetirlo al reiniciar.
-  Si se vuelve a escanear y se guarda otra vez, el nuevo archivo sustituye al
-  anterior en el caso.
+  Un escaneo repetido (mismo nombre, otro contenido) se sube como un escaneo
+  más del caso; el taller ve todos y elige.
 
 ## Privacidad (RGPD)
 
-El puente solo sube archivos de escaneo de los casos abiertos de su clínica. El
-token identifica al equipo, no a una persona, y se revoca desde el panel. Los
-nombres de carpeta llevan el nombre del paciente para que el profesional se
-oriente; si no se quiere, basta con renombrar la carpeta dejando el trozo
-`ORT-00123-XXXXXXXX`, que es lo único que usa la asociación.
+El puente solo sube archivos de escaneo y solo a la clínica de su token. El
+token identifica al equipo, no a una persona, y se revoca desde el panel. El
+archivo va directo al almacén con una URL firmada de un solo uso; la descarga
+desde el expediente exige sesión y queda en el registro de accesos.

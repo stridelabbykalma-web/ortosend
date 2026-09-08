@@ -40,12 +40,13 @@ asociadas. Stack: **Next.js (App Router, server actions) + PostgreSQL (Prisma)**
   baropodometría Podisense (estática + dinámica múltiple) y
   escaneo de las espumas fenólicas como último paso. La baropodometría se hace en su
   propia plataforma y aquí solo se marca como hecha (el informe llega desde Podisense y no
-  se adjunta). El **escaneo llega solo desde RevoScan**: cada caso tiene una carpeta con su
-  código (`ORT-00123-XXXXXXXX-nombre`), el profesional la elige al guardar en RevoScan y el
-  **puente de escaneo** instalado en el PC del escáner (`tools/puente-escaneo/`) sube el
-  modelo 3D, que queda asociado al paciente por el código; la pantalla lo ve llegar sin
-  recargar. Respaldo: adjuntar el archivo desde el navegador en el mismo paso. Token del
-  puente por clínica en *Panel → Puente de escaneo*. Detalle en `docs/puente-escaneo.md`.
+  se adjunta). El **escaneo llega solo desde RevoScan al taller**: el puente instalado en el
+  PC del escáner (`tools/puente-escaneo/`) sube cada mesh exportado directo al almacén
+  común (Cloudflare R2, sin límite de tamaño) y se asocia al caso que está abierto en el
+  paso del escaneo; con duda, la app pregunta «¿es de este paciente?». El taller lo descarga
+  desde el expediente. Sin carpetas por paciente ni nombres que respetar. Token del puente
+  por clínica en *Panel → Puente de escaneo*. Detalle y variables `R2_*` en
+  `docs/puente-escaneo.md`.
   **Checklist bloqueante**: sin todo en verde no hay envío.
 - **Estudio de captura guiado con MediaPipe** (`src/components/caso/captura-studio.tsx`,
   reglas en `src/lib/capture-guide.ts`): la cámara se abre a pantalla completa, un modelo de

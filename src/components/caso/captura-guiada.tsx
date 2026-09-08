@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Capture, Case, Incident, MediaAsset, Patient } from "@prisma/client";
-import { checklistOf, ensureScanCode, puenteActivo } from "@/lib/cases";
+import { checklistOf } from "@/lib/cases";
+import { bandejaDe, puenteActivo } from "@/lib/escaneos";
 import { BARO_KINDS, CAPTURA_VISUAL, FOTO_KINDS, SCAN_KIND, VIDEO_KINDS } from "@/lib/format";
 import {
   ACTIVIDAD_OPTS,
@@ -63,7 +64,6 @@ import {
   ramasSinCubrir,
   type TestId,
 } from "@/lib/tests-podologicos";
-import { scanFolder } from "@/lib/scan";
 import { CheckLine } from "@/components/ui";
 import { RX_ROUTES, RX_ROUTE_HELP, RX_ROUTE_LABEL, type RxRoute } from "@/lib/rx-route";
 import {
@@ -159,7 +159,7 @@ function buildSlides(): Slide[] {
       kind: SCAN_KIND,
       title: "Escaneo de las espumas fenólicas",
       grupo: "Escaneo",
-      help: "Toma el molde en las espumas fenólicas y escanéalo con RevoScan. Al guardar, elige la carpeta del caso que se indica abajo: el escaneo se sube y se asocia solo a este paciente. Es el último paso del estudio.",
+      help: "Toma el molde en las espumas fenólicas, escanéalo con RevoScan y exporta el mesh a la carpeta de escaneos del PC del escáner. Con esta pantalla abierta, el escaneo se sube y se asocia solo a este paciente. Es el último paso del estudio.",
       boton: "Marcar escaneo como hecho",
       hecho: "Escaneo de las espumas registrado.",
     },
@@ -861,12 +861,24 @@ export async function CapturaGuiada({
   const next = paso < total ? paso + 1 : null;
   const done = doneFlags[i];
 
-  // Escaneo de las espumas: la carpeta que hay que elegir en RevoScan se
-  // prepara aquí para que la pantalla la enseñe sin esperar a ninguna consulta.
+  // Escaneo de las espumas: estado inicial de la espera (el resto lo va
+  // refrescando la propia pantalla cada pocos segundos).
   const escaneo =
-    s.t === "file" && s.kind === SCAN_KIND && !done
+    s.t === "file" && s.kind === SCAN_KIND
       ? {
-          folder: scanFolder(kase.number, await ensureScanCode(kase.id), kase.patient.name),
+          hecho: done,
+          escaneos: media
+            .filter((m) => m.kind === SCAN_KIND)
+            .map((m) => ({
+              id: m.id,
+              archivo: (m.meta as { archivo?: string } | null)?.archivo ?? "escaneo",
+              bytes: m.sizeBytes ?? 0,
+              at: (m.confirmedAt ?? new Date()).toISOString(),
+            })),
+          bandeja: (await bandejaDe(kase.clinicId)).map((b) => ({
+            ...b,
+            receivedAt: (b.receivedAt ?? new Date()).toISOString(),
+          })),
           puente: await puenteActivo(kase.clinicId),
         }
       : null;
@@ -982,7 +994,40 @@ export async function CapturaGuiada({
             </>
           ))}
 
-        {s.t === "file" &&
+        {s.t === "file" && escaneo && (
+          <>
+            <p className="muted" style={{ margin: "4px 0 10px" }}>
+              {s.help}
+            </p>
+            <EscaneoPuente caseId={kase.id} paciente={kase.patient.name} caso={kase.number} inicial={escaneo} />
+            <div className="sp" />
+            {done ? (
+              <Link href={`/caso/${kase.id}?paso=${next ?? total}`}>
+                <button className="pri wfull" type="button">
+                  Siguiente →
+                </button>
+              </Link>
+            ) : (
+              <>
+                {/* Último recurso: sin modelo 3D el taller no puede diseñar. */}
+                <form action={markMediaAction}>
+                  <input type="hidden" name="caseId" value={kase.id} />
+                  <input type="hidden" name="kind" value={s.kind} />
+                  <input type="hidden" name="next" value={next ?? ""} />
+                  <button type="submit" className="wfull">
+                    El escaneo está hecho, subirlo más tarde
+                  </button>
+                </form>
+                <div className="tiny" style={{ marginTop: 8 }}>
+                  Solo si el escáner no puede subirlo ahora: el modelo 3D tiene que llegar antes de
+                  que el taller diseñe la plantilla de <b>{kase.patient.name}</b>.
+                </div>
+              </>
+            )}
+          </>
+        )}
+
+        {s.t === "file" && !escaneo &&
           (done ? (
             <>
               <div className="note g">
@@ -1000,41 +1045,17 @@ export async function CapturaGuiada({
               <p className="muted" style={{ margin: "4px 0 10px" }}>
                 {s.help}
               </p>
-              {/* El escaneo llega solo desde RevoScan: la pantalla enseña la carpeta
-                  del caso y espera el archivo. Marcarlo a mano queda como último
-                  recurso, porque sin modelo 3D el taller no puede diseñar. */}
-              {escaneo && (
-                <EscaneoPuente
-                  caseId={kase.id}
-                  folder={escaneo.folder}
-                  paciente={kase.patient.name}
-                  caso={kase.number}
-                  puenteInicial={escaneo.puente}
-                />
-              )}
-              <div className="sp" />
               <form action={markMediaAction}>
                 <input type="hidden" name="caseId" value={kase.id} />
                 <input type="hidden" name="kind" value={s.kind} />
                 <input type="hidden" name="next" value={next ?? ""} />
-                <button type="submit" className={s.kind === SCAN_KIND ? "wfull" : "pri wfull"}>
-                  {s.kind === SCAN_KIND ? "El escaneo está hecho, adjuntarlo luego" : s.boton}
+                <button type="submit" className="pri wfull">
+                  {s.boton}
                 </button>
               </form>
               <div className="tiny" style={{ marginTop: 8 }}>
-                {s.kind === SCAN_KIND ? (
-                  <>
-                    Marcarlo sin archivo solo si el escáner no puede subirlo ahora: el modelo 3D
-                    tiene que llegar antes de que el taller diseñe la plantilla de{" "}
-                    <b>{kase.patient.name}</b>.
-                  </>
-                ) : (
-                  <>
-                    Se guardará asociado a <b>{kase.patient.name}</b> — caso #{kase.number}. No
-                    hace falta renombrar el archivo: el nombre del paciente y el caso se añaden
-                    solos.
-                  </>
-                )}
+                Se guardará asociado a <b>{kase.patient.name}</b> — caso #{kase.number}. No hace
+                falta renombrar el archivo: el nombre del paciente y el caso se añaden solos.
               </div>
             </>
           ))}
