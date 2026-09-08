@@ -193,29 +193,26 @@ async function firmaCarpeta(dir) {
   return { bytes, mtime: Math.round(mtime), archivos, reciente: Math.max(mtime, creado) };
 }
 
-// Escaneos en bruto en la carpeta de Revo Scan: proyectos (carpetas con .revo)
-// y archivos .revox sueltos.
-async function escaneosEnBruto(dir) {
-  const out = [];
+// Escaneos en bruto en la carpeta de Revo Scan, a cualquier profundidad:
+// proyectos (carpetas que contienen su índice .revo; Revo Scan puede meter
+// una subcarpeta "Projects" por medio) y archivos .revox sueltos.
+const PROFUNDIDAD_MAX = 5;
+async function escaneosEnBruto(dir, nivel = 0, out = []) {
+  if (nivel > PROFUNDIDAD_MAX) return out;
   let entradas;
   try {
     entradas = await fsp.readdir(dir, { withFileTypes: true });
   } catch {
     return out;
   }
+  if (nivel > 0 && entradas.some((e) => e.isFile() && PROJECT_INDEX.test(e.name))) {
+    out.push({ tipo: "proyecto", ruta: dir });
+    return out; // dentro de un proyecto no se busca más
+  }
   for (const e of entradas) {
     const completo = path.join(dir, e.name);
-    if (e.isDirectory()) {
-      let hijos = [];
-      try {
-        hijos = await fsp.readdir(completo);
-      } catch {
-        continue;
-      }
-      if (hijos.some((h) => PROJECT_INDEX.test(h))) out.push({ tipo: "proyecto", ruta: completo });
-    } else if (RAW_EXTS.includes(path.extname(e.name).toLowerCase())) {
-      out.push({ tipo: "archivo", ruta: completo });
-    }
+    if (e.isDirectory()) await escaneosEnBruto(completo, nivel + 1, out);
+    else if (RAW_EXTS.includes(path.extname(e.name).toLowerCase())) out.push({ tipo: "archivo", ruta: completo });
   }
   return out;
 }
@@ -344,6 +341,7 @@ async function cicloBruto(cfg, estado, vistos) {
     // Espera a que nada cambie durante ESTABLE_BRUTO_MS.
     const visto = vistos.get(esc.ruta);
     if (!visto || visto.clave !== clave) {
+      if (!visto) log(`Detectado ${esc.tipo} ${path.basename(esc.ruta)} (${MB(firma.bytes)}): esperando a que Revo Scan termine de escribirlo...`);
       vistos.set(esc.ruta, { clave, desde: Date.now() });
       continue;
     }
@@ -409,6 +407,11 @@ async function main() {
       `Clínica: ${hola.clinica} · modo ${hola.modo === "directo" ? "directo al almacén (sin límite de tamaño)" : `servidor (máx. ${(hola.maxBytes / 1048576).toFixed(0)} MB)`}`
     );
   setInterval(() => saludar(cfg).catch((e) => log("Error:", e.message)), SALUDO_MS);
+
+  if (cfg.carpetaRevoScan) {
+    const vistosAhora = await escaneosEnBruto(cfg.carpetaRevoScan);
+    log(`Escaneos en la carpeta de Revo Scan ahora mismo: ${vistosAhora.length} (los anteriores a la instalación no se suben; los nuevos, en cuanto lleven ${ESTABLE_BRUTO_MS / 1000} s sin cambios)`);
+  }
 
   // Bucle secuencial: nunca hay dos subidas a la vez desde el mismo PC.
   for (;;) {
