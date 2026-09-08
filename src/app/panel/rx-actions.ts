@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { requireRole } from "@/lib/auth";
 import { audit, notify, pushEvent, releaseStale } from "@/lib/cases";
-import { PAY_LINK_DAYS } from "@/lib/states";
+import { PAY_LINK_DAYS, VENTANA_COLA } from "@/lib/states";
 import { PRICE_CENTS } from "@/lib/format";
 import type { Case } from "@prisma/client";
 
@@ -52,13 +52,75 @@ export async function nextRxAction() {
   redirect("/panel?ok=" + encodeURIComponent("No hay casos en cola ahora mismo"));
 }
 
-// Un prescriptor de clínica abre un caso concreto de su propia cola.
+// Abrir un caso concreto: el prescriptor de clínica elige de su propia cola y
+// el recetador central, de los primeros de la cola (o de los marcados como
+// complicados, que se pueden coger siempre para echar una mano).
 export async function openCaseAction(formData: FormData) {
   const caseId = String(formData.get("caseId"));
   const { u, kase } = await requirePrescriberFor(caseId);
-  if (kase.openBy && kase.openBy !== u.id) fail("/panel", "Otro profesional tiene abierto ese caso");
-  await prisma.case.update({ where: { id: caseId }, data: { openBy: u.id, openAt: new Date() } });
+  if (kase.openBy === u.id) redirect(`/caso/${caseId}`);
+  if (kase.openBy) fail("/panel", "Otro profesional tiene abierto ese caso");
+  if (u.role === "RECETADOR" && !kase.hardAt) {
+    await releaseStale();
+    const primeros = await prisma.case.findMany({
+      where: { state: "EN_PRESCRIPCION", openBy: null, clinic: { hasPrescriber: false } },
+      orderBy: { createdAt: "asc" },
+      take: VENTANA_COLA,
+      select: { id: true },
+    });
+    if (!primeros.some((c) => c.id === caseId))
+      fail(
+        "/panel",
+        `La cola es por antigüedad: solo puedes elegir entre los ${VENTANA_COLA} casos que llevan más tiempo esperando`
+      );
+  }
+  // Reclamo atómico: si otro lo cogió entre la lectura y ahora, no lo pisamos.
+  const claimed = await prisma.case.updateMany({
+    where: { id: caseId, openBy: null },
+    data: { openBy: u.id, openAt: new Date() },
+  });
+  if (claimed.count !== 1) fail("/panel", "Otro profesional acaba de coger ese caso");
   redirect(`/caso/${caseId}`);
+}
+
+// Marcar el caso como complicado: pide una segunda opinión al resto de
+// prescriptores, que lo verán destacado en su cola con la nota.
+export async function markHardAction(formData: FormData) {
+  const caseId = String(formData.get("caseId"));
+  const { u, kase } = await requirePrescriberFor(caseId);
+  const back = `/caso/${caseId}`;
+  const note = String(formData.get("hardNote") ?? "").trim();
+  if (!note) fail(back, "Escribe qué hay que mirar: es lo que verá el compañero que lo coja");
+  if (!["EN_PRESCRIPCION", "EN_CONTACTO"].includes(kase.state)) fail(back, "El caso no está en valoración");
+  const soltar = formData.get("release") !== null;
+  const draft = String(formData.get("assessment") ?? "").trim();
+  await prisma.case.update({
+    where: { id: caseId },
+    data: {
+      hardAt: new Date(),
+      hardBy: u.id,
+      hardByName: u.name,
+      hardNote: note,
+      ...(draft ? { rxDraft: draft } : {}),
+      ...(soltar ? { openBy: null, openAt: null } : {}),
+    },
+  });
+  await pushEvent(caseId, `Marcado como complicado — segunda opinión: ${note}`, u.name);
+  if (soltar) redirect("/panel?ok=" + encodeURIComponent(`Caso #${kase.number} marcado como complicado y devuelto a la cola`));
+  redirect(back + "?ok=" + encodeURIComponent("Caso marcado como complicado: tus compañeros lo verán destacado"));
+}
+
+// Retirar la marca: el caso ya no necesita una segunda opinión.
+export async function unmarkHardAction(formData: FormData) {
+  const caseId = String(formData.get("caseId"));
+  const { u, kase } = await requirePrescriberFor(caseId);
+  if (!kase.hardAt) redirect(`/caso/${caseId}`);
+  await prisma.case.update({
+    where: { id: caseId },
+    data: { hardAt: null, hardBy: null, hardByName: null, hardNote: null },
+  });
+  await pushEvent(caseId, "Retirada la marca de caso complicado", u.name);
+  redirect(`/caso/${caseId}?ok=` + encodeURIComponent("Marca de caso complicado retirada"));
 }
 
 async function ownerPhone(kase: Case & { patient: { ownerId: string } }) {

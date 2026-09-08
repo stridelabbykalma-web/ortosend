@@ -72,9 +72,17 @@ asociadas. Stack: **Next.js (App Router, server actions) + PostgreSQL (Prisma)**
   (cola, espera del más antiguo, contactos pendientes, firmadas en 30 días), bloque de acción
   con el siguiente caso, cola con motivo, señales del estudio y días de espera, casos en
   contacto con teléfono pulsable y las últimas prescripciones firmadas.
-- **Reparto automático** por antigüedad en la cola central (clínicas sin prescriptor): al abrir
-  un caso queda asociado; se libera al soltarlo, cerrar sesión o a los 45 min de inactividad.
-  El prescriptor de clínica elige el caso de su propia cola.
+- **Reparto por antigüedad con elección entre los primeros** en la cola central (clínicas sin
+  prescriptor): el botón principal abre el que más lleva esperando, pero el revisor puede elegir
+  entre los **5 primeros** (`VENTANA_COLA` en `src/lib/states.ts`) para dejar para luego uno que
+  se le vaya a alargar sin bloquear la cola. El resto espera turno, y la regla se aplica también
+  en el servidor, no solo en la interfaz. Al abrir un caso queda asociado; se libera al soltarlo,
+  cerrar sesión o a los 45 min de inactividad. El prescriptor de clínica elige de su propia cola.
+- **Caso complicado / segunda opinión**: quien lo valora primero puede marcarlo como complicado
+  con una nota de qué hay que mirar, y soltarlo o quedárselo. El resto de prescriptores lo ven
+  destacado en su mesa, con quién lo marcó y su nota, y **pueden cogerlo aunque no sea de los más
+  antiguos**. Cualquiera puede retirar la marca cuando deja de hacer falta. Todo queda en el
+  historial del caso.
 - **Puesto del revisor** (`src/components/revisor/puesto.tsx`): cabecera fija con el paciente,
   el estado y el tiempo que lleva abierto; alertas y borrador arriba del todo; expediente por
   secciones a la izquierda (resumen del cuestionario, puntos clave, exploración con el núcleo

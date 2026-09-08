@@ -57,6 +57,11 @@ export function canTransition(from: CaseState, to: CaseState, role: Role) {
 
 // Liberación de casos (reparto automático): al cerrar sesión o 45 min de inactividad
 export const OPEN_CASE_TIMEOUT_MIN = 45;
+// La cola central sigue siendo por antigüedad, pero el revisor puede elegir
+// entre los primeros: si uno pide más tiempo o está complicado, lo deja para
+// luego sin bloquear al resto. Los marcados como complicados se pueden abrir
+// siempre, estén donde estén en la cola: ahí lo que se busca es ayuda.
+export const VENTANA_COLA = 5;
 export const PAY_LINK_DAYS = 30;
 export const PAY_REMINDERS_DAYS = [3, 7, 15];
 export const SOFT_EXPIRY_MONTHS = 6;

@@ -17,6 +17,7 @@ import {
   sintesisComoTexto,
   sintesisDe,
 } from "@/lib/revisor";
+import { unmarkHardAction } from "@/app/panel/rx-actions";
 import { StatePill } from "@/components/ui";
 import { MediaGallery } from "@/components/caso/expediente";
 import { RxView } from "@/components/caso/rx-view";
@@ -119,6 +120,18 @@ export function PuestoRevisor({
               <li key={a.texto}>{a.texto}</li>
             ))}
           </ul>
+        </div>
+      )}
+      {k.hardAt && (
+        <div className="note a rev-hard-note" style={{ marginBottom: 14 }}>
+          <div>
+            <b>Caso marcado como complicado</b> por {k.hardByName ?? "un compañero"} {hace(k.hardAt, ahora)}:{" "}
+            {k.hardNote}
+          </div>
+          <form action={unmarkHardAction}>
+            <input type="hidden" name="caseId" value={k.id} />
+            <button type="submit">Retirar la marca</button>
+          </form>
         </div>
       )}
       {abiertas.length > 0 && (

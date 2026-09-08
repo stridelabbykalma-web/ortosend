@@ -2,6 +2,7 @@ import type { Case } from "@prisma/client";
 import {
   contactAction,
   draftAction,
+  markHardAction,
   noPrescribeAction,
   repeatAction,
   signRxAction,
@@ -124,7 +125,7 @@ export function RxView({
       </form>
 
       <details className="rev-salidas">
-        <summary>Otras salidas del caso: contactar, repetir prueba, no prescribir o soltar</summary>
+        <summary>Otras salidas: contactar, pedir ayuda, repetir prueba, no prescribir o soltar</summary>
         {!enContacto && (
           <form className="rev-salida" action={contactAction}>
             <input type="hidden" name="caseId" value={kase.id} />
@@ -165,6 +166,29 @@ export function RxView({
           <div className="sp" />
           <button type="submit" className="dang">
             No prescribir
+          </button>
+        </form>
+        <form className="rev-salida rev-salida-hard" action={markHardAction}>
+          <input type="hidden" name="caseId" value={kase.id} />
+          <b>Pedir una segunda opinión</b>
+          <div className="tiny">
+            Marca el caso como complicado: tus compañeros lo verán destacado en su cola y podrán cogerlo aunque no sea
+            el más antiguo.
+          </div>
+          <label>¿Qué hay que mirar? (lo verá quien lo coja)</label>
+          <textarea
+            name="hardNote"
+            rows={2}
+            required
+            defaultValue={kase.hardNote ?? ""}
+            placeholder="Dudo entre control de retropié o descarga; el vídeo posterior no cuadra con la exploración…"
+          />
+          <label className="chk" style={{ marginTop: 8 }}>
+            <input type="checkbox" name="release" defaultChecked /> Dejarlo en la cola para que lo coja otro
+          </label>
+          <div className="sp" />
+          <button type="submit" className="warn">
+            {kase.hardAt ? "Actualizar la petición de ayuda" : "Marcar como complicado"}
           </button>
         </form>
         <form className="rev-salida" action={draftAction}>

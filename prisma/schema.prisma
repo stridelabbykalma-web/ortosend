@@ -179,6 +179,12 @@ model Case {
   openBy       String?
   openAt       DateTime?
   assignedTo   String?   // asignación pegajosa tras contacto con el paciente
+  // Caso marcado como complicado: quien lo valora primero pide una segunda
+  // opinión y el caso se destaca en la cola del resto de prescriptores.
+  hardAt       DateTime?
+  hardBy       String?   // userId de quien lo marcó
+  hardByName   String?
+  hardNote     String?   // qué hay que mirar / en qué necesita ayuda
   capture      Capture?
   prescription Prescription?
   payment      Payment?

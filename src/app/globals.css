@@ -282,3 +282,13 @@ tr.click:hover { background: var(--paper); }
   .rev-head { position: static; }
   .rev-timer { text-align: left; max-width: none; }
 }
+
+/* Casos complicados: piden una segunda opinión a los compañeros */
+.rev-hard-box { border-color: #ecd6b3; }
+.rev-hard { border: 1px solid #ecd6b3; background: var(--amber-l); border-radius: 10px; padding: 12px 14px; }
+.rev-hard p { margin: 6px 0 10px; font-size: 13px; color: var(--ink); }
+.rev-hard .tiny { color: var(--amber); }
+.rev-hard-note { display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; }
+.rev-hard-note button { background: transparent; border-color: var(--amber); color: var(--amber); white-space: nowrap; }
+.rev-fila-hard > td { background: #fdf6ea; }
+.rev-salida-hard { border-color: #ecd6b3; background: #fffdf9; }

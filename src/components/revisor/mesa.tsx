@@ -3,7 +3,7 @@ import type { Prisma, User } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { releaseStale } from "@/lib/cases";
 import { fmtd } from "@/lib/format";
-import { OPEN_CASE_TIMEOUT_MIN } from "@/lib/states";
+import { OPEN_CASE_TIMEOUT_MIN, VENTANA_COLA } from "@/lib/states";
 import type { Questionnaire } from "@/lib/questionnaire";
 import type { Exam } from "@/lib/exploracion";
 import { ahoraMs, diasDesde, edad, hace, sintesisDe } from "@/lib/revisor";
@@ -17,9 +17,10 @@ const COLA_INCLUDE = {
 } satisfies Prisma.CaseInclude;
 type CasoCola = Prisma.CaseGetPayload<{ include: typeof COLA_INCLUDE }>;
 
-// Mesa de valoración: lo que ve el revisor al entrar. En modo «central» la
-// cola se reparte por antigüedad (solo «siguiente caso»); en modo «clinica» el
-// prescriptor elige el caso de su propia clínica.
+// Mesa de valoración: lo que ve el revisor al entrar. La cola sigue siendo por
+// antigüedad, pero puede elegir entre los primeros (VENTANA_COLA) para dejar
+// para luego uno que pida más tiempo; los marcados como complicados se pueden
+// coger siempre, porque ahí lo que se pide es ayuda.
 export async function MesaRevisor({ user, modo }: { user: User; modo: "central" | "clinica" }) {
   await releaseStale();
   const ahora = ahoraMs();
@@ -45,6 +46,11 @@ export async function MesaRevisor({ user, modo }: { user: User; modo: "central" 
   ]);
   const colaLibre = cola.filter((c) => !c.openBy || c.openBy === user.id);
   const masAntiguo = colaLibre[0];
+  // Elegibles: los primeros de la cola. El resto espera su turno, salvo los
+  // marcados como complicados, que puede coger cualquiera para ayudar.
+  const ventana = modo === "central" ? colaLibre.slice(0, VENTANA_COLA).map((c) => c.id) : colaLibre.map((c) => c.id);
+  const puedeAbrir = (c: CasoCola) => (!c.openBy || c.openBy === user.id) && (ventana.includes(c.id) || !!c.hardAt);
+  const complicados = colaLibre.filter((c) => c.hardAt);
   const firmadas30 = firmadas.filter((p) => ahora - new Date(p.signedAt).getTime() < 30 * 86400000).length;
   const verificado = !!profile?.canPrescribe && !!profile.verifiedAt;
 
@@ -69,6 +75,7 @@ export async function MesaRevisor({ user, modo }: { user: User; modo: "central" 
       <div className="grid g4" style={{ margin: "14px 0" }}>
         <Kpi v={colaLibre.length} l="Casos en cola" />
         <Kpi v={masAntiguo ? `${diasDesde(masAntiguo.createdAt, ahora)} d` : "—"} l="Espera del más antiguo" />
+        <Kpi v={complicados.length} l="Piden segunda opinión" />
         <Kpi v={contact.length} l="Pendientes de contacto" />
         <Kpi v={firmadas30} l="Firmadas por ti (30 d)" />
       </div>
@@ -94,7 +101,7 @@ export async function MesaRevisor({ user, modo }: { user: User; modo: "central" 
             <h3>{colaLibre.length ? "Siguiente caso de la cola" : "Cola vacía"}</h3>
             <p>
               {masAntiguo
-                ? `El más antiguo es el #${masAntiguo.number} (${masAntiguo.clinic.name}), esperando ${diasDesde(masAntiguo.createdAt, ahora)} días. Al abrirlo queda asociado a ti.`
+                ? `El más antiguo es el #${masAntiguo.number} (${masAntiguo.clinic.name}), esperando ${diasDesde(masAntiguo.createdAt, ahora)} días. Si te pide más tiempo del que tienes ahora, abajo puedes elegir entre los ${VENTANA_COLA} que llevan más esperando.`
                 : "Ahora mismo no hay estudios pendientes de valorar en clínicas sin prescriptor."}
             </p>
           </div>
@@ -105,17 +112,59 @@ export async function MesaRevisor({ user, modo }: { user: User; modo: "central" 
       ) : (
         <div className="rev-next">
           <div>
-            <h3>{colaLibre.length ? `${colaLibre.length} caso${colaLibre.length === 1 ? "" : "s"} pendiente${colaLibre.length === 1 ? "" : "s"} de tu prescripción` : "Nada pendiente de prescribir"}</h3>
+            <h3>
+              {colaLibre.length
+                ? `${colaLibre.length} caso${colaLibre.length === 1 ? "" : "s"} pendiente${colaLibre.length === 1 ? "" : "s"} de tu prescripción`
+                : "Nada pendiente de prescribir"}
+            </h3>
             <p>Elige el caso en la lista de abajo. Al abrirlo queda asociado a ti hasta que lo cierres o lo sueltes.</p>
           </div>
         </div>
+      )}
+
+      {complicados.length > 0 && (
+        <>
+          <div className="sp" />
+          <div className="card rev-hard-box">
+            <b>Casos que piden una segunda opinión</b>
+            <div className="tiny">
+              Un compañero los ha marcado como complicados. Puedes cogerlos aunque no sean los más antiguos.
+            </div>
+            <div className="grid g2" style={{ marginTop: 10 }}>
+              {complicados.map((c) => (
+                <div key={c.id} className="rev-hard">
+                  <div className="row between">
+                    <b>
+                      #{c.number} · {c.patient.name}
+                    </b>
+                    <span className="pill a">complicado</span>
+                  </div>
+                  <div className="tiny">
+                    {c.hardByName ?? "un compañero"} · {hace(c.hardAt, ahora)}
+                    {modo === "central" ? ` · ${c.clinic.name}` : ""}
+                  </div>
+                  <p>{c.hardNote}</p>
+                  <form action={openCaseAction}>
+                    <input type="hidden" name="caseId" value={c.id} />
+                    <button type="submit" className="pri">
+                      {c.hardBy === user.id ? "Retomar mi caso" : "Echar una mano"}
+                    </button>
+                  </form>
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
       )}
 
       <div className="sp" />
       <div className="card">
         <div className="row between">
           <b>{modo === "central" ? "Cola central (por antigüedad)" : "Casos de la clínica pendientes"}</b>
-          <span className="tiny">{cola.length} en total</span>
+          <span className="tiny">
+            {cola.length} en total
+            {modo === "central" && colaLibre.length > VENTANA_COLA ? ` · puedes elegir entre los ${VENTANA_COLA} primeros` : ""}
+          </span>
         </div>
         {cola.length ? (
           <div style={{ overflowX: "auto" }}>
@@ -133,7 +182,15 @@ export async function MesaRevisor({ user, modo }: { user: User; modo: "central" 
               </thead>
               <tbody>
                 {cola.map((c, i) => (
-                  <FilaCola key={c.id} c={c} ahora={ahora} modo={modo} userId={user.id} primero={i === 0} />
+                  <FilaCola
+                    key={c.id}
+                    c={c}
+                    ahora={ahora}
+                    modo={modo}
+                    userId={user.id}
+                    primero={i === 0}
+                    abrible={puedeAbrir(c)}
+                  />
                 ))}
               </tbody>
             </table>
@@ -219,7 +276,7 @@ export async function MesaRevisor({ user, modo }: { user: User; modo: "central" 
       <div className="sp" />
       <div className="tiny">
         {modo === "central"
-          ? `El reparto es automático por antigüedad: al abrir un caso queda asociado a ti y desaparece de la cola del resto. Si cierras sesión sin terminarlo (o pasan ${OPEN_CASE_TIMEOUT_MIN} min de inactividad), vuelve al principio de la cola con tus notas guardadas.`
+          ? `El reparto es por antigüedad, pero eliges entre los ${VENTANA_COLA} casos que llevan más esperando: si uno se te va a alargar, déjalo para luego sin bloquear la cola. Al abrir uno queda asociado a ti y desaparece de la cola del resto; si cierras sesión sin terminarlo (o pasan ${OPEN_CASE_TIMEOUT_MIN} min de inactividad), vuelve a su sitio con tus notas guardadas.`
           : `Al abrir un caso queda asociado a ti; si cierras sesión sin terminarlo (o pasan ${OPEN_CASE_TIMEOUT_MIN} min de inactividad) se libera con tus notas guardadas.`}
       </div>
     </>
@@ -232,12 +289,14 @@ function FilaCola({
   modo,
   userId,
   primero,
+  abrible,
 }: {
   c: CasoCola;
   ahora: number;
   modo: "central" | "clinica";
   userId: string;
   primero: boolean;
+  abrible: boolean;
 }) {
   const q = (c.capture?.questionnaire as Questionnaire | null) ?? null;
   const e = (c.capture?.physicalExam as Exam | null) ?? null;
@@ -248,55 +307,51 @@ function FilaCola({
   const dias = diasDesde(c.createdAt, ahora);
   const otro = !!c.openBy && c.openBy !== userId;
   return (
-    <tr>
+    <tr className={c.hardAt ? "rev-fila-hard" : undefined}>
       <td>
         #{c.number}
-        {primero && modo === "central" && (
-          <>
-            {" "}
-            <span className="pill">siguiente</span>
-          </>
-        )}
+        {primero && <> <span className="pill">el que más espera</span></>}
       </td>
       <td>
         {c.patient.name}
         {years !== null && <span className="tiny"> · {years} a.</span>}
       </td>
       {modo === "central" && <td className="muted">{c.clinic.name}</td>}
-      <td className="muted" style={{ maxWidth: 260 }}>
+      <td className="muted" style={{ maxWidth: 240 }}>
         {q?.motivo || "—"}
-        {q?.dolor ? <span className="tiny"> · dolor {String(q.dolor).includes("/") ? q.dolor : `${q.dolor}/10`}</span> : null}
+        {q?.dolor ? (
+          <span className="tiny"> · dolor {String(q.dolor).includes("/") ? q.dolor : `${q.dolor}/10`}</span>
+        ) : null}
       </td>
       <td>
-        {alertas > 0 && <span className="pill r">{alertas} alerta{alertas > 1 ? "s" : ""}</span>}{" "}
-        {revisar > 0 && <span className="pill a">{revisar} a revisar</span>}
-        {alertas + revisar === 0 && <span className="tiny">—</span>}
+        {c.hardAt && <span className="pill a">complicado</span>}{" "}
+        {alertas > 0 && (
+          <span className="pill r">
+            {alertas} alerta{alertas > 1 ? "s" : ""}
+          </span>
+        )}{" "}
+        {revisar > 0 && <span className="pill b">{revisar} a revisar</span>}
+        {!c.hardAt && alertas + revisar === 0 && <span className="tiny">—</span>}
       </td>
       <td>
-        <span className={`pill ${dias >= 2 ? "r" : dias >= 1 ? "a" : "n"}`}>
-          {dias === 0 ? "hoy" : `${dias} d`}
-        </span>
+        <span className={`pill ${dias >= 2 ? "r" : dias >= 1 ? "a" : "n"}`}>{dias === 0 ? "hoy" : `${dias} d`}</span>
       </td>
       <td style={{ whiteSpace: "nowrap" }}>
-        {modo === "clinica" ? (
-          otro ? (
-            <span className="tiny">abierto por otro profesional</span>
-          ) : c.openBy === userId ? (
-            <Link href={`/caso/${c.id}`} className="btn pri">
-              Continuar
-            </Link>
-          ) : (
-            <form action={openCaseAction}>
-              <input type="hidden" name="caseId" value={c.id} />
-              <button type="submit" className={primero ? "pri" : ""}>
-                Valorar
-              </button>
-            </form>
-          )
+        {otro ? (
+          <span className="tiny">lo tiene otro profesional</span>
+        ) : c.openBy === userId ? (
+          <Link href={`/caso/${c.id}`} className="btn pri">
+            Continuar
+          </Link>
+        ) : abrible ? (
+          <form action={openCaseAction}>
+            <input type="hidden" name="caseId" value={c.id} />
+            <button type="submit" className={primero ? "pri" : ""}>
+              {c.hardAt ? "Echar una mano" : "Valorar"}
+            </button>
+          </form>
         ) : (
-          <span className="row" style={{ gap: 6 }}>
-            <StatePill state={c.state} />
-          </span>
+          <span className="tiny">espera turno</span>
         )}
       </td>
     </tr>
