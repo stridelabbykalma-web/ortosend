@@ -6,7 +6,7 @@ import { audit } from "@/lib/cases";
 import { Flash, StatePill, Steps } from "@/components/ui";
 import { Expediente, Historial } from "@/components/caso/expediente";
 import { CapturaGuiada } from "@/components/caso/captura-guiada";
-import { RxView } from "@/components/caso/rx-view";
+import { PuestoRevisor } from "@/components/revisor/puesto";
 import { TallerView } from "@/components/caso/taller-view";
 import { unlockRxAction } from "@/app/panel/cliente-actions";
 import { verifyDocToken } from "@/app/panel/cliente-actions";
@@ -76,13 +76,13 @@ export default async function CasoPage({
       </>
     );
   } else if (canPrescribeHere && inRx) {
-    inner = (
-      <>
-        <Expediente kase={k} />
+    // Puesto del revisor: lleva su propia cabecera fija, sin el título general
+    return (
+      <div className="wrap">
         <div className="sp" />
-        <RxView kase={k} collegiateNum={profile?.collegiateNum ?? null} />
-        <Historial events={k.events} />
-      </>
+        <Flash error={error} ok={ok} />
+        <PuestoRevisor kase={k} collegiateNum={profile?.collegiateNum ?? null} />
+      </div>
     );
   } else if (isTaller && inTaller) {
     inner = (

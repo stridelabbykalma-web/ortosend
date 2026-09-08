@@ -136,7 +136,7 @@ export function Historial({ events }: { events: { id: string; at: Date; text: st
 
 // Visor de las capturas reales subidas desde el estudio web (vídeos y fotos).
 // Solo hay archivo servible cuando la URL apunta a /api/media (subida confirmada).
-function MediaGallery({ media }: { media: MediaAsset[] }) {
+export function MediaGallery({ media }: { media: MediaAsset[] }) {
   const files = media.filter((m) => m.confirmedAt && m.url.startsWith("/api/media/"));
   if (files.length === 0) return null;
   return (

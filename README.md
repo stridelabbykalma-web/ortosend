@@ -66,13 +66,31 @@ asociadas. Stack: **Next.js (App Router, server actions) + PostgreSQL (Prisma)**
   control de acceso que el expediente y registro RGPD. El modelo (5,8 MB) va en `public/`; el
   WASM se sirve desde el CDN de jsDelivr (o desde la app con `NEXT_PUBLIC_MEDIAPIPE_WASM`).
 
-**Prescripción**
-- Cola del prescriptor de clínica y **cola central Ortosend** (clínicas sin prescriptor) con
-  **reparto automático** por antigüedad: al abrir un caso queda asociado; se libera al soltarlo,
-  cerrar sesión o a los 45 min de inactividad.
+**Prescripción — puesto del revisor**
+- **Mesa de valoración** (`src/components/revisor/mesa.tsx`), la misma pantalla para el
+  prescriptor de clínica y para el recetador central: estado de la colegiación, indicadores
+  (cola, espera del más antiguo, contactos pendientes, firmadas en 30 días), bloque de acción
+  con el siguiente caso, cola con motivo, señales del estudio y días de espera, casos en
+  contacto con teléfono pulsable y las últimas prescripciones firmadas.
+- **Reparto automático** por antigüedad en la cola central (clínicas sin prescriptor): al abrir
+  un caso queda asociado; se libera al soltarlo, cerrar sesión o a los 45 min de inactividad.
+  El prescriptor de clínica elige el caso de su propia cola.
+- **Puesto del revisor** (`src/components/revisor/puesto.tsx`): cabecera fija con el paciente,
+  el estado y el tiempo que lleva abierto; alertas y borrador arriba del todo; expediente por
+  secciones a la izquierda (resumen del cuestionario, puntos clave, exploración con el núcleo
+  en tabla izq./dcha., vídeos y fotos con sus informes, historial) y el formulario de
+  prescripción **fijo a la derecha**, siempre a la vista.
+- **Puntos clave** (`src/lib/revisor.ts`): primer barrido automático y orientativo que reúne
+  los hallazgos de alerta, los valores del núcleo fuera de rango (navicular drop ≥ 10 mm, lunge
+  < 10 cm, Jack negativo, single heel rise alterado), la dismetría, Helbing y Perthes y los
+  hallazgos de los informes de marcha. Nunca diagnostica: ordena lo que ya hay.
+- **Chips de volcado** en el formulario: uno mete la síntesis en la valoración, los verdes (✦)
+  añaden a la pauta de fabricación lo que sugieren los vídeos y la exploración, y el resto son
+  pautas frecuentes. Siempre añaden texto, nunca sustituyen lo escrito.
 - Firma solo por prescriptor con **colegiación verificada** (guarda dura). Salidas: prescribir
   (→ pago), contactar con el paciente (asignación pegajosa), devolver a clínica para repetir
-  prueba (sin coste), no prescribir (el cliente no paga) y guardar borrador.
+  prueba (sin coste, con la lista de pruebas del protocolo), no prescribir (el cliente no paga)
+  y guardar borrador.
 
 **Pago y panel del cliente**
 - Sin prescripción no hay pago; enlace válido 30 días con caducidad → NO_CONVERTIDO y

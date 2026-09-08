@@ -4,7 +4,7 @@ import { prisma } from "@/lib/db";
 import { StatePill } from "@/components/ui";
 import { fmtd, fmtdt } from "@/lib/format";
 import { addSlotAction, delSlotAction, newCaseBAction } from "@/app/panel/clinica-actions";
-import { openCaseAction } from "@/app/panel/rx-actions";
+import { MesaRevisor } from "@/components/revisor/mesa";
 
 export async function PanelClinica({ user, tab }: { user: User; tab?: string }) {
   const clinic = await prisma.clinic.findUnique({
@@ -153,48 +153,7 @@ export async function PanelClinica({ user, tab }: { user: User; tab?: string }) 
     );
   }
   if (t === "rx" && isPrescriber) {
-    const queue = cases.filter((c) => ["EN_PRESCRIPCION", "EN_CONTACTO"].includes(c.state));
-    body = (
-      <>
-        <h3>Casos pendientes de tu prescripción</h3>
-        <div className="sp" />
-        <div className="card">
-          {queue.length ? (
-            <table>
-              <thead>
-                <tr>
-                  <th>Caso</th>
-                  <th>Paciente</th>
-                  <th>Estado</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {queue.map((c) => (
-                  <tr key={c.id}>
-                    <td>#{c.number}</td>
-                    <td>{c.patient.name}</td>
-                    <td>
-                      <StatePill state={c.state} />
-                    </td>
-                    <td>
-                      <form action={openCaseAction}>
-                        <input type="hidden" name="caseId" value={c.id} />
-                        <button type="submit" className="pri">
-                          Valorar
-                        </button>
-                      </form>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <div className="muted">Nada pendiente de prescribir.</div>
-          )}
-        </div>
-      </>
-    );
+    body = <MesaRevisor user={user} modo="clinica" />;
   }
   if (t === "disp") {
     body = (

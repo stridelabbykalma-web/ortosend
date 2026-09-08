@@ -6,98 +6,177 @@ import {
   repeatAction,
   signRxAction,
 } from "@/app/panel/rx-actions";
+import { Insertar } from "@/components/revisor/insertar";
+import { VIDEO_KINDS, FOTO_KINDS } from "@/lib/format";
 
-// Vista de valoración y prescripción (prescriptor de clínica o recetador central).
-export function RxView({ kase, collegiateNum }: { kase: Case; collegiateNum: string | null }) {
+// Pautas frecuentes de fabricación: chips que añaden texto a la orden de trabajo.
+const PAUTAS = [
+  "Plantilla semirrígida de contacto total.",
+  "Plantilla rígida con control de retropié.",
+  "Descarga retrocapital (barra metatarsal).",
+  "Cuña supinadora de retropié 3° bilateral.",
+  "Cuña pronadora de retropié 3°.",
+  "Estabilizador de talón profundo.",
+  "Soporte del arco interno reforzado.",
+  "Descarga de talón (herradura) en el lado doloroso.",
+  "Extensión de Morton (primer radio).",
+];
+
+const DIAGNOSTICOS = [
+  "Fascitis plantar",
+  "Pie plano flexible",
+  "Pie cavo",
+  "Metatarsalgia",
+  "Neuroma de Morton",
+  "Tendinopatía del tibial posterior",
+  "Tendinopatía aquílea",
+  "Dismetría",
+  "Hallux valgus / limitus",
+  "Otro (detallar)",
+];
+
+// Formulario de valoración y prescripción (prescriptor de clínica o recetador
+// central). Va en la columna fija del puesto del revisor.
+export function RxView({
+  kase,
+  collegiateNum,
+  sintesisTexto,
+  plantillaSugerida = [],
+}: {
+  kase: Case;
+  collegiateNum: string | null;
+  sintesisTexto?: string;
+  plantillaSugerida?: string[];
+}) {
+  const enContacto = kase.state === "EN_CONTACTO";
   return (
-    <div className="card">
-      <b style={{ fontFamily: "var(--font-sora)" }}>Valoración y prescripción</b>
+    <div className="card rev-form">
+      <div className="row between">
+        <b style={{ fontFamily: "var(--font-sora)" }}>Valoración y prescripción</b>
+        {enContacto && <span className="pill a">En contacto con el paciente</span>}
+      </div>
       <form action={signRxAction} id={`rx-${kase.id}`}>
         <input type="hidden" name="caseId" value={kase.id} />
-        <label>Valoración clínica (hallazgos relevantes)</label>
+        <label htmlFor="rx-assessment">Valoración clínica (hallazgos relevantes)</label>
         <textarea
+          id="rx-assessment"
           name="assessment"
-          rows={2}
+          rows={4}
           placeholder="Qué observas en la marcha, presiones, exploración…"
           defaultValue={kase.rxDraft ?? ""}
         />
-        <label>Diagnóstico / indicación</label>
-        <div className="row">
-          <select name="diagnosis" style={{ maxWidth: 280 }} defaultValue="Fascitis plantar">
-            <option>Fascitis plantar</option>
-            <option>Pie plano flexible</option>
-            <option>Metatarsalgia</option>
-            <option>Pie cavo</option>
-            <option>Dismetría</option>
-            <option>Otro (detallar)</option>
-          </select>
-          <input name="diagnosisDetail" placeholder="Matiz o detalle" style={{ flex: 1, minWidth: 160 }} />
-        </div>
-        <label>Pauta de fabricación (orden de trabajo para el taller)</label>
+        {sintesisTexto && (
+          <div className="rev-chips">
+            <Insertar target="rx-assessment" text={sintesisTexto}>
+              ＋ Volcar los puntos clave del estudio
+            </Insertar>
+          </div>
+        )}
+        <label htmlFor="rx-diagnosis">Diagnóstico / indicación</label>
+        <select id="rx-diagnosis" name="diagnosis" defaultValue="Fascitis plantar">
+          {DIAGNOSTICOS.map((d) => (
+            <option key={d}>{d}</option>
+          ))}
+        </select>
+        <input name="diagnosisDetail" placeholder="Matiz o detalle (lado, grado…)" style={{ marginTop: 6 }} />
+        <label htmlFor="rx-fab">
+          Pauta de fabricación <span className="tiny">· orden de trabajo del taller, obligatoria</span>
+        </label>
         <textarea
+          id="rx-fab"
           name="fabricationOrder"
-          rows={2}
+          rows={4}
+          required
           placeholder="Tipo de plantilla, correcciones, cuñas, descargas, alza en mm…"
         />
-        <label>Pauta de uso para el paciente</label>
+        <div className="rev-chips">
+          {plantillaSugerida.map((p) => (
+            <Insertar key={p} target="rx-fab" text={p} className="rev-chip sug">
+              ✦ {p}
+            </Insertar>
+          ))}
+          {PAUTAS.map((p) => (
+            <Insertar key={p} target="rx-fab" text={p}>
+              ＋ {p.replace(/\.$/, "")}
+            </Insertar>
+          ))}
+        </div>
+        {plantillaSugerida.length > 0 && (
+          <div className="tiny" style={{ marginTop: 6 }}>
+            ✦ propuestas orientativas a partir de los vídeos y la exploración; el resto son pautas frecuentes.
+          </div>
+        )}
+        <label htmlFor="rx-uso">Pauta de uso para el paciente</label>
         <textarea
+          id="rx-uso"
           name="usageGuidelines"
           rows={2}
           defaultValue="Adaptación progresiva 2-3 semanas, con calzado cerrado. Revisión anual incluida."
         />
         <div className="sp" />
-        <button type="submit" className="pri">
+        <button type="submit" className="pri wfull">
           Firmar y prescribir
         </button>
+        <div className="tiny" style={{ marginTop: 8 }}>
+          Firma con tu identidad y colegiación ({collegiateNum ?? "sin verificar"}). El paciente recibe la
+          prescripción en su panel y el enlace de pago (30 días). Sin prescripción no hay pago.
+        </div>
       </form>
-      <div className="sp" />
-      <details>
-        <summary style={{ cursor: "pointer", fontSize: 14 }}>Otras salidas del caso…</summary>
-        <div className="grid g2" style={{ marginTop: 10 }}>
-          <form className="card" action={contactAction} style={{ padding: 14 }}>
+
+      <details className="rev-salidas">
+        <summary>Otras salidas del caso: contactar, repetir prueba, no prescribir o soltar</summary>
+        {!enContacto && (
+          <form className="rev-salida" action={contactAction}>
             <input type="hidden" name="caseId" value={kase.id} />
-            <b style={{ fontSize: 13 }}>Contactar con el paciente</b>
+            <b>Contactar con el paciente</b>
+            <div className="tiny">El caso queda asignado a ti hasta resolverlo; el paciente recibe un aviso.</div>
             <label>Nota del contacto (obligatoria, quedará en el caso)</label>
-            <input name="note" required />
+            <input name="note" required placeholder="Qué quieres aclarar con el paciente" />
             <div className="sp" />
             <button type="submit">Proponer llamada</button>
           </form>
-          <form className="card" action={repeatAction} style={{ padding: 14 }}>
-            <input type="hidden" name="caseId" value={kase.id} />
-            <b style={{ fontSize: 13 }}>Pedir repetición de prueba</b>
-            <label>¿Qué prueba hay que repetir?</label>
-            <input name="what" placeholder="Ej.: vídeo marcha posterior descalzo" required />
-            <label>Motivo (lo verá la clínica)</label>
-            <input name="why" />
-            <div className="sp" />
-            <button type="submit" className="warn">
-              Devolver a clínica
-            </button>
-          </form>
-          <form className="card" action={noPrescribeAction} style={{ padding: 14 }}>
-            <input type="hidden" name="caseId" value={kase.id} />
-            <b style={{ fontSize: 13 }}>No prescribir</b>
-            <label>Recomendación para el paciente (se le comunicará con cuidado)</label>
-            <input name="reason" />
-            <div className="sp" />
-            <button type="submit" className="dang">
-              No prescribir (el cliente no paga)
-            </button>
-          </form>
-          <form className="card" action={draftAction} style={{ padding: 14 }}>
-            <input type="hidden" name="caseId" value={kase.id} />
-            <b style={{ fontSize: 13 }}>Soltar el caso</b>
-            <label>Borrador de valoración (se conserva)</label>
-            <input name="assessment" defaultValue={kase.rxDraft ?? ""} />
-            <div className="sp" />
-            <button type="submit">Guardar borrador y soltar (conserva antigüedad)</button>
-          </form>
-        </div>
+        )}
+        <form className="rev-salida" action={repeatAction}>
+          <input type="hidden" name="caseId" value={kase.id} />
+          <b>Pedir repetición de prueba</b>
+          <div className="tiny">Vuelve a la clínica sin coste para el paciente; el resto del estudio se conserva.</div>
+          <label>¿Qué prueba hay que repetir?</label>
+          <input name="what" list="rx-pruebas" placeholder="Ej.: vídeo marcha posterior descalzo" required />
+          <datalist id="rx-pruebas">
+            {[...VIDEO_KINDS, ...FOTO_KINDS].map(([k, l]) => (
+              <option key={k} value={l} />
+            ))}
+            <option value="Baropodometría dinámica" />
+            <option value="Escaneo de las espumas" />
+          </datalist>
+          <label>Motivo (lo verá la clínica)</label>
+          <input name="why" placeholder="Encuadre, iluminación, paciente calzado…" />
+          <div className="sp" />
+          <button type="submit" className="warn">
+            Devolver a clínica
+          </button>
+        </form>
+        <form className="rev-salida" action={noPrescribeAction}>
+          <input type="hidden" name="caseId" value={kase.id} />
+          <b>No prescribir</b>
+          <div className="tiny">El cliente no paga y la clínica no cobra. Se le comunica con cuidado.</div>
+          <label>Recomendación para el paciente</label>
+          <input name="reason" placeholder="Derivación, ejercicios, calzado…" />
+          <div className="sp" />
+          <button type="submit" className="dang">
+            No prescribir
+          </button>
+        </form>
+        <form className="rev-salida" action={draftAction}>
+          <input type="hidden" name="caseId" value={kase.id} />
+          <b>Guardar borrador y soltar el caso</b>
+          <div className="tiny">Vuelve a la cola conservando su antigüedad; tus notas se guardan.</div>
+          <label>Borrador de valoración (se conserva)</label>
+          <input name="assessment" defaultValue={kase.rxDraft ?? ""} />
+          <div className="sp" />
+          <button type="submit">Guardar y soltar</button>
+        </form>
       </details>
-      <div className="tiny" style={{ marginTop: 10 }}>
-        La firma queda registrada con tu identidad y colegiación ({collegiateNum ?? "—"}). El
-        paciente recibirá la prescripción en su panel y el enlace de pago (30 días).
-      </div>
     </div>
   );
 }
