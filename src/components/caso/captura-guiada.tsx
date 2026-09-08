@@ -645,7 +645,7 @@ function ESection({ section, e, q }: { section: string; e: Exam | null; q: Quest
         <div className="note g" style={{ marginBottom: 10 }}>
           <b>Prellenado con el análisis de los vídeos de marcha.</b> Patrón, ángulo de paso y
           retropié vienen del informe de los vídeos posterior y anterior; revisa, corrige si no
-          coincide con lo que has visto y completa contacto inicial y despegue (vista lateral).
+          coincide con lo que has visto y completa contacto inicial y despegue observándolo en consulta.
         </div>
       ) : (
         <div className="note a" style={{ marginBottom: 10 }}>

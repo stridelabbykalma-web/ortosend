@@ -299,7 +299,7 @@ export function sanitizeMarcha(raw: unknown): { track: MarchaTrack; informe: Mar
 // Apartado «Análisis de la marcha» de la exploración, rellenado a partir de los
 // informes de los vídeos posterior y anterior. Devuelve solo los campos que se
 // pueden deducir de una vista frontal; contacto inicial y despegue son de la
-// vista lateral y se dejan al profesional.
+// vista de perfil y los observa el profesional en consulta.
 export type MarchaExam = {
   marchaPatron?: string;
   anguloPaso?: string;
@@ -362,7 +362,7 @@ export function marchaDesdeInformes(post: MarchaInforme | null | undefined, ant:
     .map((h) => h.titulo);
   if (hall.length) obs.push(`Hallazgos: ${[...new Set(hall)].join("; ")}`);
   obs.push(
-    "Rellenado automáticamente con el análisis de los vídeos de marcha (orientativo, 2D). Contacto inicial y despegue no se valoran en vista frontal: revisar en los vídeos laterales."
+    "Rellenado automáticamente con el análisis de los vídeos de marcha (orientativo, 2D). Contacto inicial y despegue no se valoran en vista frontal: los observa el profesional en consulta."
   );
   out.marchaObs = obs.join("\n");
   return out;
