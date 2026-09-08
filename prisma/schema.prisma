@@ -190,6 +190,10 @@ model Case {
   material     String?   // trazabilidad: lote de material en confección
   designFileUrl String?  // CAD archivado (reposiciones / revisión anual)
   rxDraft      String?   // borrador de valoración guardado al soltar el caso
+  // Quién receta, elegido al enviar: CLINICA (lo firma quien envió) |
+  // ORTOSEND (cola central) | REVISION (Ortosend revisa y devuelve; firma la clínica)
+  rxRoute      String?
+  rxRequestedBy String?  // User de la clínica que envió el estudio
   qcPhotoUrl   String?   // foto obligatoria del par en calidad
   payLinkExpiresAt DateTime? // 30 días; recordatorios días 0/3/7/15
   incidents    Incident[]

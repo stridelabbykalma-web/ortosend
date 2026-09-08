@@ -9,6 +9,7 @@ import { BARO_KINDS, SCAN_KIND } from "@/lib/format";
 import type { Questionnaire } from "@/lib/questionnaire";
 import type { Exam } from "@/lib/exploracion";
 import { nucleoCompleto, ramasSinCubrir } from "@/lib/tests-podologicos";
+import { RX_ROUTES, type RxRoute } from "@/lib/rx-route";
 import type { User } from "@prisma/client";
 
 const MAX_SLOTS = 5;
@@ -354,6 +355,8 @@ export async function markMediaAction(formData: FormData) {
 export async function sendCaseAction(formData: FormData) {
   const u = await requireClinicStaff();
   const caseId = String(formData.get("caseId"));
+  const paso = String(formData.get("paso") ?? "");
+  const back = `/caso/${caseId}${paso ? `?paso=${paso}` : ""}`;
   const kase = await prisma.case.findUnique({
     where: { id: caseId },
     include: { capture: { include: { media: true } }, patient: true, clinic: true },
@@ -364,14 +367,36 @@ export async function sendCaseAction(formData: FormData) {
     fail(`/caso/${caseId}`, "El estudio no está en curso");
   const cl = checklistOf(kase!.capture);
   if (!cl.completa) fail(`/caso/${caseId}`, "La checklist del protocolo debe estar completa (todo en verde)");
+
+  // Quién receta se eligió antes de empezar el estudio (chooseRxRouteAction).
+  const rxRoute = kase!.rxRoute as RxRoute | null;
+  if (!rxRoute) fail(`/caso/${caseId}?elegir=1`, "Antes de enviar hay que elegir quién receta el caso");
+  void back;
+
   await prisma.capture.update({ where: { caseId }, data: { completedAt: new Date() } });
-  await prisma.case.update({ where: { id: caseId }, data: { state: "EN_PRESCRIPCION" } });
-  const central = !kase!.clinic.hasPrescriber;
+  await prisma.case.update({
+    where: { id: caseId },
+    data: {
+      state: "EN_PRESCRIPCION",
+      rxRequestedBy: kase!.rxRequestedBy ?? u.id,
+      // Receta propia: queda asignado a quien lo envió solo si es prescriptor; si lo
+      // envió el administrador, lo coge cualquier prescriptor de la clínica desde su cola.
+      assignedTo:
+        rxRoute === "CLINICA" && (await esPrescriptorVerificado(kase!.rxRequestedBy ?? u.id))
+          ? (kase!.rxRequestedBy ?? u.id)
+          : null,
+      openBy: null,
+      openAt: null,
+    },
+  });
+  const destino = {
+    CLINICA: `receta propia de ${u.name}`,
+    ORTOSEND: "receta por parte del equipo de Ortosend",
+    REVISION: `receta propia de ${u.name} con segunda opinión de Ortosend`,
+  }[rxRoute];
   await pushEvent(
     caseId,
-    fromRepeat
-      ? "Prueba repetida y reenviada a prescripción"
-      : `Estudio completo. Enviado a ${central ? "cola central Ortosend" : "prescriptor de la clínica"}`,
+    fromRepeat ? `Prueba repetida y reenviada a prescripción: ${destino}` : `Estudio completo. Enviado a prescripción: ${destino}`,
     u.name
   );
   if (kase!.patient) {
@@ -381,7 +406,55 @@ export async function sendCaseAction(formData: FormData) {
         nota: "Tu estudio está completo y en valoración. Te avisaremos en un máximo de 48 h laborables.",
       });
   }
-  redirect("/panel?ok=" + encodeURIComponent(`Caso #${kase!.number} enviado a prescripción`));
+  if (rxRoute === "CLINICA")
+    redirect(`/caso/${caseId}?ok=` + encodeURIComponent(`Caso #${kase!.number} en tu cola: ya puedes recetarlo`));
+  redirect(
+    "/panel?ok=" +
+      encodeURIComponent(
+        `Caso #${kase!.number} enviado a ${rxRoute === "REVISION" ? "Ortosend para revisión" : "prescripción de Ortosend"}`
+      )
+  );
+}
+
+// Quién receta se decide ANTES de empezar el estudio, porque el protocolo
+// depende de ello: si receta Ortosend se hace el estudio completo; si receta
+// la clínica o pide una segunda opinión, el formulario es otro (pendiente).
+// Solo un prescriptor con colegiación verificada puede quedárselo o pedir
+// revisión; el resto envía a Ortosend.
+// ¿Tiene la clínica algún prescriptor con colegiación verificada?
+async function clinicaPuedeRecetar(clinicId: string) {
+  const n = await prisma.professionalProfile.count({
+    where: { canPrescribe: true, verifiedAt: { not: null }, user: { clinicId, active: true } },
+  });
+  return n > 0;
+}
+
+// ¿Es este usuario un prescriptor con colegiación verificada?
+async function esPrescriptorVerificado(userId: string) {
+  const p = await prisma.professionalProfile.findUnique({ where: { userId } });
+  return !!p?.canPrescribe && !!p.verifiedAt;
+}
+
+export async function chooseRxRouteAction(formData: FormData) {
+  const u = await requireClinicStaff();
+  const caseId = String(formData.get("caseId"));
+  const kase = await prisma.case.findUnique({ where: { id: caseId } });
+  if (!kase || kase.clinicId !== u.clinicId) fail("/panel", "Caso no accesible");
+  if (!["CITA_RESERVADA", "ESTUDIO_EN_CURSO", "DEVUELTO_CLINICA"].includes(kase!.state))
+    fail(`/caso/${caseId}`, "El caso ya está enviado: no se puede cambiar quién receta");
+  // Las opciones de receta propia dependen de la clínica (que tenga un prescriptor
+  // verificado), no de quien rellena: el administrador también puede elegirlas.
+  const pedida = String(formData.get("rxRoute") ?? "");
+  let rxRoute: RxRoute;
+  if (!(await clinicaPuedeRecetar(u.clinicId!))) rxRoute = "ORTOSEND";
+  else if (RX_ROUTES.includes(pedida as RxRoute)) rxRoute = pedida as RxRoute;
+  else fail(`/caso/${caseId}?elegir=1`, "Elige quién receta este caso");
+  if (kase!.rxRoute !== rxRoute) {
+    await prisma.case.update({ where: { id: caseId }, data: { rxRoute, rxRequestedBy: u.id } });
+    const texto = { CLINICA: `receta propia de ${u.name}`, ORTOSEND: "receta por parte del equipo de Ortosend", REVISION: `receta propia de ${u.name} con segunda opinión de Ortosend` }[rxRoute];
+    await pushEvent(caseId, `Quién receta: ${texto}`, u.name);
+  }
+  redirect(`/caso/${caseId}`);
 }
 
 // --- Solicitud de alta de profesional (solo ADMIN_CLINICA) ---

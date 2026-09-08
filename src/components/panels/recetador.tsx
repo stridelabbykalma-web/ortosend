@@ -4,13 +4,15 @@ import { prisma } from "@/lib/db";
 import { releaseStale } from "@/lib/cases";
 import { Kpi } from "@/components/ui";
 import { nextRxAction } from "@/app/panel/rx-actions";
+import { CENTRAL_WHERE } from "@/lib/rx-route";
 
 export async function PanelRecetador({ user }: { user: User }) {
   await releaseStale();
-  const [queueCount, mineOpen, contact] = await Promise.all([
+  const [queueCount, revisiones, mineOpen, contact] = await Promise.all([
     prisma.case.count({
-      where: { state: "EN_PRESCRIPCION", openBy: null, clinic: { hasPrescriber: false } },
+      where: { state: "EN_PRESCRIPCION", openBy: null, ...CENTRAL_WHERE },
     }),
+    prisma.case.count({ where: { state: "EN_PRESCRIPCION", openBy: null, rxRoute: "REVISION" } }),
     prisma.case.findFirst({ where: { openBy: user.id }, include: { patient: true } }),
     prisma.case.findMany({
       where: { state: "EN_CONTACTO", assignedTo: user.id },
@@ -22,7 +24,7 @@ export async function PanelRecetador({ user }: { user: User }) {
       <h2>Cola central de prescripción</h2>
       <div className="grid g3" style={{ margin: "14px 0" }}>
         <Kpi v={queueCount} l="Casos en cola" />
-        <Kpi v="48 h" l="Compromiso de respuesta" />
+        <Kpi v={revisiones} l="De ellos, segundas opiniones pedidas por clínicas" />
         <Kpi v={contact.length} l="Pendientes de contacto" />
       </div>
       {mineOpen ? (
@@ -71,8 +73,10 @@ export async function PanelRecetador({ user }: { user: User }) {
       )}
       <div className="sp" />
       <div className="tiny">
-        El reparto es automático por antigüedad: al abrir un caso queda asociado a ti y desaparece
-        de la cola del resto. Si cierras sesión sin terminarlo (o pasan 45 min de inactividad),
+        En la cola entran los casos que las clínicas envían a Ortosend y los que piden revisión
+        (esos los firma la clínica: tú dejas tu valoración y se lo devuelves). El reparto es
+        automático por antigüedad: al abrir un caso queda asociado a ti y desaparece de la cola
+        del resto. Si cierras sesión sin terminarlo (o pasan 45 min de inactividad),
         vuelve al principio de la cola con tus notas guardadas.
       </div>
     </>

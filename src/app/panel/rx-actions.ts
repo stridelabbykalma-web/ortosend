@@ -9,13 +9,15 @@ import { audit, notify, pushEvent, releaseStale } from "@/lib/cases";
 import { PAY_LINK_DAYS } from "@/lib/states";
 import { PRICE_CENTS } from "@/lib/format";
 import type { Case } from "@prisma/client";
+import { CENTRAL_WHERE, REVISION_PREFIJO, esCentral } from "@/lib/rx-route";
 
 function fail(path: string, msg: string): never {
   redirect(`${path}${path.includes("?") ? "&" : "?"}error=` + encodeURIComponent(msg));
 }
 
-// El usuario puede valorar este caso: recetador central (clínicas sin prescriptor)
-// o profesional prescriptor de la clínica del caso.
+// El usuario puede valorar este caso: recetador central (casos enviados a
+// Ortosend o para revisión) o profesional prescriptor de la clínica del caso
+// (casos que la clínica se quedó).
 async function requirePrescriberFor(caseId: string) {
   const u = await requireRole("RECETADOR", "PROFESIONAL");
   const kase = await prisma.case.findUnique({
@@ -24,9 +26,10 @@ async function requirePrescriberFor(caseId: string) {
   });
   if (!kase) throw new Error("Caso no encontrado");
   if (u.role === "RECETADOR") {
-    if (kase.clinic.hasPrescriber) throw new Error("Este caso lo valora el prescriptor de su clínica");
+    if (!esCentral(kase)) throw new Error("Este caso lo receta el prescriptor de su clínica");
   } else {
     if (u.clinicId !== kase.clinicId) throw new Error("Caso de otra clínica");
+    if (esCentral(kase)) throw new Error("Este caso lo está valorando el equipo de Ortosend");
   }
   const profile = await prisma.professionalProfile.findUnique({ where: { userId: u.id } });
   return { u, kase, profile };
@@ -38,7 +41,7 @@ export async function nextRxAction() {
   const u = await requireRole("RECETADOR");
   await releaseStale();
   const candidates = await prisma.case.findMany({
-    where: { state: "EN_PRESCRIPCION", openBy: null, clinic: { hasPrescriber: false } },
+    where: { state: "EN_PRESCRIPCION", openBy: null, ...CENTRAL_WHERE },
     orderBy: { createdAt: "asc" },
     take: 5,
   });
@@ -190,4 +193,31 @@ export async function draftAction(formData: FormData) {
   await pushEvent(caseId, "Borrador guardado; caso devuelto a la cola (conserva antigüedad)", u.name);
   void kase;
   redirect("/panel");
+}
+
+// Segunda opinión pedida por la clínica: Ortosend deja su valoración y devuelve el
+// caso al profesional que lo envió, que es quien firma.
+export async function reviewBackAction(formData: FormData) {
+  const caseId = String(formData.get("caseId"));
+  const { u, kase } = await requirePrescriberFor(caseId);
+  const back = `/caso/${caseId}`;
+  if (u.role !== "RECETADOR") fail(back, "Solo el equipo de Ortosend devuelve revisiones");
+  if (kase.rxRoute !== "REVISION") fail(back, "Este caso no tiene una segunda opinión pedida");
+  if (!["EN_PRESCRIPCION", "EN_CONTACTO"].includes(kase.state)) fail(back, "El caso no está en valoración");
+  const review = String(formData.get("review") ?? "").trim();
+  if (!review) fail(back, "Escribe la segunda opinión que devuelves a la clínica");
+  await prisma.case.update({
+    where: { id: caseId },
+    data: {
+      state: "EN_PRESCRIPCION",
+      rxRoute: "CLINICA",
+      assignedTo: kase.rxRequestedBy,
+      openBy: null,
+      openAt: null,
+      rxDraft: `${REVISION_PREFIJO} (${u.name}): ${review}`,
+    },
+  });
+  await pushEvent(caseId, `Segunda opinión devuelta a la clínica para que firme: ${review}`, u.name);
+  await audit(u.id, "prescription.review", `case:${kase.number}`);
+  redirect("/panel?ok=" + encodeURIComponent(`Segunda opinión del caso #${kase.number} devuelta a la clínica`));
 }

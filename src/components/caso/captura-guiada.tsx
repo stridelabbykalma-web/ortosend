@@ -64,8 +64,10 @@ import {
   type TestId,
 } from "@/lib/tests-podologicos";
 import { CheckLine } from "@/components/ui";
+import { RX_ROUTES, RX_ROUTE_HELP, RX_ROUTE_LABEL, type RxRoute } from "@/lib/rx-route";
 import {
   autosaveSectionAction,
+  chooseRxRouteAction,
   markMediaAction,
   saveExamSectionAction,
   saveQuestionnaireSectionAction,
@@ -668,7 +670,95 @@ function ESection({ section, e, q }: { section: string; e: Exam | null; q: Quest
 
 // --- Componente principal: una prueba por pantalla ---
 
-export function CapturaGuiada({ kase, paso }: { kase: CaseWithCapture; paso?: number }) {
+// Primera pantalla del caso: quién receta. De ello depende el protocolo.
+function ElegirQuienReceta({
+  kase,
+  puedeRecetar,
+}: {
+  kase: CaseWithCapture;
+  puedeRecetar: boolean;
+}) {
+  const actual = (kase.rxRoute as RxRoute | null) ?? null;
+  return (
+    <div className="slide-wrap">
+      <div className="card slide-card">
+        <h3 style={{ margin: "0 0 4px", fontFamily: "var(--font-sora)" }}>¿Quién receta este caso?</h3>
+        <p className="muted" style={{ margin: "4px 0 10px" }}>
+          Se decide antes de empezar, porque el estudio que hay que hacer depende de ello.
+        </p>
+        <form action={chooseRxRouteAction}>
+          <input type="hidden" name="caseId" value={kase.id} />
+          {puedeRecetar ? (
+            RX_ROUTES.map((r) => (
+              <label className="chk" key={r} style={{ alignItems: "flex-start" }}>
+                <input type="radio" name="rxRoute" value={r} defaultChecked={(actual ?? "ORTOSEND") === r} required />{" "}
+                <span>
+                  {RX_ROUTE_LABEL[r]}
+                  <span className="tiny" style={{ display: "block" }}>{RX_ROUTE_HELP[r]}</span>
+                </span>
+              </label>
+            ))
+          ) : (
+            <>
+              <input type="hidden" name="rxRoute" value="ORTOSEND" />
+              <div className="note">Receta por parte del equipo de Ortosend.</div>
+            </>
+          )}
+          <div className="sp" />
+          <button type="submit" className="pri wfull">
+            {actual ? "Guardar y continuar →" : "Empezar →"}
+          </button>
+        </form>
+        {actual && (
+          <div className="row between" style={{ marginTop: 14 }}>
+            <Link className="tiny" href={`/caso/${kase.id}`}>
+              ← Volver sin cambiar
+            </Link>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Protocolo de las vías «receta propia» (con o sin segunda opinión): pendiente de definir.
+function ProtocoloPendiente({ kase }: { kase: CaseWithCapture }) {
+  const r = kase.rxRoute as RxRoute;
+  return (
+    <div className="slide-wrap">
+      <div className="card slide-card">
+        <h3 style={{ margin: "0 0 4px", fontFamily: "var(--font-sora)" }}>{RX_ROUTE_LABEL[r]}</h3>
+        <div className="note a" style={{ marginTop: 10 }}>
+          <b>Este formulario está pendiente de definir.</b> El estudio completo de Ortosend es
+          para la receta por parte del equipo de Ortosend; la receta propia, con o sin segunda
+          opinión, tendrá un formulario específico.
+        </div>
+        <div className="sp" />
+        <Link href={`/caso/${kase.id}?elegir=1`}>
+          <button className="wfull" type="button">
+            Cambiar quién receta
+          </button>
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+export function CapturaGuiada({
+  kase,
+  paso,
+  puedeRecetar = false,
+  elegir = false,
+}: {
+  kase: CaseWithCapture;
+  paso?: number;
+  puedeRecetar?: boolean; // la clínica tiene un prescriptor con colegiación verificada
+  elegir?: boolean; // volver a la pantalla de quién receta
+}) {
+  // Sin decidir quién receta no hay protocolo; y solo la vía de Ortosend usa este.
+  if (!kase.rxRoute || elegir) return <ElegirQuienReceta kase={kase} puedeRecetar={puedeRecetar} />;
+  if (kase.rxRoute !== "ORTOSEND") return <ProtocoloPendiente kase={kase} />;
+
   const cp = kase.capture;
   const q = (cp?.questionnaire as Questionnaire | null) ?? null;
   const e = (cp?.physicalExam as Exam | null) ?? null;
@@ -706,6 +796,10 @@ export function CapturaGuiada({ kase, paso }: { kase: CaseWithCapture; paso?: nu
         <div className="card">
           <div className="row between">
             <b style={{ fontFamily: "var(--font-sora)" }}>Protocolo de captura</b>
+            <span className="tiny">
+              Receta por parte del equipo de Ortosend ·{" "}
+              <Link href={`/caso/${kase.id}?elegir=1`}>cambiar</Link>
+            </span>
             <span className="pill n">
               {doneFlags.filter((d, j) => d && SLIDES[j].t !== "envio").length}/{total - 1} pruebas
             </span>
@@ -919,6 +1013,12 @@ export function CapturaGuiada({ kase, paso }: { kase: CaseWithCapture; paso?: nu
             {cl.completa ? (
               <form action={sendCaseAction}>
                 <input type="hidden" name="caseId" value={kase.id} />
+                <input type="hidden" name="paso" value={paso} />
+                <div className="sp" />
+                <div className="tiny">
+                  Vía elegida al empezar: <b>receta por parte del equipo de Ortosend</b> (·{" "}
+                  <Link href={`/caso/${kase.id}?elegir=1`}>cambiar</Link>).
+                </div>
                 <div className="sp" />
                 <button type="submit" className="pri wfull">
                   {repeat ? "Reenviar caso a prescripción" : "Enviar caso a prescripción"}
