@@ -72,11 +72,14 @@ export function RxView({
           </select>
           <input name="diagnosisDetail" placeholder="Matiz o detalle" style={{ flex: 1, minWidth: 160 }} />
         </div>
-        <label>Pauta de fabricación (orden de trabajo para el taller)</label>
+        <label>
+          Receta: cómo deben ser las plantillas, qué deben llevar y qué función tienen (orden de
+          trabajo para el taller)
+        </label>
         <textarea
           name="fabricationOrder"
-          rows={2}
-          placeholder="Tipo de plantilla, correcciones, cuñas, descargas, alza en mm…"
+          rows={3}
+          placeholder="Cómo deben ser (tipo, material, rigidez)… qué deben llevar (cuñas, descargas, alza en mm)… y qué función tienen (objetivo del tratamiento)."
         />
         <label>Pauta de uso para el paciente</label>
         <textarea

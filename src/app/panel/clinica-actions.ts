@@ -365,12 +365,21 @@ export async function sendCaseAction(formData: FormData) {
   const fromRepeat = kase!.state === "DEVUELTO_CLINICA";
   if (!["ESTUDIO_EN_CURSO", "DEVUELTO_CLINICA"].includes(kase!.state))
     fail(`/caso/${caseId}`, "El estudio no está en curso");
-  const cl = checklistOf(kase!.capture);
-  if (!cl.completa) fail(`/caso/${caseId}`, "La checklist del protocolo debe estar completa (todo en verde)");
 
   // Quién receta se eligió antes de empezar el estudio (chooseRxRouteAction).
   const rxRoute = kase!.rxRoute as RxRoute | null;
   if (!rxRoute) fail(`/caso/${caseId}?elegir=1`, "Antes de enviar hay que elegir quién receta el caso");
+  if (rxRoute === "ORTOSEND") {
+    // Estudio completo de Ortosend: checklist bloqueante, sin todo en verde no hay envío.
+    const cl = checklistOf(kase!.capture);
+    if (!cl.completa) fail(`/caso/${caseId}`, "La checklist del protocolo debe estar completa (todo en verde)");
+  } else {
+    // Receta propia (con o sin segunda opinión): las pruebas son elegibles; lo único
+    // obligatorio es que el motivo de consulta quede registrado en el caso.
+    const q = kase!.capture?.questionnaire as { motivo?: string } | null;
+    if (!q?.motivo?.trim())
+      fail(`/caso/${caseId}?paso=1`, "El motivo de consulta es obligatorio: regístralo antes de enviar");
+  }
   void back;
 
   await prisma.capture.update({ where: { caseId }, data: { completedAt: new Date() } });

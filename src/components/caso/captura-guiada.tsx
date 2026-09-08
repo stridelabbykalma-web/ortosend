@@ -721,29 +721,6 @@ function ElegirQuienReceta({
   );
 }
 
-// Protocolo de las vías «receta propia» (con o sin segunda opinión): pendiente de definir.
-function ProtocoloPendiente({ kase }: { kase: CaseWithCapture }) {
-  const r = kase.rxRoute as RxRoute;
-  return (
-    <div className="slide-wrap">
-      <div className="card slide-card">
-        <h3 style={{ margin: "0 0 4px", fontFamily: "var(--font-sora)" }}>{RX_ROUTE_LABEL[r]}</h3>
-        <div className="note a" style={{ marginTop: 10 }}>
-          <b>Este formulario está pendiente de definir.</b> El estudio completo de Ortosend es
-          para la receta por parte del equipo de Ortosend; la receta propia, con o sin segunda
-          opinión, tendrá un formulario específico.
-        </div>
-        <div className="sp" />
-        <Link href={`/caso/${kase.id}?elegir=1`}>
-          <button className="wfull" type="button">
-            Cambiar quién receta
-          </button>
-        </Link>
-      </div>
-    </div>
-  );
-}
-
 export function CapturaGuiada({
   kase,
   paso,
@@ -755,9 +732,13 @@ export function CapturaGuiada({
   puedeRecetar?: boolean; // la clínica tiene un prescriptor con colegiación verificada
   elegir?: boolean; // volver a la pantalla de quién receta
 }) {
-  // Sin decidir quién receta no hay protocolo; y solo la vía de Ortosend usa este.
+  // Sin decidir quién receta no hay protocolo.
   if (!kase.rxRoute || elegir) return <ElegirQuienReceta kase={kase} puedeRecetar={puedeRecetar} />;
-  if (kase.rxRoute !== "ORTOSEND") return <ProtocoloPendiente kase={kase} />;
+  // Receta propia (con o sin segunda opinión de Ortosend): mismo protocolo guiado,
+  // pero cualquier prueba es elegible — solo el motivo de consulta es obligatorio.
+  // El estudio completo con checklist bloqueante es el de la vía Ortosend.
+  const propio = kase.rxRoute !== "ORTOSEND";
+  const ruta = RX_ROUTE_LABEL[kase.rxRoute as RxRoute];
 
   const cp = kase.capture;
   const q = (cp?.questionnaire as Questionnaire | null) ?? null;
@@ -771,7 +752,11 @@ export function CapturaGuiada({
     ? [...kase.incidents].sort((a, b) => +b.createdAt - +a.createdAt).find((i) => i.type === "CAPTURA_INVALIDA")
     : null;
 
-  const doneFlags = SLIDES.map((s) => (s.t === "envio" ? cl.completa : slideDone(s, q, e, has)));
+  // Receta propia: para enviar basta el motivo de consulta (primera pantalla).
+  const motivoDone = slideDone(SLIDES[0], q, e, has);
+  const puedeEnviar = propio ? motivoDone : cl.completa;
+
+  const doneFlags = SLIDES.map((s) => (s.t === "envio" ? puedeEnviar : slideDone(s, q, e, has)));
   const total = SLIDES.length;
   const firstPending = doneFlags.findIndex((d, i) => !d && SLIDES[i].t !== "envio");
   const continueAt = firstPending === -1 ? total : firstPending + 1;
@@ -785,6 +770,13 @@ export function CapturaGuiada({
             <b>Caso devuelto:</b> {lastIncident?.reason ?? "repetir prueba indicada"}. Repite la
             prueba señalada y reenvía el estudio.
           </div>
+        ) : propio ? (
+          <div className="note">
+            <b>{ruta}.</b> Solo el <b>motivo de consulta</b> es obligatorio; el resto de pruebas
+            son elegibles — haz únicamente las que necesites para tu valoración (vídeos guiados de
+            8-10 s como máximo). Al enviar, la receta la rellena y firma el prescriptor de vuestra
+            clínica{kase.rxRoute === "REVISION" ? ", con la segunda opinión de Ortosend recibida" : ""}.
+          </div>
         ) : (
           <div className="note">
             Protocolo guiado: una prueba por pantalla, con guardado automático mientras escribes
@@ -795,10 +787,11 @@ export function CapturaGuiada({
         <div className="sp" />
         <div className="card">
           <div className="row between">
-            <b style={{ fontFamily: "var(--font-sora)" }}>Protocolo de captura</b>
+            <b style={{ fontFamily: "var(--font-sora)" }}>
+              {propio ? "Protocolo de receta propia" : "Protocolo de captura"}
+            </b>
             <span className="tiny">
-              Receta por parte del equipo de Ortosend ·{" "}
-              <Link href={`/caso/${kase.id}?elegir=1`}>cambiar</Link>
+              {ruta} · <Link href={`/caso/${kase.id}?elegir=1`}>cambiar</Link>
             </span>
             <span className="pill n">
               {doneFlags.filter((d, j) => d && SLIDES[j].t !== "envio").length}/{total - 1} pruebas
@@ -818,7 +811,10 @@ export function CapturaGuiada({
                 <Link href={`/caso/${kase.id}?paso=${i + 1}`} style={{ textDecoration: "none", color: "inherit" }}>
                   <CheckLine ok={doneFlags[i]}>
                     {s.title}
-                    <span className="push tiny">{doneFlags[i] ? "revisar" : "hacer →"}</span>
+                    {propio && i === 0 && !doneFlags[i] && <span className="pill a">obligatorio</span>}
+                    <span className="push tiny">
+                      {doneFlags[i] ? "revisar" : propio && i > 0 ? "elegible →" : "hacer →"}
+                    </span>
                   </CheckLine>
                 </Link>
               </div>
@@ -989,16 +985,34 @@ export function CapturaGuiada({
         {s.t === "envio" && (
           <>
             <p className="muted" style={{ margin: "4px 0 10px" }}>
-              Checklist bloqueante del protocolo: sin todo en verde no hay envío a prescripción.
+              {propio
+                ? "Receta propia: solo el motivo de consulta es obligatorio. Las demás pruebas son elegibles y se adjuntan las que hayas hecho."
+                : "Checklist bloqueante del protocolo: sin todo en verde no hay envío a prescripción."}
             </p>
-            <CheckLine ok={cl.cuestionario}>Cuestionario clínico (5 pantallas)</CheckLine>
-            <CheckLine ok={cl.exploracion}>Exploración y tests (6 pantallas)</CheckLine>
-            <CheckLine ok={cl.capturas >= CAPTURA_VISUAL.length}>
-              Vídeos y fotos {cl.capturas}/{CAPTURA_VISUAL.length} ({VIDEO_KINDS.length} vídeos de
-              marcha + {FOTO_KINDS.length} fotos de los pies de cerca)
-            </CheckLine>
-            <CheckLine ok={cl.baro}>Baropodometría (estática + dinámica múltiple)</CheckLine>
-            <CheckLine ok={cl.escaneos}>Escaneo de las espumas fenólicas</CheckLine>
+            {propio ? (
+              <>
+                <CheckLine ok={motivoDone}>Motivo de consulta y dolor (obligatorio)</CheckLine>
+                <CheckLine ok={cl.cuestionario}>Cuestionario clínico completo (elegible)</CheckLine>
+                <CheckLine ok={cl.exploracion}>Exploración y tests (elegible)</CheckLine>
+                <CheckLine ok={cl.capturas > 0}>
+                  Vídeos y fotos adjuntos: {cl.capturas}/{CAPTURA_VISUAL.length} (elegibles, máx. 10
+                  s por vídeo)
+                </CheckLine>
+                <CheckLine ok={cl.baro}>Baropodometría (elegible)</CheckLine>
+                <CheckLine ok={cl.escaneos}>Escaneo de las espumas fenólicas (elegible)</CheckLine>
+              </>
+            ) : (
+              <>
+                <CheckLine ok={cl.cuestionario}>Cuestionario clínico (5 pantallas)</CheckLine>
+                <CheckLine ok={cl.exploracion}>Exploración y tests (6 pantallas)</CheckLine>
+                <CheckLine ok={cl.capturas >= CAPTURA_VISUAL.length}>
+                  Vídeos y fotos {cl.capturas}/{CAPTURA_VISUAL.length} ({VIDEO_KINDS.length} vídeos de
+                  marcha + {FOTO_KINDS.length} fotos de los pies de cerca)
+                </CheckLine>
+                <CheckLine ok={cl.baro}>Baropodometría (estática + dinámica múltiple)</CheckLine>
+                <CheckLine ok={cl.escaneos}>Escaneo de las espumas fenólicas</CheckLine>
+              </>
+            )}
             {alertas.length > 0 && (
               <div className="note r" style={{ marginTop: 10 }}>
                 <b>Hallazgos de alerta en la exploración</b> — se envían destacados al prescriptor,
@@ -1010,26 +1024,36 @@ export function CapturaGuiada({
                 </ul>
               </div>
             )}
-            {cl.completa ? (
+            {puedeEnviar ? (
               <form action={sendCaseAction}>
                 <input type="hidden" name="caseId" value={kase.id} />
                 <input type="hidden" name="paso" value={paso} />
                 <div className="sp" />
                 <div className="tiny">
-                  Vía elegida al empezar: <b>receta por parte del equipo de Ortosend</b> (·{" "}
+                  Vía elegida al empezar: <b>{ruta.toLowerCase()}</b> (·{" "}
                   <Link href={`/caso/${kase.id}?elegir=1`}>cambiar</Link>).
+                  {propio &&
+                    (kase.rxRoute === "REVISION"
+                      ? " Ortosend valorará el estudio y devolverá su segunda opinión; después la receta la rellena y firma el prescriptor de vuestra clínica, con su identidad y colegiación puestas automáticamente desde su perfil."
+                      : " Al enviar, la receta (cómo deben ser las plantillas, qué deben llevar y qué función tienen) la rellena y firma el prescriptor de vuestra clínica, con su identidad y colegiación puestas automáticamente desde su perfil.")}
                 </div>
                 <div className="sp" />
                 <button type="submit" className="pri wfull">
-                  {repeat ? "Reenviar caso a prescripción" : "Enviar caso a prescripción"}
+                  {repeat
+                    ? "Reenviar caso a prescripción"
+                    : propio
+                      ? kase.rxRoute === "REVISION"
+                        ? "Enviar a Ortosend para la segunda opinión"
+                        : "Enviar y pasar a la receta"
+                      : "Enviar caso a prescripción"}
                 </button>
               </form>
             ) : (
               <>
                 <div className="sp" />
-                <Link href={`/caso/${kase.id}?paso=${continueAt}`}>
+                <Link href={`/caso/${kase.id}?paso=${propio ? 1 : continueAt}`}>
                   <button className="wfull" type="button">
-                    Ir a la primera prueba pendiente →
+                    {propio ? "Registrar el motivo de consulta (obligatorio) →" : "Ir a la primera prueba pendiente →"}
                   </button>
                 </Link>
               </>
