@@ -385,9 +385,9 @@ export async function sendCaseAction(formData: FormData) {
     },
   });
   const destino = {
-    CLINICA: `lo receta ${u.name} (clínica)`,
-    ORTOSEND: "prescriptor de Ortosend",
-    REVISION: `revisión de Ortosend pedida por ${u.name}; firmará la clínica`,
+    CLINICA: `receta propia de ${u.name}`,
+    ORTOSEND: "receta por parte del equipo de Ortosend",
+    REVISION: `receta propia de ${u.name} con segunda opinión de Ortosend`,
   }[rxRoute];
   await pushEvent(
     caseId,
@@ -432,7 +432,7 @@ export async function chooseRxRouteAction(formData: FormData) {
   else fail(`/caso/${caseId}?elegir=1`, "Elige quién receta este caso");
   if (kase!.rxRoute !== rxRoute) {
     await prisma.case.update({ where: { id: caseId }, data: { rxRoute, rxRequestedBy: u.id } });
-    const texto = { CLINICA: `lo recetará ${u.name} (clínica)`, ORTOSEND: "lo recetará Ortosend", REVISION: `${u.name} pedirá una segunda opinión a Ortosend` }[rxRoute];
+    const texto = { CLINICA: `receta propia de ${u.name}`, ORTOSEND: "receta por parte del equipo de Ortosend", REVISION: `receta propia de ${u.name} con segunda opinión de Ortosend` }[rxRoute];
     await pushEvent(caseId, `Quién receta: ${texto}`, u.name);
   }
   redirect(`/caso/${caseId}`);

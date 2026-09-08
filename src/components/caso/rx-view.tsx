@@ -29,7 +29,7 @@ export function RxView({
       {revisionPedida && (
         <form action={reviewBackAction} className="note a" style={{ marginTop: 10 }}>
           <input type="hidden" name="caseId" value={kase.id} />
-          <b>Revisión pedida por {requestedBy ?? "la clínica"}</b> — el caso lo firmará la clínica.
+          <b>Segunda opinión pedida por {requestedBy ?? "la clínica"}</b> — receta propia de la clínica: la firma es suya.
           Escribe tu valoración y devuélveselo; te lo puedes quedar y firmarlo tú solo si la clínica
           lo pide expresamente.
           <label>Tu valoración para la clínica</label>
@@ -41,13 +41,13 @@ export function RxView({
           />
           <div className="sp" />
           <button type="submit" className="pri">
-            Devolver la revisión a la clínica
+            Devolver la segunda opinión a la clínica
           </button>
         </form>
       )}
       {revisionRecibida && (
         <div className="note g" style={{ marginTop: 10 }}>
-          <b>Revisión de Ortosend recibida</b> — la tienes abajo, en la valoración clínica, lista
+          <b>Segunda opinión de Ortosend recibida</b> — la tienes abajo, en la valoración clínica, lista
           para completarla y firmar.
         </div>
       )}

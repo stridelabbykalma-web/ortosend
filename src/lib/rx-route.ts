@@ -16,19 +16,19 @@ export type RxRoute = "CLINICA" | "ORTOSEND" | "REVISION";
 export const RX_ROUTES: RxRoute[] = ["CLINICA", "ORTOSEND", "REVISION"];
 
 export const RX_ROUTE_LABEL: Record<RxRoute, string> = {
-  CLINICA: "Receto yo",
-  ORTOSEND: "Que lo recete el prescriptor de Ortosend",
-  REVISION: "Quiero una revisión de Ortosend antes de firmar yo",
+  CLINICA: "Receta propia",
+  ORTOSEND: "Receta por parte del equipo de Ortosend",
+  REVISION: "Receta propia con segunda opinión de Ortosend",
 };
 
 export const RX_ROUTE_HELP: Record<RxRoute, string> = {
-  CLINICA: "El caso pasa a tu cola de prescripciones y lo firmas tú.",
-  ORTOSEND: "Entra en la cola central; lo valora y firma el equipo de Ortosend.",
-  REVISION: "Ortosend lo valora y te devuelve su opinión; después lo firmas tú.",
+  CLINICA: "La valoración y la firma son tuyas.",
+  ORTOSEND: "El equipo de Ortosend valora el estudio y firma la prescripción.",
+  REVISION: "El equipo de Ortosend valora el estudio y te devuelve su opinión; la firma es tuya.",
 };
 
-// Prefijo con el que Ortosend deja su revisión en el borrador de valoración.
-export const REVISION_PREFIJO = "Revisión de Ortosend";
+// Prefijo con el que Ortosend deja su segunda opinión en el borrador de valoración.
+export const REVISION_PREFIJO = "Segunda opinión de Ortosend";
 
 // Casos que valora el equipo central: los enviados a Ortosend o para revisión,
 // y los antiguos sin ruta de clínicas sin prescriptor propio.

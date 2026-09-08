@@ -195,17 +195,17 @@ export async function draftAction(formData: FormData) {
   redirect("/panel");
 }
 
-// Revisión pedida por la clínica: Ortosend deja su valoración y devuelve el
+// Segunda opinión pedida por la clínica: Ortosend deja su valoración y devuelve el
 // caso al profesional que lo envió, que es quien firma.
 export async function reviewBackAction(formData: FormData) {
   const caseId = String(formData.get("caseId"));
   const { u, kase } = await requirePrescriberFor(caseId);
   const back = `/caso/${caseId}`;
   if (u.role !== "RECETADOR") fail(back, "Solo el equipo de Ortosend devuelve revisiones");
-  if (kase.rxRoute !== "REVISION") fail(back, "Este caso no tiene una revisión pedida");
+  if (kase.rxRoute !== "REVISION") fail(back, "Este caso no tiene una segunda opinión pedida");
   if (!["EN_PRESCRIPCION", "EN_CONTACTO"].includes(kase.state)) fail(back, "El caso no está en valoración");
   const review = String(formData.get("review") ?? "").trim();
-  if (!review) fail(back, "Escribe la valoración que devuelves a la clínica");
+  if (!review) fail(back, "Escribe la segunda opinión que devuelves a la clínica");
   await prisma.case.update({
     where: { id: caseId },
     data: {
@@ -217,7 +217,7 @@ export async function reviewBackAction(formData: FormData) {
       rxDraft: `${REVISION_PREFIJO} (${u.name}): ${review}`,
     },
   });
-  await pushEvent(caseId, `Revisión devuelta a la clínica para que firme: ${review}`, u.name);
+  await pushEvent(caseId, `Segunda opinión devuelta a la clínica para que firme: ${review}`, u.name);
   await audit(u.id, "prescription.review", `case:${kase.number}`);
-  redirect("/panel?ok=" + encodeURIComponent(`Revisión del caso #${kase.number} devuelta a la clínica`));
+  redirect("/panel?ok=" + encodeURIComponent(`Segunda opinión del caso #${kase.number} devuelta a la clínica`));
 }

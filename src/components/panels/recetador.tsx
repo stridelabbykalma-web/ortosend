@@ -24,7 +24,7 @@ export async function PanelRecetador({ user }: { user: User }) {
       <h2>Cola central de prescripción</h2>
       <div className="grid g3" style={{ margin: "14px 0" }}>
         <Kpi v={queueCount} l="Casos en cola" />
-        <Kpi v={revisiones} l="De ellos, revisiones pedidas por clínicas" />
+        <Kpi v={revisiones} l="De ellos, segundas opiniones pedidas por clínicas" />
         <Kpi v={contact.length} l="Pendientes de contacto" />
       </div>
       {mineOpen ? (

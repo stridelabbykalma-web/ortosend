@@ -701,7 +701,7 @@ function ElegirQuienReceta({
           ) : (
             <>
               <input type="hidden" name="rxRoute" value="ORTOSEND" />
-              <div className="note">Lo recetará el prescriptor de Ortosend.</div>
+              <div className="note">Receta por parte del equipo de Ortosend.</div>
             </>
           )}
           <div className="sp" />
@@ -721,7 +721,7 @@ function ElegirQuienReceta({
   );
 }
 
-// Protocolo de las vías «receto yo» y «segunda opinión»: pendiente de definir.
+// Protocolo de las vías «receta propia» (con o sin segunda opinión): pendiente de definir.
 function ProtocoloPendiente({ kase }: { kase: CaseWithCapture }) {
   const r = kase.rxRoute as RxRoute;
   return (
@@ -730,8 +730,8 @@ function ProtocoloPendiente({ kase }: { kase: CaseWithCapture }) {
         <h3 style={{ margin: "0 0 4px", fontFamily: "var(--font-sora)" }}>{RX_ROUTE_LABEL[r]}</h3>
         <div className="note a" style={{ marginTop: 10 }}>
           <b>Este formulario está pendiente de definir.</b> El estudio completo de Ortosend es
-          para los casos que receta Ortosend; para los que receta la clínica o pide una segunda
-          opinión habrá un formulario propio, más corto.
+          para la receta por parte del equipo de Ortosend; la receta propia, con o sin segunda
+          opinión, tendrá un formulario específico.
         </div>
         <div className="sp" />
         <Link href={`/caso/${kase.id}?elegir=1`}>
@@ -797,7 +797,7 @@ export function CapturaGuiada({
           <div className="row between">
             <b style={{ fontFamily: "var(--font-sora)" }}>Protocolo de captura</b>
             <span className="tiny">
-              Receta Ortosend ·{" "}
+              Receta por parte del equipo de Ortosend ·{" "}
               <Link href={`/caso/${kase.id}?elegir=1`}>cambiar</Link>
             </span>
             <span className="pill n">
@@ -1016,7 +1016,7 @@ export function CapturaGuiada({
                 <input type="hidden" name="paso" value={paso} />
                 <div className="sp" />
                 <div className="tiny">
-                  Este caso lo receta <b>el prescriptor de Ortosend</b> (elegido al empezar ·{" "}
+                  Vía elegida al empezar: <b>receta por parte del equipo de Ortosend</b> (·{" "}
                   <Link href={`/caso/${kase.id}?elegir=1`}>cambiar</Link>).
                 </div>
                 <div className="sp" />

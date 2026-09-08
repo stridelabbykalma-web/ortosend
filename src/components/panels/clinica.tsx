@@ -184,7 +184,7 @@ export async function PanelClinica({ user, tab }: { user: User; tab?: string }) 
                     <td>
                       <StatePill state={c.state} />{" "}
                       {c.rxDraft?.startsWith(REVISION_PREFIJO) && (
-                        <span className="pill g">Revisión de Ortosend recibida</span>
+                        <span className="pill g">Segunda opinión de Ortosend recibida</span>
                       )}
                     </td>
                     <td>
