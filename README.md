@@ -71,7 +71,14 @@ asociadas. Stack: **Next.js (App Router, server actions) + PostgreSQL (Prisma)**
   (profesional o administrador de la clínica). Si la clínica tiene un prescriptor con
   colegiación verificada: **receta propia**, **receta por parte del equipo de Ortosend** o
   **receta propia con segunda opinión de Ortosend**; si no, solo la receta por parte de Ortosend.
-  El estudio completo es el de la vía Ortosend; el formulario de la receta propia está por definir.
+  El estudio completo con checklist bloqueante es el de la vía Ortosend. En las vías de
+  **receta propia** (con o sin segunda opinión) el protocolo es el mismo pero **elegible**: solo
+  el motivo de consulta es obligatorio y el resto de pruebas (cuestionario completo, exploración,
+  vídeos guiados de 8-10 s, fotos, baropodometría, escaneo) se hacen solo si el profesional las
+  necesita. Al enviar, la receta — cómo deben ser las plantillas, qué deben llevar y qué función
+  tienen — la rellena y firma el prescriptor de la clínica, con identidad y colegiación puestas
+  automáticamente desde su perfil; en la vía con segunda opinión, Ortosend valora antes el
+  estudio y devuelve su opinión al borrador, y firma la clínica.
 - Cola del prescriptor de clínica y **cola central Ortosend** con
   **reparto automático** por antigüedad: al abrir un caso queda asociado; se libera al soltarlo,
   cerrar sesión o a los 45 min de inactividad.
