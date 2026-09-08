@@ -1,5 +1,5 @@
-# ============================================================
-# Instalador del puente de escaneo Ortosend — PC del escáner (Windows)
+﻿# ============================================================
+# Instalador del puente de escaneo Ortosend - PC del escáner (Windows)
 # ============================================================
 # Lo descarga el administrador de la clínica desde Panel → Puente de escaneo
 # (ya con el servidor y el token puestos) y lo ejecuta con doble clic en el
@@ -21,7 +21,7 @@ function Ok($t) { Write-Host "    $t" -ForegroundColor Green }
 $Destino = "C:\Ortosend\puente-escaneo"
 $Escaneos = "C:\Ortosend\Escaneos"
 
-Write-Host "Puente de escaneo Ortosend — instalación" -ForegroundColor Yellow
+Write-Host "Puente de escaneo Ortosend - instalación" -ForegroundColor Yellow
 Write-Host "Servidor: $Servidor"
 
 # --- 1. Node ---------------------------------------------------------------
@@ -38,7 +38,7 @@ $node = NodeExe
 if ($node) {
   Ok "Node ya instalado: $(& $node -v)"
 } else {
-  Write-Host "    Node no está instalado. Instalando (puede tardar un par de minutos)…"
+  Write-Host "    Node no está instalado. Instalando (puede tardar un par de minutos)..."
   $instalado = $false
   if (Get-Command winget -ErrorAction SilentlyContinue) {
     try {
