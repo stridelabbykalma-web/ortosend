@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { Capture, Case, Incident, MediaAsset, Patient } from "@prisma/client";
 import { checklistOf } from "@/lib/cases";
-import { CAPTURA_VISUAL, FOTO_KINDS, SCAN_KIND, VIDEO_KINDS } from "@/lib/format";
+import { BARO_KINDS, CAPTURA_VISUAL, FOTO_KINDS, SCAN_KIND, VIDEO_KINDS } from "@/lib/format";
 import {
   ACTIVIDAD_OPTS,
   ANTECEDENTES_OPTS,
@@ -756,11 +756,17 @@ export function CapturaGuiada({
   // El autoguardado crea la clave «motivo» con la primera tecla, así que se exige
   // que tenga texto: es lo mismo que comprueba el servidor al enviar.
   const motivoDone = !!q?.motivo?.trim();
-  const puedeEnviar = propio ? motivoDone : cl.completa;
+  // Receta propia: obligatorios el motivo de consulta, la baropodometría (estática y
+  // dinámica) y el escaneo de las espumas; el resto de pruebas son elegibles.
+  const obligatoria = (s: Slide, i: number) =>
+    i === 0 || (s.t === "file" && (s.kind === SCAN_KIND || BARO_KINDS.some(([k]) => k === s.kind)));
+  const puedeEnviar = propio ? motivoDone && cl.baro && cl.escaneos : cl.completa;
 
   const doneFlags = SLIDES.map((s) => (s.t === "envio" ? puedeEnviar : slideDone(s, q, e, has)));
   const total = SLIDES.length;
-  const firstPending = doneFlags.findIndex((d, i) => !d && SLIDES[i].t !== "envio");
+  const firstPending = doneFlags.findIndex(
+    (d, i) => !d && SLIDES[i].t !== "envio" && (!propio || obligatoria(SLIDES[i], i))
+  );
   const continueAt = firstPending === -1 ? total : firstPending + 1;
 
   // --- Índice (sin ?paso): resumen del protocolo y continuar donde se quedó ---
@@ -774,9 +780,10 @@ export function CapturaGuiada({
           </div>
         ) : propio ? (
           <div className="note">
-            <b>{ruta}.</b> Solo el <b>motivo de consulta</b> es obligatorio; el resto de pruebas
-            son elegibles — haz únicamente las que necesites para tu valoración (vídeos guiados de
-            8-10 s como máximo). Al enviar, la receta la rellena y firma el prescriptor de vuestra
+            <b>{ruta}.</b> Obligatorios: el <b>motivo de consulta</b>, la{" "}
+            <b>baropodometría</b> (estática y dinámica múltiple) y el <b>escaneo de las espumas</b>.
+            El resto de pruebas son elegibles — haz únicamente las que necesites para tu valoración
+            (vídeos guiados de 8-10 s como máximo). Al enviar, la receta la rellena y firma el prescriptor de vuestra
             clínica{kase.rxRoute === "REVISION" ? ", con la segunda opinión de Ortosend recibida" : ""}.
           </div>
         ) : (
@@ -813,9 +820,11 @@ export function CapturaGuiada({
                 <Link href={`/caso/${kase.id}?paso=${i + 1}`} style={{ textDecoration: "none", color: "inherit" }}>
                   <CheckLine ok={doneFlags[i]}>
                     {s.title}
-                    {propio && i === 0 && !doneFlags[i] && <span className="pill a">obligatorio</span>}
+                    {propio && obligatoria(s, i) && !doneFlags[i] && (
+                      <span className="pill a">obligatorio</span>
+                    )}
                     <span className="push tiny">
-                      {doneFlags[i] ? "revisar" : propio && i > 0 ? "elegible →" : "hacer →"}
+                      {doneFlags[i] ? "revisar" : propio && !obligatoria(s, i) ? "elegible →" : "hacer →"}
                     </span>
                   </CheckLine>
                 </Link>
@@ -988,7 +997,7 @@ export function CapturaGuiada({
           <>
             <p className="muted" style={{ margin: "4px 0 10px" }}>
               {propio
-                ? "Receta propia: solo el motivo de consulta es obligatorio. Las demás pruebas son elegibles y se adjuntan las que hayas hecho."
+                ? "Receta propia: son obligatorios el motivo de consulta, la baropodometría y el escaneo de las espumas. Las demás pruebas son elegibles y se adjuntan las que hayas hecho."
                 : "Checklist bloqueante del protocolo: sin todo en verde no hay envío a prescripción."}
             </p>
             {propio ? (
@@ -1000,8 +1009,8 @@ export function CapturaGuiada({
                   Vídeos y fotos adjuntos: {cl.capturas}/{CAPTURA_VISUAL.length} (elegibles, máx. 10
                   s por vídeo)
                 </CheckLine>
-                <CheckLine ok={cl.baro}>Baropodometría (elegible)</CheckLine>
-                <CheckLine ok={cl.escaneos}>Escaneo de las espumas fenólicas (elegible)</CheckLine>
+                <CheckLine ok={cl.baro}>Baropodometría estática + dinámica múltiple (obligatoria)</CheckLine>
+                <CheckLine ok={cl.escaneos}>Escaneo de las espumas fenólicas (obligatorio)</CheckLine>
               </>
             ) : (
               <>
@@ -1053,9 +1062,9 @@ export function CapturaGuiada({
             ) : (
               <>
                 <div className="sp" />
-                <Link href={`/caso/${kase.id}?paso=${propio ? 1 : continueAt}`}>
+                <Link href={`/caso/${kase.id}?paso=${continueAt}`}>
                   <button className="wfull" type="button">
-                    {propio ? "Registrar el motivo de consulta (obligatorio) →" : "Ir a la primera prueba pendiente →"}
+                    {propio ? "Ir a la primera prueba obligatoria pendiente →" : "Ir a la primera prueba pendiente →"}
                   </button>
                 </Link>
               </>

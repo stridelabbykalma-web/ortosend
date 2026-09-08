@@ -72,10 +72,10 @@ asociadas. Stack: **Next.js (App Router, server actions) + PostgreSQL (Prisma)**
   colegiación verificada: **receta propia**, **receta por parte del equipo de Ortosend** o
   **receta propia con segunda opinión de Ortosend**; si no, solo la receta por parte de Ortosend.
   El estudio completo con checklist bloqueante es el de la vía Ortosend. En las vías de
-  **receta propia** (con o sin segunda opinión) el protocolo es el mismo pero **elegible**: solo
-  el motivo de consulta es obligatorio y el resto de pruebas (cuestionario completo, exploración,
-  vídeos guiados de 8-10 s, fotos, baropodometría, escaneo) se hacen solo si el profesional las
-  necesita. Al enviar, la receta — cómo deben ser las plantillas, qué deben llevar y qué función
+  **receta propia** (con o sin segunda opinión) el protocolo es el mismo pero **elegible**: son
+  obligatorios el motivo de consulta, la baropodometría (estática + dinámica múltiple) y el
+  escaneo de las espumas; el resto (cuestionario completo, exploración, vídeos guiados de 8-10 s,
+  fotos) se hace solo si el profesional lo necesita. Al enviar, la receta — cómo deben ser las plantillas, qué deben llevar y qué función
   tienen — la rellena y firma el prescriptor de la clínica, con identidad y colegiación puestas
   automáticamente desde su perfil; en la vía con segunda opinión, Ortosend valora antes el
   estudio y devuelve su opinión al borrador, y firma la clínica.
