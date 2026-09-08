@@ -91,11 +91,16 @@ function leerConfig() {
 // golpe todo el historial de la clínica.
 const PRIMERA_VEZ_HORAS = 24;
 function leerEstado() {
+  let estado;
   try {
-    return JSON.parse(fs.readFileSync(ESTADO_PATH, "utf8").replace(/^\uFEFF/, ""));
+    estado = JSON.parse(fs.readFileSync(ESTADO_PATH, "utf8").replace(/^\uFEFF/, ""));
   } catch {
-    return { subidos: {}, instaladoEn: Date.now() };
+    estado = { subidos: {} };
   }
+  // Estado de una versión anterior (sin fecha de instalación): cuenta desde hoy.
+  if (!estado.instaladoEn) estado.instaladoEn = Date.now();
+  if (!estado.subidos) estado.subidos = {};
+  return estado;
 }
 function demasiadoAntiguo(estado, mtime) {
   return !!estado.instaladoEn && mtime < estado.instaladoEn - PRIMERA_VEZ_HORAS * 3600 * 1000;
