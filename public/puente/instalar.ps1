@@ -1,7 +1,7 @@
 ﻿# ============================================================
 # Instalador del puente de escaneo Ortosend - PC del escáner (Windows)
 # ============================================================
-# Lo descarga el administrador de la clínica desde Panel → Puente de escaneo
+# Lo descarga el administrador de la clínica desde Panel -> Puente de escaneo
 # (ya con el servidor y el token puestos) y lo ejecuta con doble clic en el
 # PC donde está Revo Scan. Hace todo lo que haría una persona:
 #   1. Instala Node (si no está).
@@ -88,7 +88,7 @@ if ($carpetaRevo) {
   Ok "Revo Scan guarda los escaneos en: $carpetaRevo"
 } else {
   Write-Host "    No he encontrado la carpeta de Revo Scan (¿está instalado en este PC?)." -ForegroundColor Yellow
-  Write-Host "    En Revo Scan: Preferencias → ruta de proyectos. Pégala aquí, o deja vacío para configurarla después:"
+  Write-Host "    En Revo Scan: Preferencias -> ruta de proyectos. Pégala aquí, o deja vacío para configurarla después:"
   $carpetaRevo = Read-Host "    Carpeta de Revo Scan"
 }
 $config = [ordered]@{
