@@ -368,24 +368,18 @@ export async function sendCaseAction(formData: FormData) {
   const cl = checklistOf(kase!.capture);
   if (!cl.completa) fail(`/caso/${caseId}`, "La checklist del protocolo debe estar completa (todo en verde)");
 
-  // Quién receta: lo elige quien envía. Solo un prescriptor con colegiación
-  // verificada puede quedárselo o pedir revisión; el resto envía a Ortosend.
-  const profile = await prisma.professionalProfile.findUnique({ where: { userId: u.id } });
-  const puedeRecetar = !!profile?.canPrescribe && !!profile.verifiedAt;
-  const pedida = String(formData.get("rxRoute") ?? "");
-  let rxRoute: RxRoute;
-  if (!puedeRecetar) rxRoute = "ORTOSEND";
-  else if (RX_ROUTES.includes(pedida as RxRoute)) rxRoute = pedida as RxRoute;
-  else fail(back, "Elige quién receta este caso");
+  // Quién receta se eligió antes de empezar el estudio (chooseRxRouteAction).
+  const rxRoute = kase!.rxRoute as RxRoute | null;
+  if (!rxRoute) fail(`/caso/${caseId}?elegir=1`, "Antes de enviar hay que elegir quién receta el caso");
+  void back;
 
   await prisma.capture.update({ where: { caseId }, data: { completedAt: new Date() } });
   await prisma.case.update({
     where: { id: caseId },
     data: {
       state: "EN_PRESCRIPCION",
-      rxRoute,
-      rxRequestedBy: u.id,
-      assignedTo: rxRoute === "CLINICA" ? u.id : null,
+      rxRequestedBy: kase!.rxRequestedBy ?? u.id,
+      assignedTo: rxRoute === "CLINICA" ? (kase!.rxRequestedBy ?? u.id) : null,
       openBy: null,
       openAt: null,
     },
@@ -415,4 +409,31 @@ export async function sendCaseAction(formData: FormData) {
         `Caso #${kase!.number} enviado a ${rxRoute === "REVISION" ? "Ortosend para revisión" : "prescripción de Ortosend"}`
       )
   );
+}
+
+// Quién receta se decide ANTES de empezar el estudio, porque el protocolo
+// depende de ello: si receta Ortosend se hace el estudio completo; si receta
+// la clínica o pide una segunda opinión, el formulario es otro (pendiente).
+// Solo un prescriptor con colegiación verificada puede quedárselo o pedir
+// revisión; el resto envía a Ortosend.
+export async function chooseRxRouteAction(formData: FormData) {
+  const u = await requireClinicStaff();
+  const caseId = String(formData.get("caseId"));
+  const kase = await prisma.case.findUnique({ where: { id: caseId } });
+  if (!kase || kase.clinicId !== u.clinicId) fail("/panel", "Caso no accesible");
+  if (!["CITA_RESERVADA", "ESTUDIO_EN_CURSO", "DEVUELTO_CLINICA"].includes(kase!.state))
+    fail(`/caso/${caseId}`, "El caso ya está enviado: no se puede cambiar quién receta");
+  const profile = await prisma.professionalProfile.findUnique({ where: { userId: u.id } });
+  const puedeRecetar = !!profile?.canPrescribe && !!profile.verifiedAt;
+  const pedida = String(formData.get("rxRoute") ?? "");
+  let rxRoute: RxRoute;
+  if (!puedeRecetar) rxRoute = "ORTOSEND";
+  else if (RX_ROUTES.includes(pedida as RxRoute)) rxRoute = pedida as RxRoute;
+  else fail(`/caso/${caseId}?elegir=1`, "Elige quién receta este caso");
+  if (kase!.rxRoute !== rxRoute) {
+    await prisma.case.update({ where: { id: caseId }, data: { rxRoute, rxRequestedBy: u.id } });
+    const texto = { CLINICA: `lo recetará ${u.name} (clínica)`, ORTOSEND: "lo recetará Ortosend", REVISION: `${u.name} pedirá una segunda opinión a Ortosend` }[rxRoute];
+    await pushEvent(caseId, `Quién receta: ${texto}`, u.name);
+  }
+  redirect(`/caso/${caseId}`);
 }

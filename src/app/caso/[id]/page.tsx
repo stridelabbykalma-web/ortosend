@@ -20,12 +20,12 @@ export default async function CasoPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string; ok?: string; doc?: string; paso?: string }>;
+  searchParams: Promise<{ error?: string; ok?: string; doc?: string; paso?: string; elegir?: string }>;
 }) {
   const user = await getSessionUser();
   if (!user) redirect("/login");
   const { id } = await params;
-  const { error, ok, doc, paso } = await searchParams;
+  const { error, ok, doc, paso, elegir } = await searchParams;
   const kase = await prisma.case.findUnique({
     where: { id },
     include: {
@@ -74,7 +74,7 @@ export default async function CasoPage({
     const pasoNum = paso ? Number(paso) || undefined : undefined;
     inner = (
       <>
-        <CapturaGuiada kase={k} paso={pasoNum} puedeRecetar={puedeRecetar} />
+        <CapturaGuiada kase={k} paso={pasoNum} puedeRecetar={puedeRecetar} elegir={elegir === "1"} />
         {!pasoNum && <Historial events={k.events} />}
       </>
     );
