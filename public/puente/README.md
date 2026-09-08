@@ -11,6 +11,15 @@ exporta, no crea carpetas ni pone nombres.
 
 ## Cómo sabe de qué paciente es
 
+Por este orden, y solo cuando no hay duda:
+
+1. **El nombre del proyecto en Revo Scan** lleva el número de un caso abierto
+   (p. ej. «Pere Vidal 123» o «#123»).
+2. **El nombre del proyecto es el nombre de un paciente** con estudio abierto en
+   la clínica. Por eso lo natural es ponerle al proyecto el nombre del paciente
+   al crearlo en Revo Scan: se asocia aunque nadie tenga el caso abierto.
+3. Lo que sigue:
+
 Revo Scan no sabe nada de Ortosend; la asociación la hace el servidor. El
 profesional tiene abierto en la app el caso del paciente, en el paso «Escaneo
 de las espumas»: ese caso está *esperando escaneo* y el archivo que llega en
@@ -21,12 +30,14 @@ confirma con un toque. Nunca se asigna a ciegas.
 
 ## Qué vigila
 
-- `carpetaRevoScan` — la carpeta donde Revo Scan guarda los escaneos:
-  - **Revo Scan 6** («un escaneo, un archivo»): sube cada archivo de escaneo.
-  - **Revo Scan 5**: cada carpeta de proyecto (la que contiene el `.revo`) se
-    empaqueta en un ZIP y se sube. Por defecto es
-    `C:\Users\<usuario>\AppData\Roaming\RevoScan5\Projects` (Preferencias de
-    Revo Scan → ruta de proyectos).
+- `carpetaRevoScan` — la carpeta donde Revo Scan guarda los escaneos. No
+  depende de cómo la organice cada versión: en el primer nivel, **cualquier
+  carpeta nueva** es un escaneo (se empaqueta en ZIP con el nombre del
+  proyecto leído de su índice `.revo`) y **cualquier archivo nuevo** de más de
+  200 KB también (Revo Scan 6: «un escaneo, un archivo»). Si la carpeta
+  vigilada contiene a su vez una `Projects`, se baja a ella. Por defecto,
+  `C:\Users\<usuario>\AppData\Roaming\RevoScan5\Projects`; en Revo Scan,
+  Preferencias → ruta de proyectos. Al arrancar, la ventana lista lo que hay.
   - Un escaneo se sube cuando lleva 45 s sin cambiar nada (Revo Scan ha
     terminado de escribir). Si después cambia (se fusiona, se malla), se sube
     otra vez como versión nueva; el taller ve todas.

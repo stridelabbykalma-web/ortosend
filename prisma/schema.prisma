@@ -149,6 +149,7 @@ model ScanUpload {
   agent      ScanAgent? @relation(fields: [agentId], references: [id])
   uploadedBy String                 // puente (nombre del equipo) o usuario
   filename   String
+  label      String?                // nombre del proyecto en Revo Scan (lo pone el profesional)
   mime       String
   sizeBytes  Int                    // tamaño original del mesh
   encoding   String?                // "gzip": se guarda comprimido y se sirve con Content-Encoding

@@ -25,22 +25,37 @@ export const SCAN_MIME: Record<string, string> = {
   revox: "application/octet-stream",
   revo: "application/octet-stream",
   zip: "application/zip",
+  // Cualquier otro archivo que deje Revo Scan (formatos de versiones nuevas):
+  // se guarda tal cual y el taller lo abre en su Revo Scan.
+  bin: "application/octet-stream",
 };
+const MESH_EXTS = ["stl", "obj", "ply", "glb", "gltf", "3mf", "asc"];
 export const SCAN_EXTS = Object.keys(SCAN_MIME);
 export const SCAN_ACCEPT = SCAN_EXTS.map((e) => `.${e}`).join(",");
 
 // Escaneo en bruto (para abrir en Revo Scan) o mesh ya exportado.
 export function esProyecto(filename: string) {
   const ext = scanExt(filename);
-  return ext === "revox" || ext === "revo" || ext === "zip";
+  return !!ext && !MESH_EXTS.includes(ext);
 }
 export function tipoEscaneo(filename: string) {
   return esProyecto(filename) ? "Proyecto Revo Scan (abrir en Revo Scan → Un clic → Exportar)" : "Mesh exportado";
 }
 
 export function scanExt(filename: string): string | null {
-  const ext = filename.toLowerCase().split(".").pop() ?? "";
-  return ext in SCAN_MIME ? ext : null;
+  const partes = filename.toLowerCase().split(".");
+  if (partes.length < 2) return "bin"; // sin extensión: escaneo en bruto
+  const ext = partes.pop() ?? "";
+  if (ext in SCAN_MIME) return ext;
+  // Documentos y basura del sistema no son escaneos.
+  if (/^(txt|log|ini|json|xml|tmp|lnk|pdf|docx?|xlsx?|jpe?g|png|gif|mp4|exe|msi|bat|ps1)$/.test(ext)) return null;
+  return "bin";
+}
+
+// Nombre del proyecto tal y como lo tecleó el profesional en Revo Scan.
+export function safeLabel(t: unknown): string | null {
+  const v = String(t ?? "").replace(/[\x00-\x1f]/g, "").trim().slice(0, 120);
+  return v || null;
 }
 
 // Nombre de archivo seguro para el evento del caso y la descarga.

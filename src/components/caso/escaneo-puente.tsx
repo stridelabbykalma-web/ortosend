@@ -17,7 +17,7 @@ const hace = (iso: string) => {
 };
 
 type Escaneo = { id: string; archivo: string; bytes: number; at: string };
-type Bandeja = { id: string; filename: string; sizeBytes: number; receivedAt: string; uploadedBy: string };
+type Bandeja = { id: string; filename: string; label: string | null; sizeBytes: number; receivedAt: string; uploadedBy: string };
 type Estado = { hecho: boolean; escaneos: Escaneo[]; bandeja: Bandeja[]; puente: boolean };
 
 // Cada cuánto se pregunta al servidor si el escaneo ya ha llegado (y se renueva
@@ -160,7 +160,8 @@ export function EscaneoPuente({
             {est.bandeja.map((b) => (
               <li key={b.id} className="row between" style={{ gap: 8, alignItems: "center", marginTop: 6 }}>
                 <span>
-                  {b.filename} · {fmtMB(b.sizeBytes)} · {hace(b.receivedAt)} · {b.uploadedBy}
+                  {b.label ? <b>{b.label}</b> : b.filename} · {fmtMB(b.sizeBytes)} · {hace(b.receivedAt)} ·{" "}
+                  {b.uploadedBy}
                 </span>
                 <button type="button" className="btn" disabled={ocupado} onClick={() => asociar(b.id)}>
                   Es de {paciente.split(" ")[0]}
@@ -176,8 +177,9 @@ export function EscaneoPuente({
           {est.puente ? (
             <>
               <b>Esperando el escaneo…</b> Escanea con Revo Scan y pulsa Parar. El escaneo llega
-              aquí solo, asociado a <b>{paciente}</b>; el taller lo procesa. No cierres esta pantalla
-              mientras escaneas.
+              aquí solo, asociado a <b>{paciente}</b>; el taller lo procesa. Consejo: al crear el
+              proyecto en Revo Scan, ponle el nombre del paciente (o el número de caso #{caso}) y se
+              asociará aunque esta pantalla no esté abierta.
             </>
           ) : (
             <>

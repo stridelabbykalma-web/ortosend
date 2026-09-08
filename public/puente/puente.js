@@ -193,28 +193,86 @@ async function firmaCarpeta(dir) {
   return { bytes, mtime: Math.round(mtime), archivos, reciente: Math.max(mtime, creado) };
 }
 
-// Escaneos en bruto en la carpeta de Revo Scan, a cualquier profundidad:
-// proyectos (carpetas que contienen su índice .revo; Revo Scan puede meter
-// una subcarpeta "Projects" por medio) y archivos .revox sueltos.
-const PROFUNDIDAD_MAX = 5;
-async function escaneosEnBruto(dir, nivel = 0, out = []) {
-  if (nivel > PROFUNDIDAD_MAX) return out;
+// Escaneos en bruto en la carpeta de Revo Scan. No se depende de cómo la
+// organiza cada versión de Revo Scan: en el primer nivel, cualquier carpeta
+// es un escaneo (va en zip) y cualquier archivo de más de MIN_ARCHIVO también
+// (Revo Scan 6 guarda «un escaneo, un archivo»). Si la carpeta vigilada es un
+// nivel por encima (p. ej. contiene "Projects"), se baja hasta encontrar las
+// carpetas que llevan su índice .revo.
+const MIN_ARCHIVO = 200 * 1024;
+const IGNORAR = /^(desktop\.ini|thumbs\.db|\.ds_store|.*\.(txt|log|ini|json|xml|tmp|lnk))$/i;
+async function escaneosEnBruto(dir) {
+  const out = [];
   let entradas;
   try {
     entradas = await fsp.readdir(dir, { withFileTypes: true });
   } catch {
     return out;
   }
-  if (nivel > 0 && entradas.some((e) => e.isFile() && PROJECT_INDEX.test(e.name))) {
-    out.push({ tipo: "proyecto", ruta: dir });
-    return out; // dentro de un proyecto no se busca más
-  }
   for (const e of entradas) {
     const completo = path.join(dir, e.name);
-    if (e.isDirectory()) await escaneosEnBruto(completo, nivel + 1, out);
-    else if (RAW_EXTS.includes(path.extname(e.name).toLowerCase())) out.push({ tipo: "archivo", ruta: completo });
+    if (e.isDirectory()) {
+      let hijos = [];
+      try {
+        hijos = await fsp.readdir(completo, { withFileTypes: true });
+      } catch {
+        continue;
+      }
+      const tieneIndice = hijos.some((h) => h.isFile() && PROJECT_INDEX.test(h.name));
+      // Carpeta contenedora (p. ej. "Projects"): dentro hay carpetas con .revo
+      const contenedora = !tieneIndice && (await esContenedora(completo, hijos));
+      if (contenedora) out.push(...(await escaneosEnBruto(completo)));
+      else out.push({ tipo: "proyecto", ruta: completo });
+    } else if (e.isFile() && !IGNORAR.test(e.name)) {
+      try {
+        const st = await fsp.stat(completo);
+        if (st.size >= MIN_ARCHIVO || RAW_EXTS.includes(path.extname(e.name).toLowerCase()))
+          out.push({ tipo: "archivo", ruta: completo });
+      } catch {
+        // borrado entre medias
+      }
+    }
   }
   return out;
+}
+async function esContenedora(dir, hijos) {
+  for (const h of hijos) {
+    if (!h.isDirectory()) continue;
+    try {
+      const nietos = await fsp.readdir(path.join(dir, h.name));
+      if (nietos.some((n) => PROJECT_INDEX.test(n))) return true;
+    } catch {
+      // sin acceso
+    }
+  }
+  return false;
+}
+
+// Nombre del proyecto tal y como lo tecleó el profesional en Revo Scan: se
+// busca en el índice .revo (JSON) y, si no, se usa el nombre de la carpeta o
+// del archivo. Con él el servidor asocia el escaneo al paciente.
+async function nombreProyecto(esc) {
+  const base = path.basename(esc.ruta).replace(/\.[^.]+$/, "");
+  if (esc.tipo !== "proyecto") return base;
+  try {
+    const hijos = await fsp.readdir(esc.ruta);
+    const idx = hijos.find((h) => PROJECT_INDEX.test(h));
+    if (!idx) return base;
+    const json = JSON.parse((await fsp.readFile(path.join(esc.ruta, idx), "utf8")).replace(/^\uFEFF/, ""));
+    const claves = ["name", "projectName", "project_name", "ProjectName", "title", "displayName", "alias"];
+    const buscar = (o, nivel = 0) => {
+      if (!o || typeof o !== "object" || nivel > 3) return null;
+      for (const k of claves) if (typeof o[k] === "string" && o[k].trim()) return o[k].trim();
+      for (const v of Object.values(o)) {
+        const r = buscar(v, nivel + 1);
+        if (r) return r;
+      }
+      return null;
+    };
+    return buscar(json) || base;
+  } catch {
+    return base;
+  }
 }
 
 // --- Subida ---------------------------------------------------------------
@@ -228,12 +286,12 @@ async function comprimir(archivo) {
 // Subida directa al almacén (R2) con URL firmada: el archivo no pasa por el
 // servidor de Ortosend, así que no hay límite de tamaño. Si el servidor no
 // tiene R2, lo manda entero por /api/scan/ingest.
-async function subirArchivo(cfg, { rutaLocal, nombre, bytesOriginal, encoding }) {
+async function subirArchivo(cfg, { rutaLocal, nombre, bytesOriginal, encoding, proyecto }) {
   const bytesAlmacenados = (await fsp.stat(rutaLocal)).size;
   const plan = await api(cfg, "/api/scan/subida", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ nombre, bytes: bytesOriginal, ...(encoding ? { encoding, storedBytes: bytesAlmacenados } : {}) }),
+    body: JSON.stringify({ nombre, bytes: bytesOriginal, proyecto, ...(encoding ? { encoding, storedBytes: bytesAlmacenados } : {}) }),
   });
   if (!plan.ok) return plan;
 
@@ -262,6 +320,7 @@ async function subirArchivo(cfg, { rutaLocal, nombre, bytesOriginal, encoding })
   const form = new FormData();
   form.append("nombre", nombre);
   form.append("bytes", String(bytesOriginal));
+  if (proyecto) form.append("proyecto", proyecto);
   if (encoding) form.append("encoding", encoding);
   form.append("file", new Blob([await fsp.readFile(rutaLocal)]), nombre);
   return api(cfg, "/api/scan/ingest", { method: "POST", body: form });
@@ -316,7 +375,7 @@ async function cicloMesh(cfg, estado, tamanos) {
     const gz = await comprimir(archivo);
     try {
       log(`  comprimido: ${MB(st.size)} → ${MB(gz.bytes)}`);
-      const r = await subirArchivo(cfg, { rutaLocal: gz.tmp, nombre, bytesOriginal: st.size, encoding: "gzip" });
+      const r = await subirArchivo(cfg, { rutaLocal: gz.tmp, nombre, bytesOriginal: st.size, encoding: "gzip", proyecto: nombre.replace(/\.[^.]+$/, "") });
       anotar(estado, clave, r, nombre);
     } catch (e) {
       log(`Fallo de red al subir ${nombre}: ${e.message}. Se reintenta.`);
@@ -333,6 +392,7 @@ async function cicloBruto(cfg, estado, vistos) {
     if (!firma || firma.bytes === 0) continue;
     const clave = `${esc.ruta}|${firma.bytes}|${firma.mtime}`;
     if (estado.subidos[clave]) continue;
+    const proyecto = await nombreProyecto(esc);
     if (demasiadoAntiguo(estado, firma.reciente)) {
       estado.subidos[clave] = { at: new Date().toISOString(), descartado: "anterior a la instalación" };
       guardarEstado(estado);
@@ -341,7 +401,7 @@ async function cicloBruto(cfg, estado, vistos) {
     // Espera a que nada cambie durante ESTABLE_BRUTO_MS.
     const visto = vistos.get(esc.ruta);
     if (!visto || visto.clave !== clave) {
-      if (!visto) log(`Detectado ${esc.tipo} ${path.basename(esc.ruta)} (${MB(firma.bytes)}): esperando a que Revo Scan termine de escribirlo...`);
+      if (!visto) log(`Detectado ${esc.tipo} "${proyecto}" (${path.basename(esc.ruta)}, ${MB(firma.bytes)}): esperando a que Revo Scan termine de escribirlo...`);
       vistos.set(esc.ruta, { clave, desde: Date.now() });
       continue;
     }
@@ -354,7 +414,7 @@ async function cicloBruto(cfg, estado, vistos) {
         log(`Empaquetando proyecto ${nombreBase} (${firma.archivos} archivos, ${MB(firma.bytes)})…`);
         const bytesZip = await zipCarpeta(esc.ruta, tmp);
         log(`  zip: ${MB(bytesZip)}. Subiendo…`);
-        const r = await subirArchivo(cfg, { rutaLocal: tmp, nombre: `${nombreBase}.zip`, bytesOriginal: bytesZip, encoding: null });
+        const r = await subirArchivo(cfg, { rutaLocal: tmp, nombre: `${nombreBase}.zip`, bytesOriginal: bytesZip, encoding: null, proyecto });
         anotar(estado, clave, r, `proyecto ${nombreBase}`);
       } catch (e) {
         log(`Fallo al subir el proyecto ${nombreBase}: ${e.message}. Se reintenta.`);
@@ -364,7 +424,7 @@ async function cicloBruto(cfg, estado, vistos) {
     } else {
       try {
         log(`Subiendo escaneo ${nombreBase} (${MB(firma.bytes)})…`);
-        const r = await subirArchivo(cfg, { rutaLocal: esc.ruta, nombre: nombreBase, bytesOriginal: firma.bytes, encoding: null });
+        const r = await subirArchivo(cfg, { rutaLocal: esc.ruta, nombre: nombreBase, bytesOriginal: firma.bytes, encoding: null, proyecto });
         anotar(estado, clave, r, nombreBase);
       } catch (e) {
         log(`Fallo al subir ${nombreBase}: ${e.message}. Se reintenta.`);
@@ -409,8 +469,17 @@ async function main() {
   setInterval(() => saludar(cfg).catch((e) => log("Error:", e.message)), SALUDO_MS);
 
   if (cfg.carpetaRevoScan) {
+    let entradas = [];
+    try {
+      entradas = await fsp.readdir(cfg.carpetaRevoScan, { withFileTypes: true });
+    } catch {
+      log(`AVISO: la carpeta de Revo Scan no existe o no se puede leer: ${cfg.carpetaRevoScan}`);
+    }
+    log(`Dentro de la carpeta de Revo Scan hay ${entradas.length} elemento(s):`);
+    for (const e of entradas.slice(0, 12)) log(`   ${e.isDirectory() ? "[carpeta]" : "[archivo]"} ${e.name}`);
+    if (entradas.length > 12) log(`   ... y ${entradas.length - 12} más`);
     const vistosAhora = await escaneosEnBruto(cfg.carpetaRevoScan);
-    log(`Escaneos en la carpeta de Revo Scan ahora mismo: ${vistosAhora.length} (los anteriores a la instalación no se suben; los nuevos, en cuanto lleven ${ESTABLE_BRUTO_MS / 1000} s sin cambios)`);
+    log(`Escaneos reconocidos: ${vistosAhora.length}. Lo anterior a la instalación no se sube; lo nuevo, en cuanto lleve ${ESTABLE_BRUTO_MS / 1000} s sin cambios.`);
   }
 
   // Bucle secuencial: nunca hay dos subidas a la vez desde el mismo PC.

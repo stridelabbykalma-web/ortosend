@@ -5,7 +5,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { actorOf } from "@/lib/escaneos";
-import { SCAN_MIME, SCAN_SERVER_MAX_BYTES, safeFilename, scanExt } from "@/lib/scan";
+import { SCAN_MIME, SCAN_SERVER_MAX_BYTES, safeFilename, safeLabel, scanExt } from "@/lib/scan";
 import { presignPut, r2Configured } from "@/lib/storage";
 
 export const runtime = "nodejs";
@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
 export async function POST(req: Request) {
   const actor = await actorOf(req);
   if (!actor) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-  let body: { nombre?: unknown; bytes?: unknown; encoding?: unknown; storedBytes?: unknown };
+  let body: { nombre?: unknown; bytes?: unknown; encoding?: unknown; storedBytes?: unknown; proyecto?: unknown };
   try {
     body = await req.json();
   } catch {
@@ -48,6 +48,7 @@ export async function POST(req: Request) {
       agentId: actor.agentId,
       uploadedBy: actor.name,
       filename: nombre,
+      label: safeLabel(body.proyecto),
       mime,
       sizeBytes: bytes,
       encoding,
