@@ -7,7 +7,7 @@ import { requireRole } from "@/lib/auth";
 import { audit, pushEvent } from "@/lib/cases";
 import { MEDIA_LABEL, FOTO_KINDS, VIDEO_KINDS } from "@/lib/format";
 import { sanitizeHelbing } from "@/lib/helbing";
-import { sanitizeMarcha } from "@/lib/marcha";
+import { marchaDesdeInformes, sanitizeMarcha, type MarchaInforme } from "@/lib/marcha";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -104,6 +104,27 @@ export async function POST(req: Request) {
       },
     });
   });
+
+  // Vídeos posterior/anterior con análisis: rellenan el apartado «Análisis de la
+  // marcha» de la exploración (patrón, ángulo de paso, retropié, observaciones).
+  const marchaMeta = (meta as { marcha?: { informe: MarchaInforme } } | undefined)?.marcha;
+  if (marchaMeta && (kind === "video_post_descalzo" || kind === "video_ant_descalzo")) {
+    const media = await prisma.mediaAsset.findMany({
+      where: { captureId: capture.id, kind: { in: ["video_post_descalzo", "video_ant_descalzo"] }, confirmedAt: { not: null } },
+    });
+    const informeDe = (k: string) =>
+      (media.find((x) => x.kind === k)?.meta as { marcha?: { informe: MarchaInforme } } | null)?.marcha?.informe ?? null;
+    const derivado = marchaDesdeInformes(informeDe("video_post_descalzo"), informeDe("video_ant_descalzo"));
+    if (derivado) {
+      const fresh = await prisma.capture.findUnique({ where: { id: capture.id } });
+      const prev = (fresh?.physicalExam ?? {}) as Record<string, unknown>;
+      await prisma.capture.update({
+        where: { id: capture.id },
+        data: { physicalExam: { ...prev, v: 2, ...derivado } as object },
+      });
+      await pushEvent(caseId, "Análisis de la marcha rellenado con el informe del vídeo", "Ortosend (análisis de vídeo)");
+    }
+  }
 
   await pushEvent(
     caseId,

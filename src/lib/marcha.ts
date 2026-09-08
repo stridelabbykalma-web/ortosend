@@ -295,3 +295,75 @@ export function sanitizeMarcha(raw: unknown): { track: MarchaTrack; informe: Mar
   const track: MarchaTrack = { vista, w, h, frames };
   return { track, informe: analizarMarcha(track) }; // el informe se recalcula aquí, nunca se confía en el del cliente
 }
+
+// Apartado «Análisis de la marcha» de la exploración, rellenado a partir de los
+// informes de los vídeos posterior y anterior. Devuelve solo los campos que se
+// pueden deducir de una vista frontal; contacto inicial y despegue son de la
+// vista lateral y se dejan al profesional.
+export type MarchaExam = {
+  marchaPatron?: string;
+  anguloPaso?: string;
+  retropieApoyo?: string;
+  marchaObs: string;
+  marchaAuto: true;
+};
+
+export function marchaDesdeInformes(post: MarchaInforme | null | undefined, ant: MarchaInforme | null | undefined): MarchaExam | null {
+  if (!post && !ant) return null;
+  const g = (n: number | null | undefined) => (n === null || n === undefined ? "—" : `${f1(n)}°`);
+  const obs: string[] = [];
+  const out: MarchaExam = { marchaObs: "", marchaAuto: true };
+
+  // Retropié en apoyo (vista posterior): + eversión/valgo, − inversión/varo
+  if (post) {
+    const { izq, dcha } = post.retropie;
+    const cls = (v: number | null) => (v === null ? null : v > 8 ? "Valgo" : v < -5 ? "Varo" : "Neutro");
+    const ci = cls(izq), cd = cls(dcha);
+    if (ci && cd) out.retropieApoyo = ci === cd ? ci : "Asimétrico";
+    else out.retropieApoyo = ci ?? cd ?? undefined;
+    obs.push(`Retropié en apoyo (vídeo posterior): dcha. ${g(dcha)} · izq. ${g(izq)} (+ eversión / − inversión)`);
+    obs.push(`Caída pélvica en apoyo: dcha. ${g(post.caidaPelvica.dcha)} · izq. ${g(post.caidaPelvica.izq)}`);
+  }
+  // Patrón de pisada: pronador/supinador por retropié y rodilla frontal, por lado
+  const lado = (inf: MarchaInforme | null | undefined, k: "izq" | "dcha"): "pron" | "sup" | "neutro" | null => {
+    if (!inf) return null;
+    const rp = inf.retropie[k], rf = inf.rodillaFrontal[k];
+    if (rp === null && rf === null) return null;
+    if ((rp !== null && rp > 8) || (rf !== null && rf > 10)) return "pron";
+    if ((rp !== null && rp < -5) || (rf !== null && rf < -8)) return "sup";
+    return "neutro";
+  };
+  const pick = (k: "izq" | "dcha") => lado(post, k) ?? lado(ant, k);
+  const li = pick("izq"), ld = pick("dcha");
+  if (li && ld) {
+    if (li === ld) out.marchaPatron = li === "pron" ? "Pronador" : li === "sup" ? "Supinador" : "Neutro";
+    else out.marchaPatron = "Mixto / asimétrico";
+  } else if (li || ld) {
+    const v = (li ?? ld)!;
+    out.marchaPatron = v === "pron" ? "Pronador" : v === "sup" ? "Supinador" : "Neutro";
+  }
+  const src = post ?? ant;
+  if (src)
+    obs.push(`Rodilla en plano frontal: dcha. ${g(src.rodillaFrontal.dcha)} · izq. ${g(src.rodillaFrontal.izq)} (+ valgo / − varo)`);
+
+  // Ángulo de progresión (vista anterior): + toe-out, − toe-in
+  if (ant) {
+    const { izq, dcha } = ant.progresion;
+    const vals = [izq, dcha].filter((v): v is number => v !== null);
+    if (vals.length) {
+      if (vals.some((v) => v > 18)) out.anguloPaso = "Aumentado (marcha en abducción)";
+      else if (vals.some((v) => v < -5)) out.anguloPaso = "Disminuido (marcha convergente)";
+      else out.anguloPaso = "Normal";
+    }
+    obs.push(`Ángulo de progresión del pie (vídeo anterior): dcha. ${g(dcha)} · izq. ${g(izq)} (+ hacia fuera)`);
+  }
+  const hall = [...(post?.hallazgos ?? []), ...(ant?.hallazgos ?? [])]
+    .filter((h) => h.clave !== "sin_hallazgos" && h.clave !== "muestra")
+    .map((h) => h.titulo);
+  if (hall.length) obs.push(`Hallazgos: ${[...new Set(hall)].join("; ")}`);
+  obs.push(
+    "Rellenado automáticamente con el análisis de los vídeos de marcha (orientativo, 2D). Contacto inicial y despegue no se valoran en vista frontal: revisar en los vídeos laterales."
+  );
+  out.marchaObs = obs.join("\n");
+  return out;
+}

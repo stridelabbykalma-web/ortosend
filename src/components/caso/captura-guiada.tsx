@@ -131,13 +131,15 @@ function buildSlides(): Slide[] {
     { t: "e", section: "comp_sel", title: "Tests complementarios: cuáles hacer", grupo: "Exploración" },
     { t: "e", section: "comp_res", title: "Tests complementarios: resultados", grupo: "Exploración" },
     { t: "e", section: "dismetria", title: "Dismetría: nivel y láminas", grupo: "Exploración" },
-    { t: "e", section: "marcha", title: "Análisis de la marcha", grupo: "Exploración" },
     // Con el paciente delante se termina primero la parte «de consulta» (cuestionario,
     // exploración y vídeos); las máquinas (escáner y Podisense) quedan para el final.
     ...CAPTURA_VISUAL.map(([kind, label]) => {
       const m = CAPTURA_META[kind];
       return { t: "media", kind, title: label, grupo: m.grupo, help: m.help } as Slide;
     }),
+    // El análisis de la marcha va DESPUÉS de los vídeos: lo rellena el informe de
+    // los vídeos posterior y anterior y el profesional solo revisa y completa.
+    { t: "e", section: "marcha", title: "Análisis de la marcha (prellenado por los vídeos)", grupo: "Exploración" },
     {
       t: "file",
       kind: "baro_est",
@@ -645,6 +647,18 @@ function ESection({ section, e, q }: { section: string; e: Exam | null; q: Quest
     );
   return (
     <>
+      {e?.marchaAuto ? (
+        <div className="note g" style={{ marginBottom: 10 }}>
+          <b>Prellenado con el análisis de los vídeos de marcha.</b> Patrón, ángulo de paso y
+          retropié vienen del informe de los vídeos posterior y anterior; revisa, corrige si no
+          coincide con lo que has visto y completa contacto inicial y despegue (vista lateral).
+        </div>
+      ) : (
+        <div className="note a" style={{ marginBottom: 10 }}>
+          Aún no hay vídeos posterior y anterior analizados: al grabarlos, este apartado se
+          rellena solo. Puedes rellenarlo a mano igualmente.
+        </div>
+      )}
       <div className="grid g3">
         <Sel name="marchaPatron" label="Patrón de pisada" opts={MARCHA_PATRON_OPTS} def={e?.marchaPatron} />
         <Sel name="contactoInicial" label="Contacto inicial" opts={CONTACTO_OPTS} def={e?.contactoInicial} />
@@ -657,11 +671,15 @@ function ESection({ section, e, q }: { section: string; e: Exam | null; q: Quest
       <label>Observaciones de la marcha (asimetrías, claudicación, compensaciones…)</label>
       <textarea
         name="marchaObs"
-        rows={2}
+        rows={e?.marchaAuto ? 6 : 2}
         defaultValue={e?.marchaObs}
         placeholder="Ej.: colapso del arco interno izquierdo en apoyo medio"
       />
-      <div className="tiny">Los vídeos de marcha y la baropodometría de los siguientes pasos completan esta valoración.</div>
+      <div className="tiny">
+        {e?.marchaAuto
+          ? "Las cifras de las observaciones salen del análisis 2D de los vídeos (orientativo). Al guardar, quedan como valoración del profesional."
+          : "La baropodometría completa esta valoración."}
+      </div>
     </>
   );
 }

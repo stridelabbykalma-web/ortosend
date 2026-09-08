@@ -133,6 +133,7 @@ export type Exam = {
   retropieApoyo?: string;
   despegue?: string;
   marchaObs?: string;
+  marchaAuto?: boolean; // el apartado de marcha se rellenó con el análisis de los vídeos
 };
 
 // Categoría clínica del FPI-6 para mostrar junto al número.
