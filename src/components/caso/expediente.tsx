@@ -4,6 +4,7 @@ import { questionnaireLines, type Questionnaire } from "@/lib/questionnaire";
 import { examLines, type Exam } from "@/lib/exploracion";
 import { alertasDe } from "@/lib/tests-podologicos";
 import { CAPTURA_VISUAL, FOTO_KINDS, MEDIA_LABEL, SCAN_KIND, VIDEO_KINDS, fmtdt } from "@/lib/format";
+import { esProyecto } from "@/lib/scan";
 import { helbingResumen, type Helbing } from "@/lib/helbing";
 import { HelbingOverlay } from "@/components/caso/helbing-overlay";
 import { VideoAnalizado } from "@/components/caso/video-analizado";
@@ -147,10 +148,11 @@ function Escaneos({ media, hecho }: { media: MediaAsset[]; hecho: boolean }) {
         return (
           <div key={m.id} className="row" style={{ gap: 8, alignItems: "center" }}>
             <a href={m.url} className="btn" download>
-              Descargar escaneo
+              {esProyecto(meta?.archivo ?? "") ? "Descargar proyecto Revo Scan" : "Descargar escaneo"}
             </a>
             <span>
               {meta?.archivo ?? "escaneo"}
+              {esProyecto(meta?.archivo ?? "") ? " · abrir en Revo Scan → Un clic → Exportar" : ""}
               {m.sizeBytes ? ` · ${(m.sizeBytes / 1048576).toLocaleString("es-ES", { maximumFractionDigits: 1 })} MB` : ""}
               {m.confirmedAt ? ` · ${fmtdt(m.confirmedAt)}` : ""}
             </span>
@@ -164,7 +166,8 @@ function Escaneos({ media, hecho }: { media: MediaAsset[]; hecho: boolean }) {
 // Visor de las capturas reales subidas desde el estudio web (vídeos y fotos).
 // Solo hay archivo servible cuando la URL apunta a /api/media (subida confirmada).
 function MediaGallery({ media }: { media: MediaAsset[] }) {
-  const files = media.filter((m) => m.confirmedAt && m.url.startsWith("/api/media/"));
+  // Los escaneos 3D no se ven aquí: tienen su botón de descarga en la ficha.
+  const files = media.filter((m) => m.confirmedAt && m.url.startsWith("/api/media/") && m.kind !== SCAN_KIND);
   if (files.length === 0) return null;
   return (
     <>

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { Capture, Case, Incident, MediaAsset, Patient } from "@prisma/client";
 import { checklistOf } from "@/lib/cases";
-import { bandejaDe, puenteActivo } from "@/lib/escaneos";
+import { bandejaDe, marcarEsperando, puenteActivo } from "@/lib/escaneos";
 import { BARO_KINDS, CAPTURA_VISUAL, FOTO_KINDS, SCAN_KIND, VIDEO_KINDS } from "@/lib/format";
 import {
   ACTIVIDAD_OPTS,
@@ -159,7 +159,7 @@ function buildSlides(): Slide[] {
       kind: SCAN_KIND,
       title: "Escaneo de las espumas fenólicas",
       grupo: "Escaneo",
-      help: "Toma el molde en las espumas fenólicas, escanéalo con RevoScan y exporta el mesh a la carpeta de escaneos del PC del escáner. Con esta pantalla abierta, el escaneo se sube y se asocia solo a este paciente. Es el último paso del estudio.",
+      help: "Toma el molde en las espumas fenólicas y escanéalo con Revo Scan: escanear y Parar, nada más. Con esta pantalla abierta, el escaneo se sube solo y queda asociado a este paciente; el taller lo procesa. Es el último paso del estudio.",
       boton: "Marcar escaneo como hecho",
       hecho: "Escaneo de las espumas registrado.",
     },
@@ -863,6 +863,7 @@ export async function CapturaGuiada({
 
   // Escaneo de las espumas: estado inicial de la espera (el resto lo va
   // refrescando la propia pantalla cada pocos segundos).
+  if (s.t === "file" && s.kind === SCAN_KIND) await marcarEsperando(kase.id);
   const escaneo =
     s.t === "file" && s.kind === SCAN_KIND
       ? {

@@ -1,22 +1,25 @@
-# Escaneo → paciente → taller, sin tocar archivos (RevoScan)
+# Escaneo → paciente → taller, sin tocar archivos (Revo Scan)
 
 Cómo llega el escaneo de las espumas fenólicas desde el PC del escáner de la
-clínica hasta el taller, asociado al paciente, sin que nadie cree carpetas,
-renombre ni suba nada a mano.
+clínica hasta el taller, asociado al paciente, sin que el profesional fusione,
+malle, exporte, cree carpetas ni renombre nada: **escanea y pulsa Parar**.
 
 ## La idea
 
-RevoScan no puede hablar con Ortosend y, al exportar el mesh, pierde el nombre
-del proyecto. Por eso la asociación no depende ni de carpetas ni de nombres:
+Revo Scan no tiene API ni nube: solo deja archivos en el disco (Revo Scan 6:
+un archivo por escaneo; Revo Scan 5: una carpeta de proyecto). El puente del
+PC del escáner sube ese escaneo en bruto entero y el **taller** lo abre en su
+Revo Scan, lo procesa («Edición con un clic») y exporta. Como Revo Scan no
+sabe nada de Ortosend, la asociación no depende de carpetas ni de nombres:
 **el caso abierto en el paso del escaneo es el que recibe el archivo.**
 
 ```
 Clínica (PC del escáner)              Ortosend                        Taller
 ────────────────────────              ────────                        ──────
-RevoScan exporta mesh.stl             POST /api/scan/subida
-   en C:\Ortosend\Escaneos   ───►       → URL firmada de R2
+Revo Scan guarda el escaneo           POST /api/scan/subida
+   (proyecto RS5 / archivo RS6) ───►     → URL firmada de R2
          │                                                        Expediente del caso
-   puente.js  ── PUT directo a R2 (sin límite) ──►  bucket común   «Descargar escaneo»
+   puente.js (zip) ── PUT directo a R2 (sin límite) ──►  bucket   «Descargar proyecto Revo Scan»
          │                            POST /api/scan/confirmar          │
          └─────────────────────►        → ¿qué caso espera?  ◄──── GET /api/media/[id]
                                          → MediaAsset scan_espumas        (URL firmada 10 min)
@@ -43,7 +46,7 @@ Asistente (tablet)                       + evento en el historial
 | `GET /api/media/[id]` | servidor | Descarga autenticada + `AuditLog`; para escaneos redirige a la URL firmada de R2. |
 | `EscaneoPuente` | `src/components/caso/escaneo-puente.tsx` | Paso del escaneo: espera, bandeja para confirmar, subida a mano con progreso. |
 | `Escaneos` | `src/components/caso/expediente.tsx` | En el expediente: «Descargar escaneo» por cada archivo (taller, prescriptor, clínica). |
-| `tools/puente-escaneo/` | PC del escáner | El vigilante de la carpeta (Node 18, sin dependencias). |
+| `tools/puente-escaneo/` | PC del escáner | Vigila la carpeta de Revo Scan (proyectos RS5 → ZIP propio sin dependencias; archivos RS6) y, opcionalmente, una carpeta de mesh exportados (gzip). Node 18, sin dependencias. |
 
 ## Reglas de asociación
 
@@ -53,8 +56,10 @@ Asistente (tablet)                       + evento en el historial
    evento en el historial, check verde en el asistente sin recargar).
 3. **Cero o varios** → queda en la bandeja 24 h; el asistente de cualquier
    caso abierto de la clínica lo ofrece: «¿es de Pere Vidal?» → un toque.
-4. Un caso puede acumular varios escaneos (repetir el molde): el taller ve
-   todos en el expediente y elige.
+4. Un caso puede acumular varios escaneos (repetir el molde, o el mismo
+   proyecto vuelto a subir tras fusionarlo): el taller ve todos y elige.
+5. El expediente distingue «proyecto Revo Scan» (abrir en Revo Scan → un clic
+   → exportar) de «mesh exportado» (STL listo para el CAD).
 
 ## Seguridad y RGPD
 

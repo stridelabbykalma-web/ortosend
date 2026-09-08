@@ -31,6 +31,15 @@ export async function actorOf(req: Request): Promise<Actor | null> {
   return { clinicId: user.clinicId, name: user.name, userId: user.id, agentId: null };
 }
 
+// El asistente de este caso está en el paso del escaneo: «levanta la mano»
+// para que el próximo escaneo que llegue de la clínica sea suyo.
+export async function marcarEsperando(caseId: string) {
+  await prisma.case.updateMany({
+    where: { id: caseId, state: { in: [...CAPTURE_STATES] } },
+    data: { scanWaitingAt: new Date() },
+  });
+}
+
 // ¿Hay algún puente de escaneo dando señal en esta clínica?
 export async function puenteActivo(clinicId: string): Promise<boolean> {
   const desde = new Date(Date.now() - PUENTE_VIVO_MIN * 60 * 1000);

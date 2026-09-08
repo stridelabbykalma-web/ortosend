@@ -454,10 +454,11 @@ export async function PanelClinica({ user, tab }: { user: User; tab?: string }) 
         <div className="card">
           <p className="muted" style={{ marginTop: 0 }}>
             El puente es un programa pequeño que se instala en el PC del escáner. Vigila la carpeta
-            donde RevoScan exporta los mesh y sube cada escaneo nuevo al almacén común de Ortosend.
-            El escaneo se asocia solo al paciente cuyo caso está abierto en el paso «Escaneo de las
-            espumas» del asistente; el taller lo descarga desde el expediente. No hay que crear
-            carpetas ni renombrar archivos.
+            donde Revo Scan guarda los escaneos y sube cada uno, entero, al almacén común de
+            Ortosend. El profesional solo escanea y pulsa Parar: el escaneo se asocia al paciente
+            cuyo caso está abierto en el paso «Escaneo de las espumas» del asistente, y el taller
+            lo descarga desde el expediente y lo procesa. No hay que exportar, crear carpetas ni
+            renombrar archivos.
           </p>
           <form action={crearPuenteAction} className="row" style={{ gap: 8 }}>
             <input name="name" placeholder="Nombre del equipo (ej.: PC escáner consulta 1)" />
@@ -504,13 +505,14 @@ export async function PanelClinica({ user, tab }: { user: User; tab?: string }) 
           <ol className="muted" style={{ margin: "8px 0 0 18px", padding: 0 }}>
             <li>Copia la carpeta <code>tools/puente-escaneo</code> al PC (necesita Node 18 o superior).</li>
             <li>
-              Rellena <code>puente.config.json</code> con el servidor y el token de arriba, y con la
-              carpeta donde RevoScan exporta los mesh (por ejemplo <code>C:\Ortosend\Escaneos</code>).
+              Rellena <code>puente.config.json</code> con el servidor y el token de arriba y con la
+              carpeta de escaneos de Revo Scan (por defecto{" "}
+              <code>C:\Users\USUARIO\AppData\Roaming\RevoScan5\Projects</code>).
             </li>
             <li>Ejecútalo con <code>node puente.js</code> (o el acceso directo <code>iniciar-puente.bat</code>).</li>
             <li>
-              En RevoScan, al exportar el mesh, guárdalo en esa carpeta. Con el caso abierto en el
-              paso del escaneo, llega solo al paciente.
+              Con el caso abierto en el paso del escaneo, escanea y pulsa Parar: llega solo al
+              paciente. Si no había caso abierto, se confirma con un toque en el asistente.
             </li>
           </ol>
         </div>

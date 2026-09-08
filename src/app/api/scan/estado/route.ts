@@ -6,7 +6,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireRole } from "@/lib/auth";
-import { CAPTURE_STATES, bandejaDe, puenteActivo } from "@/lib/escaneos";
+import { bandejaDe, marcarEsperando, puenteActivo } from "@/lib/escaneos";
 import { SCAN_KIND } from "@/lib/format";
 
 export const runtime = "nodejs";
@@ -27,8 +27,7 @@ export async function GET(req: Request) {
   if (!kase || kase.clinicId !== user.clinicId)
     return NextResponse.json({ error: "Caso no accesible" }, { status: 404 });
 
-  if (CAPTURE_STATES.includes(kase.state as (typeof CAPTURE_STATES)[number]))
-    await prisma.case.update({ where: { id: caseId }, data: { scanWaitingAt: new Date() } });
+  await marcarEsperando(caseId);
 
   const escaneos = (kase.capture?.media ?? []).map((m) => ({
     id: m.id,

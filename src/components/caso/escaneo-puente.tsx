@@ -23,7 +23,7 @@ type Estado = { hecho: boolean; escaneos: Escaneo[]; bandeja: Bandeja[]; puente:
 // Cada cuánto se pregunta al servidor si el escaneo ya ha llegado (y se renueva
 // la «espera» de este caso).
 const POLL_MS = 4000;
-const ACCEPT = ".stl,.obj,.ply,.glb,.gltf,.3mf,.asc,.zip";
+const ACCEPT = ".stl,.obj,.ply,.glb,.gltf,.3mf,.asc,.revox,.revo,.zip";
 
 export function EscaneoPuente({
   caseId,
@@ -175,9 +175,9 @@ export function EscaneoPuente({
         <div className={`note ${est.puente ? "b" : "a"}`} aria-live="polite">
           {est.puente ? (
             <>
-              <b>Esperando el escaneo…</b> Escanea con RevoScan y exporta el mesh a la carpeta de
-              escaneos del PC del escáner, como siempre. Aparecerá aquí solo, asociado a{" "}
-              <b>{paciente}</b>. No cierres esta pantalla mientras escaneas.
+              <b>Esperando el escaneo…</b> Escanea con Revo Scan y pulsa Parar. El escaneo llega
+              aquí solo, asociado a <b>{paciente}</b>; el taller lo procesa. No cierres esta pantalla
+              mientras escaneas.
             </>
           ) : (
             <>
@@ -190,8 +190,8 @@ export function EscaneoPuente({
 
       <div className="sp" />
       <label className="tiny muted">
-        {est.escaneos.length ? "Añadir otro escaneo a mano" : "Subir el escaneo a mano"} (.stl, .obj,
-        .ply, .glb, .3mf, .zip)
+        {est.escaneos.length ? "Añadir otro escaneo a mano" : "Subir el escaneo a mano"} (archivo de
+        Revo Scan o mesh .stl/.obj/.ply)
       </label>
       <input
         ref={fileRef}

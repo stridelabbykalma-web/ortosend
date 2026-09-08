@@ -1,5 +1,6 @@
 {
   "servidor": "https://app.ortosend.com",
   "token": "PEGA-AQUI-EL-TOKEN-DEL-PANEL",
+  "carpetaRevoScan": "C:\\Users\\USUARIO\\AppData\\Roaming\\RevoScan5\\Projects",
   "carpeta": "C:\\Ortosend\\Escaneos"
 }

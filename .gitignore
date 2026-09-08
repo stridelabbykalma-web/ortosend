@@ -46,3 +46,7 @@ next-env.d.ts
 
 # WASM de MediaPipe: en producción se sirve desde el CDN, aquí solo para pruebas locales
 public/mediapipe/wasm/
+
+# Puente de escaneo: token de la clínica y estado local, nunca al repositorio
+tools/puente-escaneo/puente.config.json
+tools/puente-escaneo/puente-estado.json

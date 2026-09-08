@@ -11,6 +11,7 @@
 // manda casi siempre un MIME vacío para estos archivos, así que el tipo se
 // decide por la extensión, no por lo que diga el cliente.
 export const SCAN_MIME: Record<string, string> = {
+  // Mesh exportado (lo abre cualquier CAD)
   stl: "model/stl",
   obj: "model/obj",
   ply: "model/ply",
@@ -18,10 +19,24 @@ export const SCAN_MIME: Record<string, string> = {
   gltf: "model/gltf+json",
   "3mf": "model/3mf",
   asc: "text/plain",
+  // Escaneo en bruto de Revo Scan: archivo de Revo Scan 6 («un escaneo, un
+  // archivo») o carpeta de proyecto de Revo Scan 5 empaquetada en ZIP por el
+  // puente. El taller lo abre en su Revo Scan, fusiona/malla y exporta.
+  revox: "application/octet-stream",
+  revo: "application/octet-stream",
   zip: "application/zip",
 };
 export const SCAN_EXTS = Object.keys(SCAN_MIME);
 export const SCAN_ACCEPT = SCAN_EXTS.map((e) => `.${e}`).join(",");
+
+// Escaneo en bruto (para abrir en Revo Scan) o mesh ya exportado.
+export function esProyecto(filename: string) {
+  const ext = scanExt(filename);
+  return ext === "revox" || ext === "revo" || ext === "zip";
+}
+export function tipoEscaneo(filename: string) {
+  return esProyecto(filename) ? "Proyecto Revo Scan (abrir en Revo Scan → Un clic → Exportar)" : "Mesh exportado";
+}
 
 export function scanExt(filename: string): string | null {
   const ext = filename.toLowerCase().split(".").pop() ?? "";
