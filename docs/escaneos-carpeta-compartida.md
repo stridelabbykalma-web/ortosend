@@ -40,7 +40,3 @@ profesional, así que en OneDrive basta con buscar ese nombre.
 - **Automatizar sin tocar PCs**: leer el OneDrive de Ortosend por la API de
   Microsoft Graph (una app registrada en el Microsoft 365 de Ortosend) para
   poner el check verde y el enlace de descarga solos. Con iCloud no es posible.
-- **Puente de escaneo** (`public/puente/`, `docs/puente-escaneo.md`): subida
-  automática desde el PC del escáner al almacén R2. Funciona, pero exige
-  instalar un servicio en cada PC; está desactivado en el panel
-  (`PUENTE_ESCANEO=1` para verlo).
