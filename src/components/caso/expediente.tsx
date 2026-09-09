@@ -171,8 +171,10 @@ function Escaneos({
 // Visor de las capturas reales subidas desde el estudio web (vídeos y fotos).
 // Solo hay archivo servible cuando la URL apunta a /api/media (subida confirmada).
 function MediaGallery({ media }: { media: MediaAsset[] }) {
-  // Los escaneos 3D no se ven aquí: tienen su botón de descarga en la ficha.
-  const files = media.filter((m) => m.confirmedAt && m.url.startsWith("/api/media/") && m.kind !== SCAN_KIND);
+  // Solo vídeos y fotos del estudio: el escaneo va por su carpeta y la foto
+  // de calidad del taller se enseña en la zona de trabajo del taller.
+  const estudio = new Set<string>(CAPTURA_VISUAL.map(([k]) => k));
+  const files = media.filter((m) => m.confirmedAt && m.url.startsWith("/api/media/") && estudio.has(m.kind));
   if (files.length === 0) return null;
   return (
     <>

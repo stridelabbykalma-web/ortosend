@@ -104,11 +104,34 @@ asociadas. Stack: **Next.js (App Router, server actions) + PostgreSQL (Prisma)**
 - Línea de tiempo del tratamiento (7 hitos) con textos por estado.
 
 **Taller**
-- «Siguiente caso» + tablero por fases. Aceptación técnica (guardas: prescripción + pago),
-  diseño (CAD archivado), fabricación **mecanizado CNC → confección a mano** (lote y material
-  para trazabilidad), **calidad con foto del par obligatoria**, envío con seguimiento y entrega.
-- Incidencias: captura inválida (→ devolver a clínica sin coste) y rehacer por defecto.
-- Hoja de trabajo del caso (diagnóstico + pauta de fabricación).
+- Panel con KPIs (en producción, moldes por mecanizar, fuera de plazo, en tránsito, incidencias)
+  y cinco pestañas: **Tablero** por fases (entrada → diseño → fabricación → calidad → envío) con
+  semáforo del plazo en cada tarjeta (días laborables desde el pago contra el compromiso de 5;
+  verde hasta el día 3, ámbar 4-5, rojo si se pasa) y los «rehacer» siempre primero;
+  **Lotes CNC** (moldes pendientes agrupados por lote, asignación del lote con código sugerido y
+  «tanda mecanizada» que pasa todos los moldes del lote a confección de una vez); **Envíos** (en
+  tránsito, corregir transportista/seguimiento, confirmar entrega); **Incidencias** (abiertas con
+  cierre y resolución, cerradas recientes); **Entregados** (trazabilidad: lote CNC, material y
+  seguimiento por caso).
+- «Siguiente caso» global o por fase (botón en cada columna): cada puesto del taller tira de la
+  suya. Reparto y liberación igual que en prescripción (asociado al abrir, 45 min de inactividad).
+- Ficha del caso para el taller: paso de producción (entrada, diseño CAD, mecanizado CNC,
+  confección, calidad, envío, entrega), zona de trabajo de la fase y **ficha de fabricación**
+  (pauta y diagnóstico de la prescripción, talla, peso/altura, actividad, calzado, tipo de pie,
+  FPI, dismetría y alza, entrega y nombre del proyecto Revo Scan). El expediente clínico completo
+  queda plegado debajo.
+- Fases: aceptación técnica (guardas: prescripción + pago; confirma escaneo legible y pauta
+  ejecutable), diseño (CAD archivado, lote opcional), mecanizado CNC → confección a mano (lote y
+  material para trazabilidad), **calidad con checklist de 4 puntos y foto real del par
+  obligatorias** (la foto se hace con el móvil o se elige del PC, se reduce en el navegador y se
+  guarda en `/api/media/calidad`; sin ella el botón no se activa y el servidor lo vuelve a
+  comprobar), envío con transportista y seguimiento, entrega.
+- **Hoja de trabajo imprimible** (`/caso/[id]/hoja`): una hoja A4 que acompaña al par con la pauta,
+  los datos del par, casillas de fase con fecha y firma, el control de calidad y las dos
+  **etiquetas de molde (I / D)** para recortar. Solo taller y administración; el acceso queda en
+  `AuditLog`.
+- Incidencias: captura inválida (→ devolver a clínica sin coste) y rehacer por defecto (vuelve a
+  confección con prioridad; se cierra sola al superar calidad).
 
 **Administración Ortosend**
 - KPIs, solicitudes de clínicas (aprobar → alta), red de clínicas (activar/suspender),

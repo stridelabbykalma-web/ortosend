@@ -26,7 +26,7 @@ export default async function PanelPage({
         <PanelClinica user={user} tab={tab} />
       )}
       {user.role === "RECETADOR" && <PanelRecetador user={user} />}
-      {user.role === "TALLER" && <PanelTaller user={user} />}
+      {user.role === "TALLER" && <PanelTaller user={user} tab={tab} />}
       {user.role === "ADMIN" && <PanelAdmin tab={tab} />}
     </div>
   );

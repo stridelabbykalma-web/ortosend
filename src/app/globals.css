@@ -122,6 +122,12 @@ tr.click:hover { background: var(--paper); }
 .col h4 { font-size: 12px; color: var(--ink2); padding: 2px 4px 8px; margin: 0; }
 .tcard { display: block; background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 9px; margin-bottom: 7px; cursor: pointer; font-size: 13px; color: var(--ink); }
 .tcard:hover { border-color: var(--teal); }
+/* Semáforo del plazo en las tarjetas del tablero del taller */
+.tcard.sla-ajustado { border-left: 4px solid var(--amber); }
+.tcard.sla-fuera { border-left: 4px solid var(--red); }
+.tcard.sla-ok { border-left: 4px solid var(--green); }
+button.mini { font-size: 12px; padding: 4px 10px; border-radius: 8px; }
+.tabs a .tabn { display: inline-block; margin-left: 6px; font-size: 11px; font-weight: 600; background: var(--teal-l); color: var(--teal-d); border-radius: 99px; padding: 1px 7px; }
 .checkline { display: flex; align-items: center; gap: 9px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; margin-bottom: 7px; font-size: 13.5px; }
 .checkline.ok { background: var(--green-l); border-color: #bfdcc0; color: var(--green); }
 .checkline form, .checkline .push { margin-left: auto; }
@@ -130,6 +136,42 @@ tr.click:hover { background: var(--paper); }
 .slotlabel input { display: none; }
 .footer { border-top: 1px solid var(--line); margin-top: 60px; padding: 26px 0; color: var(--mut); font-size: 12.5px; }
 .wfull { width: 100%; }
+/* --- Taller: ficha del caso y hoja de trabajo --- */
+.steps.prod { margin-bottom: 12px; }
+.taller-grid { display: grid; grid-template-columns: minmax(0, 3fr) minmax(260px, 2fr); gap: 14px; align-items: start; }
+.taller-grid h3 { font-size: 18px; }
+.ficha .pauta, .hoja .pauta { font-size: 15.5px; line-height: 1.5; margin: 4px 0 10px; padding: 10px 12px; background: var(--teal-l); border-radius: var(--r); color: var(--teal-d); }
+.ficha-dl { margin: 4px 0 0; display: grid; gap: 4px 14px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+.ficha-dl div { display: flex; flex-direction: column; }
+.ficha-dl dt { font-size: 11.5px; color: var(--mut); }
+.ficha-dl dd { margin: 0; font-size: 14px; }
+label.chk.qc { padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; margin: 0 0 7px; }
+label.chk.qc:has(input:checked) { background: var(--green-l); border-color: #bfdcc0; }
+.qc-foto { margin: 4px 0 10px; }
+.qc-foto img { display: block; max-width: 320px; width: 100%; border-radius: 10px; border: 1px solid var(--line); margin-bottom: 8px; }
+.hoja-paper { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 28px 32px; max-width: 800px; margin: 0 auto; }
+.hoja-num { font-family: var(--font-sora); font-size: 40px; font-weight: 700; color: var(--teal-d); }
+.hoja-meta { margin: 12px 0 6px; font-size: 13px; }
+.hoja-meta th { width: 80px; padding: 5px 8px 5px 0; border: none; vertical-align: top; }
+.hoja-meta td { padding: 5px 12px 5px 0; border: none; vertical-align: top; }
+.hoja-bloque { border-top: 1px solid var(--line); padding: 12px 0; }
+.hoja-fases td { padding: 6px 4px; border: none; font-size: 13.5px; }
+.hoja-fases .box { width: 22px; font-size: 16px; }
+.hoja-fases .linea { border-bottom: 1px dotted var(--mut); min-width: 90px; font-size: 12px; color: var(--ink2); }
+.hoja-fases .firma { width: 110px; }
+.etiqueta { display: flex; gap: 12px; align-items: center; border: 1.5px dashed var(--ink2); border-radius: 8px; padding: 10px 14px; }
+.etiqueta .lado { font-family: var(--font-sora); font-size: 40px; font-weight: 700; line-height: 1; color: var(--teal-d); width: 44px; text-align: center; }
+@media print {
+  .nav, .footer, .noprint, .audio-primer { display: none !important; }
+  body { background: #fff; font-size: 12.5px; }
+  .hoja-paper { border: none; border-radius: 0; padding: 0; max-width: none; }
+  .wrap { max-width: none; padding: 0; }
+  .hoja .sp2 { display: none; }
+  .pauta { background: #eef3f0 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .etiqueta { break-inside: avoid; }
+}
+@media (max-width: 760px) { .taller-grid { grid-template-columns: 1fr; } }
+
 @media (max-width: 640px) {
   .hero h1 { font-size: 26px; }
   .nav .links { gap: 10px; font-size: 13px; }
