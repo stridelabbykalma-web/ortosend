@@ -178,8 +178,8 @@ export function EscaneoPuente({
             <>
               <b>Esperando el escaneo…</b> Escanea con Revo Scan y pulsa Parar. El escaneo llega
               aquí solo, asociado a <b>{paciente}</b>; el taller lo procesa. Consejo: al crear el
-              proyecto en Revo Scan, ponle el nombre del paciente (o el número de caso #{caso}) y se
-              asociará aunque esta pantalla no esté abierta.
+              proyecto en Revo Scan, ponle el nombre y el móvil del paciente (o el número de caso #
+              {caso}) y se asociará aunque esta pantalla no esté abierta.
             </>
           ) : (
             <>

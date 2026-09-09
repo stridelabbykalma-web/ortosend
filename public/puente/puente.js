@@ -66,8 +66,16 @@ function log(...args) {
 function carpetaRevoScanPorDefecto() {
   const candidatos =
     process.platform === "win32"
-      ? [path.join(process.env.APPDATA || "", "RevoScan5", "Projects")]
-      : [path.join(os.homedir(), "Library", "Application Support", "RevoScan5", "Projects")];
+      ? [
+          path.join(process.env.APPDATA || "", "Revopoint", "RevoScan6", "Projects"),
+          path.join(process.env.LOCALAPPDATA || "", "Revopoint", "RevoScan6", "Projects"),
+          path.join(os.homedir(), "Documents", "Revopoint", "RevoScan6", "Projects"),
+          path.join(process.env.APPDATA || "", "RevoScan5", "Projects"),
+        ]
+      : [
+          path.join(os.homedir(), "Library", "Application Support", "Revopoint", "RevoScan6", "Projects"),
+          path.join(os.homedir(), "Library", "Application Support", "RevoScan5", "Projects"),
+        ];
   return candidatos.find((c) => c && fs.existsSync(c)) || "";
 }
 
@@ -275,13 +283,31 @@ async function esContenedora(dir, hijos) {
 // Nombre del proyecto tal y como lo tecleó el profesional en Revo Scan: se
 // busca en el índice .revo (JSON) y, si no, se usa el nombre de la carpeta o
 // del archivo. Con él el servidor asocia el escaneo al paciente.
+// Nombres de archivo que Revo Scan pone por su cuenta dentro de un proyecto.
+const NO_ES_NOMBRE = /^(preview|raw_preview|project|thumbnail|thumb)$/i;
+const EXT_AUX = /\.(png|jpe?g|ply|obj|stl|txt|json|log|ini|xml|db|tmp)$/i;
 async function nombreProyecto(esc) {
   const base = path.basename(esc.ruta).replace(/\.[^.]+$/, "");
   if (esc.tipo !== "proyecto") return base;
   try {
     const hijos = await fsp.readdir(esc.ruta);
     const idx = hijos.find((h) => PROJECT_INDEX.test(h));
-    if (!idx) return base;
+    if (!idx) {
+      // Revo Scan 6: la carpeta del proyecto lleva un nombre aleatorio, pero
+      // el archivo de proyecto de dentro se llama como lo tecleó el
+      // profesional ("aleix bayer 689590840.xxx"). Se usa ese nombre.
+      const candidatos = [];
+      for (const h of hijos) {
+        try {
+          const st = await fsp.stat(path.join(esc.ruta, h));
+          const sinExt = h.replace(/\.[^.]+$/, "");
+          if (st.isFile() && !EXT_AUX.test(h) && !NO_ES_NOMBRE.test(sinExt) && st.size < 5 * 1024 * 1024) candidatos.push(sinExt);
+        } catch {
+          // ignorado
+        }
+      }
+      return candidatos[0] || base;
+    }
     const json = JSON.parse((await fsp.readFile(path.join(esc.ruta, idx), "utf8")).replace(/^\uFEFF/, ""));
     const claves = ["name", "projectName", "project_name", "ProjectName", "title", "displayName", "alias"];
     const buscar = (o, nivel = 0) => {

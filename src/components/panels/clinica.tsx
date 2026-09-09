@@ -34,7 +34,9 @@ export async function PanelClinica({ user, tab }: { user: User; tab?: string }) 
     ...(user.role === "ADMIN_CLINICA"
       ? ([
           ["prof", "Profesionales"],
-          ["puente", "Puente de escaneo"],
+          // Puente de escaneo (subida automática desde el PC del escáner): opcional,
+          // desactivado por defecto. El flujo normal es la carpeta compartida.
+          ...(process.env.PUENTE_ESCANEO === "1" ? ([["puente", "Puente de escaneo"]] as [string, string][]) : []),
           ["liq", "Liquidaciones"],
         ] as [string, string][])
       : []),

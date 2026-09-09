@@ -83,19 +83,23 @@ Ok "puente.js, zip.js e iniciar-puente.bat descargados"
 # --- 3. Carpeta de Revo Scan y configuración ----------------------------------
 Paso "Buscando la carpeta de escaneos de Revo Scan"
 $carpetaRevo = ""
+# Revo Scan 6 guarda en ...\Revopoint\RevoScan6\Projects (AppData o Documentos);
+# Revo Scan 5, en ...\RevoScan5\Projects.
 $candidatos = @(
+  (Join-Path $env:APPDATA "Revopoint\RevoScan6\Projects"),
+  (Join-Path $env:LOCALAPPDATA "Revopoint\RevoScan6\Projects"),
+  (Join-Path ([Environment]::GetFolderPath("MyDocuments")) "Revopoint\RevoScan6\Projects"),
   (Join-Path $env:APPDATA "RevoScan5\Projects"),
-  (Join-Path $env:APPDATA "RevoScan6\Projects"),
-  (Join-Path $env:APPDATA "RevoScan\Projects"),
-  (Join-Path ([Environment]::GetFolderPath("MyDocuments")) "Revo Scan")
+  (Join-Path $env:APPDATA "RevoScan6\Projects")
 )
 # Con permiso de administrador, $env:APPDATA puede ser el de otro usuario:
 # se miran las carpetas de Revo Scan de todos los usuarios del PC.
 Get-ChildItem "C:\Users" -Directory -ErrorAction SilentlyContinue | ForEach-Object {
-  Get-ChildItem (Join-Path $_.FullName "AppData\Roaming") -Directory -Filter "RevoScan*" -ErrorAction SilentlyContinue | ForEach-Object {
-    $candidatos += (Join-Path $_.FullName "Projects")
-    $candidatos += $_.FullName
-  }
+  $u = $_.FullName
+  $candidatos += (Join-Path $u "AppData\Roaming\Revopoint\RevoScan6\Projects")
+  $candidatos += (Join-Path $u "AppData\Local\Revopoint\RevoScan6\Projects")
+  $candidatos += (Join-Path $u "Documents\Revopoint\RevoScan6\Projects")
+  $candidatos += (Join-Path $u "AppData\Roaming\RevoScan5\Projects")
 }
 foreach ($c in $candidatos) { if ($c -and (Test-Path $c)) { $carpetaRevo = $c; break } }
 if (-not $carpetaRevo) {

@@ -116,12 +116,36 @@ function normaliza(t: string) {
 export async function autoasociar(upload: ScanUpload, actor: Actor) {
   const abiertos = await prisma.case.findMany({
     where: { clinicId: upload.clinicId, state: { in: [...CAPTURE_STATES] } },
-    select: { id: true, number: true, scanWaitingAt: true, patient: { select: { name: true } } },
+    select: {
+      id: true,
+      number: true,
+      scanWaitingAt: true,
+      patient: { select: { name: true, dni: true, owner: { select: { phone: true } } } },
+    },
   });
   const etiqueta = normaliza(upload.label ?? "");
 
   if (etiqueta) {
-    const numeros = new Set((etiqueta.match(/\d{1,7}/g) ?? []).map(Number));
+    const cifras = etiqueta.match(/\d{1,15}/g) ?? [];
+    // Teléfono: 9 cifras seguidas que coinciden con el móvil del titular
+    // (se comparan las 9 últimas, por si uno lleva prefijo +34).
+    const telefonos = new Set(cifras.filter((n) => n.length >= 9).map((n) => n.slice(-9)));
+    const porTelefono = abiertos.filter((c) => {
+      const t = (c.patient.owner.phone ?? "").replace(/\D/g, "").slice(-9);
+      return t.length === 9 && telefonos.has(t);
+    });
+    if (porTelefono.length === 1)
+      return asociarEscaneo(upload, porTelefono[0].id, actor, "teléfono del paciente en el nombre del proyecto");
+
+    // DNI/NIE: 7-8 cifras (+ letra) que coinciden con el del paciente.
+    const dnis = new Set(cifras.filter((n) => n.length === 7 || n.length === 8));
+    const porDni = abiertos.filter((c) => {
+      const d = (c.patient.dni ?? "").replace(/\D/g, "");
+      return d.length >= 7 && dnis.has(d);
+    });
+    if (porDni.length === 1) return asociarEscaneo(upload, porDni[0].id, actor, "DNI del paciente en el nombre del proyecto");
+
+    const numeros = new Set(cifras.filter((n) => n.length <= 7).map(Number));
     const porNumero = abiertos.filter((c) => numeros.has(c.number));
     if (porNumero.length === 1)
       return asociarEscaneo(upload, porNumero[0].id, actor, "número de caso en el nombre del proyecto");
