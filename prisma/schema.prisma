@@ -133,6 +133,7 @@ model ScanAgent {
   createdBy  String              // userId del admin de clínica que lo dio de alta
   createdAt  DateTime  @default(now())
   lastSeenAt DateTime?           // último contacto del agente (diagnóstico)
+  lastLog    String?             // últimas líneas de actividad que manda el puente (se ven en el panel)
   revokedAt  DateTime?
   uploads    ScanUpload[]
 }

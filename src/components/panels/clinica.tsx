@@ -477,6 +477,17 @@ export async function PanelClinica({ user, tab }: { user: User; tab?: string }) 
                   {a.lastSeenAt ? `Última señal: ${fmtdt(a.lastSeenAt)}` : "Sin estrenar"}
                 </span>
               </div>
+              {a.lastLog && (
+                <>
+                  <div className="sp" />
+                  <div className="tiny muted">Actividad reciente del puente (lo que iría en su ventana)</div>
+                  <pre
+                    style={{ fontSize: 11, maxHeight: 180, overflow: "auto", background: "#f6f6f4", padding: 8, borderRadius: 6, whiteSpace: "pre-wrap" }}
+                  >
+                    {a.lastLog}
+                  </pre>
+                </>
+              )}
               <div className="sp" />
               <label>Servidor</label>
               <input readOnly value={base} />
@@ -498,8 +509,8 @@ export async function PanelClinica({ user, tab }: { user: User; tab?: string }) 
               </div>
               <div className="tiny muted" style={{ marginTop: 6 }}>
                 El instalador ya lleva el servidor y este token: en el PC del escáner, doble clic y
-                listo (instala Node si falta, detecta la carpeta de Revo Scan y lo deja arrancando
-                solo con Windows).
+                listo (instala Node si falta, detecta la carpeta de Revo Scan y lo deja como servicio
+                oculto que arranca con Windows). Aquí verás su última señal y su actividad.
               </div>
             </div>
           ))
@@ -523,9 +534,9 @@ export async function PanelClinica({ user, tab }: { user: User; tab?: string }) 
               instalar Node, acepta.
             </li>
             <li>
-              Al terminar se abre una ventana negra que dice <i>modo directo al almacén (sin límite
-              de tamaño)</i>. Déjala abierta o minimizada: es el puente. Arrancará solo cada vez que
-              se encienda el PC.
+              Windows pedirá permiso de administrador (una vez): el puente queda instalado como
+              servicio, sin ventana, y arranca solo cada vez que se encienda el PC, aunque nadie
+              inicie sesión. Se actualiza solo desde esta web.
             </li>
             <li>
               Desde entonces: abre el caso en el paso «Escaneo de las espumas», escanea con Revo

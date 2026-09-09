@@ -15,6 +15,16 @@ param(
 $ErrorActionPreference = "Stop"
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
+# Hace falta ser administrador para dejar el puente como servicio (tarea del
+# sistema): si no lo somos, se relanza pidiendo permiso (aviso de Windows).
+$esAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+if (-not $esAdmin) {
+  Write-Host "Windows va a pedir permiso de administrador para instalar el puente como servicio..." -ForegroundColor Yellow
+  $args = "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`" -Servidor `"$Servidor`" -Token `"$Token`""
+  Start-Process powershell.exe -Verb RunAs -ArgumentList $args -Wait
+  exit
+}
+
 function Paso($t) { Write-Host ""; Write-Host "==> $t" -ForegroundColor Cyan }
 function Ok($t) { Write-Host "    $t" -ForegroundColor Green }
 
@@ -79,7 +89,15 @@ $candidatos = @(
   (Join-Path $env:APPDATA "RevoScan\Projects"),
   (Join-Path ([Environment]::GetFolderPath("MyDocuments")) "Revo Scan")
 )
-foreach ($c in $candidatos) { if (Test-Path $c) { $carpetaRevo = $c; break } }
+# Con permiso de administrador, $env:APPDATA puede ser el de otro usuario:
+# se miran las carpetas de Revo Scan de todos los usuarios del PC.
+Get-ChildItem "C:\Users" -Directory -ErrorAction SilentlyContinue | ForEach-Object {
+  Get-ChildItem (Join-Path $_.FullName "AppData\Roaming") -Directory -Filter "RevoScan*" -ErrorAction SilentlyContinue | ForEach-Object {
+    $candidatos += (Join-Path $_.FullName "Projects")
+    $candidatos += $_.FullName
+  }
+}
+foreach ($c in $candidatos) { if ($c -and (Test-Path $c)) { $carpetaRevo = $c; break } }
 if (-not $carpetaRevo) {
   $otras = Get-ChildItem -Path $env:APPDATA -Directory -Filter "RevoScan*" -ErrorAction SilentlyContinue
   if ($otras) { $carpetaRevo = $otras[0].FullName }
@@ -100,23 +118,35 @@ $config = [ordered]@{
 $config | ConvertTo-Json | Set-Content -Path (Join-Path $Destino "puente.config.json") -Encoding UTF8
 Ok "Configuración guardada en $Destino\puente.config.json"
 
-# --- 4. Arranque automático + arrancar ahora -----------------------------------
-Paso "Dejándolo arrancando solo al iniciar sesión en Windows"
-$startup = [Environment]::GetFolderPath("Startup")
-$acceso = Join-Path $startup "Ortosend puente de escaneo.lnk"
-$ws = New-Object -ComObject WScript.Shell
-$lnk = $ws.CreateShortcut($acceso)
-$lnk.TargetPath = Join-Path $Destino "iniciar-puente.bat"
-$lnk.WorkingDirectory = $Destino
-$lnk.WindowStyle = 7  # minimizado
-$lnk.Description = "Sube los escaneos de Revo Scan a Ortosend"
-$lnk.Save()
-Ok "Acceso directo creado en la carpeta Inicio"
+# --- 4. Servicio: tarea del sistema oculta, arranca con Windows, se reinicia sola ---------
+Paso "Dejando el puente como servicio de Windows"
+# Se para cualquier puente que estuviera abierto a mano, para no tener dos.
+Get-CimInstance Win32_Process -Filter "Name = 'node.exe'" -ErrorAction SilentlyContinue |
+  Where-Object { $_.CommandLine -like "*puente.js*" } |
+  ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+# Acceso directo de la carpeta Inicio de versiones anteriores: ya no hace falta.
+$viejo = Join-Path ([Environment]::GetFolderPath("Startup")) "Ortosend puente de escaneo.lnk"
+if (Test-Path $viejo) { Remove-Item $viejo -Force }
 
-Paso "Arrancando el puente"
-Start-Process -FilePath (Join-Path $Destino "iniciar-puente.bat") -WorkingDirectory $Destino
+$tarea = "Ortosend puente de escaneo"
+$accion = New-ScheduledTaskAction -Execute "cmd.exe" -Argument "/c `"$Destino\iniciar-puente.bat`"" -WorkingDirectory $Destino
+$disparo = New-ScheduledTaskTrigger -AtStartup
+$principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
+$ajustes = New-ScheduledTaskSettingsSet -Hidden -StartWhenAvailable -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit ([TimeSpan]::Zero) -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
+Unregister-ScheduledTask -TaskName $tarea -Confirm:$false -ErrorAction SilentlyContinue
+Register-ScheduledTask -TaskName $tarea -Action $accion -Trigger $disparo -Principal $principal -Settings $ajustes -Description "Sube los escaneos de Revo Scan a Ortosend" | Out-Null
+Start-ScheduledTask -TaskName $tarea
+Ok "Servicio instalado y en marcha (arranca solo con Windows, sin ventana)"
+
+Start-Sleep -Seconds 8
+$log = Join-Path $Destino "puente.log"
+if (Test-Path $log) {
+  Write-Host ""
+  Write-Host "Ultimas lineas del puente:" -ForegroundColor Cyan
+  Get-Content $log -Tail 8 | ForEach-Object { Write-Host "    $_" }
+}
 Write-Host ""
-Write-Host "Listo. Se ha abierto la ventana del puente: su cuarta línea debe decir" -ForegroundColor Yellow
-Write-Host "  'modo directo al almacén (sin límite de tamaño)'." -ForegroundColor Yellow
-Write-Host "Déjala abierta (o minimizada). A partir de ahora: abre el caso en el paso 'Escaneo'," -ForegroundColor Yellow
-Write-Host "escanea con Revo Scan y pulsa Parar. El escaneo llega solo al paciente." -ForegroundColor Yellow
+Write-Host "Listo. El puente funciona en segundo plano. Su estado y su actividad se ven en" -ForegroundColor Yellow
+Write-Host "Ortosend -> Panel de clinica -> Puente de escaneo (Ultima senal)." -ForegroundColor Yellow
+Write-Host "Desde ahora: en Revo Scan, crea el proyecto con el nombre del paciente (o el numero" -ForegroundColor Yellow
+Write-Host "de caso), escanea y pulsa Parar. El escaneo llega solo al paciente." -ForegroundColor Yellow
