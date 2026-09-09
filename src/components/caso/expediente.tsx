@@ -4,7 +4,7 @@ import { questionnaireLines, type Questionnaire } from "@/lib/questionnaire";
 import { examLines, type Exam } from "@/lib/exploracion";
 import { alertasDe } from "@/lib/tests-podologicos";
 import { CAPTURA_VISUAL, FOTO_KINDS, MEDIA_LABEL, SCAN_KIND, VIDEO_KINDS, fmtdt } from "@/lib/format";
-import { esProyecto, nombreProyectoRevoScan } from "@/lib/scan";
+import { nombreProyectoRevoScan } from "@/lib/scan";
 import { helbingResumen, type Helbing } from "@/lib/helbing";
 import { HelbingOverlay } from "@/components/caso/helbing-overlay";
 import { VideoAnalizado } from "@/components/caso/video-analizado";
@@ -143,6 +143,8 @@ export function Historial({ events }: { events: { id: string; at: Date; text: st
 
 // Modelos 3D de las espumas: llegan desde el PC del escáner al almacén común y
 // desde aquí el taller (o quien receta) los descarga con la URL autenticada.
+// Escaneo de las espumas: la clínica lo guarda en su carpeta compartida con el
+// nombre que dictó el asistente; el taller lo abre en Revo Scan por ese nombre.
 function Escaneos({
   media,
   hecho,
@@ -154,38 +156,14 @@ function Escaneos({
   proyecto: string;
   clinica: string;
 }) {
-  const scans = media.filter((m) => m.kind === SCAN_KIND && m.confirmedAt && m.url.startsWith("/api/media/"));
-  if (scans.length === 0) {
-    if (!hecho) return <div className="muted">Pendiente</div>;
-    // Guardado por la clínica en su carpeta compartida: el taller lo abre por el nombre.
-    const marcado = media.find((m) => m.kind === SCAN_KIND && m.confirmedAt);
-    const nombre = (marcado?.meta as { proyecto?: string } | null)?.proyecto ?? proyecto;
-    return (
-      <div className="muted">
-        Proyecto Revo Scan <b>«{nombre}»</b>
-        <br />
-        en la carpeta compartida de <b>{clinica}</b> · abrir en Revo Scan → Un clic → Exportar
-      </div>
-    );
-  }
+  if (!hecho) return <div className="muted">Pendiente</div>;
+  const marcado = media.find((m) => m.kind === SCAN_KIND && m.confirmedAt);
+  const nombre = (marcado?.meta as { proyecto?: string } | null)?.proyecto ?? proyecto;
   return (
     <div className="muted">
-      {scans.map((m) => {
-        const meta = m.meta as { archivo?: string } | null;
-        return (
-          <div key={m.id} className="row" style={{ gap: 8, alignItems: "center" }}>
-            <a href={m.url} className="btn" download>
-              {esProyecto(meta?.archivo ?? "") ? "Descargar proyecto Revo Scan" : "Descargar escaneo"}
-            </a>
-            <span>
-              {meta?.archivo ?? "escaneo"}
-              {esProyecto(meta?.archivo ?? "") ? " · abrir en Revo Scan → Un clic → Exportar" : ""}
-              {m.sizeBytes ? ` · ${(m.sizeBytes / 1048576).toLocaleString("es-ES", { maximumFractionDigits: 1 })} MB` : ""}
-              {m.confirmedAt ? ` · ${fmtdt(m.confirmedAt)}` : ""}
-            </span>
-          </div>
-        );
-      })}
+      Proyecto Revo Scan <b>«{nombre}»</b>
+      <br />
+      en la carpeta compartida de <b>{clinica}</b> · abrir en Revo Scan → Un clic → Exportar
     </div>
   );
 }

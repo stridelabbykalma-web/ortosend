@@ -44,8 +44,7 @@ asociadas. Stack: **Next.js (App Router, server actions) + PostgreSQL (Prisma)**
   (OneDrive de empresa): la app dicta al profesional el nombre exacto del proyecto en Revo Scan
   (`Nombre Apellido 6XXXXXXXX`, nombre y móvil del paciente), el profesional escanea y marca
   «hecho», y el taller lo abre por ese nombre desde OneDrive en su Revo Scan. Nada que instalar
-  en las clínicas. Detalle en `docs/escaneos-carpeta-compartida.md`. Como opción avanzada existe
-  el puente de escaneo (`public/puente/`, `docs/puente-escaneo.md`), desactivado por defecto.
+  en las clínicas. Detalle en `docs/escaneos-carpeta-compartida.md`.
   **Checklist bloqueante**: sin todo en verde no hay envío.
 - **Estudio de captura guiado con MediaPipe** (`src/components/caso/captura-studio.tsx`,
   reglas en `src/lib/capture-guide.ts`): la cámara se abre a pantalla completa, un modelo de
