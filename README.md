@@ -155,7 +155,7 @@ prescripción → pago → taller → entrega → cierre, más cola central, gua
 npm install
 cp .env.example .env      # rellenar DATABASE_URL y AUTH_SECRET como mínimo
 npx prisma migrate deploy # o `migrate dev` si cambias el esquema
-npx prisma db seed        # datos de demo (3 clínicas, todos los roles, 2 casos)
+npx prisma db seed        # datos de demo (3 clínicas, todos los roles, 13 casos: taller en todas sus fases)
 npm run dev
 ```
 
@@ -189,7 +189,8 @@ El repo ya está preparado: `vercel-build` aplica las migraciones en cada deploy
    - `AUTH_SECRET` → un texto largo aleatorio
 4. **Deploy**. Al terminar tendrás una URL `https://….vercel.app`.
 5. Visita **`https://tu-url/api/seed`** una vez: carga clínicas, cuentas de demo y
-   dos casos (solo funciona con la base de datos vacía; después queda inerte).
+   trece casos, con el taller poblado en todas sus fases (solo funciona con la base de
+   datos vacía; después queda inerte).
    Ya puedes entrar en `/login` con las cuentas de demo.
 
 Producción real más adelante: dominio ortosend.com, `CRON_SECRET`, Cloudflare R2

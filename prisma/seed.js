@@ -1,4 +1,4 @@
-// Seed de desarrollo: clínicas, cuentas de todos los roles y dos casos demo.
+// Seed de desarrollo: clínicas, cuentas de todos los roles y casos demo (taller poblado).
 // Ejecutar con: npx prisma db seed
 const { PrismaClient } = require("@prisma/client");
 const { seedDemo } = require("./seed-data");
