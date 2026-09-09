@@ -1,12 +1,11 @@
 @echo off
-REM Puente de escaneo Ortosend — arranca el vigilante de la carpeta de Revo Scan.
-REM Deja esta ventana abierta (o minimizada) mientras se usa el escáner.
+REM Puente de escaneo Ortosend. Lo lanza el servicio (tarea programada) al
+REM arrancar Windows; tambien se puede abrir a mano para ver que hace.
 cd /d "%~dp0"
 set NODE=node
 where node >nul 2>nul || set "NODE=%ProgramFiles%\nodejs\node.exe"
 :bucle
 "%NODE%" puente.js
-echo.
-echo El puente se ha cerrado; se vuelve a arrancar en 10 segundos (Ctrl+C para salir).
-timeout /t 10 >nul
+REM Si se cierra (actualizacion o fallo) se vuelve a lanzar a los 10 s.
+ping -n 11 127.0.0.1 >nul
 goto bucle

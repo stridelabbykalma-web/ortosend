@@ -46,8 +46,21 @@ const SALUDO_MS = 60000;
 // archivos mientras se escanea y al parar.
 const ESTABLE_BRUTO_MS = Number(process.env.ORTOSEND_ESTABLE_MS || 45000);
 
+// Cada línea va a la consola (si la hay), a puente.log (para mirar en el PC)
+// y a un búfer que se manda al panel con cada latido (para mirar desde Ortosend).
+const LOG_PATH = path.join(__dirname, "puente.log");
+const ultimasLineas = [];
 function log(...args) {
-  console.log(new Date().toLocaleTimeString("es-ES"), ...args);
+  const linea = `${new Date().toLocaleTimeString("es-ES")} ${args.join(" ")}`;
+  console.log(linea);
+  ultimasLineas.push(linea);
+  if (ultimasLineas.length > 40) ultimasLineas.shift();
+  try {
+    if (fs.existsSync(LOG_PATH) && fs.statSync(LOG_PATH).size > 2 * 1024 * 1024) fs.truncateSync(LOG_PATH, 0);
+    fs.appendFileSync(LOG_PATH, linea + "\n");
+  } catch {
+    // sin permiso de escritura: solo consola
+  }
 }
 
 function carpetaRevoScanPorDefecto() {
@@ -136,6 +149,17 @@ async function saludar(cfg) {
     return null;
   }
   return cuerpo;
+}
+
+// Latido: cada minuto dice al panel que sigue vivo y le manda sus últimas
+// líneas, para que desde Ortosend se vea qué hace sin ir al PC.
+async function latido(cfg) {
+  const { ok, status } = await api(cfg, "/api/scan/latido", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ log: ultimasLineas.slice(-40) }),
+  });
+  if (!ok && status === 401) log("El servidor ya no acepta el token del puente: revocado. Descarga un instalador nuevo desde el panel.");
 }
 
 // --- Qué hay que subir ---------------------------------------------------
@@ -497,11 +521,12 @@ async function main() {
   } catch (e) {
     log(`Sin conexión con el servidor (${e.message}). Se sigue intentando.`);
   }
+  latido(cfg).catch(() => {});
   if (hola)
     log(
       `Clínica: ${hola.clinica} · modo ${hola.modo === "directo" ? "directo al almacén (sin límite de tamaño)" : `servidor (máx. ${(hola.maxBytes / 1048576).toFixed(0)} MB)`}`
     );
-  setInterval(() => saludar(cfg).catch((e) => log("Error:", e.message)), SALUDO_MS);
+  setInterval(() => latido(cfg).catch((e) => log("Error:", e.message)), SALUDO_MS);
 
   if (cfg.carpetaRevoScan) {
     let entradas = [];
