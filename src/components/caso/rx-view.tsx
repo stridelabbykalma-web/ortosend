@@ -81,6 +81,16 @@ export function RxView({
           rows={3}
           placeholder="Cómo deben ser (tipo, material, rigidez)… qué deben llevar (cuñas, descargas, alza en mm)… y qué función tienen (objetivo del tratamiento)."
         />
+        <div className="grid g2" style={{ gap: "0 14px" }}>
+          <div>
+            <label>Pie izquierdo (si el trabajo es distinto en cada pie)</label>
+            <textarea name="orderLeft" rows={2} placeholder="Solo lo específico del izquierdo: alza, cuña, descarga…" />
+          </div>
+          <div>
+            <label>Pie derecho</label>
+            <textarea name="orderRight" rows={2} placeholder="Solo lo específico del derecho. Vacío = igual que la receta general." />
+          </div>
+        </div>
         <label>Pauta de uso para el paciente</label>
         <textarea
           name="usageGuidelines"

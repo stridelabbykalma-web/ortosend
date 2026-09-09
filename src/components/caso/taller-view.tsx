@@ -6,7 +6,7 @@ import { CopiarTexto } from "@/components/caso/copiar-texto";
 import { checklistOf } from "@/lib/cases";
 import { PRICE_LABEL, SCAN_KIND, fmtd } from "@/lib/format";
 import { nombreProyectoRevoScan } from "@/lib/scan";
-import { PROD_STEPS, QC_CHECKS, fichaTecnica, prodStepIndex, slaDe } from "@/lib/taller";
+import { PROD_STEPS, QC_CHECKS, fichaTecnica, prodStepIndex, slaDe, trabajoPorPie } from "@/lib/taller";
 import type { Questionnaire } from "@/lib/questionnaire";
 import type { Exam } from "@/lib/exploracion";
 import {
@@ -61,6 +61,7 @@ export function TallerView({ kase }: { kase: CaseTaller }) {
   const sla = slaDe(kase);
   const rehacer = kase.incidents.filter((i) => i.type === "REHACER_DEFECTO" && !i.closedAt);
   const rx = kase.prescription;
+  const pies = trabajoPorPie(rx, e, q);
 
   let zone: React.ReactNode = null;
 
@@ -309,6 +310,19 @@ export function TallerView({ kase }: { kase: CaseTaller }) {
                 PAUTA DE FABRICACIÓN · {rx.prescriberName}
               </div>
               <p className="pauta">{rx.fabricationOrder}</p>
+              <div className="tiny">POR PIE (lo que va en cada etiqueta de molde)</div>
+              <div className="pies">
+                {pies.map((t) => (
+                  <div key={t.pie} className={`pie ${t.especifica ? "esp" : ""}`}>
+                    <div className="lado">{t.pie}</div>
+                    <div>
+                      <b>{t.nombre}</b>
+                      {t.especifica ? <div>{t.pauta}</div> : <div className="muted">Igual que la receta general</div>}
+                      {t.datos.length > 0 && <div className="tiny">{t.datos.join(" · ")}</div>}
+                    </div>
+                  </div>
+                ))}
+              </div>
               <div className="tiny">DIAGNÓSTICO</div>
               <p className="muted" style={{ margin: "2px 0 10px" }}>
                 {rx.diagnosis}

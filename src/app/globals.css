@@ -159,8 +159,18 @@ label.chk.qc:has(input:checked) { background: var(--green-l); border-color: #bfd
 .hoja-fases .box { width: 22px; font-size: 16px; }
 .hoja-fases .linea { border-bottom: 1px dotted var(--mut); min-width: 90px; font-size: 12px; color: var(--ink2); }
 .hoja-fases .firma { width: 110px; }
-.etiqueta { display: flex; gap: 12px; align-items: center; border: 1.5px dashed var(--ink2); border-radius: 8px; padding: 10px 14px; }
-.etiqueta .lado { font-family: var(--font-sora); font-size: 40px; font-weight: 700; line-height: 1; color: var(--teal-d); width: 44px; text-align: center; }
+.etiqueta { border: 1.5px dashed var(--ink2); border-radius: 8px; padding: 10px 14px; break-inside: avoid; }
+.etiqueta-cab { display: flex; gap: 12px; align-items: center; }
+.etiqueta .lado { font-family: var(--font-sora); font-size: 40px; font-weight: 700; line-height: 1; color: var(--teal-d); width: 44px; text-align: center; flex: none; }
+.etiqueta-trabajo { border-top: 1px solid var(--line); margin-top: 8px; padding-top: 6px; font-size: 13px; line-height: 1.4; }
+.etiqueta-datos { margin-top: 4px; font-weight: 600; color: var(--teal-d); font-size: 12.5px; }
+.pie-bloque { font-size: 13.5px; }
+.pie-bloque b { display: block; font-size: 12px; color: var(--teal-d); }
+/* Trabajo por pie en la ficha de fabricación del taller */
+.pies { display: grid; gap: 6px; margin: 4px 0 10px; }
+.pie { display: flex; gap: 10px; align-items: flex-start; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: 13.5px; }
+.pie.esp { border-color: var(--teal); background: var(--teal-l); }
+.pie .lado { font-family: var(--font-sora); font-size: 22px; font-weight: 700; line-height: 1.1; color: var(--teal-d); width: 22px; text-align: center; flex: none; }
 @media print {
   .nav, .footer, .noprint, .audio-primer { display: none !important; }
   body { background: #fff; font-size: 12.5px; }

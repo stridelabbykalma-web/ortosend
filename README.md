@@ -128,7 +128,11 @@ asociadas. Stack: **Next.js (App Router, server actions) + PostgreSQL (Prisma)**
   comprobar), envío con transportista y seguimiento, entrega.
 - **Hoja de trabajo imprimible** (`/caso/[id]/hoja`): una hoja A4 que acompaña al par con la pauta,
   los datos del par, casillas de fase con fecha y firma, el control de calidad y las dos
-  **etiquetas de molde (I / D)** para recortar. Solo taller y administración; el acceso queda en
+  **etiquetas de molde (I / D)** para recortar. **Cada etiqueta dice qué hay que hacer en su
+  pie**: la pauta específica de ese pie si el prescriptor la detalló (campos «Pie izquierdo» /
+  «Pie derecho» de la receta, opcionales; vacíos = igual que la receta general) más los datos
+  del estudio de ese lado (alza solo en la pierna corta, FPI y zona de dolor). La ficha de
+  fabricación del taller muestra lo mismo. Solo taller y administración; el acceso queda en
   `AuditLog`.
 - Incidencias: captura inválida (→ devolver a clínica sin coste) y rehacer por defecto (vuelve a
   confección con prioridad; se cierra sola al superar calidad).

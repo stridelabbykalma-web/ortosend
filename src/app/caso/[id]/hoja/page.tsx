@@ -5,22 +5,23 @@ import { getSessionUser } from "@/lib/auth";
 import { audit } from "@/lib/cases";
 import { fmtd } from "@/lib/format";
 import { nombreProyectoRevoScan } from "@/lib/scan";
-import { PROD_STEPS, QC_CHECKS, fichaTecnica } from "@/lib/taller";
+import { PROD_STEPS, QC_CHECKS, fichaTecnica, trabajoPorPie, type TrabajoPie } from "@/lib/taller";
 import { Imprimir } from "@/components/caso/imprimir";
 import type { Questionnaire } from "@/lib/questionnaire";
 import type { Exam } from "@/lib/exploracion";
 
 export const dynamic = "force-dynamic";
 
-// Etiqueta de molde (una por pie): número de caso, talla, paciente y lote.
+// Etiqueta de molde (una por pie): número de caso, talla, lote y, sobre todo,
+// qué hay que hacer en ESE pie (pauta del pie y datos del estudio de ese lado).
 function Etiqueta({
-  lado,
+  t,
   numero,
   talla,
   nombre,
   lote,
 }: {
-  lado: "I" | "D";
+  t: TrabajoPie;
   numero: number;
   talla: string;
   nombre: string;
@@ -28,13 +29,22 @@ function Etiqueta({
 }) {
   return (
     <div className="etiqueta">
-      <div className="lado">{lado}</div>
-      <div>
-        <b>#{numero}</b> {talla}
-        <div className="tiny">{nombre}</div>
-        <div className="tiny">
-          {lote ? `Lote ${lote}` : "Lote ____"} · {lado === "I" ? "Izquierdo" : "Derecho"}
+      <div className="etiqueta-cab">
+        <div className="lado">{t.pie}</div>
+        <div>
+          <b>
+            #{numero} · Pie {t.nombre.toLowerCase()}
+          </b>{" "}
+          {talla}
+          <div className="tiny">
+            {nombre} · {lote ? `Lote ${lote}` : "Lote ____"}
+          </div>
         </div>
+      </div>
+      <div className="etiqueta-trabajo">
+        <div className="tiny">{t.especifica ? `QUÉ HACER EN EL PIE ${t.nombre.toUpperCase()}` : "QUÉ HACER (IGUAL EN LOS DOS PIES)"}</div>
+        <div>{t.pauta}</div>
+        {t.datos.length > 0 && <div className="etiqueta-datos">{t.datos.join(" · ")}</div>}
       </div>
     </div>
   );
@@ -60,6 +70,7 @@ export default async function HojaPage({ params }: { params: Promise<{ id: strin
   const ficha = fichaTecnica(q, e, k);
   const proyecto = nombreProyectoRevoScan(k.patient.name, k.patient.owner.phone, k.number);
   const talla = q?.tallaCalzado ? `T ${q.tallaCalzado}` : "";
+  const [izq, dcho] = trabajoPorPie(k.prescription, e, q);
 
   return (
     <div className="wrap hoja">
@@ -104,6 +115,16 @@ export default async function HojaPage({ params }: { params: Promise<{ id: strin
         <div className="hoja-bloque">
           <div className="tiny">PAUTA DE FABRICACIÓN</div>
           <p className="pauta">{k.prescription?.fabricationOrder ?? "— sin prescripción —"}</p>
+          {(izq.especifica || dcho.especifica) && (
+            <div className="grid g2" style={{ gap: "6px 18px", margin: "4px 0 8px" }}>
+              {[izq, dcho].map((t) => (
+                <div key={t.pie} className="pie-bloque">
+                  <b>Pie {t.nombre.toLowerCase()}</b>
+                  <div>{t.pauta}</div>
+                </div>
+              ))}
+            </div>
+          )}
           <div className="tiny">
             Diagnóstico: {k.prescription?.diagnosis ?? "—"} · Prescribe {k.prescription?.prescriberName ?? "—"}
             {k.prescription?.collegiateNum ? ` (col. ${k.prescription.collegiateNum})` : ""}
@@ -154,8 +175,8 @@ export default async function HojaPage({ params }: { params: Promise<{ id: strin
         <div className="hoja-bloque etiquetas">
           <div className="tiny">ETIQUETAS DE MOLDE (recortar)</div>
           <div className="grid g2" style={{ gap: 12 }}>
-            <Etiqueta lado="I" numero={k.number} talla={talla} nombre={k.patient.name} lote={k.lot} />
-            <Etiqueta lado="D" numero={k.number} talla={talla} nombre={k.patient.name} lote={k.lot} />
+            <Etiqueta t={izq} numero={k.number} talla={talla} nombre={k.patient.name} lote={k.lot} />
+            <Etiqueta t={dcho} numero={k.number} talla={talla} nombre={k.patient.name} lote={k.lot} />
           </div>
         </div>
         <div className="tiny" style={{ marginTop: 14 }}>

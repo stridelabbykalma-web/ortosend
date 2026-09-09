@@ -1,7 +1,7 @@
 // Utilidades del taller: fases de producción, plazo de entrega en días laborables
 // y la ficha técnica de fabricación (lo que el taller necesita del expediente
 // sin leer todo el cuestionario clínico).
-import type { Case, CaseState, FabPhase, Payment } from "@prisma/client";
+import type { Case, CaseState, FabPhase, Payment, Prescription } from "@prisma/client";
 import type { Questionnaire } from "./questionnaire";
 import type { Exam } from "./exploracion";
 
@@ -134,3 +134,47 @@ export const QC_CHECKS: [string, string][] = [
 ];
 
 export const QC_KIND = "foto_calidad";
+
+// --- Trabajo por pie (etiquetas de molde I / D) ---
+export type Pie = "I" | "D";
+export type TrabajoPie = {
+  pie: Pie;
+  nombre: string;
+  pauta: string; // lo específico de este pie, o la receta general si no hay
+  especifica: boolean; // true si la prescripción detalla este pie aparte
+  datos: string[]; // alza, FPI y lado del dolor de este pie, sacados del estudio
+};
+
+// Qué hay que hacer en cada pie: la prescripción manda (pauta por pie si la
+// hay; si no, la general) y del estudio salen alza, FPI y dolor de ese lado.
+export function trabajoPorPie(
+  rx: Pick<Prescription, "fabricationOrder" | "orderLeft" | "orderRight"> | null,
+  e: Exam | null | undefined,
+  q?: Questionnaire | null
+): [TrabajoPie, TrabajoPie] {
+  const mk = (pie: Pie): TrabajoPie => {
+    const nombre = pie === "I" ? "Izquierdo" : "Derecho";
+    const propia = (pie === "I" ? rx?.orderLeft : rx?.orderRight)?.trim();
+    const datos: string[] = [];
+    const corto = (e?.ladoCorto ?? "").toLowerCase();
+    const esCorto = pie === "I" ? corto.startsWith("izq") : corto.startsWith("der") || corto.startsWith("dch");
+    if (e?.alza && e.alza !== "No") {
+      const alza = /^\d/.test(e.alza) ? `${e.alza} mm` : e.alza;
+      if (e.dismetria === "Sí" && corto) datos.push(esCorto ? `Alza ${alza} (lado corto)` : "Sin alza");
+      else datos.push(`Alza ${alza}`);
+    }
+    const fpi = pie === "I" ? e?.fpiIzq : e?.fpiDcho;
+    if (fpi) datos.push(`FPI-6 ${fpi}`);
+    const lado = (q?.lado ?? "").toLowerCase();
+    if (lado.startsWith("ambos") || (pie === "I" && lado.startsWith("izq")) || (pie === "D" && lado.startsWith("der")))
+      datos.push(`Dolor: ${q?.zonas?.length ? q.zonas.join(", ").toLowerCase() : "sí"}`);
+    return {
+      pie,
+      nombre,
+      pauta: propia || rx?.fabricationOrder?.trim() || "—",
+      especifica: !!propia,
+      datos,
+    };
+  };
+  return [mk("I"), mk("D")];
+}

@@ -413,7 +413,9 @@ async function seedDemo(prisma) {
       collegiateNum: "COL-1234",
       assessment: "Sobrecarga de cabezas metatarsales centrales en apoyo medio; marcha estable.",
       diagnosis: "Metatarsalgia mecánica bilateral",
-      fabricationOrder: "Plantilla semirrígida con descarga retrocapital. Sin alza.",
+      fabricationOrder: "Plantilla semirrígida con descarga retrocapital bilateral.",
+      orderLeft: "Descarga retrocapital y alza de 5 mm en el talón (pierna izquierda más corta).",
+      orderRight: "Descarga retrocapital. Sin alza.",
       usageGuidelines: "Adaptación progresiva 2-3 semanas. Apto para correr desde la semana 3.",
       pdfUrl: "prescripciones/demo2.pdf",
     },
@@ -505,6 +507,8 @@ async function seedDemo(prisma) {
         assessment: o.valoracion,
         diagnosis: o.dx,
         fabricationOrder: o.pauta,
+        orderLeft: o.pautaI ?? null,
+        orderRight: o.pautaD ?? null,
         usageGuidelines: "Adaptación progresiva 2-3 semanas: 1 h el primer día y una hora más cada día.",
         pdfUrl: `prescripciones/demo${seq}.pdf`,
         signedAt: ago(o.pagado + 1),
@@ -590,6 +594,8 @@ async function seedDemo(prisma) {
     valoracion: "Colapso del arco interno izquierdo en apoyo medio con dolor en inserción de la fascia.",
     dx: "Fascitis plantar izquierda con pie plano flexible",
     pauta: "Plantilla de EVA 45 con soporte de arco medial alto, descarga en herradura del talón izquierdo y cuña supinadora de retropié 3º bilateral. Sin alza.",
+    pautaI: "Soporte de arco medial alto, descarga en herradura del talón (poron 4 mm) y cuña supinadora de retropié 3º.",
+    pautaD: "Soporte de arco medial alto y cuña supinadora de retropié 3º. Sin descarga de talón.",
   });
 
   // 2 · Diseño: aceptado ayer, pendiente de CAD
@@ -613,6 +619,8 @@ async function seedDemo(prisma) {
     valoracion: "Pronación excesiva derecha con caída pélvica contralateral en apoyo monopodal.",
     dx: "Síndrome de estrés medial de tibia con hiperpronación",
     pauta: "Plantilla deportiva de EVA 55 con control de retropié (cuña supinadora 4º dcha., 2º izq.), soporte de arco medio y antepié fino para zapatilla de running.",
+    pautaI: "Cuña supinadora de retropié 2º, soporte de arco medio, antepié fino.",
+    pautaD: "Cuña supinadora de retropié 4º, soporte de arco medio, antepié fino.",
     eventos: [["Aceptado por el taller", 2], ["Diseño terminado (CAD archivado) — a mecanizado CNC · lote L-09", 1]],
   });
   await casoTaller({
@@ -623,6 +631,8 @@ async function seedDemo(prisma) {
     valoracion: "Pie plano flexible bilateral con dismetría de 6 mm (derecha más corta) confirmada con nivel pélvico.",
     dx: "Pie plano flexible bilateral sintomático con dismetría",
     pauta: "Plantilla de EVA 45 con soporte de arco medial y estabilizador de talón profundo; alza de 6 mm en la derecha integrada en el talón. Apta para calzado de seguridad.",
+    pautaI: "Soporte de arco medial y estabilizador de talón profundo. Sin alza.",
+    pautaD: "Soporte de arco medial, estabilizador de talón profundo y alza de 6 mm integrada en el talón (pierna más corta).",
     eventos: [["Aceptado por el taller", 3], ["Diseño terminado (CAD archivado) — a mecanizado CNC · lote L-09", 2]],
   });
 
@@ -647,6 +657,8 @@ async function seedDemo(prisma) {
     valoracion: "Hallux limitus funcional derecho con primer radio hipermóvil.",
     dx: "Hallux valgus derecho con hallux limitus funcional",
     pauta: "Plantilla semirrígida con extensión de Morton bajo el primer radio derecho, soporte de arco medial y cuña supinadora 3º. Perfil bajo para calzado de vestir.",
+    pautaI: "Soporte de arco medial y cuña supinadora 3º. Sin extensión de Morton.",
+    pautaD: "Extensión de Morton bajo el primer radio (hasta la cabeza del primer metatarsiano), soporte de arco medial y cuña supinadora 3º.",
     incidencias: [{ tipo: "REHACER_DEFECTO", motivo: "Extensión de Morton 4 mm más corta que el CAD; no cubre la cabeza del primer metatarsiano", hace: 1 }],
     eventos: [["Aceptado por el taller", 8], ["Diseño terminado (CAD archivado) — a mecanizado CNC · lote L-08", 6], ["Molde mecanizado (L-08) — pasa a confección a mano", 4], ["Confección terminada (material EVA-45 lote M-2210) — a control de calidad", 2], ["No pasa calidad: extensión de Morton 4 mm más corta que el CAD — rehacer con prioridad", 1]],
   });
@@ -660,6 +672,8 @@ async function seedDemo(prisma) {
     valoracion: "Pie cavo con retropié varo; sobrecarga del Aquiles izquierdo en despegue.",
     dx: "Tendinopatía de Aquiles izquierda con pie cavo",
     pauta: "Plantilla de EVA 55 con talonera de 8 mm bilateral (10 mm izq.), cuña pronadora lateral de retropié 3º y relleno de arco externo.",
+    pautaI: "Talonera de 10 mm, cuña pronadora lateral de retropié 3º y relleno de arco externo.",
+    pautaD: "Talonera de 8 mm, cuña pronadora lateral de retropié 3º y relleno de arco externo.",
     eventos: [["Aceptado por el taller", 4], ["Diseño terminado (CAD archivado) — a mecanizado CNC · lote L-07", 3], ["Molde mecanizado (L-07) — pasa a confección a mano", 2], ["Confección terminada (material EVA-55 lote M-2208) — a control de calidad", 1], ["Foto del par adjuntada en control de calidad", 0]],
   });
 
@@ -698,6 +712,8 @@ async function seedDemo(prisma) {
     valoracion: "Pie cavo varo con inestabilidad lateral de tobillo derecho.",
     dx: "Inestabilidad crónica de tobillo derecho con pie cavo varo",
     pauta: "Plantilla de EVA 55 con cuña pronadora lateral de retropié 4º y de antepié 2º, talonera estabilizadora profunda.",
+    pautaI: "Talonera estabilizadora profunda. Sin cuñas.",
+    pautaD: "Cuña pronadora lateral de retropié 4º y de antepié 2º, talonera estabilizadora profunda.",
     eventos: [["Aceptado por el taller", 15], ["Diseño terminado — a mecanizado CNC · lote L-05", 14], ["Molde mecanizado (L-05) — pasa a confección a mano", 14], ["No pasa calidad: marcado I/D invertido — rehacer con prioridad", 13], ["Calidad superada — enviado (seguimiento PQ7H0C55118ES)", 11], ["Entrega confirmada", 10]],
   });
 
@@ -711,6 +727,8 @@ async function seedDemo(prisma) {
     valoracion: "Pie cavo con dorso prominente; conflicto con el calzado.",
     dx: "Pie cavo sintomático izquierdo",
     pauta: "Plantilla de perfil muy bajo en EVA 45 con relleno de arco y talonera de 4 mm, para calzado de vestir.",
+    pautaI: "Relleno de arco y talonera de 4 mm; rebajar el borde interno para no rozar el empeine.",
+    pautaD: "Relleno de arco y talonera de 4 mm.",
     eventos: [["Incidencia de captura — devuelto a clínica sin coste para el cliente", 2]],
   });
   await prisma.capture.update({ where: { caseId: elena.id }, data: { completedAt: null } });

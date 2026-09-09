@@ -250,7 +250,9 @@ model Prescription {
   collegiateNum String
   assessment   String              // valoración clínica
   diagnosis    String
-  fabricationOrder String          // pauta de fabricación (→ hoja de trabajo)
+  fabricationOrder String          // pauta de fabricación del par (→ hoja de trabajo)
+  orderLeft    String?             // trabajo específico del pie izquierdo (etiqueta I)
+  orderRight   String?             // trabajo específico del pie derecho (etiqueta D)
   usageGuidelines  String          // pauta de uso para el paciente
   contactNotes String?             // notas de llamadas al paciente
   pdfUrl       String?             // PDF firmado, inmutable, retención 5 años
