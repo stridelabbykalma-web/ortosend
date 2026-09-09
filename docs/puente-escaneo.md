@@ -1,3 +1,8 @@
+> **Opcional / avanzado.** El flujo normal es la carpeta compartida
+> (`docs/escaneos-carpeta-compartida.md`). Este puente sube los escaneos
+> automáticamente desde el PC del escáner, pero exige instalar un servicio en
+> cada PC; la pestaña del panel solo aparece con `PUENTE_ESCANEO=1`.
+
 # Escaneo → paciente → taller, sin tocar archivos (Revo Scan)
 
 Cómo llega el escaneo de las espumas fenólicas desde el PC del escáner de la

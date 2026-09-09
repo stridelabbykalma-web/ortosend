@@ -4,7 +4,7 @@ import { questionnaireLines, type Questionnaire } from "@/lib/questionnaire";
 import { examLines, type Exam } from "@/lib/exploracion";
 import { alertasDe } from "@/lib/tests-podologicos";
 import { CAPTURA_VISUAL, FOTO_KINDS, MEDIA_LABEL, SCAN_KIND, VIDEO_KINDS, fmtdt } from "@/lib/format";
-import { esProyecto } from "@/lib/scan";
+import { esProyecto, nombreProyectoRevoScan } from "@/lib/scan";
 import { helbingResumen, type Helbing } from "@/lib/helbing";
 import { HelbingOverlay } from "@/components/caso/helbing-overlay";
 import { VideoAnalizado } from "@/components/caso/video-analizado";
@@ -12,6 +12,7 @@ import type { MarchaInforme, MarchaTrack } from "@/lib/marcha";
 
 type CaseFull = Case & {
   patient: Patient & { owner: User };
+  clinic: { name: string };
   capture: (Capture & { media: MediaAsset[] }) | null;
   prescription: Prescription | null;
 };
@@ -77,7 +78,12 @@ export function Expediente({ kase }: { kase: CaseFull }) {
         </div>
         <div>
           <div className="tiny">ESCANEO DE ESPUMAS</div>
-          <Escaneos media={cp?.media ?? []} hecho={cl.escaneos} />
+          <Escaneos
+            media={cp?.media ?? []}
+            hecho={cl.escaneos}
+            proyecto={nombreProyectoRevoScan(kase.patient.name, kase.patient.owner.phone, kase.number)}
+            clinica={kase.clinic.name}
+          />
         </div>
         <div>
           <div className="tiny">BAROPODOMETRÍA</div>
@@ -137,10 +143,31 @@ export function Historial({ events }: { events: { id: string; at: Date; text: st
 
 // Modelos 3D de las espumas: llegan desde el PC del escáner al almacén común y
 // desde aquí el taller (o quien receta) los descarga con la URL autenticada.
-function Escaneos({ media, hecho }: { media: MediaAsset[]; hecho: boolean }) {
+function Escaneos({
+  media,
+  hecho,
+  proyecto,
+  clinica,
+}: {
+  media: MediaAsset[];
+  hecho: boolean;
+  proyecto: string;
+  clinica: string;
+}) {
   const scans = media.filter((m) => m.kind === SCAN_KIND && m.confirmedAt && m.url.startsWith("/api/media/"));
-  if (scans.length === 0)
-    return <div className="muted">{hecho ? "Marcado como hecho, sin archivo todavía" : "Pendiente"}</div>;
+  if (scans.length === 0) {
+    if (!hecho) return <div className="muted">Pendiente</div>;
+    // Guardado por la clínica en su carpeta compartida: el taller lo abre por el nombre.
+    const marcado = media.find((m) => m.kind === SCAN_KIND && m.confirmedAt);
+    const nombre = (marcado?.meta as { proyecto?: string } | null)?.proyecto ?? proyecto;
+    return (
+      <div className="muted">
+        Proyecto Revo Scan <b>«{nombre}»</b>
+        <br />
+        en la carpeta compartida de <b>{clinica}</b> · abrir en Revo Scan → Un clic → Exportar
+      </div>
+    );
+  }
   return (
     <div className="muted">
       {scans.map((m) => {

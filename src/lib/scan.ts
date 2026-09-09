@@ -52,6 +52,15 @@ export function scanExt(filename: string): string | null {
   return "bin";
 }
 
+// Nombre que hay que ponerle al proyecto en Revo Scan: nombre del paciente y
+// móvil del titular (o el número de caso si no hay móvil). Es lo que enlaza
+// la carpeta compartida de la clínica con el paciente en el taller.
+export function nombreProyectoRevoScan(nombre: string, telefono: string | null | undefined, numeroCaso: number) {
+  const tel = (telefono ?? "").replace(/\D/g, "").slice(-9);
+  const base = nombre.trim().replace(/\s+/g, " ");
+  return tel.length === 9 ? `${base} ${tel}` : `${base} caso ${numeroCaso}`;
+}
+
 // Nombre del proyecto tal y como lo tecleó el profesional en Revo Scan.
 export function safeLabel(t: unknown): string | null {
   const v = String(t ?? "").replace(/[\x00-\x1f]/g, "").trim().slice(0, 120);

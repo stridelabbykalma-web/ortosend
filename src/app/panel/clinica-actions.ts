@@ -6,6 +6,7 @@ import { prisma } from "@/lib/db";
 import { requireRole, createInviteToken } from "@/lib/auth";
 import { checklistOf, notify, pushEvent } from "@/lib/cases";
 import { BARO_KINDS, SCAN_KIND } from "@/lib/format";
+import { nombreProyectoRevoScan } from "@/lib/scan";
 import type { Questionnaire } from "@/lib/questionnaire";
 import type { Exam } from "@/lib/exploracion";
 import { nucleoCompleto, ramasSinCubrir } from "@/lib/tests-podologicos";
@@ -339,14 +340,24 @@ export async function markMediaAction(formData: FormData) {
     // Carpeta por caso identificada con el nombre del paciente, para que el archivo
     // del escáner o del dashboard quede asociado sin depender de su nombre original.
     const carpeta = `estudios/${String(kase.number).padStart(5, "0")}-${slugify(kase.patient.name)}`;
+    // Escaneo: se anota el nombre con el que está guardado el proyecto de Revo
+    // Scan en la carpeta compartida de la clínica, que es como lo busca el taller.
+    let meta: object | undefined;
+    if (kind === SCAN_KIND) {
+      const owner = await prisma.user.findUnique({ where: { id: kase.patient.ownerId }, select: { phone: true } });
+      meta = { proyecto: nombreProyectoRevoScan(kase.patient.name, owner?.phone, kase.number) };
+    }
     await prisma.mediaAsset.create({
       data: {
         captureId: capture.id,
         kind,
         url: `${carpeta}/${kind}`,
+        meta,
         confirmedAt: new Date(), // check verde SOLO con confirmación del servidor
       },
     });
+    if (kind === SCAN_KIND)
+      await pushEvent(caseId, `Escaneo de las espumas guardado en Revo Scan como «${(meta as { proyecto: string }).proyecto}»`, u.name);
   }
   redirect(`/caso/${caseId}${next ? `?paso=${next}` : ""}`);
 }

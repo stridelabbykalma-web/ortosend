@@ -1,7 +1,6 @@
 import Link from "next/link";
 import type { Capture, Case, Incident, MediaAsset, Patient } from "@prisma/client";
 import { checklistOf } from "@/lib/cases";
-import { bandejaDe, marcarEsperando, puenteActivo } from "@/lib/escaneos";
 import { BARO_KINDS, CAPTURA_VISUAL, FOTO_KINDS, SCAN_KIND, VIDEO_KINDS } from "@/lib/format";
 import {
   ACTIVIDAD_OPTS,
@@ -64,6 +63,7 @@ import {
   ramasSinCubrir,
   type TestId,
 } from "@/lib/tests-podologicos";
+import { nombreProyectoRevoScan } from "@/lib/scan";
 import { CheckLine } from "@/components/ui";
 import { RX_ROUTES, RX_ROUTE_HELP, RX_ROUTE_LABEL, type RxRoute } from "@/lib/rx-route";
 import {
@@ -75,12 +75,12 @@ import {
   sendCaseAction,
 } from "@/app/panel/clinica-actions";
 import { CapturaStudio } from "./captura-studio";
-import { EscaneoPuente } from "./escaneo-puente";
+import { CopiarTexto } from "./copiar-texto";
 import { CAPTURE_GUIDES, durationLabel } from "@/lib/capture-guide";
 import { AutosaveForm } from "./autosave-form";
 
 type CaseWithCapture = Case & {
-  patient: Patient;
+  patient: Patient & { owner?: { phone: string | null } | null };
   capture: (Capture & { media: MediaAsset[] }) | null;
   incidents: Incident[];
 };
@@ -159,7 +159,7 @@ function buildSlides(): Slide[] {
       kind: SCAN_KIND,
       title: "Escaneo de las espumas fenólicas",
       grupo: "Escaneo",
-      help: "Toma el molde en las espumas fenólicas y escanéalo con Revo Scan: escanear y Parar, nada más. Con esta pantalla abierta, el escaneo se sube solo y queda asociado a este paciente; el taller lo procesa. Es el último paso del estudio.",
+      help: "Toma el molde en las espumas fenólicas y escanéalo con Revo Scan, guardando el proyecto con el nombre que se indica. El taller lo abre desde la carpeta compartida y lo procesa. Es el último paso del estudio.",
       boton: "Marcar escaneo como hecho",
       hecho: "Escaneo de las espumas registrado.",
     },
@@ -861,27 +861,11 @@ export async function CapturaGuiada({
   const next = paso < total ? paso + 1 : null;
   const done = doneFlags[i];
 
-  // Escaneo de las espumas: estado inicial de la espera (el resto lo va
-  // refrescando la propia pantalla cada pocos segundos).
-  if (s.t === "file" && s.kind === SCAN_KIND) await marcarEsperando(kase.id);
-  const escaneo =
+  // Escaneo de las espumas: el proyecto de Revo Scan se guarda en la carpeta
+  // compartida de la clínica con este nombre, y por él lo encuentra el taller.
+  const nombreProyecto =
     s.t === "file" && s.kind === SCAN_KIND
-      ? {
-          hecho: done,
-          escaneos: media
-            .filter((m) => m.kind === SCAN_KIND)
-            .map((m) => ({
-              id: m.id,
-              archivo: (m.meta as { archivo?: string } | null)?.archivo ?? "escaneo",
-              bytes: m.sizeBytes ?? 0,
-              at: (m.confirmedAt ?? new Date()).toISOString(),
-            })),
-          bandeja: (await bandejaDe(kase.clinicId)).map((b) => ({
-            ...b,
-            receivedAt: (b.receivedAt ?? new Date()).toISOString(),
-          })),
-          puente: await puenteActivo(kase.clinicId),
-        }
+      ? nombreProyectoRevoScan(kase.patient.name, kase.patient.owner?.phone, kase.number)
       : null;
 
   const navFooter = (
@@ -995,44 +979,17 @@ export async function CapturaGuiada({
             </>
           ))}
 
-        {s.t === "file" && escaneo && (
-          <>
-            <p className="muted" style={{ margin: "4px 0 10px" }}>
-              {s.help}
-            </p>
-            <EscaneoPuente caseId={kase.id} paciente={kase.patient.name} caso={kase.number} inicial={escaneo} />
-            <div className="sp" />
-            {done ? (
-              <Link href={`/caso/${kase.id}?paso=${next ?? total}`}>
-                <button className="pri wfull" type="button">
-                  Siguiente →
-                </button>
-              </Link>
-            ) : (
-              <>
-                {/* Último recurso: sin modelo 3D el taller no puede diseñar. */}
-                <form action={markMediaAction}>
-                  <input type="hidden" name="caseId" value={kase.id} />
-                  <input type="hidden" name="kind" value={s.kind} />
-                  <input type="hidden" name="next" value={next ?? ""} />
-                  <button type="submit" className="wfull">
-                    El escaneo está hecho, subirlo más tarde
-                  </button>
-                </form>
-                <div className="tiny" style={{ marginTop: 8 }}>
-                  Solo si el escáner no puede subirlo ahora: el modelo 3D tiene que llegar antes de
-                  que el taller diseñe la plantilla de <b>{kase.patient.name}</b>.
-                </div>
-              </>
-            )}
-          </>
-        )}
-
-        {s.t === "file" && !escaneo &&
+        {s.t === "file" &&
           (done ? (
             <>
               <div className="note g">
                 {s.hecho} Queda asociado a <b>{kase.patient.name}</b> (caso #{kase.number}).
+                {nombreProyecto && (
+                  <>
+                    {" "}
+                    Proyecto en Revo Scan: <b>{nombreProyecto}</b>.
+                  </>
+                )}
               </div>
               <div className="sp" />
               <Link href={`/caso/${kase.id}?paso=${next ?? total}`}>
@@ -1046,6 +1003,19 @@ export async function CapturaGuiada({
               <p className="muted" style={{ margin: "4px 0 10px" }}>
                 {s.help}
               </p>
+              {nombreProyecto && (
+                <div className="card" style={{ padding: 12, marginBottom: 12 }}>
+                  <div className="tiny muted">En Revo Scan, al crear el proyecto, ponle este nombre:</div>
+                  <div className="row between" style={{ gap: 8, alignItems: "center", marginTop: 6 }}>
+                    <b style={{ fontSize: 18 }}>{nombreProyecto}</b>
+                    <CopiarTexto texto={nombreProyecto} />
+                  </div>
+                  <div className="tiny muted" style={{ marginTop: 6 }}>
+                    Escanea y pulsa Parar. El proyecto se guarda en la carpeta compartida de la
+                    clínica y el taller lo abre por ese nombre. No hay que exportar ni subir nada.
+                  </div>
+                </div>
+              )}
               <form action={markMediaAction}>
                 <input type="hidden" name="caseId" value={kase.id} />
                 <input type="hidden" name="kind" value={s.kind} />
@@ -1055,8 +1025,18 @@ export async function CapturaGuiada({
                 </button>
               </form>
               <div className="tiny" style={{ marginTop: 8 }}>
-                Se guardará asociado a <b>{kase.patient.name}</b> — caso #{kase.number}. No hace
-                falta renombrar el archivo: el nombre del paciente y el caso se añaden solos.
+                {nombreProyecto ? (
+                  <>
+                    Márcalo cuando el escaneo esté guardado con ese nombre: queda asociado a{" "}
+                    <b>{kase.patient.name}</b> (caso #{kase.number}).
+                  </>
+                ) : (
+                  <>
+                    Se guardará asociado a <b>{kase.patient.name}</b> — caso #{kase.number}. No
+                    hace falta renombrar el archivo: el nombre del paciente y el caso se añaden
+                    solos.
+                  </>
+                )}
               </div>
             </>
           ))}
