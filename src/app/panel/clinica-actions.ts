@@ -82,7 +82,7 @@ export async function newCaseBAction(formData: FormData) {
         name,
         birthDate: birth ? new Date(birth) : null,
         // Consentimiento recogido en papel/tablet en la clínica; queda versionado.
-        consents: { salud: { aceptado: true, fecha: now.toISOString(), version: "v1", via: "clinica" } },
+        consents: { salud: { aceptado: true, fecha: now.toISOString(), version: "v2", via: "clinica" } },
       },
     });
     const kase = await tx.case.create({

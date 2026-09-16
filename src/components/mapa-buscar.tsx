@@ -7,6 +7,7 @@
 // La clave es de uso en navegador (viaja en el HTML) y está restringida por
 // dominio en Google Cloud; NEXT_PUBLIC_GOOGLE_MAPS_KEY permite sobrescribirla.
 import { useEffect, useRef } from "react";
+import { setCookieChoice, useCookieChoice } from "@/components/cookies";
 
 const MAPS_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY ?? "AIzaSyAYf2ZSh2rXeipzP0kOECR6aJ6oweoOBQU";
 
@@ -58,9 +59,13 @@ export function MapaBuscar({
   const overlaysRef = useRef<(google.maps.Marker | google.maps.Circle)[]>([]);
   const infoRef = useRef<google.maps.InfoWindow | null>(null);
   const dataKey = JSON.stringify([clinics.map((c) => [c.id, c.lat, c.lng]), center?.lat, center?.lng, radiusKm]);
+  // Google Maps solo se carga con las cookies de terceros aceptadas (AEPD).
+  const cookies = useCookieChoice();
+  const allowed = cookies === "all";
 
-  // Creación única del mapa, visible desde el momento 0.
+  // Creación única del mapa, visible desde el momento 0 (si hay consentimiento).
   useEffect(() => {
+    if (!allowed) return;
     let disposed = false;
     (async () => {
       try {
@@ -89,10 +94,11 @@ export function MapaBuscar({
       overlaysRef.current = [];
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [allowed]);
 
   // Actualización de marcadores/círculo cuando cambian los datos.
   useEffect(() => {
+    if (!allowed) return;
     let cancelled = false;
     (async () => {
       try {
@@ -171,7 +177,36 @@ export function MapaBuscar({
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dataKey]);
+  }, [dataKey, allowed]);
+
+  if (!allowed) {
+    return (
+      <div
+        style={{
+          height: 380,
+          borderRadius: 14,
+          border: "1px solid var(--line)",
+          background: "#efede6",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 10,
+          padding: 20,
+          textAlign: "center",
+        }}
+      >
+        <div className="muted" style={{ maxWidth: 420 }}>
+          El mapa usa Google Maps y sus cookies. Acéptalas para verlo — o sigue con la lista de
+          clínicas de abajo, que funciona igual.
+        </div>
+        <button type="button" className="pri" onClick={() => setCookieChoice("all")}>
+          Aceptar cookies y ver el mapa
+        </button>
+        <a href="/legal/cookies" className="tiny">Política de cookies</a>
+      </div>
+    );
+  }
 
   return (
     <div

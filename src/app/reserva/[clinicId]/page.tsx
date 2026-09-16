@@ -87,13 +87,20 @@ export default async function ReservaPage({
           <label>Crea tu contraseña (para seguir tu tratamiento en tu panel)</label>
           <input name="password" type="password" minLength={8} required />
           <label className="chk">
-            <input type="checkbox" name="consentSalud" required /> Consiento el tratamiento de mis
-            datos de salud para la prestación del servicio (RGPD).
+            <input type="checkbox" name="consentSalud" required /> Consiento de forma explícita el
+            tratamiento de mis datos de salud para la prestación del servicio, incluida la
+            grabación de vídeos de mi marcha y fotografías de mis pies durante el estudio. Si
+            reservo para un menor de edad, declaro ser su padre, madre o tutor legal y consentir
+            en su nombre.
           </label>
           <label className="chk">
-            <input type="checkbox" name="consentWhatsApp" /> Acepto recibir comunicaciones del
-            servicio por WhatsApp.
+            <input type="checkbox" name="consentWhatsApp" /> Acepto recibir los avisos del
+            servicio por WhatsApp (solo avisos y enlaces, nunca contenido clínico).
           </label>
+        </div>
+        <div className="tiny" style={{ marginTop: 10 }}>
+          Responsable: Ortosend. Finalidad: gestionar tu cita, estudio y tratamiento. Derechos de
+          acceso, rectificación y supresión en la <a href="/legal/privacidad">política de privacidad</a>.
         </div>
         <div className="sp" />
         <button type="submit" className="pri wfull" disabled={clinic.slots.length === 0}>

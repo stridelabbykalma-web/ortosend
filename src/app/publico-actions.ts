@@ -53,8 +53,8 @@ export async function reservaAction(formData: FormData) {
         name: d.name,
         birthDate: d.birth ? new Date(d.birth) : null,
         consents: {
-          salud: { aceptado: true, fecha: now.toISOString(), version: "v1" },
-          whatsapp: { aceptado: consentWhatsApp, fecha: now.toISOString(), version: "v1" },
+          salud: { aceptado: true, fecha: now.toISOString(), version: "v2" },
+          whatsapp: { aceptado: consentWhatsApp, fecha: now.toISOString(), version: "v2" },
         },
       },
     });

@@ -11,6 +11,11 @@ const { seedDemo } = require("../../../../prisma/seed-data.js");
 export const dynamic = "force-dynamic";
 
 export async function GET() {
+  // En producción queda desactivado salvo autorización explícita por entorno
+  // (ALLOW_SEED=1 en Vercel para una puesta en marcha controlada).
+  if (process.env.NODE_ENV === "production" && process.env.ALLOW_SEED !== "1") {
+    return NextResponse.json({ error: "Seed desactivado en producción." }, { status: 403 });
+  }
   const users = await prisma.user.count();
   if (users > 0) {
     return NextResponse.json(

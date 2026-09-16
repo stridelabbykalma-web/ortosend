@@ -3,6 +3,7 @@ import { Sora, Inter } from "next/font/google";
 import "./globals.css";
 import { Nav } from "@/components/nav";
 import { AudioPrimer } from "@/components/audio-primer";
+import { CookieBanner } from "@/components/cookies";
 
 const sora = Sora({ variable: "--font-sora", subsets: ["latin"], weight: ["400", "600", "700"] });
 const inter = Inter({ variable: "--font-inter", subsets: ["latin"], weight: ["400", "500", "600"] });
@@ -20,11 +21,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <AudioPrimer />
         <Nav />
         {children}
+        <CookieBanner />
         <div className="footer">
           <div className="wrap row between">
             <span>© 2026 Ortosend</span>
             <span>
-              <a href="/legal/privacidad">Privacidad</a> · <a href="/legal/terminos">Términos</a>
+              <a href="/legal/aviso-legal">Aviso legal</a> · <a href="/legal/privacidad">Privacidad</a> ·{" "}
+              <a href="/legal/terminos">Términos</a> · <a href="/legal/cookies">Cookies</a>
             </span>
           </div>
         </div>
