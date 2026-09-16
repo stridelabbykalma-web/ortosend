@@ -12,6 +12,8 @@ export const EMPRESA = {
 
 // Versión vigente de los textos de consentimiento. Se guarda junto a cada
 // consentimiento del paciente; súbela cuando cambie el texto legal.
-export const CONSENT_VERSION = "v2";
+// v3: menores gestionados por su tutor hasta los 16 años y traspaso de la
+// cuenta al propio paciente al cumplirlos.
+export const CONSENT_VERSION = "v3";
 
 export const FECHA_TEXTOS = "septiembre de 2026";

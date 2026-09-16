@@ -5,8 +5,10 @@
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { requireRole } from "@/lib/auth";
-import { notify, pushEvent } from "@/lib/cases";
+import { notify, notifyOwner, pushEvent } from "@/lib/cases";
 import { PAY_LINK_DAYS, PAY_REMINDERS_DAYS, SOFT_EXPIRY_MONTHS } from "@/lib/states";
+import { nacimientoLimiteMayoria } from "@/lib/edad";
+import { enviarAvisoMayoria } from "@/lib/mayoria";
 
 function fail(path: string, msg: string): never {
   redirect(`${path}${path.includes("?") ? "&" : "?"}error=` + encodeURIComponent(msg));
@@ -89,9 +91,15 @@ export async function runJobsAction() {
   void u;
   redirect(
     "/panel?ok=" +
-      encodeURIComponent(`Mantenimiento: ${res.expired} enlaces caducados, ${res.reminders} recordatorios encolados`)
+      encodeURIComponent(
+        `Mantenimiento: ${res.expired} enlaces caducados, ${res.reminders} recordatorios de pago, ${res.citas} recordatorios de cita, ${res.mayoria} avisos de mayoría de edad`
+      )
   );
 }
+
+// Ventana del recordatorio de cita: el cron corre una vez al día, así que se
+// avisa de las citas de las próximas 36 h (la víspera) y se marca para no repetir.
+const REMINDER_WINDOW_H = 36;
 
 export async function runJobs() {
   const now = new Date();
@@ -131,7 +139,40 @@ export async function runJobs() {
       reminders++;
     }
   }
-  return { expired: expiredCases.length, reminders };
+  // 3) Recordatorio de cita (Flujo A): la víspera, por WhatsApp si lo aceptó y por email.
+  let citas = 0;
+  const proximas = await prisma.case.findMany({
+    where: {
+      state: "CITA_RESERVADA",
+      reminderSentAt: null,
+      appointmentAt: { gt: now, lt: new Date(now.getTime() + REMINDER_WINDOW_H * 3600 * 1000) },
+    },
+    include: { patient: { include: { owner: true } }, clinic: true },
+  });
+  for (const c of proximas) {
+    await notifyOwner(c.patient.owner, c.patient.consents, "recordatorio_24h", {
+      caseId: c.id,
+      nombre: c.patient.owner.name,
+      paciente: c.patient.name !== c.patient.owner.name ? c.patient.name : undefined,
+      clinica: c.clinic.name,
+      direccion: c.clinic.address,
+      fechaTexto: c.appointmentAt!.toLocaleString("es-ES", { dateStyle: "full", timeStyle: "short" }),
+      enlace: "/panel",
+      nota: "Recordatorio de tu cita de mañana. Trae tu calzado habitual y ropa cómoda.",
+    });
+    await prisma.case.update({ where: { id: c.id }, data: { reminderSentAt: now } });
+    citas++;
+  }
+  // 4) Mayoría de edad (16 años): aviso al paciente para que tome el control de su cuenta.
+  let mayoria = 0;
+  const mayores = await prisma.patient.findMany({
+    where: { isMinor: true, handoverAt: null, handoverNoticeAt: null, birthDate: { lte: nacimientoLimiteMayoria(now) } },
+    include: { owner: true },
+  });
+  for (const p of mayores) {
+    if ((await enviarAvisoMayoria(p, p.owner)) === "enviado") mayoria++;
+  }
+  return { expired: expiredCases.length, reminders, citas, mayoria };
 }
 
 // --- Altas de profesionales solicitadas por las clínicas ---

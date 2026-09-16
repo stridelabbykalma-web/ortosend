@@ -4,7 +4,10 @@
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { requireRole, createInviteToken } from "@/lib/auth";
-import { checklistOf, notify, pushEvent } from "@/lib/cases";
+import { checklistOf, notify, notifyEmail, pushEvent } from "@/lib/cases";
+import { isValidPhone, normalizeEmail, normalizePhone } from "@/lib/contacto";
+import { EDAD_MAYORIA_SALUD, esMenor, parseBirth } from "@/lib/edad";
+import { CONSENT_VERSION } from "@/lib/legal";
 import { BARO_KINDS, SCAN_KIND } from "@/lib/format";
 import { nombreProyectoRevoScan } from "@/lib/scan";
 import type { Questionnaire } from "@/lib/questionnaire";
@@ -59,30 +62,51 @@ export async function delSlotAction(formData: FormData) {
 }
 
 // --- Flujo B: caso iniciado en clínica + invitación de cuenta (72 h) ---
+// Si el paciente es menor de 16, la cuenta (y la invitación) son de su tutor y
+// el contacto del menor se guarda en su ficha para el aviso al cumplirlos.
 export async function newCaseBAction(formData: FormData) {
   const u = await requireClinicStaff();
   const back = "/panel?tab=agenda";
   const name = String(formData.get("name") ?? "").trim();
-  const phone = String(formData.get("phone") ?? "").trim();
-  const email = String(formData.get("email") ?? "").trim().toLowerCase() || null;
-  const birth = String(formData.get("birth") ?? "");
-  if (!name || !phone) fail(back, "Nombre y móvil del paciente son obligatorios");
+  const phone = normalizePhone(String(formData.get("phone") ?? ""));
+  const email = normalizeEmail(String(formData.get("email") ?? "")) || null;
+  const birth = parseBirth(String(formData.get("birth") ?? ""));
+  const tutorNombre = String(formData.get("tutorNombre") ?? "").trim();
+  const tutorMovil = normalizePhone(String(formData.get("tutorMovil") ?? ""));
+  const tutorEmail = normalizeEmail(String(formData.get("tutorEmail") ?? "")) || null;
+  const menor = esMenor(birth);
+  if (!name) fail(back, "El nombre del paciente es obligatorio");
+  if (menor && !tutorNombre) fail(back, `Paciente menor de ${EDAD_MAYORIA_SALUD} años: indica su padre, madre o tutor`);
+  if (email && !email.includes("@")) fail(back, "Email no válido");
+  // Contacto del titular de la cuenta: el paciente o, si es menor, su tutor.
+  const ownerPhone = menor ? tutorMovil : phone;
+  const ownerEmail = menor ? tutorEmail : email;
+  if (!isValidPhone(ownerPhone)) fail(back, menor ? "El móvil del tutor es obligatorio" : "Móvil del paciente no válido");
+  if (phone && !isValidPhone(phone)) fail(back, "Móvil del paciente no válido");
+  if (menor && email && email === ownerEmail) fail(back, "El email del menor debe ser distinto del de su tutor");
   const dup = await prisma.user.findFirst({
-    where: { OR: [{ phone }, ...(email ? [{ email }] : [])] },
+    where: { OR: [{ phone: ownerPhone }, ...(ownerEmail ? [{ email: ownerEmail }] : [])] },
   });
   if (dup) fail(back, "Ya existe una cuenta con ese móvil o email");
   const now = new Date();
   const { kase, owner } = await prisma.$transaction(async (tx) => {
     const owner = await tx.user.create({
-      data: { email, phone, role: "CLIENTE", name, invitedAt: now },
+      data: { email: ownerEmail, phone: ownerPhone, role: "CLIENTE", name: menor ? tutorNombre : name, invitedAt: now },
     });
     const patient = await tx.patient.create({
       data: {
         ownerId: owner.id,
         name,
-        birthDate: birth ? new Date(birth) : null,
+        birthDate: birth,
+        isMinor: menor,
+        email: menor ? email : null,
+        phone: menor ? phone || null : null,
         // Consentimiento recogido en papel/tablet en la clínica; queda versionado.
-        consents: { salud: { aceptado: true, fecha: now.toISOString(), version: "v2", via: "clinica" } },
+        consents: {
+          salud: { aceptado: true, fecha: now.toISOString(), version: CONSENT_VERSION, via: "clinica" },
+          whatsapp: { aceptado: true, fecha: now.toISOString(), version: CONSENT_VERSION, via: "clinica" },
+          ...(menor ? { tutor: { declarado: true, fecha: now.toISOString(), version: CONSENT_VERSION, via: "clinica" } } : {}),
+        },
       },
     });
     const kase = await tx.case.create({
@@ -92,12 +116,14 @@ export async function newCaseBAction(formData: FormData) {
     return { kase, owner };
   });
   const token = await createInviteToken(owner.id);
-  await pushEvent(kase.id, `Caso creado en clínica (Flujo B) por ${u.name}`, u.name);
-  await notify(phone, "invitacion_cuenta", {
-    enlace: `/activar?token=${token}`,
-    validez: "72 h",
-    clinica: u.clinicId,
-  });
+  await pushEvent(
+    kase.id,
+    `Caso creado en clínica (Flujo B) por ${u.name}${menor ? ` · menor a cargo de ${tutorNombre}` : ""}`,
+    u.name
+  );
+  const payload = { enlace: `/activar?token=${token}`, validez: "72 h", clinica: u.clinicId, nombre: owner.name };
+  await notify(ownerPhone, "invitacion_cuenta", payload);
+  if (ownerEmail) await notifyEmail(ownerEmail, "invitacion_cuenta", payload);
   redirect(`/caso/${kase.id}`);
 }
 

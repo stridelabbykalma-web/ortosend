@@ -6,6 +6,7 @@ import { fmtd, fmtdt } from "@/lib/format";
 import { addSlotAction, delSlotAction, newCaseBAction, requestProfessionalAction } from "@/app/panel/clinica-actions";
 import { openCaseAction } from "@/app/panel/rx-actions";
 import { REVISION_PREFIJO, esCentral } from "@/lib/rx-route";
+import { EDAD_MAYORIA_SALUD } from "@/lib/edad";
 
 export async function PanelClinica({ user, tab }: { user: User; tab?: string }) {
   const clinic = await prisma.clinic.findUnique({
@@ -32,7 +33,7 @@ export async function PanelClinica({ user, tab }: { user: User; tab?: string }) 
   const t = tab && tabsDef.some(([k]) => k === tab) ? tab : "agenda";
   const cases = await prisma.case.findMany({
     where: { clinicId: clinic.id },
-    include: { patient: true },
+    include: { patient: { include: { owner: true } } },
     orderBy: { createdAt: "desc" },
   });
 
@@ -63,7 +64,13 @@ export async function PanelClinica({ user, tab }: { user: User; tab?: string }) 
                 {agenda.map((c) => (
                   <tr key={c.id}>
                     <td>#{c.number}</td>
-                    <td>{c.patient.name}</td>
+                    <td>
+                      {c.patient.name}
+                      {c.patient.isMinor && (
+                        <div className="tiny">Menor · tutor: {c.patient.owner.name}</div>
+                      )}
+                      {c.reason && <div className="tiny">Motivo: {c.reason}</div>}
+                    </td>
                     <td>{c.appointmentAt ? fmtdt(c.appointmentAt) : "Flujo B"}</td>
                     <td>
                       <StatePill state={c.state} />
@@ -90,7 +97,7 @@ export async function PanelClinica({ user, tab }: { user: User; tab?: string }) 
             <div className="grid g2">
               <div>
                 <label>Móvil (recibirá la invitación de cuenta, 72 h)</label>
-                <input name="phone" required />
+                <input name="phone" type="tel" />
               </div>
               <div>
                 <label>Email (opcional)</label>
@@ -99,13 +106,33 @@ export async function PanelClinica({ user, tab }: { user: User; tab?: string }) 
             </div>
             <label>Fecha de nacimiento</label>
             <input name="birth" type="date" />
+            <details style={{ marginTop: 10 }}>
+              <summary style={{ cursor: "pointer" }}>El paciente es menor de {EDAD_MAYORIA_SALUD} años</summary>
+              <div className="tiny" style={{ margin: "6px 0" }}>
+                La cuenta y la invitación son para su padre, madre o tutor; el móvil y el email de arriba
+                son los del menor (recibirá el aviso para gestionar su cuenta al cumplir {EDAD_MAYORIA_SALUD}
+                años). Deja el móvil del menor vacío si no tiene.
+              </div>
+              <label>Nombre y apellidos del tutor</label>
+              <input name="tutorNombre" />
+              <div className="grid g2">
+                <div>
+                  <label>Móvil del tutor (recibirá la invitación)</label>
+                  <input name="tutorMovil" type="tel" />
+                </div>
+                <div>
+                  <label>Email del tutor</label>
+                  <input name="tutorEmail" type="email" />
+                </div>
+              </div>
+            </details>
             <div className="sp" />
             <button type="submit" className="pri">
               Crear caso e invitar al paciente
             </button>
             <div className="tiny" style={{ marginTop: 8 }}>
-              El consentimiento RGPD se recoge en clínica. El paciente activa su cuenta desde el
-              enlace de invitación (WhatsApp).
+              El consentimiento RGPD se recoge en clínica. El paciente (o su tutor) activa su cuenta
+              desde el enlace de invitación (WhatsApp y email).
             </div>
           </form>
         </details>

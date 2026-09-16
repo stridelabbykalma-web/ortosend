@@ -73,6 +73,24 @@ export async function createInviteToken(userId: string) {
     .setExpirationTime("72h")
     .sign(secret());
 }
+// Token con el que el paciente toma el control de su cuenta al cumplir 16 años.
+export async function createHandoverToken(patientId: string, days: number) {
+  return new SignJWT({ pid: patientId, kind: "handover" })
+    .setProtectedHeader({ alg: "HS256" })
+    .setIssuedAt()
+    .setExpirationTime(`${days * 24}h`)
+    .sign(secret());
+}
+export async function verifyHandoverToken(token: string): Promise<string | null> {
+  try {
+    const { payload } = await jwtVerify(token, secret());
+    if (payload.kind !== "handover") return null;
+    return payload.pid as string;
+  } catch {
+    return null;
+  }
+}
+
 export async function verifyInviteToken(token: string): Promise<string | null> {
   try {
     const { payload } = await jwtVerify(token, secret());

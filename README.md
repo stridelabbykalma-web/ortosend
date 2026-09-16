@@ -8,8 +8,15 @@ asociadas. Stack: **Next.js (App Router, server actions) + PostgreSQL (Prisma)**
 **Web pública**
 - Home con propuesta de valor y buscador de clínicas por población/CP (`/buscar`).
 - «Cómo funciona», «Para clínicas» (solicitud de alta) y lista de espera de zonas sin cobertura.
-- **Flujo A**: reserva online con huecos reales (reclamo atómico del slot, sin dobles reservas),
-  alta de cuenta del cliente con consentimientos RGPD versionados.
+- **Flujo A**: reserva online con huecos reales (bloqueo de 15 min al elegir la hora y reclamo
+  atómico del slot, sin dobles reservas), alta de cuenta del cliente con consentimientos RGPD
+  versionados (`CONSENT_VERSION`), móvil y email normalizados, motivo de la reserva visible en la
+  agenda, y reserva con la cuenta ya existente (para uno mismo o para un menor a cargo).
+  Confirmación por email y, si lo acepta, por WhatsApp; recordatorio la víspera desde el cron.
+  **Menores**: hasta los 16 años los gestiona su padre/madre/tutor desde su cuenta; al cumplirlos
+  el cron avisa por email al menor con un enlace (`/mayoria`, 30 días) para que confirme email y
+  móvil y cree su contraseña, y desde entonces solo él/ella accede (el tutor recibe aviso y pierde
+  el acceso). Detalle en `docs/alta-cliente-flujo-a.md`.
 - Textos legales provisionales (privacidad y términos).
 
 **Autenticación y roles**
@@ -145,11 +152,13 @@ Cuentas de demo (contraseña `ortosend123`):
 - **Stripe real** (PaymentIntent + webhook; Bizum) y facturas.
 - **Media en Cloudflare R2/S3** por fragmentos con URLs firmadas (hoy los vídeos y fotos se
   guardan en Postgres, con tope de 4 MB por archivo); visor del escaneo 3D.
-- **WhatsApp Business API** (360dialog/Twilio) para la cola de `Notification`; email de respaldo.
+- **WhatsApp Business API** (360dialog/Twilio) para la cola de `Notification`. El email de respaldo
+  ya se encola y sale por Resend si se configuran `RESEND_API_KEY` y `EMAIL_FROM`.
 - Mapa Leaflet/OSM con radio 50 km real en `/buscar` (lat/lng ya en el modelo).
 - Envíos (Sendcloud/Packlink) con webhook de entrega; PDF real de la prescripción.
 - i18n ES/CA, passkeys, PWA offline del asistente de captura.
-- Recordatorio de cita 24 h, seguimiento de adaptación d20 y revisión anual como cron real.
+- Seguimiento de adaptación d20 y revisión anual como cron real (el recordatorio de cita ya va en
+  `/api/cron`).
 - Onboarding completo de clínicas (contrato, cesión de equipamiento, formación bloqueante).
 
 ## Despliegue en Vercel + Neon (sin terminal, ~5 min)
@@ -164,6 +173,8 @@ El repo ya está preparado: `vercel-build` aplica las migraciones en cada deploy
 3. En **Environment Variables** añade:
    - `DATABASE_URL` → la cadena de Neon
    - `AUTH_SECRET` → un texto largo aleatorio
+   - opcionales: `RESEND_API_KEY` y `EMAIL_FROM` para que salgan los emails (confirmaciones,
+     recordatorios y aviso de mayoría de edad); sin ellos quedan encolados en el panel de admin.
 4. **Deploy**. Al terminar tendrás una URL `https://….vercel.app`.
 5. Visita **`https://tu-url/api/seed`** una vez: carga clínicas, cuentas de demo y
    dos casos (solo funciona con la base de datos vacía; después queda inerte).

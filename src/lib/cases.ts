@@ -1,7 +1,8 @@
-// Utilidades sobre casos: eventos, notificaciones simuladas, reparto y liberación.
+// Utilidades sobre casos: eventos, notificaciones, reparto y liberación.
 import { prisma } from "./db";
 import { OPEN_CASE_TIMEOUT_MIN } from "./states";
 import { BARO_KINDS, CAPTURA_VISUAL, SCAN_KIND } from "./format";
+import { deliverEmail, renderEmail } from "./email";
 
 export async function pushEvent(caseId: string, text: string, actor: string) {
   await prisma.caseEvent.create({ data: { caseId, text, actor } });
@@ -9,7 +10,36 @@ export async function pushEvent(caseId: string, text: string, actor: string) {
 
 // Canal WhatsApp (simulado): encola el aviso — solo texto + enlace, nunca contenido clínico.
 export async function notify(toPhone: string, template: string, payload: Record<string, unknown> = {}) {
-  await prisma.notification.create({ data: { toPhone, template, payload: payload as object } });
+  await prisma.notification.create({ data: { channel: "whatsapp", toPhone, template, payload: payload as object } });
+}
+
+// Canal email (respaldo y avisos legales): encola el aviso y, si hay proveedor
+// configurado, lo envía en el acto (ver src/lib/email.ts).
+export async function notifyEmail(toEmail: string, template: string, payload: Record<string, unknown> = {}) {
+  if (!toEmail) return;
+  const { subject, text } = renderEmail(template, payload);
+  const sent = await deliverEmail(toEmail, subject, text);
+  await prisma.notification.create({
+    data: {
+      channel: "email",
+      toEmail,
+      template,
+      payload: { ...payload, asunto: subject } as object,
+      sentAt: sent ? new Date() : null,
+    },
+  });
+}
+
+// Avisos al titular de un paciente: WhatsApp solo si lo aceptó; email siempre.
+export async function notifyOwner(
+  owner: { phone: string | null; email: string | null },
+  consents: unknown,
+  template: string,
+  payload: Record<string, unknown> = {}
+) {
+  const wa = (consents as { whatsapp?: { aceptado?: boolean } } | null)?.whatsapp?.aceptado;
+  if (owner.phone && wa) await notify(owner.phone, template, payload);
+  if (owner.email) await notifyEmail(owner.email, template, payload);
 }
 
 export async function audit(userId: string, action: string, target: string) {
