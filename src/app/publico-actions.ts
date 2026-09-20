@@ -12,6 +12,7 @@ import { isValidPhone, normalizeEmail, normalizePhone } from "@/lib/contacto";
 import { EDAD_MAYORIA_SALUD, esMenor, parseBirth } from "@/lib/edad";
 import { CONSENT_VERSION } from "@/lib/legal";
 import { HOLD_COOKIE, HOLD_MINUTES } from "@/lib/reserva";
+import { enviarBienvenida } from "@/lib/cuenta";
 
 const reservaSchema = z.object({
   clinicId: z.string().min(1),
@@ -219,7 +220,11 @@ export async function reservaAction(formData: FormData) {
     enlace: "/panel",
     nota: "Trae tu calzado habitual. Reserva gratuita: solo pagarás si un profesional prescribe tu tratamiento.",
   });
-  if (!titular) await createSession(owner.id);
+  if (!titular) {
+    // Cuenta nueva: bienvenida con los datos de acceso y enlace para confirmar el email.
+    await enviarBienvenida(owner);
+    await createSession(owner.id);
+  }
   redirect(
     "/panel?ok=" +
       encodeURIComponent(

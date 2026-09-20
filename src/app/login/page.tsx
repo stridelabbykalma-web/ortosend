@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { loginAction } from "@/app/(auth)/actions";
 import { Flash } from "@/components/ui";
 
@@ -25,6 +26,9 @@ export default async function LoginPage({
         <button type="submit" className="pri wfull">
           Entrar
         </button>
+        <div className="tiny" style={{ marginTop: 10, textAlign: "center" }}>
+          <Link href="/recuperar">¿Has olvidado tu contraseña?</Link>
+        </div>
       </form>
       <div className="tiny" style={{ marginTop: 12 }}>
         ¿Primera vez? Si has reservado cita online ya tienes cuenta con la contraseña que creaste.

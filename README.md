@@ -13,6 +13,9 @@ asociadas. Stack: **Next.js (App Router, server actions) + PostgreSQL (Prisma)**
   versionados (`CONSENT_VERSION`), móvil y email normalizados, motivo de la reserva visible en la
   agenda, y reserva con la cuenta ya existente (para uno mismo o para un menor a cargo).
   Confirmación por email y, si lo acepta, por WhatsApp; recordatorio la víspera desde el cron.
+  Email de bienvenida con los datos de acceso y **confirmación del email** (`/verificar`, aviso
+  en el panel hasta confirmarlo), y **recuperación de contraseña** (`/recuperar` →
+  `/restablecer`, enlace de 1 h y un solo uso, sin revelar si la cuenta existe).
   **Menores**: hasta los 16 años los gestiona su padre/madre/tutor desde su cuenta; al cumplirlos
   el cron avisa por email al menor con un enlace (`/mayoria`, 30 días) para que confirme email y
   móvil y cree su contraseña, y desde entonces solo él/ella accede (el tutor recibe aviso y pierde
@@ -156,7 +159,8 @@ Cuentas de demo (contraseña `ortosend123`):
   ya se encola y sale por Resend si se configuran `RESEND_API_KEY` y `EMAIL_FROM`.
 - Mapa Leaflet/OSM con radio 50 km real en `/buscar` (lat/lng ya en el modelo).
 - Envíos (Sendcloud/Packlink) con webhook de entrega; PDF real de la prescripción.
-- i18n ES/CA, passkeys, PWA offline del asistente de captura.
+- i18n ES/CA, passkeys, verificación del móvil por SMS/WhatsApp, PWA offline del asistente de
+  captura.
 - Seguimiento de adaptación d20 y revisión anual como cron real (el recordatorio de cita ya va en
   `/api/cron`).
 - Onboarding completo de clínicas (contrato, cesión de equipamiento, formación bloqueante).

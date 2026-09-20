@@ -31,12 +31,25 @@ mantenimiento diario en `src/app/panel/admin-actions.ts` (`runJobs`).
    a que siga libre o bloqueado por este navegador. Si falla el reclamo se deshace todo.
 6. **Avisos**: evento en el historial del caso; confirmación por **email** siempre y por
    **WhatsApp** solo si el titular aceptó ese canal (`notifyOwner`).
-7. **Sesión y panel**: el visitante queda logueado (cookie 30 días) y ve la cita en `/panel`.
+7. **Bienvenida y confirmación del email** (`src/lib/cuenta.ts`): al crear la cuenta se envía
+   `cuenta_creada` con los datos de acceso (email, móvil, contraseña creada al reservar) y un
+   enlace `/verificar?token=…` de 7 días. Al abrirlo se marca `User.emailVerifiedAt`. Mientras
+   no esté confirmado, el panel muestra un aviso con botón de reenvío. Si el cliente cambia el
+   email desde «Mis datos», vuelve a quedar sin confirmar y recibe un enlace nuevo; el enlace
+   antiguo deja de valer porque lleva el email dentro.
+8. **Sesión y panel**: el visitante queda logueado (cookie 30 días) y ve la cita en `/panel`.
    Desde el panel puede reservar otra cita, editar sus datos de acceso y gestionar las personas a
    su cargo.
-8. **Recordatorio la víspera**: el cron diario (`/api/cron`, 06:00 UTC) avisa de las citas de las
+9. **Recuperar contraseña**: desde `/login` → `/recuperar`, con email o móvil. La respuesta es
+   siempre la misma (no revela si la cuenta existe). Si existe y tiene email, recibe
+   `recuperar_contrasena` con un enlace `/restablecer?token=…` de 1 hora y **un solo uso** (el
+   token lleva una huella del hash actual, así que al cambiar la contraseña queda invalidado).
+   Tras guardar la nueva contraseña entra directamente, se le avisa por email
+   (`contrasena_cambiada`) y se registra en `AuditLog`. Cambiar la contraseña desde el panel
+   también envía ese aviso.
+10. **Recordatorio la víspera**: el cron diario (`/api/cron`, 06:00 UTC) avisa de las citas de las
    próximas 36 h y marca `Case.reminderSentAt` para no repetir.
-9. **En clínica**: la agenda muestra el motivo y, si es menor, quién es su tutor. Al abrir el
+11. **En clínica**: la agenda muestra el motivo y, si es menor, quién es su tutor. Al abrir el
    estudio el caso pasa a ESTUDIO_EN_CURSO y sigue el ciclo común.
 
 ## 2. Menores y mayoría de edad (16 años)
@@ -57,7 +70,9 @@ Base: a partir de los 16 el paciente decide sobre su salud (Ley 41/2002). Consta
   - Si el menor **no tiene email**, avisa al tutor (`mayoria_edad_sin_email`, como mucho una vez
     por semana) para que lo añada en su panel; al guardarlo se envía el enlace en el acto.
 - **El menor activa su cuenta** en `/mayoria` (`handoverAction`): confirma o cambia email y
-  móvil (deben ser distintos de los del tutor y no estar en otra cuenta) y crea su contraseña. En
+  móvil (deben ser distintos de los del tutor y no estar en otra cuenta) y crea su contraseña. Si
+  mantiene el email al que llegó el enlace, queda confirmado; si lo cambia, recibe el enlace de
+  confirmación. En
   una transacción se crea su `User` CLIENTE, el `Patient` pasa a `ownerId` = nuevo usuario,
   `isMinor = false`, `handoverAt = ahora` y se registra el traspaso en `consents`. Como el acceso
   al caso se decide por `patient.ownerId`, el tutor deja de ver el expediente automáticamente. Se
@@ -66,7 +81,13 @@ Base: a partir de los 16 el paciente decide sobre su salud (Ley 41/2002). Consta
 - Flujo B: la clínica puede marcar «El paciente es menor de 16» e indicar al tutor; la cuenta e
   invitación son del tutor y el contacto del menor queda en su ficha para el mismo traspaso.
 
-## 3. Canales de aviso
+## 3. Pendiente en el alta del cliente
+
+- Verificación del **móvil** por SMS o WhatsApp: exige el canal real (WhatsApp Business API),
+  hoy la confirmación es solo del email.
+- Bloqueo del login tras varios intentos fallidos y passkeys.
+
+## 4. Canales de aviso
 
 `Notification` tiene `channel` (`whatsapp` | `email`), `toPhone` y `toEmail`. WhatsApp sigue
 simulado. El email (`src/lib/email.ts`) se encola siempre y sale por la API de Resend si están

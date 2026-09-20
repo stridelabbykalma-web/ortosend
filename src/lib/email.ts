@@ -58,6 +58,39 @@ export function renderEmail(template: string, p: Payload): { subject: string; te
           p.paciente
         )} ha activado su propia cuenta en ${EMPRESA.nombreComercial}. Su expediente ya no es accesible desde la tuya; a partir de ahora los avisos le llegarán directamente.${firma}`,
       };
+    case "cuenta_creada":
+      return {
+        subject: `Bienvenido/a a ${EMPRESA.nombreComercial}: confirma tu email`,
+        text: `Hola ${str(p.nombre)},\n\nTu cuenta en ${EMPRESA.nombreComercial} ya está creada. Con ella sigues tu tratamiento, ves tu prescripción y pagas online solo si un profesional la firma.\n\nTus datos de acceso:\n· Email: ${str(
+          p.email
+        )}\n· Móvil: ${str(p.movil)}\n· Contraseña: la que creaste al reservar\n\nConfirma que este email es tuyo (así podrás recuperar tu contraseña si la olvidas):\n\n${link(
+          p
+        )}\n\nEl enlace es válido ${str(p.validez)}. Si no has sido tú, ignora este mensaje.${firma}`,
+      };
+    case "verificar_email":
+      return {
+        subject: `Confirma tu email en ${EMPRESA.nombreComercial}`,
+        text: `Hola ${str(p.nombre)},\n\nConfirma que este email es tuyo desde este enlace (válido ${str(p.validez)}):\n\n${link(
+          p
+        )}\n\nSi no has sido tú, ignora este mensaje.${firma}`,
+      };
+    case "recuperar_contrasena":
+      return {
+        subject: `Restablece tu contraseña de ${EMPRESA.nombreComercial}`,
+        text: `Hola ${str(p.nombre)},\n\nHemos recibido una petición para restablecer tu contraseña. Crea una nueva desde este enlace (válido ${str(
+          p.validez
+        )} y de un solo uso):\n\n${link(p)}\n\nSi no has sido tú, ignora este mensaje: tu contraseña no cambia.${firma}`,
+      };
+    case "contrasena_cambiada":
+      return {
+        subject: `Tu contraseña de ${EMPRESA.nombreComercial} ha cambiado`,
+        text: `Hola ${str(p.nombre)},\n\nTu contraseña acaba de cambiar. Si no has sido tú, restablécela ahora desde ${EMPRESA.web}/recuperar y escríbenos.${firma}`,
+      };
+    case "cuenta_activada":
+      return {
+        subject: `Tu cuenta en ${EMPRESA.nombreComercial} está activa`,
+        text: `Hola ${str(p.nombre)},\n\n${str(p.nota)}\n\n${link(p)}${firma}`,
+      };
     case "invitacion_cuenta":
       return {
         subject: `Activa tu cuenta en ${EMPRESA.nombreComercial}`,

@@ -8,6 +8,7 @@ import {
   updateMyAccountAction,
   updatePatientContactAction,
 } from "@/app/panel/cliente-actions";
+import { resendVerificationAction } from "@/app/(auth)/actions";
 import { fmtd, fmtdt, PRICE_LABEL } from "@/lib/format";
 import { EDAD_MAYORIA_SALUD, HANDOVER_TOKEN_DAYS, fechaMayoria } from "@/lib/edad";
 
@@ -22,6 +23,7 @@ export async function PanelCliente({ user }: { user: User }) {
   if (cases.length === 0) {
     return (
       <>
+        <EmailSinConfirmar user={user} />
         <div className="card">
           <b>Aún no tienes ningún tratamiento</b>
           <p className="muted" style={{ marginTop: 6 }}>
@@ -39,6 +41,7 @@ export async function PanelCliente({ user }: { user: User }) {
     <>
       <h2>Hola, {user.name.split(" ")[0]}</h2>
       <div className="sp" />
+      <EmailSinConfirmar user={user} />
       {cases.map((c) => {
         let body: React.ReactNode = null;
         switch (c.state) {
@@ -266,6 +269,20 @@ function PersonasACargo({ menores }: { menores: { id: string; name: string; birt
         </form>
       ))}
     </>
+  );
+}
+
+// Aviso mientras el email no esté confirmado (necesario para recuperar la contraseña).
+function EmailSinConfirmar({ user }: { user: User }) {
+  if (!user.email || user.emailVerifiedAt) return null;
+  return (
+    <form action={resendVerificationAction} className="note a row between" style={{ marginBottom: 14 }}>
+      <span>
+        Confirma tu email: te hemos enviado un enlace a <b>{user.email}</b>. Sin confirmarlo no podrás
+        recuperar tu contraseña si la olvidas.
+      </span>
+      <button type="submit">Reenviar</button>
+    </form>
   );
 }
 

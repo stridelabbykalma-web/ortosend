@@ -8,6 +8,7 @@ import { hashPassword, requireRole, verifyPassword } from "@/lib/auth";
 import { audit, notify, pushEvent } from "@/lib/cases";
 import { isValidPhone, normalizeEmail, normalizePhone } from "@/lib/contacto";
 import { enviarAvisoMayoria } from "@/lib/mayoria";
+import { avisarContrasenaCambiada, enviarVerificacionEmail } from "@/lib/cuenta";
 
 const secret = () => new TextEncoder().encode(process.env.AUTH_SECRET || "dev-secret");
 
@@ -138,10 +139,24 @@ export async function updateMyAccountAction(formData: FormData) {
   if (password && password.length < 8) fail(back, "La nueva contraseña debe tener al menos 8 caracteres");
   const dup = await prisma.user.findFirst({ where: { id: { not: u.id }, OR: [{ email }, { phone }] } });
   if (dup) fail(back, "Ya existe otra cuenta con ese email o móvil");
-  await prisma.user.update({
+  const emailCambiado = email !== u.email;
+  const updated = await prisma.user.update({
     where: { id: u.id },
-    data: { email, phone, ...(password ? { passwordHash: await hashPassword(password) } : {}) },
+    data: {
+      email,
+      phone,
+      ...(emailCambiado ? { emailVerifiedAt: null } : {}),
+      ...(password ? { passwordHash: await hashPassword(password) } : {}),
+    },
   });
   await audit(u.id, "account.update", `user:${u.id}`);
-  redirect(back + "?ok=" + encodeURIComponent("Datos de acceso actualizados"));
+  if (emailCambiado) await enviarVerificacionEmail(updated);
+  if (password) await avisarContrasenaCambiada(updated);
+  redirect(
+    back +
+      "?ok=" +
+      encodeURIComponent(
+        emailCambiado ? `Datos actualizados. Te hemos enviado un enlace a ${email} para confirmar el nuevo email.` : "Datos de acceso actualizados"
+      )
+  );
 }

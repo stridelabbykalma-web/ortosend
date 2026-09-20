@@ -33,6 +33,7 @@ model User {
   active       Boolean  @default(true)
   invitedAt    DateTime?            // invitación enviada (Flujo B)
   activatedAt  DateTime?
+  emailVerifiedAt DateTime?         // email confirmado desde el enlace enviado (Flujo A)
   clinicId     String?
   clinic       Clinic?  @relation(fields: [clinicId], references: [id])
   professional ProfessionalProfile?

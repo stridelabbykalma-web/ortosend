@@ -11,9 +11,11 @@ import {
   verifyPassword,
   verifyHandoverToken,
   verifyInviteToken,
+  verifyResetToken,
 } from "@/lib/auth";
-import { notifyEmail, notifyOwner, pushEvent, releaseAllBy } from "@/lib/cases";
+import { audit, notifyEmail, notifyOwner, pushEvent, releaseAllBy } from "@/lib/cases";
 import { isValidPhone, normalizeEmail, normalizeIdentifier, normalizePhone } from "@/lib/contacto";
+import { avisarContrasenaCambiada, enviarRecuperacion, enviarVerificacionEmail } from "@/lib/cuenta";
 
 const loginSchema = z.object({
   identifier: z.string().min(3),
@@ -89,7 +91,16 @@ export async function handoverAction(formData: FormData) {
   const now = new Date();
   const user = await prisma.$transaction(async (tx) => {
     const user = await tx.user.create({
-      data: { email, phone, passwordHash: await hashPassword(password), role: "CLIENTE", name: p.name, activatedAt: now },
+      data: {
+        email,
+        phone,
+        passwordHash: await hashPassword(password),
+        role: "CLIENTE",
+        name: p.name,
+        activatedAt: now,
+        // El enlace llegó a p.email: si lo mantiene, ya está confirmado.
+        emailVerifiedAt: email === p.email ? now : null,
+      },
     });
     await tx.patient.update({
       where: { id: p.id },
@@ -116,6 +127,53 @@ export async function handoverAction(formData: FormData) {
     nota: "Tu cuenta está activa. Ya eres la única persona con acceso a tu expediente.",
     enlace: "/panel",
   });
+  if (!user.emailVerifiedAt) await enviarVerificacionEmail(user);
   await createSession(user.id);
   redirect("/panel?ok=" + encodeURIComponent("Tu cuenta es tuya: ya solo tú puedes acceder a tu tratamiento."));
+}
+
+// --- Recuperación de contraseña (Flujo A) ---
+// Siempre responde lo mismo, exista o no la cuenta, para no revelar quién está registrado.
+export async function recoverAction(formData: FormData) {
+  const id = normalizeIdentifier(String(formData.get("identifier") ?? ""));
+  if (id.length >= 3) {
+    const user = await prisma.user.findFirst({ where: { OR: [{ email: id }, { phone: id }] } });
+    if (user && user.active && user.email) await enviarRecuperacion(user);
+  }
+  redirect(
+    "/recuperar?ok=" +
+      encodeURIComponent(
+        "Si esa cuenta existe y tiene email, en unos minutos recibirás un enlace para crear una contraseña nueva (válido 1 hora)."
+      )
+  );
+}
+
+export async function resetPasswordAction(formData: FormData) {
+  const token = String(formData.get("token") ?? "");
+  const password = String(formData.get("password") ?? "");
+  const again = String(formData.get("password2") ?? "");
+  const back = (msg: string): never =>
+    redirect(`/restablecer?token=${encodeURIComponent(token)}&error=` + encodeURIComponent(msg));
+  const user = await verifyResetToken(token);
+  if (!user) redirect("/recuperar?error=" + encodeURIComponent("El enlace no es válido, ya se ha usado o ha caducado. Pide uno nuevo."));
+  if (password.length < 8) back("La contraseña debe tener al menos 8 caracteres");
+  if (password !== again) back("Las dos contraseñas no coinciden");
+  const updated = await prisma.user.update({
+    where: { id: user!.id },
+    data: { passwordHash: await hashPassword(password), activatedAt: user!.activatedAt ?? new Date() },
+  });
+  await audit(user!.id, "password.reset", `user:${user!.id}`);
+  await avisarContrasenaCambiada(updated);
+  await releaseAllBy(user!.id);
+  await createSession(user!.id);
+  redirect("/panel?ok=" + encodeURIComponent("Contraseña cambiada. Ya has iniciado sesión."));
+}
+
+// Reenvío del enlace de confirmación del email desde el panel.
+export async function resendVerificationAction() {
+  const user = await getSessionUser();
+  if (!user) redirect("/login");
+  if (user!.emailVerifiedAt) redirect("/panel");
+  await enviarVerificacionEmail(user!);
+  redirect("/panel?ok=" + encodeURIComponent(`Te hemos reenviado el enlace de confirmación a ${user!.email}`));
 }

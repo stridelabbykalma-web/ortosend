@@ -193,6 +193,7 @@ async function seedDemo(prisma) {
       role: "CLIENTE",
       name: "Pere Vidal",
       activatedAt: new Date(),
+      emailVerifiedAt: new Date(),
     },
   });
   const perePat = await prisma.patient.create({
@@ -303,6 +304,7 @@ async function seedDemo(prisma) {
       role: "CLIENTE",
       name: "Jordi Ferrer",
       activatedAt: new Date(),
+      emailVerifiedAt: new Date(),
     },
   });
   const jordiPat = await prisma.patient.create({
