@@ -63,7 +63,7 @@ export function renderEmail(template: string, p: Payload): { subject: string; te
         subject: `Bienvenido/a a ${EMPRESA.nombreComercial}: confirma tu email`,
         text: `Hola ${str(p.nombre)},\n\nTu cuenta en ${EMPRESA.nombreComercial} ya está creada. Con ella sigues tu tratamiento, ves tu prescripción y pagas online solo si un profesional la firma.\n\nTus datos de acceso:\n· Email: ${str(
           p.email
-        )}\n· Móvil: ${str(p.movil)}\n· Contraseña: la que creaste al reservar\n\nConfirma que este email es tuyo (así podrás recuperar tu contraseña si la olvidas):\n\n${link(
+        )}\n· Móvil: ${str(p.movil)}\n· Contraseña: la que has creado\n\nConfirma que este email es tuyo (así podrás recuperar tu contraseña si la olvidas):\n\n${link(
           p
         )}\n\nEl enlace es válido ${str(p.validez)}. Si no has sido tú, ignora este mensaje.${firma}`,
       };
@@ -94,9 +94,12 @@ export function renderEmail(template: string, p: Payload): { subject: string; te
     case "invitacion_cuenta":
       return {
         subject: `Activa tu cuenta en ${EMPRESA.nombreComercial}`,
-        text: `Hola ${str(p.nombre)},\n\nTu clínica ha iniciado tu estudio. Activa tu cuenta para seguir tu tratamiento (enlace válido ${str(
+        text: `Hola ${str(p.nombre)},\n\n${
+          str(p.nota) ||
+          `${str(p.clinica) ? `${str(p.clinica)} ha` : "Tu clínica ha"} iniciado tu estudio de plantillas con ${EMPRESA.nombreComercial}.`
+        }\n\nActiva tu cuenta para seguir el tratamiento, ver la prescripción y pagar online solo si un profesional la firma. En el enlace confirmarás tu email y tu móvil y crearás tu contraseña (enlace válido ${str(
           p.validez
-        )}):\n\n${link(p)}${firma}`,
+        )}):\n\n${link(p)}\n\nSi caduca, tu clínica puede reenviártelo.${firma}`,
       };
     default:
       return {

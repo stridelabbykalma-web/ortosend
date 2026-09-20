@@ -9,6 +9,7 @@ import { notify, notifyOwner, pushEvent } from "@/lib/cases";
 import { PAY_LINK_DAYS, PAY_REMINDERS_DAYS, SOFT_EXPIRY_MONTHS } from "@/lib/states";
 import { nacimientoLimiteMayoria } from "@/lib/edad";
 import { enviarAvisoMayoria } from "@/lib/mayoria";
+import { MAX_AUTO_RESENDS, enviarInvitacion, estadoInvitacion, invitacionCaducaEl } from "@/lib/invitacion";
 
 function fail(path: string, msg: string): never {
   redirect(`${path}${path.includes("?") ? "&" : "?"}error=` + encodeURIComponent(msg));
@@ -92,7 +93,7 @@ export async function runJobsAction() {
   redirect(
     "/panel?ok=" +
       encodeURIComponent(
-        `Mantenimiento: ${res.expired} enlaces caducados, ${res.reminders} recordatorios de pago, ${res.citas} recordatorios de cita, ${res.mayoria} avisos de mayoría de edad`
+        `Mantenimiento: ${res.expired} enlaces caducados, ${res.reminders} recordatorios de pago, ${res.citas} recordatorios de cita, ${res.mayoria} avisos de mayoría de edad, ${res.invitaciones} invitaciones reenviadas`
       )
   );
 }
@@ -132,10 +133,11 @@ export async function runJobs() {
         where: { template, toPhone: owner.phone, payload: { path: ["caseId"], equals: c.id } },
       });
       if (already) continue;
-      await notify(owner.phone, template, {
-        caseId: c.id,
-        nota: "Tu prescripción sigue lista y tu enlace de pago activo. Completa el pago para iniciar la fabricación.",
-      });
+      const nota = "Tu prescripción sigue lista y tu enlace de pago activo. Completa el pago para iniciar la fabricación.";
+      await notify(owner.phone, template, { caseId: c.id, nota });
+      // Flujo B sin cuenta activada: sin cuenta no puede pagar → va con la invitación.
+      if (estadoInvitacion(owner) !== "activada")
+        await enviarInvitacion(owner, { nota: `${nota} Primero activa tu cuenta desde este enlace.` });
       reminders++;
     }
   }
@@ -172,7 +174,24 @@ export async function runJobs() {
   for (const p of mayores) {
     if ((await enviarAvisoMayoria(p, p.owner)) === "enviado") mayoria++;
   }
-  return { expired: expiredCases.length, reminders, citas, mayoria };
+  // 5) Invitaciones caducadas (Flujo B) con un caso vivo: reenvío automático, limitado.
+  let invitaciones = 0;
+  const sinActivar = await prisma.user.findMany({
+    where: {
+      role: "CLIENTE",
+      activatedAt: null,
+      passwordHash: null,
+      invitedAt: { not: null },
+      inviteCount: { lte: MAX_AUTO_RESENDS },
+      patients: { some: { cases: { some: { state: { notIn: ["CERRADO", "NO_PRESCRITO", "NO_CONVERTIDO"] } } } } },
+    },
+  });
+  for (const u of sinActivar) {
+    if (invitacionCaducaEl(u.invitedAt!) > now) continue;
+    await enviarInvitacion(u, { nota: "Tu enlace anterior caducó: aquí tienes uno nuevo para activar tu cuenta y seguir tu tratamiento." });
+    invitaciones++;
+  }
+  return { expired: expiredCases.length, reminders, citas, mayoria, invitaciones };
 }
 
 // --- Altas de profesionales solicitadas por las clínicas ---

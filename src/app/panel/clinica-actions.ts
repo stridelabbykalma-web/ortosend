@@ -3,8 +3,9 @@
 // Acciones del panel de clínica: disponibilidad, Flujo B y asistente de captura.
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
-import { requireRole, createInviteToken } from "@/lib/auth";
-import { checklistOf, notify, notifyEmail, pushEvent } from "@/lib/cases";
+import { requireRole } from "@/lib/auth";
+import { checklistOf, notify, pushEvent } from "@/lib/cases";
+import { enviarInvitacion, estadoInvitacion } from "@/lib/invitacion";
 import { isValidPhone, normalizeEmail, normalizePhone } from "@/lib/contacto";
 import { EDAD_MAYORIA_SALUD, esMenor, parseBirth } from "@/lib/edad";
 import { CONSENT_VERSION } from "@/lib/legal";
@@ -115,16 +116,31 @@ export async function newCaseBAction(formData: FormData) {
     await tx.capture.create({ data: { caseId: kase.id } });
     return { kase, owner };
   });
-  const token = await createInviteToken(owner.id);
   await pushEvent(
     kase.id,
     `Caso creado en clínica (Flujo B) por ${u.name}${menor ? ` · menor a cargo de ${tutorNombre}` : ""}`,
     u.name
   );
-  const payload = { enlace: `/activar?token=${token}`, validez: "72 h", clinica: u.clinicId, nombre: owner.name };
-  await notify(ownerPhone, "invitacion_cuenta", payload);
-  if (ownerEmail) await notifyEmail(ownerEmail, "invitacion_cuenta", payload);
+  const clinic = await prisma.clinic.findUnique({ where: { id: u.clinicId }, select: { name: true } });
+  await enviarInvitacion(owner, { clinica: clinic?.name });
   redirect(`/caso/${kase.id}`);
+}
+
+// Reenvío de la invitación (caducada o no recibida) desde la agenda de la clínica.
+export async function resendInviteAction(formData: FormData) {
+  const u = await requireClinicStaff();
+  const caseId = String(formData.get("caseId"));
+  const back = `/panel?tab=${String(formData.get("tab") ?? "agenda")}`;
+  const kase = await prisma.case.findFirst({
+    where: { id: caseId, clinicId: u.clinicId },
+    include: { patient: { include: { owner: true } }, clinic: true },
+  });
+  if (!kase) fail(back, "Caso no encontrado");
+  const owner = kase!.patient.owner;
+  if (estadoInvitacion(owner) === "activada") fail(back, "Esa cuenta ya está activada");
+  await enviarInvitacion(owner, { clinica: kase!.clinic.name });
+  await pushEvent(caseId, `Invitación de cuenta reenviada a ${owner.name}`, u.name);
+  redirect(back + "&ok=" + encodeURIComponent(`Invitación reenviada a ${owner.name} (${owner.phone ?? owner.email})`));
 }
 
 // --- Asistente de captura (guardado continuo) ---

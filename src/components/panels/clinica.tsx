@@ -3,7 +3,14 @@ import type { User } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { StatePill } from "@/components/ui";
 import { fmtd, fmtdt } from "@/lib/format";
-import { addSlotAction, delSlotAction, newCaseBAction, requestProfessionalAction } from "@/app/panel/clinica-actions";
+import {
+  addSlotAction,
+  delSlotAction,
+  newCaseBAction,
+  requestProfessionalAction,
+  resendInviteAction,
+} from "@/app/panel/clinica-actions";
+import { estadoInvitacion, invitacionCaducaEl } from "@/lib/invitacion";
 import { openCaseAction } from "@/app/panel/rx-actions";
 import { REVISION_PREFIJO, esCentral } from "@/lib/rx-route";
 import { EDAD_MAYORIA_SALUD } from "@/lib/edad";
@@ -70,6 +77,7 @@ export async function PanelClinica({ user, tab }: { user: User; tab?: string }) 
                         <div className="tiny">Menor · tutor: {c.patient.owner.name}</div>
                       )}
                       {c.reason && <div className="tiny">Motivo: {c.reason}</div>}
+                      <Invitacion owner={c.patient.owner} caseId={c.id} tab="agenda" />
                     </td>
                     <td>{c.appointmentAt ? fmtdt(c.appointmentAt) : "Flujo B"}</td>
                     <td>
@@ -161,7 +169,10 @@ export async function PanelClinica({ user, tab }: { user: User; tab?: string }) 
                     <td>
                       <Link href={`/caso/${c.id}`}>#{c.number}</Link>
                     </td>
-                    <td>{c.patient.name}</td>
+                    <td>
+                      {c.patient.name}
+                      <Invitacion owner={c.patient.owner} caseId={c.id} tab="casos" />
+                    </td>
                     <td>{fmtd(c.createdAt)}</td>
                     <td>
                       <StatePill state={c.state} />
@@ -506,5 +517,33 @@ export async function PanelClinica({ user, tab }: { user: User; tab?: string }) 
       </div>
       {body}
     </>
+  );
+}
+
+// Estado de la cuenta del paciente (Flujo B): invitación pendiente o caducada, con reenvío.
+function Invitacion({
+  owner,
+  caseId,
+  tab,
+}: {
+  owner: { activatedAt: Date | null; invitedAt: Date | null; passwordHash: string | null };
+  caseId: string;
+  tab: string;
+}) {
+  const estado = estadoInvitacion(owner);
+  if (estado === "activada") return null;
+  return (
+    <form action={resendInviteAction} className="row" style={{ marginTop: 4, gap: 6 }}>
+      <input type="hidden" name="caseId" value={caseId} />
+      <input type="hidden" name="tab" value={tab} />
+      <span className={`pill ${estado === "caducada" ? "r" : "a"}`}>
+        {estado === "pendiente"
+          ? `Cuenta sin activar · enlace hasta ${fmtdt(invitacionCaducaEl(owner.invitedAt!))}`
+          : estado === "caducada"
+            ? "Cuenta sin activar · invitación caducada"
+            : "Cuenta sin invitar"}
+      </span>
+      <button type="submit">Reenviar invitación</button>
+    </form>
   );
 }

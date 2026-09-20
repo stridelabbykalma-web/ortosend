@@ -15,7 +15,8 @@ import {
 } from "@/lib/auth";
 import { audit, notifyEmail, notifyOwner, pushEvent, releaseAllBy } from "@/lib/cases";
 import { isValidPhone, normalizeEmail, normalizeIdentifier, normalizePhone } from "@/lib/contacto";
-import { avisarContrasenaCambiada, enviarRecuperacion, enviarVerificacionEmail } from "@/lib/cuenta";
+import { avisarContrasenaCambiada, enviarBienvenida, enviarRecuperacion, enviarVerificacionEmail } from "@/lib/cuenta";
+import { CONSENT_VERSION } from "@/lib/legal";
 
 const loginSchema = z.object({
   identifier: z.string().min(3),
@@ -50,20 +51,68 @@ export async function logoutAction() {
   redirect("/");
 }
 
-// Activación de cuenta por invitación (Flujo B) — enlace válido 72 h.
+// Activación de cuenta por invitación (Flujo B) — enlace válido 72 h. El
+// paciente (o su tutor) confirma email y móvil, crea su contraseña y, si es
+// cliente, ratifica online los consentimientos recogidos en la clínica.
 export async function activateAction(formData: FormData) {
   const token = String(formData.get("token") ?? "");
-  const password = String(formData.get("password") ?? "");
-  if (password.length < 8)
-    redirect(`/activar?token=${encodeURIComponent(token)}&error=` + encodeURIComponent("La contraseña debe tener al menos 8 caracteres"));
+  const back = (msg: string): never =>
+    redirect(`/activar?token=${encodeURIComponent(token)}&error=` + encodeURIComponent(msg));
   const uid = await verifyInviteToken(token);
-  if (!uid) redirect("/login?error=" + encodeURIComponent("Enlace de invitación caducado o no válido"));
-  await prisma.user.update({
-    where: { id: uid! },
-    data: { passwordHash: await hashPassword(password), activatedAt: new Date() },
+  const user = uid ? await prisma.user.findUnique({ where: { id: uid } }) : null;
+  if (!user) redirect("/login?error=" + encodeURIComponent("Enlace de invitación caducado o no válido"));
+  if (user!.activatedAt) redirect("/login?error=" + encodeURIComponent("Esta cuenta ya está activada: entra con tu contraseña"));
+  const u = user!;
+  const email = normalizeEmail(String(formData.get("email") ?? ""));
+  const phone = normalizePhone(String(formData.get("phone") ?? ""));
+  const password = String(formData.get("password") ?? "");
+  if (!email.includes("@")) back("Indica un email válido");
+  if (!isValidPhone(phone)) back("Indica un móvil válido");
+  if (password.length < 8) back("La contraseña debe tener al menos 8 caracteres");
+  const esCliente = u.role === "CLIENTE";
+  if (esCliente && formData.get("consentSalud") !== "on") back("Debes confirmar el consentimiento de datos de salud");
+  const consentWhatsApp = formData.get("consentWhatsApp") === "on";
+  const dup = await prisma.user.findFirst({ where: { id: { not: u.id }, OR: [{ email }, { phone }] } });
+  if (dup) back("Ya existe otra cuenta con ese email o móvil");
+  const now = new Date();
+  const updated = await prisma.$transaction(async (tx) => {
+    const updated = await tx.user.update({
+      where: { id: u.id },
+      data: {
+        email,
+        phone,
+        passwordHash: await hashPassword(password),
+        activatedAt: now,
+        emailVerifiedAt: null,
+      },
+    });
+    if (esCliente) {
+      // Ratificación online de lo firmado en clínica, con la versión vigente.
+      const patients = await tx.patient.findMany({ where: { ownerId: u.id } });
+      for (const p of patients) {
+        const prev = (p.consents ?? {}) as Record<string, unknown>;
+        await tx.patient.update({
+          where: { id: p.id },
+          data: {
+            consents: {
+              ...prev,
+              salud: { aceptado: true, fecha: now.toISOString(), version: CONSENT_VERSION, via: "activacion" },
+              whatsapp: { aceptado: consentWhatsApp, fecha: now.toISOString(), version: CONSENT_VERSION, via: "activacion" },
+            },
+          },
+        });
+      }
+    }
+    return updated;
   });
-  await createSession(uid!);
-  redirect("/panel");
+  if (esCliente) {
+    const cases = await prisma.case.findMany({ where: { patient: { ownerId: u.id } }, select: { id: true } });
+    for (const c of cases) await pushEvent(c.id, `Cuenta activada por ${u.name} (datos y consentimientos confirmados)`, u.name);
+  }
+  await audit(u.id, "account.activate", `user:${u.id}`);
+  await enviarBienvenida(updated);
+  await createSession(u.id);
+  redirect("/panel?ok=" + encodeURIComponent("Cuenta activada. Te hemos enviado un email para confirmar tu dirección."));
 }
 
 // Mayoría de edad (16 años): el paciente toma el control de su cuenta. Crea su

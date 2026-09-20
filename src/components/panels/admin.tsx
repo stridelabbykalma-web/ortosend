@@ -2,6 +2,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { Kpi, StatePill } from "@/components/ui";
 import { fmtd, fmtdt } from "@/lib/format";
+import { estadoInvitacion } from "@/lib/invitacion";
 import {
   applicationSetAction,
   clinicStatusAction,
@@ -309,7 +310,7 @@ export async function PanelAdmin({ tab }: { tab?: string }) {
   }
   if (t === "cas") {
     const cases = await prisma.case.findMany({
-      include: { patient: true, clinic: true },
+      include: { patient: { include: { owner: true } }, clinic: true },
       orderBy: { createdAt: "desc" },
     });
     body = (
@@ -334,7 +335,15 @@ export async function PanelAdmin({ tab }: { tab?: string }) {
                   <td>
                     <Link href={`/caso/${c.id}`}>#{c.number}</Link>
                   </td>
-                  <td>{c.patient.name}</td>
+                  <td>
+                    {c.patient.name}
+                    {estadoInvitacion(c.patient.owner) !== "activada" && (
+                      <div className="tiny">
+                        Cuenta sin activar ({estadoInvitacion(c.patient.owner) === "caducada" ? "invitación caducada" : "invitación enviada"}
+                        {c.patient.owner.inviteCount > 1 ? `, ${c.patient.owner.inviteCount} envíos` : ""})
+                      </div>
+                    )}
+                  </td>
                   <td>{c.clinic.name}</td>
                   <td>{fmtd(c.createdAt)}</td>
                   <td>

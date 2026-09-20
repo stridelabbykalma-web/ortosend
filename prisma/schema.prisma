@@ -31,7 +31,8 @@ model User {
   role         Role
   name         String
   active       Boolean  @default(true)
-  invitedAt    DateTime?            // invitación enviada (Flujo B)
+  invitedAt    DateTime?            // última invitación enviada (Flujo B)
+  inviteCount  Int      @default(0) // invitaciones enviadas (reenvíos automáticos limitados)
   activatedAt  DateTime?
   emailVerifiedAt DateTime?         // email confirmado desde el enlace enviado (Flujo A)
   clinicId     String?
