@@ -17,6 +17,7 @@ import { audit, notifyEmail, notifyOwner, pushEvent, releaseAllBy } from "@/lib/
 import { isValidPhone, normalizeEmail, normalizeIdentifier, normalizePhone } from "@/lib/contacto";
 import { avisarContrasenaCambiada, enviarBienvenida, enviarRecuperacion, enviarVerificacionEmail } from "@/lib/cuenta";
 import { CONSENT_VERSION } from "@/lib/legal";
+import { estadoInvitacion } from "@/lib/invitacion";
 
 const loginSchema = z.object({
   identifier: z.string().min(3),
@@ -225,4 +226,106 @@ export async function resendVerificationAction() {
   if (user!.emailVerifiedAt) redirect("/panel");
   await enviarVerificacionEmail(user!);
   redirect("/panel?ok=" + encodeURIComponent(`Te hemos reenviado el enlace de confirmación a ${user!.email}`));
+}
+
+// --- Flujo B: el paciente (o su tutor) acepta la invitación de la clínica ---
+// Aquí nacen la cuenta (o se usa la que ya tiene), el paciente con sus
+// consentimientos y el caso en estudio. Todo registrado por el propio paciente.
+export async function acceptInvitationAction(formData: FormData) {
+  const token = String(formData.get("token") ?? "");
+  const back = (msg: string): never =>
+    redirect(`/invitacion?token=${encodeURIComponent(token)}&error=` + encodeURIComponent(msg));
+  const inv = await prisma.invitation.findUnique({ where: { token }, include: { clinic: true } });
+  if (!inv || estadoInvitacion(inv) !== "pendiente") redirect(`/invitacion?token=${encodeURIComponent(token)}`);
+  const i = inv!;
+  if (formData.get("consentSalud") !== "on") back("Debes aceptar el consentimiento de datos de salud para continuar");
+  const consentWhatsApp = formData.get("consentWhatsApp") === "on";
+  const now = new Date();
+  const consents = {
+    salud: { aceptado: true, fecha: now.toISOString(), version: CONSENT_VERSION, via: "invitacion" },
+    whatsapp: { aceptado: consentWhatsApp, fecha: now.toISOString(), version: CONSENT_VERSION, via: "invitacion" },
+    ...(i.isMinor ? { tutor: { declarado: true, fecha: now.toISOString(), version: CONSENT_VERSION, via: "invitacion" } } : {}),
+  };
+
+  const sessionUser = await getSessionUser();
+  const conCuenta = sessionUser?.role === "CLIENTE" ? sessionUser : null;
+  let nueva: { name: string; email: string; phone: string; password: string } | null = null;
+  if (!conCuenta) {
+    const email = normalizeEmail(String(formData.get("email") ?? ""));
+    const phone = normalizePhone(String(formData.get("phone") ?? ""));
+    const password = String(formData.get("password") ?? "");
+    if (!email.includes("@")) back("Indica un email válido");
+    if (!isValidPhone(phone)) back("Indica un móvil válido");
+    if (password.length < 8) back("La contraseña debe tener al menos 8 caracteres");
+    if (i.isMinor && (email === normalizeEmail(i.patientEmail) || phone === i.patientPhone))
+      back("Tu email y tu móvil deben ser distintos de los del menor");
+    const dup = await prisma.user.findFirst({ where: { OR: [{ email }, { phone }] } });
+    if (dup) back("Ya existe una cuenta con ese email o móvil. Inicia sesión para aceptar la invitación con ella.");
+    nueva = { name: i.tutorName ?? i.name, email, phone, password };
+  }
+
+  const result = await prisma.$transaction(async (tx) => {
+    const owner =
+      conCuenta ??
+      (await tx.user.create({
+        data: {
+          email: nueva!.email,
+          phone: nueva!.phone,
+          passwordHash: await hashPassword(nueva!.password),
+          role: "CLIENTE",
+          name: nueva!.name,
+          activatedAt: now,
+        },
+      }));
+    // Paciente: el propio titular (reutiliza su ficha si ya la tiene) o un menor nuevo.
+    const propio = !i.isMinor && conCuenta ? await tx.patient.findFirst({ where: { ownerId: owner.id, isMinor: false } }) : null;
+    const patient = propio
+      ? await tx.patient.update({ where: { id: propio.id }, data: { consents, birthDate: propio.birthDate ?? i.birthDate } })
+      : await tx.patient.create({
+          data: {
+            ownerId: owner.id,
+            name: i.name,
+            birthDate: i.birthDate,
+            isMinor: i.isMinor,
+            email: i.isMinor ? normalizeEmail(i.patientEmail) || null : null,
+            phone: i.isMinor ? i.patientPhone : null,
+            consents,
+          },
+        });
+    const kase = await tx.case.create({
+      data: { patientId: patient.id, clinicId: i.clinicId, state: "ESTUDIO_EN_CURSO", flow: "B" },
+    });
+    await tx.capture.create({ data: { caseId: kase.id } });
+    const claimed = await tx.invitation.updateMany({
+      where: { id: i.id, status: "pendiente" },
+      data: { status: "aceptada", acceptedAt: now, caseId: kase.id },
+    });
+    if (!claimed.count) throw new Error("INVITACION_USADA");
+    return { owner, patient, kase };
+  }).catch((e) => {
+    if (e instanceof Error && e.message === "INVITACION_USADA") return null;
+    throw e;
+  });
+  if (!result) back("Esta invitación acaba de aceptarse desde otro dispositivo");
+  const { owner, kase } = result!;
+  await pushEvent(
+    kase.id,
+    `Invitación de ${i.createdByName} aceptada por ${owner.name}: cuenta y consentimientos registrados (Flujo B)${
+      i.isMinor ? ` · menor ${i.name} a cargo de ${owner.name}` : ""
+    }`,
+    owner.name
+  );
+  await audit(owner.id, "invitation.accept", `case:${kase.number}`);
+  if (nueva) await enviarBienvenida(owner);
+  // En un dispositivo de la clínica (sesión profesional) no se abre la sesión del paciente.
+  if (!sessionUser || sessionUser.role === "CLIENTE") {
+    if (!conCuenta) await createSession(owner.id);
+    redirect(
+      "/panel?ok=" +
+        encodeURIComponent(
+          `${nueva ? "Cuenta creada. " : ""}Tu estudio en ${i.clinic.name} ya está en marcha${nueva ? "; te hemos enviado un email para confirmar tu dirección" : ""}.`
+        )
+    );
+  }
+  redirect(`/invitacion?token=${encodeURIComponent(token)}&hecho=1`);
 }

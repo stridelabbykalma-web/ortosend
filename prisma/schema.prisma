@@ -31,8 +31,7 @@ model User {
   role         Role
   name         String
   active       Boolean  @default(true)
-  invitedAt    DateTime?            // última invitación enviada (Flujo B)
-  inviteCount  Int      @default(0) // invitaciones enviadas (reenvíos automáticos limitados)
+  invitedAt    DateTime?            // invitación enviada (cuentas de profesionales)
   activatedAt  DateTime?
   emailVerifiedAt DateTime?         // email confirmado desde el enlace enviado (Flujo A)
   clinicId     String?
@@ -97,7 +96,35 @@ model Clinic {
   equipment    Equipment[]
   settlements  Settlement[]
   professionalApplications ProfessionalApplication[]
+  invitations  Invitation[]
   createdAt    DateTime     @default(now())
+}
+
+// Invitación de la clínica (Flujo B): solo los datos esenciales del paciente.
+// La cuenta, los consentimientos y el caso se crean cuando el paciente (o su
+// tutor) la acepta desde el enlace, así todo queda registrado por él.
+model Invitation {
+  id            String   @id @default(cuid())
+  clinicId      String
+  clinic        Clinic   @relation(fields: [clinicId], references: [id])
+  createdBy     String              // userId del profesional
+  createdByName String
+  token         String   @unique    // secreto del enlace (se regenera al reenviar)
+  name          String              // paciente
+  birthDate     DateTime?
+  isMinor       Boolean  @default(false)
+  patientEmail  String?             // contacto propio del menor (aviso a los 16)
+  patientPhone  String?
+  tutorName     String?
+  phone         String              // destinatario: paciente o tutor
+  email         String?
+  status        String   @default("pendiente") // pendiente | aceptada | cancelada
+  sentAt        DateTime @default(now())
+  sentCount     Int      @default(1)
+  expiresAt     DateTime
+  acceptedAt    DateTime?
+  caseId        String?  @unique    // caso creado al aceptar
+  createdAt     DateTime @default(now())
 }
 
 // Huecos publicados en la web (Flujo A) — máx. 5 activos por clínica

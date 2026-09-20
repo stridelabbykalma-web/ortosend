@@ -5,7 +5,6 @@ import { examLines, type Exam } from "@/lib/exploracion";
 import { alertasDe } from "@/lib/tests-podologicos";
 import { CAPTURA_VISUAL, FOTO_KINDS, MEDIA_LABEL, SCAN_KIND, VIDEO_KINDS, fmtdt } from "@/lib/format";
 import { nombreProyectoRevoScan } from "@/lib/scan";
-import { estadoInvitacion } from "@/lib/invitacion";
 import { helbingResumen, type Helbing } from "@/lib/helbing";
 import { HelbingOverlay } from "@/components/caso/helbing-overlay";
 import { VideoAnalizado } from "@/components/caso/video-analizado";
@@ -111,11 +110,6 @@ export function Expediente({ kase }: { kase: CaseFull }) {
               </>
             )}
             {kase.reason && <div className="tiny">Motivo indicado al reservar: {kase.reason}</div>}
-            {estadoInvitacion(kase.patient.owner) !== "activada" && (
-              <div className="tiny" style={{ color: "var(--amber)" }}>
-                Cuenta sin activar: el paciente aún no ha abierto la invitación (reenvío desde la agenda).
-              </div>
-            )}
           </div>
         </div>
       </div>

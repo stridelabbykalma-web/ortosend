@@ -9,7 +9,7 @@ import { notify, notifyOwner, pushEvent } from "@/lib/cases";
 import { PAY_LINK_DAYS, PAY_REMINDERS_DAYS, SOFT_EXPIRY_MONTHS } from "@/lib/states";
 import { nacimientoLimiteMayoria } from "@/lib/edad";
 import { enviarAvisoMayoria } from "@/lib/mayoria";
-import { MAX_AUTO_RESENDS, enviarInvitacion, estadoInvitacion, invitacionCaducaEl } from "@/lib/invitacion";
+import { MAX_AUTO_RESENDS, reenviarInvitacion } from "@/lib/invitacion";
 
 function fail(path: string, msg: string): never {
   redirect(`${path}${path.includes("?") ? "&" : "?"}error=` + encodeURIComponent(msg));
@@ -135,9 +135,6 @@ export async function runJobs() {
       if (already) continue;
       const nota = "Tu prescripción sigue lista y tu enlace de pago activo. Completa el pago para iniciar la fabricación.";
       await notify(owner.phone, template, { caseId: c.id, nota });
-      // Flujo B sin cuenta activada: sin cuenta no puede pagar → va con la invitación.
-      if (estadoInvitacion(owner) !== "activada")
-        await enviarInvitacion(owner, { nota: `${nota} Primero activa tu cuenta desde este enlace.` });
       reminders++;
     }
   }
@@ -174,21 +171,14 @@ export async function runJobs() {
   for (const p of mayores) {
     if ((await enviarAvisoMayoria(p, p.owner)) === "enviado") mayoria++;
   }
-  // 5) Invitaciones caducadas (Flujo B) con un caso vivo: reenvío automático, limitado.
+  // 5) Invitaciones de clínica (Flujo B) caducadas sin aceptar: reenvío automático, limitado.
   let invitaciones = 0;
-  const sinActivar = await prisma.user.findMany({
-    where: {
-      role: "CLIENTE",
-      activatedAt: null,
-      passwordHash: null,
-      invitedAt: { not: null },
-      inviteCount: { lte: MAX_AUTO_RESENDS },
-      patients: { some: { cases: { some: { state: { notIn: ["CERRADO", "NO_PRESCRITO", "NO_CONVERTIDO"] } } } } },
-    },
+  const caducadas = await prisma.invitation.findMany({
+    where: { status: "pendiente", expiresAt: { lt: now }, sentCount: { lte: MAX_AUTO_RESENDS } },
+    include: { clinic: true },
   });
-  for (const u of sinActivar) {
-    if (invitacionCaducaEl(u.invitedAt!) > now) continue;
-    await enviarInvitacion(u, { nota: "Tu enlace anterior caducó: aquí tienes uno nuevo para activar tu cuenta y seguir tu tratamiento." });
+  for (const inv of caducadas) {
+    await reenviarInvitacion(inv, inv.clinic.name, "Tu enlace anterior caducó: aquí tienes uno nuevo para crear tu cuenta y seguir tu estudio.");
     invitaciones++;
   }
   return { expired: expiredCases.length, reminders, citas, mayoria, invitaciones };

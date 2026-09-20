@@ -30,8 +30,8 @@ export default async function RecuperarPage({
         </form>
       )}
       <div className="tiny" style={{ marginTop: 12 }}>
-        Si tu cuenta la creó tu clínica y aún no la has activado, usa el enlace de invitación que te
-        enviaron o pide a la clínica que lo reenvíe.
+        Si tu clínica te invitó y aún no has creado la cuenta, usa el enlace de la invitación o pide a
+        la clínica que lo reenvíe.
       </div>
     </div>
   );

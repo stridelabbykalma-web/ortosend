@@ -25,12 +25,12 @@ asociadas. Stack: **Next.js (App Router, server actions) + PostgreSQL (Prisma)**
 **Autenticación y roles**
 - Sesión con cookie firmada (jose) + bcrypt. 6 roles: ADMIN, ADMIN_CLINICA, PROFESIONAL,
   RECETADOR, TALLER, CLIENTE.
-- **Flujo B**: la clínica crea el caso (también de menores, con su tutor como titular) y el
-  paciente recibe invitación por WhatsApp y email (enlace de activación 72 h, `/activar`) donde
-  confirma email y móvil, crea la contraseña y ratifica online los consentimientos. La agenda
-  muestra si la cuenta está sin activar o la invitación caducada, con reenvío; el cron reenvía
-  las caducadas (máx. 3 veces) y la firma de la prescripción y los recordatorios de pago llevan
-  la invitación si aún no hay cuenta. Detalle en `docs/alta-cliente-flujo-b.md`.
+- **Flujo B**: la clínica solo emite una invitación con los datos esenciales (también de
+  menores, con su tutor); el paciente la recibe al momento por WhatsApp y email, crea su cuenta
+  en `/invitacion`, revisa sus datos y acepta los consentimientos, y en ese instante nacen su
+  ficha y el caso en estudio. La agenda lista las invitaciones pendientes (abrir en la tablet,
+  copiar enlace, reenviar, cancelar) y el cron reenvía las caducadas (máx. 3 veces). Sin
+  aceptación no hay caso. Detalle en `docs/alta-cliente-flujo-b.md`.
 - Capa sensible: ver el documento clínico exige **re-confirmar la contraseña** (token de lectura
   de 10 min) y queda registrado en `AuditLog` (RGPD).
 

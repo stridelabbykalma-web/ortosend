@@ -97,7 +97,9 @@ export function renderEmail(template: string, p: Payload): { subject: string; te
         text: `Hola ${str(p.nombre)},\n\n${
           str(p.nota) ||
           `${str(p.clinica) ? `${str(p.clinica)} ha` : "Tu clínica ha"} iniciado tu estudio de plantillas con ${EMPRESA.nombreComercial}.`
-        }\n\nActiva tu cuenta para seguir el tratamiento, ver la prescripción y pagar online solo si un profesional la firma. En el enlace confirmarás tu email y tu móvil y crearás tu contraseña (enlace válido ${str(
+        }${
+          str(p.paciente) ? `\nPaciente: ${str(p.paciente)} (menor a tu cargo).` : ""
+        }\n\nCrea tu cuenta desde este enlace: revisarás tus datos, aceptarás los consentimientos y elegirás tu contraseña. Con ella sigues el tratamiento, ves la prescripción y pagas online solo si un profesional la firma (enlace válido ${str(
           p.validez
         )}):\n\n${link(p)}\n\nSi caduca, tu clínica puede reenviártelo.${firma}`,
       };

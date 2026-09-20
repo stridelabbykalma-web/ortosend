@@ -1,45 +1,46 @@
-// Invitación de cuenta (Flujo B): la clínica crea el caso y el paciente (o su
-// tutor) activa la cuenta desde un enlace de 72 h. Aquí se envía, se reenvía y
-// se calcula su estado; el cron reenvía las caducadas un número limitado de veces.
-import type { User } from "@prisma/client";
+// Invitación de la clínica (Flujo B). La clínica solo registra los datos
+// esenciales del paciente y envía el enlace; la cuenta, los consentimientos y el
+// caso se crean cuando el paciente (o su tutor) acepta en /invitacion.
+import { randomBytes } from "crypto";
+import type { Invitation } from "@prisma/client";
 import { prisma } from "./db";
-import { createInviteToken } from "./auth";
 import { notify, notifyEmail } from "./cases";
 
 export const INVITE_HOURS = 72;
-export const MAX_AUTO_RESENDS = 3; // reenvíos automáticos tras la invitación inicial
+export const MAX_AUTO_RESENDS = 3; // reenvíos automáticos del cron tras la invitación inicial
 
-export type EstadoInvitacion = "activada" | "pendiente" | "caducada" | "sin_invitar";
+export type EstadoInvitacion = "pendiente" | "caducada" | "aceptada" | "cancelada";
 
-export function invitacionCaducaEl(invitedAt: Date) {
-  return new Date(invitedAt.getTime() + INVITE_HOURS * 3600 * 1000);
+export function estadoInvitacion(inv: Pick<Invitation, "status" | "expiresAt">): EstadoInvitacion {
+  if (inv.status === "aceptada") return "aceptada";
+  if (inv.status === "cancelada") return "cancelada";
+  return inv.expiresAt > new Date() ? "pendiente" : "caducada";
 }
 
-export function estadoInvitacion(u: Pick<User, "activatedAt" | "invitedAt" | "passwordHash">): EstadoInvitacion {
-  if (u.activatedAt || u.passwordHash) return "activada";
-  if (!u.invitedAt) return "sin_invitar";
-  return invitacionCaducaEl(u.invitedAt) > new Date() ? "pendiente" : "caducada";
-}
+export const nuevoTokenInvitacion = () => randomBytes(24).toString("base64url");
+export const caducidadInvitacion = () => new Date(Date.now() + INVITE_HOURS * 3600 * 1000);
+export const enlaceInvitacion = (token: string) => `/invitacion?token=${token}`;
 
-// Envía (o reenvía) la invitación por WhatsApp y email y la anota en el usuario.
-export async function enviarInvitacion(
-  user: Pick<User, "id" | "name" | "phone" | "email">,
-  extra: { clinica?: string; nota?: string; template?: string } = {}
-) {
-  const token = await createInviteToken(user.id);
+// Envía la invitación por WhatsApp y email (con el token vigente).
+export async function enviarInvitacion(inv: Invitation, clinica: string, nota?: string) {
   const payload = {
-    enlace: `/activar?token=${token}`,
+    enlace: enlaceInvitacion(inv.token),
     validez: `${INVITE_HOURS} h`,
-    nombre: user.name,
-    clinica: extra.clinica,
-    nota: extra.nota,
+    nombre: inv.tutorName ?? inv.name,
+    paciente: inv.isMinor ? inv.name : undefined,
+    clinica,
+    nota,
   };
-  const template = extra.template ?? "invitacion_cuenta";
-  if (user.phone) await notify(user.phone, template, payload);
-  if (user.email) await notifyEmail(user.email, template, payload);
-  await prisma.user.update({
-    where: { id: user.id },
-    data: { invitedAt: new Date(), inviteCount: { increment: 1 } },
+  await notify(inv.phone, "invitacion_cuenta", payload);
+  if (inv.email) await notifyEmail(inv.email, "invitacion_cuenta", payload);
+}
+
+// Reenvío: token y caducidad nuevos, contador de envíos.
+export async function reenviarInvitacion(inv: Invitation, clinica: string, nota?: string) {
+  const updated = await prisma.invitation.update({
+    where: { id: inv.id },
+    data: { token: nuevoTokenInvitacion(), expiresAt: caducidadInvitacion(), sentAt: new Date(), sentCount: { increment: 1 } },
   });
-  return token;
+  await enviarInvitacion(updated, clinica, nota);
+  return updated;
 }
