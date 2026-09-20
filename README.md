@@ -8,8 +8,11 @@ asociadas. Stack: **Next.js (App Router, server actions) + PostgreSQL (Prisma)**
 **Web pública**
 - Home con propuesta de valor y buscador de clínicas por población/CP (`/buscar`).
 - «Cómo funciona», «Para clínicas» (solicitud de alta) y lista de espera de zonas sin cobertura.
-- **Flujo A**: reserva online con huecos reales (reclamo atómico del slot, sin dobles reservas),
-  alta de cuenta del cliente con consentimientos RGPD versionados.
+- **Flujo A**: reserva online con **calendario real** de la clínica (mes con días disponibles,
+  horas del día, elección de profesional si la clínica lo permite), reserva atómica sin dobles
+  reservas, alta de cuenta del cliente con consentimientos RGPD versionados. El cliente con
+  cuenta reserva para sí o para otra persona a su cargo, y **cambia o anula** su cita desde el
+  panel. Detalle en `docs/sistema-de-citas.md`.
 - Textos legales provisionales (privacidad y términos).
 
 **Autenticación y roles**
@@ -21,8 +24,14 @@ asociadas. Stack: **Next.js (App Router, server actions) + PostgreSQL (Prisma)**
   de 10 min) y queda registrado en `AuditLog` (RGPD).
 
 **Panel clínica**
-- Agenda (citas Flujo A + casos Flujo B), disponibilidad (máx. 5 huecos), profesionales y
-  formación 5/5, liquidaciones (placeholder).
+- **Agenda semanal** por clínica y por profesional (citas de estudio, repetición, revisión y
+  ajuste; dar, cambiar y anular citas, no presentado, fuera de horario), casos pendientes de
+  cita, y **suscripción iCal** para ver la agenda en Outlook/Google/Apple Calendar.
+- **Disponibilidad**: horario semanal por agenda (la de la clínica con capacidad y la de cada
+  profesional), cierres (festivos, vacaciones, bajas) y aperturas puntuales por fechas,
+  ajustes de la reserva online (duración de cita, antelación mínima, horizonte, publicar o
+  no, elegir profesional) y vista previa de lo que ve el paciente.
+- Profesionales y formación 5/5, liquidaciones (placeholder).
 - **Asistente de captura** guiado con guardado continuo: cuestionario clínico completo
   (motivo/dolor, actividad y datos físicos, calzado, antecedentes y tratamientos previos —
   visible entero en el expediente que llega al prescriptor), tipo de pie y FPI-6 más una
@@ -115,11 +124,15 @@ asociadas. Stack: **Next.js (App Router, server actions) + PostgreSQL (Prisma)**
   profesionales con estado de colegiación, todos los casos (cerrar con revisión anual,
   reactivar pagos), lista de espera y **cola de WhatsApp simulada** (solo avisos + enlace,
   nunca contenido clínico).
-- Mantenimiento (`/api/cron` o botón): caducidad de enlaces de pago y recordatorios d3/7/15.
+- Mantenimiento (`/api/cron` o botón): caducidad de enlaces de pago, recordatorios d3/7/15 y
+  **recordatorio de cita 24 h**.
 
 **Modelo de datos y máquina de estados**
-- `prisma/schema.prisma`: modelo completo (11 estados + excepciones, capturas con confirmación
-  de servidor, prescripción inmutable, pagos, envíos, incidencias, liquidaciones, auditoría).
+- `prisma/schema.prisma`: modelo completo (11 estados + excepciones, agenda —horario semanal,
+  excepciones y citas por clínica y profesional—, capturas con confirmación de servidor,
+  prescripción inmutable, pagos, envíos, incidencias, liquidaciones, auditoría).
+- `src/lib/agenda.ts`: motor de disponibilidad (zona horaria, ventanas, huecos) y
+  `src/lib/agenda-db.ts`: reserva atómica con bloqueo por clínica.
 - `src/lib/states.ts`: transiciones permitidas por rol y guardas (sin prescripción no hay pago;
   sin pago no se fabrica).
 
@@ -132,13 +145,14 @@ prescripción → pago → taller → entrega → cierre, más cola central, gua
 npm install
 cp .env.example .env      # rellenar DATABASE_URL y AUTH_SECRET como mínimo
 npx prisma migrate deploy # o `migrate dev` si cambias el esquema
-npx prisma db seed        # datos de demo (3 clínicas, todos los roles, 2 casos)
+npx prisma db seed        # datos de demo (3 clínicas con horarios, todos los roles, 3 casos)
 npm run dev
 ```
 
 Cuentas de demo (contraseña `ortosend123`):
 `admin@` · `clinica@` · `profesionalreceta@` · `profesionalnoreceta@` · `tecnico.cassa@` ·
-`recetador@` · `taller@` (todas `…@ortosend.com`), y clientes `jordi@demo.com` y `pere@demo.com`.
+`recetador@` · `taller@` (todas `…@ortosend.com`), y clientes `jordi@demo.com`, `pere@demo.com` y
+`marta@demo.com` (con cita reservada).
 
 ## Pendiente (siguientes fases)
 
@@ -149,7 +163,9 @@ Cuentas de demo (contraseña `ortosend123`):
 - Mapa Leaflet/OSM con radio 50 km real en `/buscar` (lat/lng ya en el modelo).
 - Envíos (Sendcloud/Packlink) con webhook de entrega; PDF real de la prescripción.
 - i18n ES/CA, passkeys, PWA offline del asistente de captura.
-- Recordatorio de cita 24 h, seguimiento de adaptación d20 y revisión anual como cron real.
+- Seguimiento de adaptación d20 y revisión anual como cron real (el recordatorio de cita 24 h ya
+  se encola en `runJobs`); confirmación de asistencia desde el recordatorio y lista de espera
+  por hueco.
 - Onboarding completo de clínicas (contrato, cesión de equipamiento, formación bloqueante).
 
 ## Despliegue en Vercel + Neon (sin terminal, ~5 min)

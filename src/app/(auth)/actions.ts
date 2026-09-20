@@ -25,7 +25,9 @@ export async function loginAction(formData: FormData) {
     redirect("/login?error=" + encodeURIComponent("Credenciales incorrectas"));
   }
   await createSession(user.id);
-  redirect("/panel");
+  // Vuelta a la página de origen (p. ej. la reserva de una clínica), solo rutas internas.
+  const next = String(formData.get("next") ?? "");
+  redirect(next.startsWith("/") && !next.startsWith("//") ? next : "/panel");
 }
 
 export async function logoutAction() {

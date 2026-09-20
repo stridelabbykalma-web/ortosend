@@ -20,6 +20,38 @@ function inDays(d, h = 10, m = 0) {
   return t;
 }
 
+// Instante UTC de una hora de reloj de Madrid (sin librerías): calcula el
+// desfase de la zona para ese día con Intl.
+function madrid(y, m, d, hh, mm = 0) {
+  const naive = Date.UTC(y, m - 1, d, hh, mm);
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Europe/Madrid", hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit",
+  }).formatToParts(new Date(naive));
+  const g = (t) => +parts.find((p) => p.type === t).value;
+  const local = Date.UTC(g("year"), g("month") - 1, g("day"), g("hour") % 24, g("minute"));
+  return new Date(naive - (local - naive));
+}
+
+// Próximo lunes (fecha local de Madrid) a partir de hoy + 2 días, como {y,m,d}.
+function nextMondayMadrid() {
+  const now = new Date(Date.now() + 2 * 86400000);
+  const parts = new Intl.DateTimeFormat("en-US", { timeZone: "Europe/Madrid", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(now);
+  const g = (t) => +parts.find((p) => p.type === t).value;
+  const t = new Date(Date.UTC(g("year"), g("month") - 1, g("day")));
+  const wd = t.getUTCDay(); // 0 domingo
+  const add = wd === 1 ? 0 : (8 - wd) % 7;
+  t.setUTCDate(t.getUTCDate() + add);
+  return { y: t.getUTCFullYear(), m: t.getUTCMonth() + 1, d: t.getUTCDate() };
+}
+
+// Franjas semanales: días ISO (1 lunes … 7 domingo) × [inicio, fin] en minutos.
+function franjas(professionalId, dias, tramos, extra = {}) {
+  const out = [];
+  for (const weekday of dias)
+    for (const [startMin, endMin] of tramos) out.push({ professionalId, weekday, startMin, endMin, ...extra });
+  return out;
+}
+
 async function seedDemo(prisma) {
   const hash = await bcrypt.hash(PASS, 10);
   const consent = (via) => ({
@@ -44,7 +76,9 @@ async function seedDemo(prisma) {
           { type: "Podisense GO", serial: "PS-C1-001", deliveredAt: new Date() },
         ],
       },
-      slots: { create: [1, 2, 3, 4, 5].map((d) => ({ startsAt: inDays(d + 1, 9 + d) })) },
+      patientPicksPro: true,
+      // Agenda de la clínica (sala/equipo): mañanas de lunes a viernes
+      availabilityRules: { create: franjas(null, [1, 2, 3, 4, 5], [[9 * 60, 13 * 60]]) },
     },
   });
   const c2 = await prisma.clinic.create({
@@ -63,7 +97,8 @@ async function seedDemo(prisma) {
           { type: "Podisense GO", serial: "PS-C2-001", deliveredAt: new Date() },
         ],
       },
-      slots: { create: [2, 3, 4].map((d) => ({ startsAt: inDays(d + 1, 10 + d, 30) })) },
+      slotMinutes: 60,
+      availabilityRules: { create: franjas(null, [1, 2, 3, 4, 5], [[10 * 60, 14 * 60]]) },
     },
   });
   await prisma.clinic.create({
@@ -76,7 +111,13 @@ async function seedDemo(prisma) {
       lng: 2.8931,
       status: "ACTIVA",
       hasPrescriber: false,
-      slots: { create: [1, 2].map((d) => ({ startsAt: inDays(d + 2, 11) })) },
+      // Solo martes y jueves por la mañana; los sábados no se publican en la web
+      availabilityRules: {
+        create: [
+          ...franjas(null, [2, 4], [[9 * 60, 13 * 60]]),
+          ...franjas(null, [6], [[10 * 60, 12 * 60]], { online: false }),
+        ],
+      },
     },
   });
 
@@ -128,7 +169,11 @@ async function seedDemo(prisma) {
       },
     },
   });
-  await prisma.user.create({
+  // Dra. Serra: tardes de lunes, miércoles y viernes
+  await prisma.availabilityRule.createMany({
+    data: franjas(draSerra.id, [1, 3, 5], [[16 * 60, 20 * 60]]).map((r) => ({ ...r, clinicId: c1.id })),
+  });
+  const marc = await prisma.user.create({
     data: {
       email: "profesionalnoreceta@ortosend.com",
       passwordHash: hash,
@@ -140,6 +185,16 @@ async function seedDemo(prisma) {
         create: { dni: "22222222B", degree: "Fisioterapia", canPrescribe: false, training: { create: mkTraining() } },
       },
     },
+  });
+  // Marc Vidal: tardes de martes y jueves; una semana de vacaciones dentro de un mes
+  await prisma.availabilityRule.createMany({
+    data: franjas(marc.id, [2, 4], [[16 * 60, 20 * 60]]).map((r) => ({ ...r, clinicId: c1.id })),
+  });
+  const vac = nextMondayMadrid();
+  const vacStart = new Date(Date.UTC(vac.y, vac.m - 1, vac.d + 28));
+  const vacEnd = new Date(Date.UTC(vac.y, vac.m - 1, vac.d + 32));
+  await prisma.availabilityException.create({
+    data: { clinicId: c1.id, professionalId: marc.id, kind: "CIERRE", startsOn: vacStart, endsOn: vacEnd, note: "Vacaciones" },
   });
   await prisma.user.create({
     data: {
@@ -431,9 +486,43 @@ async function seedDemo(prisma) {
   ])
     await prisma.caseEvent.create({ data: { caseId: caso2.id, text: t, actor: "sistema (seed)" } });
 
+  // --- Caso demo 3: cita reservada online para el próximo lunes a las 09:45 (agenda de la clínica Girona) ---
+  const marta = await prisma.user.create({
+    data: {
+      email: "marta@demo.com",
+      phone: "600555666",
+      passwordHash: hash,
+      role: "CLIENTE",
+      name: "Marta Roca",
+      activatedAt: new Date(),
+    },
+  });
+  const martaPat = await prisma.patient.create({
+    data: { ownerId: marta.id, name: "Marta Roca", birthDate: new Date("1990-02-20"), consents: consent("web") },
+  });
+  const lunes = nextMondayMadrid();
+  const citaInicio = madrid(lunes.y, lunes.m, lunes.d, 9, 45);
+  const caso3 = await prisma.case.create({
+    data: { patientId: martaPat.id, clinicId: c1.id, state: "CITA_RESERVADA", flow: "A", appointmentAt: citaInicio },
+  });
+  await prisma.appointment.create({
+    data: {
+      clinicId: c1.id,
+      caseId: caso3.id,
+      professionalId: null,
+      kind: "ESTUDIO",
+      status: "RESERVADA",
+      startsAt: citaInicio,
+      endsAt: new Date(citaInicio.getTime() + 45 * 60000),
+      source: "web",
+      notes: "Motivo indicado al reservar: Dolor",
+    },
+  });
+  await prisma.caseEvent.create({ data: { caseId: caso3.id, text: "Cita reservada online (Flujo A)", actor: "sistema (seed)" } });
+
   console.log("Seed completado. Cuentas (contraseña «" + PASS + "»):");
   console.log(
-    "  admin@ortosend.com · clinica@ortosend.com · profesionalreceta@ortosend.com · profesionalnoreceta@ortosend.com · tecnico.cassa@ortosend.com · recetador@ortosend.com · taller@ortosend.com · jordi@demo.com · pere@demo.com"
+    "  admin@ortosend.com · clinica@ortosend.com · profesionalreceta@ortosend.com · profesionalnoreceta@ortosend.com · tecnico.cassa@ortosend.com · recetador@ortosend.com · taller@ortosend.com · jordi@demo.com · pere@demo.com · marta@demo.com"
   );
 }
 

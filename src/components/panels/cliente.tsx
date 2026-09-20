@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { User } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { StatePill, Steps } from "@/components/ui";
-import { payAction } from "@/app/panel/cliente-actions";
+import { cancelarCitaAction, payAction } from "@/app/panel/cliente-actions";
 import { fmtdt, PRICE_LABEL } from "@/lib/format";
 
 export async function PanelCliente({ user }: { user: User }) {
@@ -32,11 +32,36 @@ export async function PanelCliente({ user }: { user: User }) {
         let body: React.ReactNode = null;
         switch (c.state) {
           case "CITA_RESERVADA":
-            body = (
+            body = c.appointmentAt ? (
               <>
                 <b>Tu cita: {fmtdt(c.appointmentAt)}</b>
                 <div className="muted">
-                  {c.clinic.name} · {c.clinic.address}. Trae tu calzado habitual y ropa cómoda.
+                  {c.clinic.name} · {c.clinic.address}. Trae tu calzado habitual y ropa cómoda. Duración
+                  aproximada: {c.clinic.slotMinutes} min.
+                </div>
+                <div className="row" style={{ marginTop: 10 }}>
+                  <Link href={`/reserva/${c.clinicId}?caso=${c.id}`} className="btn">
+                    Cambiar la hora
+                  </Link>
+                  <form action={cancelarCitaAction}>
+                    <input type="hidden" name="caseId" value={c.id} />
+                    <button type="submit" className="dang">
+                      Anular la cita
+                    </button>
+                  </form>
+                </div>
+              </>
+            ) : (
+              <>
+                <b>Sin cita: elige una hora</b>
+                <div className="muted">
+                  Tu cita en {c.clinic.name} quedó anulada. Reserva otra hora cuando te venga bien; sigue siendo
+                  gratuita.
+                </div>
+                <div className="row" style={{ marginTop: 10 }}>
+                  <Link href={`/reserva/${c.clinicId}?caso=${c.id}`} className="btn pri">
+                    Reservar hora
+                  </Link>
                 </div>
               </>
             );
@@ -69,7 +94,24 @@ export async function PanelCliente({ user }: { user: User }) {
             body = (
               <>
                 <b>Necesitamos repetir una prueba</b>
-                <div className="muted">Tu clínica te contactará para una cita breve. Sin coste para ti.</div>
+                <div className="muted">
+                  {c.appointmentAt
+                    ? `Cita para repetirla: ${fmtdt(c.appointmentAt)} en ${c.clinic.name}. Sin coste para ti.`
+                    : `Es una visita breve en ${c.clinic.name}, sin coste para ti. Elige una hora o espera a que te llame la clínica.`}
+                </div>
+                <div className="row" style={{ marginTop: 10 }}>
+                  <Link href={`/reserva/${c.clinicId}?caso=${c.id}`} className={`btn ${c.appointmentAt ? "" : "pri"}`}>
+                    {c.appointmentAt ? "Cambiar la hora" : "Reservar hora"}
+                  </Link>
+                  {c.appointmentAt && (
+                    <form action={cancelarCitaAction}>
+                      <input type="hidden" name="caseId" value={c.id} />
+                      <button type="submit" className="dang">
+                        Anular la cita
+                      </button>
+                    </form>
+                  )}
+                </div>
               </>
             );
             break;

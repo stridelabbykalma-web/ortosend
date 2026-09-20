@@ -1,11 +1,14 @@
 "use server";
 
-// Acciones del cliente: pago (simulado hasta integrar Stripe) y acceso a documentos clínicos.
+// Acciones del cliente: pago (simulado hasta integrar Stripe), acceso a documentos clínicos y citas.
 import { redirect } from "next/navigation";
 import { SignJWT, jwtVerify } from "jose";
 import { prisma } from "@/lib/db";
 import { requireRole, verifyPassword } from "@/lib/auth";
 import { audit, notify, pushEvent } from "@/lib/cases";
+import { activeAppointmentOf, bookAppointment, cancelAppointment } from "@/lib/agenda-db";
+import { agendaErrorMessage, parseSlot, type SlotOk } from "@/lib/reserva-form";
+import { fmtdt } from "@/lib/format";
 
 const secret = () => new TextEncoder().encode(process.env.AUTH_SECRET || "dev-secret");
 
@@ -80,4 +83,73 @@ export async function verifyDocToken(token: string, caseId: string) {
   } catch {
     return false;
   }
+}
+
+// --- Citas: el cliente puede cambiar o anular su cita desde el panel ---
+// Estados que admiten cita gestionada por el cliente: CITA_RESERVADA (estudio)
+// y DEVUELTO_CLINICA (repetir una prueba, sin coste).
+const CLIENT_BOOKABLE = ["CITA_RESERVADA", "DEVUELTO_CLINICA"];
+
+export async function reprogramarCitaAction(formData: FormData) {
+  const caseId = String(formData.get("caseId"));
+  const { u, kase } = await myCase(caseId);
+  const back = `/reserva/${kase.clinicId}?caso=${caseId}`;
+  if (!CLIENT_BOOKABLE.includes(kase.state)) fail("/panel", "Este caso no admite cambiar la cita");
+  const slot = parseSlot(formData);
+  if (!slot.ok) fail(back, slot.error);
+  const actual = await activeAppointmentOf(prisma, caseId);
+  const kind = kase.state === "DEVUELTO_CLINICA" ? "REPETICION" : "ESTUDIO";
+  let startsAt: Date | null = null;
+  try {
+    const appt = await prisma.$transaction((tx) =>
+      bookAppointment(tx, {
+        clinicId: kase.clinicId,
+        caseId,
+        startsAt: (slot as SlotOk).startsAt,
+        professionalId: (slot as SlotOk).professionalId,
+        kind,
+        source: "cliente",
+        bookedBy: u.id,
+        mode: "online",
+        replaceAppointmentId: actual?.id ?? null,
+      })
+    );
+    startsAt = appt.startsAt;
+  } catch (e) {
+    fail(back, agendaErrorMessage(e));
+  }
+  await pushEvent(
+    caseId,
+    actual
+      ? `Cita cambiada por el cliente: de ${fmtdt(actual.startsAt)} a ${fmtdt(startsAt)}`
+      : `Cita reservada por el cliente (${kind === "REPETICION" ? "repetir prueba" : "estudio"}) — ${fmtdt(startsAt)}`,
+    u.name
+  );
+  if (u.phone)
+    await notify(u.phone, actual ? "cita_cambiada" : "cita_confirmada", {
+      caseId,
+      clinica: kase.clinic.name,
+      direccion: kase.clinic.address,
+      fecha: startsAt!.toISOString(),
+    });
+  redirect("/panel?ok=" + encodeURIComponent(`Cita ${actual ? "cambiada" : "confirmada"}: ${fmtdt(startsAt)}`));
+}
+
+export async function cancelarCitaAction(formData: FormData) {
+  const caseId = String(formData.get("caseId"));
+  const { u, kase } = await myCase(caseId);
+  if (!CLIENT_BOOKABLE.includes(kase.state)) fail("/panel", "Este caso no admite anular la cita");
+  const actual = await activeAppointmentOf(prisma, caseId);
+  if (!actual) fail("/panel", "No hay ninguna cita activa");
+  const reason = String(formData.get("reason") ?? "").trim() || null;
+  await cancelAppointment(prisma, actual!.id, u.id, reason);
+  await pushEvent(caseId, `Cita del ${fmtdt(actual!.startsAt)} anulada por el cliente${reason ? `: ${reason}` : ""}`, u.name);
+  if (u.phone)
+    await notify(u.phone, "cita_cancelada", {
+      caseId,
+      clinica: kase.clinic.name,
+      fecha: actual!.startsAt.toISOString(),
+      nota: "Tu cita queda anulada. Puedes reservar otra hora cuando quieras desde tu panel.",
+    });
+  redirect("/panel?ok=" + encodeURIComponent("Cita anulada. Puedes elegir otra hora cuando quieras."));
 }

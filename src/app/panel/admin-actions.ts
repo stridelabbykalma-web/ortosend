@@ -89,7 +89,7 @@ export async function runJobsAction() {
   void u;
   redirect(
     "/panel?ok=" +
-      encodeURIComponent(`Mantenimiento: ${res.expired} enlaces caducados, ${res.reminders} recordatorios encolados`)
+      encodeURIComponent(`Mantenimiento: ${res.expired} enlaces caducados, ${res.reminders} recordatorios de pago y ${res.citas} recordatorios de cita encolados`)
   );
 }
 
@@ -131,7 +131,31 @@ export async function runJobs() {
       reminders++;
     }
   }
-  return { expired: expiredCases.length, reminders };
+  // 3) Recordatorio de cita 24 h (citas activas que empiezan en las próximas 24-25 h)
+  let citas = 0;
+  const soon = await prisma.appointment.findMany({
+    where: {
+      status: { in: ["RESERVADA", "CONFIRMADA"] },
+      reminderSentAt: null,
+      startsAt: { gt: now, lt: new Date(now.getTime() + 25 * 3600 * 1000) },
+    },
+    include: { clinic: true, case: { include: { patient: { include: { owner: true } } } } },
+  });
+  for (const a of soon) {
+    const phone = a.case.patient.owner.phone;
+    if (phone)
+      await notify(phone, "recordatorio_24h", {
+        caseId: a.caseId,
+        appointmentId: a.id,
+        clinica: a.clinic.name,
+        direccion: a.clinic.address,
+        fecha: a.startsAt.toISOString(),
+        nota: "Recuerda tu cita de mañana. Trae tu calzado habitual. Si no puedes venir, cambia la hora desde tu panel.",
+      });
+    await prisma.appointment.update({ where: { id: a.id }, data: { reminderSentAt: now } });
+    citas++;
+  }
+  return { expired: expiredCases.length, reminders, citas };
 }
 
 // --- Altas de profesionales solicitadas por las clínicas ---

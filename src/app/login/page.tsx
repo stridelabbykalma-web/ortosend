@@ -6,9 +6,9 @@ export const dynamic = "force-dynamic";
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; next?: string }>;
 }) {
-  const { error } = await searchParams;
+  const { error, next } = await searchParams;
   return (
     <div className="wrap" style={{ maxWidth: 400 }}>
       <div className="sp2" />
@@ -16,6 +16,7 @@ export default async function LoginPage({
       <div className="sp" />
       <Flash error={error} />
       <form className="card" action={loginAction}>
+        {next && <input type="hidden" name="next" value={next} />}
         <label>Email o móvil</label>
         <input name="identifier" autoComplete="username" required />
         <label>Contraseña</label>

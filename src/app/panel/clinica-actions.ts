@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { requireRole, createInviteToken } from "@/lib/auth";
 import { checklistOf, notify, pushEvent } from "@/lib/cases";
+import { completeTodaysAppointment } from "@/lib/agenda-db";
 import { BARO_KINDS, SCAN_KIND } from "@/lib/format";
 import { nombreProyectoRevoScan } from "@/lib/scan";
 import type { Questionnaire } from "@/lib/questionnaire";
@@ -12,8 +13,6 @@ import type { Exam } from "@/lib/exploracion";
 import { nucleoCompleto, ramasSinCubrir } from "@/lib/tests-podologicos";
 import { RX_ROUTES, type RxRoute } from "@/lib/rx-route";
 import type { User } from "@prisma/client";
-
-const MAX_SLOTS = 5;
 
 // Nombre seguro para rutas de archivo a partir del nombre del paciente.
 function slugify(t: string) {
@@ -33,29 +32,6 @@ async function requireClinicStaff(): Promise<User & { clinicId: string }> {
   const u = await requireRole("PROFESIONAL", "ADMIN_CLINICA");
   if (!u.clinicId) throw new Error("Usuario sin clínica asignada");
   return u as User & { clinicId: string };
-}
-
-// --- Disponibilidad (huecos web, máx. 5 activos) ---
-export async function addSlotAction(formData: FormData) {
-  const u = await requireClinicStaff();
-  const back = "/panel?tab=disp";
-  const startsAt = String(formData.get("startsAt") ?? "");
-  if (!startsAt) fail(back, "Indica fecha y hora");
-  const when = new Date(startsAt);
-  if (isNaN(+when) || when < new Date()) fail(back, "La fecha debe ser futura");
-  const active = await prisma.slot.count({
-    where: { clinicId: u.clinicId, caseId: null, startsAt: { gt: new Date() } },
-  });
-  if (active >= MAX_SLOTS) fail(back, `Máximo ${MAX_SLOTS} huecos activos publicados`);
-  await prisma.slot.create({ data: { clinicId: u.clinicId, startsAt: when } });
-  redirect(back);
-}
-
-export async function delSlotAction(formData: FormData) {
-  const u = await requireClinicStaff();
-  const id = String(formData.get("slotId"));
-  await prisma.slot.deleteMany({ where: { id, clinicId: u.clinicId, caseId: null } });
-  redirect("/panel?tab=disp");
 }
 
 // --- Flujo B: caso iniciado en clínica + invitación de cuenta (72 h) ---
@@ -111,6 +87,8 @@ async function captureFor(caseId: string, u: User) {
     kase.capture ?? (await prisma.capture.create({ data: { caseId } }));
   if (kase.state === "CITA_RESERVADA") {
     await prisma.case.update({ where: { id: caseId }, data: { state: "ESTUDIO_EN_CURSO" } });
+    // El paciente ha venido: la cita del día queda como realizada.
+    await completeTodaysAppointment(prisma, caseId);
     await pushEvent(caseId, "Estudio iniciado en clínica", u.name);
   }
   return { kase, capture };

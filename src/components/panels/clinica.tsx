@@ -2,16 +2,29 @@ import Link from "next/link";
 import type { User } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { StatePill } from "@/components/ui";
-import { fmtd, fmtdt } from "@/lib/format";
-import { addSlotAction, delSlotAction, newCaseBAction, requestProfessionalAction } from "@/app/panel/clinica-actions";
+import { fmtd } from "@/lib/format";
+import { requestProfessionalAction } from "@/app/panel/clinica-actions";
+import { ClinicaAgenda } from "./clinica-agenda";
+import { ClinicaDisponibilidad } from "./clinica-disponibilidad";
 import { openCaseAction } from "@/app/panel/rx-actions";
 import { REVISION_PREFIJO, esCentral } from "@/lib/rx-route";
 
-export async function PanelClinica({ user, tab }: { user: User; tab?: string }) {
-  const clinic = await prisma.clinic.findUnique({
-    where: { id: user.clinicId! },
-    include: { slots: { where: { caseId: null, startsAt: { gt: new Date() } }, orderBy: { startsAt: "asc" } } },
-  });
+export async function PanelClinica({
+  user,
+  tab,
+  semana,
+  pro,
+  caso,
+  anuladas,
+}: {
+  user: User;
+  tab?: string;
+  semana?: string;
+  pro?: string;
+  caso?: string;
+  anuladas?: string;
+}) {
+  const clinic = await prisma.clinic.findUnique({ where: { id: user.clinicId! } });
   if (!clinic) return <div className="note r">Usuario sin clínica asignada.</div>;
   const profile = await prisma.professionalProfile.findUnique({ where: { userId: user.id } });
   // Cualquier prescriptor verificado de la clínica ve la cola de los casos que la clínica se quedó
@@ -38,79 +51,7 @@ export async function PanelClinica({ user, tab }: { user: User; tab?: string }) 
 
   let body: React.ReactNode = null;
   if (t === "agenda") {
-    const agenda = cases.filter((c) =>
-      ["CITA_RESERVADA", "ESTUDIO_EN_CURSO", "DEVUELTO_CLINICA"].includes(c.state)
-    );
-    body = (
-      <>
-        <div className="row between">
-          <h3>Citas y estudios pendientes</h3>
-        </div>
-        <div className="sp" />
-        <div className="card">
-          {agenda.length ? (
-            <table>
-              <thead>
-                <tr>
-                  <th>Caso</th>
-                  <th>Paciente</th>
-                  <th>Cita</th>
-                  <th>Estado</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {agenda.map((c) => (
-                  <tr key={c.id}>
-                    <td>#{c.number}</td>
-                    <td>{c.patient.name}</td>
-                    <td>{c.appointmentAt ? fmtdt(c.appointmentAt) : "Flujo B"}</td>
-                    <td>
-                      <StatePill state={c.state} />
-                    </td>
-                    <td>
-                      <Link href={`/caso/${c.id}`} className="btn">
-                        {c.state === "DEVUELTO_CLINICA" ? "Repetir prueba" : "Abrir estudio"}
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <div className="muted">Sin citas pendientes. Los pacientes que reserven online aparecerán aquí.</div>
-          )}
-        </div>
-        <div className="sp" />
-        <details className="card">
-          <summary style={{ cursor: "pointer", fontWeight: 600 }}>+ Nuevo caso (Flujo B — paciente en clínica)</summary>
-          <form action={newCaseBAction}>
-            <label>Nombre y apellidos del paciente</label>
-            <input name="name" required />
-            <div className="grid g2">
-              <div>
-                <label>Móvil (recibirá la invitación de cuenta, 72 h)</label>
-                <input name="phone" required />
-              </div>
-              <div>
-                <label>Email (opcional)</label>
-                <input name="email" type="email" />
-              </div>
-            </div>
-            <label>Fecha de nacimiento</label>
-            <input name="birth" type="date" />
-            <div className="sp" />
-            <button type="submit" className="pri">
-              Crear caso e invitar al paciente
-            </button>
-            <div className="tiny" style={{ marginTop: 8 }}>
-              El consentimiento RGPD se recoge en clínica. El paciente activa su cuenta desde el
-              enlace de invitación (WhatsApp).
-            </div>
-          </form>
-        </details>
-      </>
-    );
+    body = <ClinicaAgenda clinic={clinic} user={user} semana={semana} pro={pro} caso={caso} anuladas={anuladas} />;
   }
   if (t === "casos") {
     body = (
@@ -216,37 +157,7 @@ export async function PanelClinica({ user, tab }: { user: User; tab?: string }) 
     );
   }
   if (t === "disp") {
-    body = (
-      <>
-        <h3>Huecos publicados en la web</h3>
-        <div className="muted">
-          Franjas que tu clínica destina a reservas online (Flujo A). Máximo 5 activos.
-        </div>
-        <div className="sp" />
-        <div className="card">
-          <div className="grid g4">
-            {clinic.slots.map((s) => (
-              <div className="row" key={s.id} style={{ border: "1px solid var(--line)", borderRadius: 8, padding: "6px 10px", justifyContent: "space-between" }}>
-                <span style={{ fontSize: 13 }}>{fmtdt(s.startsAt)}</span>
-                <form action={delSlotAction}>
-                  <input type="hidden" name="slotId" value={s.id} />
-                  <button type="submit" style={{ color: "var(--red)", border: "none", padding: "0 4px" }}>
-                    ×
-                  </button>
-                </form>
-              </div>
-            ))}
-            {clinic.slots.length === 0 && <div className="muted">Sin huecos publicados.</div>}
-          </div>
-          <form className="row" style={{ marginTop: 12 }} action={addSlotAction}>
-            <input name="startsAt" type="datetime-local" style={{ maxWidth: 220 }} required />
-            <button type="submit" disabled={clinic.slots.length >= 5}>
-              Añadir hueco
-            </button>
-          </form>
-        </div>
-      </>
-    );
+    body = <ClinicaDisponibilidad clinic={clinic} user={user} />;
   }
   if (t === "prof" && user.role === "ADMIN_CLINICA") {
     const [pros, applications] = await Promise.all([
