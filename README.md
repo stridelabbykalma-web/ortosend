@@ -3,14 +3,31 @@
 Plataforma de plantillas ortopédicas a medida (199,99 € precio único) con red de clínicas
 asociadas. Stack: **Next.js (App Router, server actions) + PostgreSQL (Prisma)**.
 
+**En producción**: https://ortosend-five.vercel.app (Vercel, funciones en Frankfurt `fra1`,
+base de datos Neon en la UE). Rama de producción: `claude/hazlo-0argrv` — cada push
+despliega automáticamente.
+
+> Estado del proyecto y **lista completa de problemas pendientes**: `docs/ESTADO-Y-PENDIENTES.md`.
+> Documentación RGPD: `docs/legal/`.
+
 ## Estado actual — qué está implementado y verificado
 
 **Web pública**
-- Home con propuesta de valor y buscador de clínicas por población/CP (`/buscar`).
+- Home con propuesta de valor y **buscador en vivo con mapa de Google Maps** en la propia
+  portada (`src/components/buscador-vivo.tsx` + `mapa-buscar.tsx`): geolocalización
+  automática al entrar (si el visitante acepta se buscan solas las clínicas a 50 km; si
+  escribe CP/población manda el texto; si deniega no se busca nada hasta que escriba),
+  icono de diana dentro del campo para reintentar la ubicación, resultados sin cambiar de
+  página y alta en lista de espera si no hay cobertura. Geocodificación server-side con
+  Nominatim/OSM y radio de 50 km por haversine (`src/lib/geo.ts`, `/api/clinicas`).
+  El mapa solo carga **tras aceptar cookies** (banner propio, criterio AEPD).
 - «Cómo funciona», «Para clínicas» (solicitud de alta) y lista de espera de zonas sin cobertura.
 - **Flujo A**: reserva online con huecos reales (reclamo atómico del slot, sin dobles reservas),
-  alta de cuenta del cliente con consentimientos RGPD versionados.
-- Textos legales provisionales (privacidad y términos).
+  alta de cuenta del cliente con consentimientos RGPD versionados (v2, con vídeos/fotos y
+  declaración del tutor para menores).
+- **Textos legales completos**: aviso legal, política de privacidad, términos de venta y
+  política de cookies (`/legal/*`), con los datos societarios centralizados en
+  `src/lib/legal.ts` (placeholders `[PENDIENTE]` a rellenar con razón social/CIF/domicilio).
 
 **Autenticación y roles**
 - Sesión con cookie firmada (jose) + bcrypt. 6 roles: ADMIN, ADMIN_CLINICA, PROFESIONAL,
@@ -23,6 +40,10 @@ asociadas. Stack: **Next.js (App Router, server actions) + PostgreSQL (Prisma)**
 **Panel clínica**
 - Agenda (citas Flujo A + casos Flujo B), disponibilidad (máx. 5 huecos), profesionales y
   formación 5/5, liquidaciones (placeholder).
+- **Solicitudes de alta de profesionales**: el admin de clínica pide el alta con la ficha
+  completa (nombre, DNI, titulación, nº de colegiado y colegio si prescribe) y el equipo de
+  Ortosend la aprueba (crea la cuenta + invitación 72 h, colegiación verificada) o la
+  rechaza con nota (`ProfessionalApplication`, pestañas «Profesionales» de clínica y admin).
 - **Asistente de captura** guiado con guardado continuo: cuestionario clínico completo
   (motivo/dolor, actividad y datos físicos, calzado, antecedentes y tratamientos previos —
   visible entero en el expediente que llega al prescriptor), tipo de pie y FPI-6 más una
@@ -142,20 +163,26 @@ Cuentas de demo (contraseña `ortosend123`):
 
 ## Pendiente (siguientes fases)
 
+Lista completa y priorizada en **`docs/ESTADO-Y-PENDIENTES.md`**. Resumen:
+
 - **Stripe real** (PaymentIntent + webhook; Bizum) y facturas.
 - **Media en Cloudflare R2/S3** por fragmentos con URLs firmadas (hoy los vídeos y fotos se
   guardan en Postgres, con tope de 4 MB por archivo); visor del escaneo 3D.
 - **WhatsApp Business API** (360dialog/Twilio) para la cola de `Notification`; email de respaldo.
-- Mapa Leaflet/OSM con radio 50 km real en `/buscar` (lat/lng ya en el modelo).
 - Envíos (Sendcloud/Packlink) con webhook de entrega; PDF real de la prescripción.
 - i18n ES/CA, passkeys, PWA offline del asistente de captura.
 - Recordatorio de cita 24 h, seguimiento de adaptación d20 y revisión anual como cron real.
 - Onboarding completo de clínicas (contrato, cesión de equipamiento, formación bloqueante).
 
-## Despliegue en Vercel + Neon (sin terminal, ~5 min)
+## Despliegue en Vercel + Neon
 
-El repo ya está preparado: `vercel-build` aplica las migraciones en cada deploy,
-`vercel.json` programa el cron diario y `/api/seed` carga los datos de demo.
+**Ya desplegado** en https://ortosend-five.vercel.app (proyecto `ortosend` del team
+`ortosend` en Vercel; BD Neon en `eu-central-1`, Frankfurt). `vercel-build` ejecuta
+`prisma generate + migrate deploy + next build` en cada push, `vercel.json` programa el
+cron diario (`/api/cron`) y fija las funciones en `fra1` (junto a la BD). `/api/seed`
+queda **bloqueado en producción** salvo `ALLOW_SEED=1`.
+
+Para reproducir el despliegue desde cero:
 
 1. **Neon** — entra en [neon.tech](https://neon.tech) (cuenta gratis, región UE),
    crea un proyecto «ortosend» y copia la **connection string** (`postgresql://…`).
