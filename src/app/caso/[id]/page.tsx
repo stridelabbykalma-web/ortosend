@@ -12,6 +12,7 @@ import { unlockRxAction } from "@/app/panel/cliente-actions";
 import { verifyDocToken } from "@/app/panel/cliente-actions";
 import { fmtd } from "@/lib/format";
 import { esCentral } from "@/lib/rx-route";
+import { TALLER_STATES } from "@/lib/taller";
 
 export const dynamic = "force-dynamic";
 
@@ -75,7 +76,7 @@ export default async function CasoPage({
 
   const inCapture = ["CITA_RESERVADA", "ESTUDIO_EN_CURSO", "DEVUELTO_CLINICA"].includes(k.state);
   const inRx = ["EN_PRESCRIPCION", "EN_CONTACTO"].includes(k.state);
-  const inTaller = ["ENTRADA_TALLER", "DISENO", "FABRICACION", "CALIDAD", "ENVIADO"].includes(k.state);
+  const inTaller = TALLER_STATES.includes(k.state);
 
   let inner: React.ReactNode;
   if (isClinicStaff && inCapture) {
@@ -105,7 +106,11 @@ export default async function CasoPage({
       <div>
         <TallerView kase={k} />
         <div className="sp" />
-        <Expediente kase={k} />
+        <details className="card" style={{ padding: "12px 20px" }}>
+          <summary style={{ cursor: "pointer", fontWeight: 600 }}>Expediente clínico completo (cuestionario, exploración, vídeos y fotos)</summary>
+          <div className="sp" />
+          <Expediente kase={k} />
+        </details>
         <Historial events={k.events} />
       </div>
     );

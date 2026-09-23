@@ -84,6 +84,9 @@ export async function signRxAction(formData: FormData) {
     (formData.get("diagnosisDetail") ? ` — ${String(formData.get("diagnosisDetail")).trim()}` : "");
   const fabricationOrder = String(formData.get("fabricationOrder") ?? "").trim();
   const usageGuidelines = String(formData.get("usageGuidelines") ?? "").trim();
+  // Trabajo específico de cada pie (va a la etiqueta de su molde); vacío = igual que la receta general.
+  const orderLeft = String(formData.get("orderLeft") ?? "").trim() || null;
+  const orderRight = String(formData.get("orderRight") ?? "").trim() || null;
   if (!fabricationOrder)
     fail(back, "La pauta de fabricación es obligatoria: es la orden de trabajo del taller");
   const expires = new Date(Date.now() + PAY_LINK_DAYS * 24 * 3600 * 1000);
@@ -97,6 +100,8 @@ export async function signRxAction(formData: FormData) {
         assessment,
         diagnosis,
         fabricationOrder,
+        orderLeft,
+        orderRight,
         usageGuidelines,
         pdfUrl: `prescripciones/${kase.number}.pdf`, // PDF firmado e inmutable (generación real pendiente)
       },

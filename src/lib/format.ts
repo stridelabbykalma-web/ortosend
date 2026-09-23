@@ -94,4 +94,5 @@ export const MEDIA_LABEL: Record<string, string> = Object.fromEntries([
   ...CAPTURA_VISUAL,
   ...BARO_KINDS,
   [SCAN_KIND, "Escaneo de las espumas fenólicas"],
+  ["foto_calidad", "Foto del par terminado (control de calidad)"],
 ]);
