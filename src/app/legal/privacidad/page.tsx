@@ -1,6 +1,7 @@
 // Política de privacidad (arts. 13-14 RGPD y LOPDGDD), específica del
 // funcionamiento real de la plataforma. Pendiente de revisión por abogado.
-import { EMPRESA, FECHA_TEXTOS } from "@/lib/legal";
+import { CONSENT_VERSION, EMPRESA, FECHA_TEXTOS } from "@/lib/legal";
+import { EDAD_MAYORIA_SALUD } from "@/lib/edad";
 
 export default function Privacidad() {
   return (
@@ -50,9 +51,15 @@ export default function Privacidad() {
           sanitario colegiado (art. 22 RGPD).
         </p>
         <p>
-          <b>5. Menores.</b> Los estudios de menores de edad se gestionan a través de la cuenta de
-          su padre, madre o tutor legal, que otorga los consentimientos en su nombre. Los menores
-          de 14 años no pueden consentir por sí mismos el tratamiento de sus datos.
+          <b>5. Menores.</b> Los estudios de menores de {EDAD_MAYORIA_SALUD} años se gestionan a
+          través de la cuenta de su padre, madre o tutor legal, que otorga los consentimientos en su
+          nombre y es quien recibe los avisos del servicio. Al cumplir los {EDAD_MAYORIA_SALUD} años
+          (edad a partir de la cual el paciente decide sobre su salud, art. 9 de la Ley 41/2002),
+          enviamos al email propio del menor —facilitado por su tutor— un enlace para que cree su
+          contraseña y confirme su email y su móvil; desde ese momento <b>solo el propio paciente
+          accede a su expediente</b> y su tutor deja de tener acceso, de lo que se le informa. Si no
+          disponemos del email del menor, se lo pedimos a su tutor. Los menores de 14 años no
+          pueden consentir por sí mismos el tratamiento de sus datos.
         </p>
         <p>
           <b>6. Destinatarios y encargados.</b> Tus datos se alojan en la Unión Europea
@@ -90,7 +97,7 @@ export default function Privacidad() {
           conservar durante su plazo.
         </p>
         <p className="tiny">
-          Última actualización: {FECHA_TEXTOS}. Versión de consentimientos vigente: v2. Texto
+          Última actualización: {FECHA_TEXTOS}. Versión de consentimientos vigente: {CONSENT_VERSION}. Texto
           pendiente de revisión final por asesoría jurídica.
         </p>
       </div>

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { loginAction } from "@/app/(auth)/actions";
 import { Flash } from "@/components/ui";
 
@@ -6,9 +7,9 @@ export const dynamic = "force-dynamic";
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; next?: string }>;
 }) {
-  const { error } = await searchParams;
+  const { error, next } = await searchParams;
   return (
     <div className="wrap" style={{ maxWidth: 400 }}>
       <div className="sp2" />
@@ -16,6 +17,7 @@ export default async function LoginPage({
       <div className="sp" />
       <Flash error={error} />
       <form className="card" action={loginAction}>
+        {next?.startsWith("/") && <input type="hidden" name="next" value={next} />}
         <label>Email o móvil</label>
         <input name="identifier" autoComplete="username" required />
         <label>Contraseña</label>
@@ -24,6 +26,9 @@ export default async function LoginPage({
         <button type="submit" className="pri wfull">
           Entrar
         </button>
+        <div className="tiny" style={{ marginTop: 10, textAlign: "center" }}>
+          <Link href="/recuperar">¿Has olvidado tu contraseña?</Link>
+        </div>
       </form>
       <div className="tiny" style={{ marginTop: 12 }}>
         ¿Primera vez? Si has reservado cita online ya tienes cuenta con la contraseña que creaste.

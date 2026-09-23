@@ -94,7 +94,22 @@ export function Expediente({ kase }: { kase: CaseFull }) {
         <div>
           <div className="tiny">PACIENTE</div>
           <div className="muted">
-            {kase.patient.owner.phone ?? "—"} · {kase.patient.owner.email ?? "—"}
+            {kase.patient.isMinor ? (
+              <>
+                Menor · tutor: {kase.patient.owner.name} ({kase.patient.owner.phone ?? "—"} ·{" "}
+                {kase.patient.owner.email ?? "—"})
+                {(kase.patient.phone || kase.patient.email) && (
+                  <div className="tiny">
+                    Contacto propio: {kase.patient.phone ?? "—"} · {kase.patient.email ?? "—"}
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                {kase.patient.owner.phone ?? "—"} · {kase.patient.owner.email ?? "—"}
+              </>
+            )}
+            {kase.reason && <div className="tiny">Motivo indicado al reservar: {kase.reason}</div>}
           </div>
         </div>
       </div>

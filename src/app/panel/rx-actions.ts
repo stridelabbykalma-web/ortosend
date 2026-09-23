@@ -5,7 +5,7 @@
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { requireRole } from "@/lib/auth";
-import { audit, notify, pushEvent, releaseStale } from "@/lib/cases";
+import { audit, notify, notifyEmail, pushEvent, releaseStale } from "@/lib/cases";
 import { PAY_LINK_DAYS } from "@/lib/states";
 import { PRICE_CENTS } from "@/lib/format";
 import type { Case } from "@prisma/client";
@@ -114,11 +114,10 @@ export async function signRxAction(formData: FormData) {
   ]);
   await pushEvent(caseId, `Prescripción firmada por ${u.name} (col. ${profile.collegiateNum})`, u.name);
   await audit(u.id, "prescription.sign", `case:${kase.number}`);
-  const phone = await ownerPhone(kase);
-  if (phone)
-    await notify(phone, "rx_lista_pago", {
-      nota: "Tu prescripción está lista. Entra en tu panel para verla y completar el pago (199,99 €, enlace válido 30 días).",
-    });
+  const owner = await prisma.user.findUnique({ where: { id: kase.patient.ownerId } });
+  const nota = "Tu prescripción está lista. Entra en tu panel para verla y completar el pago (199,99 €, enlace válido 30 días).";
+  if (owner?.phone) await notify(owner.phone, "rx_lista_pago", { nota });
+  if (owner?.email) await notifyEmail(owner.email, "rx_lista_pago", { nombre: owner.name, nota, enlace: "/panel" });
   redirect("/panel?ok=" + encodeURIComponent(`Caso #${kase.number} prescrito y enviado a pago`));
 }
 

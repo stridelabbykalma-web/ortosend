@@ -2,32 +2,46 @@ import Link from "next/link";
 import type { User } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { StatePill, Steps } from "@/components/ui";
-import { payAction } from "@/app/panel/cliente-actions";
-import { fmtdt, PRICE_LABEL } from "@/lib/format";
+import {
+  payAction,
+  resendHandoverAction,
+  updateMyAccountAction,
+  updatePatientContactAction,
+} from "@/app/panel/cliente-actions";
+import { resendVerificationAction } from "@/app/(auth)/actions";
+import { fmtd, fmtdt, PRICE_LABEL } from "@/lib/format";
+import { EDAD_MAYORIA_SALUD, HANDOVER_TOKEN_DAYS, fechaMayoria } from "@/lib/edad";
 
 export async function PanelCliente({ user }: { user: User }) {
   const cases = await prisma.case.findMany({
     where: { patient: { ownerId: user.id } },
-    include: { clinic: true, prescription: true, shipment: true },
+    include: { clinic: true, prescription: true, shipment: true, patient: true },
     orderBy: { createdAt: "desc" },
   });
+  const menores = await prisma.patient.findMany({ where: { ownerId: user.id, isMinor: true }, orderBy: { name: "asc" } });
+  const variasPersonas = new Set(cases.map((c) => c.patientId)).size > 1 || menores.length > 0;
   if (cases.length === 0) {
     return (
-      <div className="card">
-        <b>Aún no tienes ningún tratamiento</b>
-        <p className="muted" style={{ marginTop: 6 }}>
-          Reserva tu primera cita en una clínica asociada.
-        </p>
-        <Link href="/buscar" className="btn pri" style={{ marginTop: 10 }}>
-          Buscar clínica
-        </Link>
-      </div>
+      <>
+        <EmailSinConfirmar user={user} />
+        <div className="card">
+          <b>Aún no tienes ningún tratamiento</b>
+          <p className="muted" style={{ marginTop: 6 }}>
+            Reserva tu primera cita en una clínica asociada.
+          </p>
+          <Link href="/buscar" className="btn pri" style={{ marginTop: 10 }}>
+            Buscar clínica
+          </Link>
+        </div>
+        <MisDatos user={user} />
+      </>
     );
   }
   return (
     <>
       <h2>Hola, {user.name.split(" ")[0]}</h2>
       <div className="sp" />
+      <EmailSinConfirmar user={user} />
       {cases.map((c) => {
         let body: React.ReactNode = null;
         switch (c.state) {
@@ -182,7 +196,10 @@ export async function PanelCliente({ user }: { user: User }) {
         return (
           <div className="card" key={c.id} style={{ marginBottom: 18 }}>
             <div className="row between">
-              <b style={{ fontFamily: "var(--font-sora)" }}>Tratamiento #{c.number}</b>
+              <b style={{ fontFamily: "var(--font-sora)" }}>
+                Tratamiento #{c.number}
+                {variasPersonas && <span className="muted"> · {c.patient.name}</span>}
+              </b>
               <StatePill state={c.state} />
             </div>
             <Steps state={c.state} />
@@ -193,6 +210,114 @@ export async function PanelCliente({ user }: { user: User }) {
           </div>
         );
       })}
+      <div className="row" style={{ marginTop: 6 }}>
+        <Link href="/buscar" className="btn">
+          Reservar otra cita (para ti o para un menor a tu cargo)
+        </Link>
+      </div>
+      {menores.length > 0 && <PersonasACargo menores={menores} />}
+      <MisDatos user={user} />
+    </>
+  );
+}
+
+// Menores gestionados desde esta cuenta: su contacto y el estado del traspaso a los 16.
+function PersonasACargo({ menores }: { menores: { id: string; name: string; birthDate: Date | null; email: string | null; phone: string | null; handoverNoticeAt: Date | null }[] }) {
+  return (
+    <>
+      <div className="sp2" />
+      <h3>Personas a tu cargo</h3>
+      <div className="muted">
+        Gestionas su tratamiento hasta que cumplan {EDAD_MAYORIA_SALUD} años. Ese día les enviaremos a su email
+        un enlace para crear su contraseña y confirmar su móvil; desde entonces solo ellos tendrán acceso a su
+        expediente y tú dejarás de verlo.
+      </div>
+      <div className="sp" />
+      {menores.map((m) => (
+        <form key={m.id} className="card" action={updatePatientContactAction} style={{ marginBottom: 12 }}>
+          <input type="hidden" name="patientId" value={m.id} />
+          <div className="row between">
+            <b>{m.name}</b>
+            <span className="pill n">
+              {m.birthDate ? `Cumple ${EDAD_MAYORIA_SALUD} años el ${fmtd(fechaMayoria(m.birthDate))}` : "Sin fecha de nacimiento"}
+            </span>
+          </div>
+          {m.handoverNoticeAt && (
+            <div className="note g" style={{ marginTop: 8 }}>
+              Aviso enviado a {m.email} el {fmtd(m.handoverNoticeAt)} (enlace válido {HANDOVER_TOKEN_DAYS} días).
+              Cuando active su cuenta dejarás de ver su tratamiento.
+            </div>
+          )}
+          <div className="grid g2">
+            <div>
+              <label>Su email (recibirá el aviso)</label>
+              <input name="email" type="email" defaultValue={m.email ?? ""} />
+            </div>
+            <div>
+              <label>Su móvil (opcional)</label>
+              <input name="phone" type="tel" defaultValue={m.phone ?? ""} />
+            </div>
+          </div>
+          <div className="row" style={{ marginTop: 8 }}>
+            <button type="submit">Guardar</button>
+            {m.handoverNoticeAt && (
+              <button type="submit" formAction={resendHandoverAction}>
+                Reenviar el aviso
+              </button>
+            )}
+          </div>
+        </form>
+      ))}
+    </>
+  );
+}
+
+// Aviso mientras el email no esté confirmado (necesario para recuperar la contraseña).
+function EmailSinConfirmar({ user }: { user: User }) {
+  if (!user.email || user.emailVerifiedAt) return null;
+  return (
+    <form action={resendVerificationAction} className="note a row between" style={{ marginBottom: 14 }}>
+      <span>
+        Confirma tu email: te hemos enviado un enlace a <b>{user.email}</b>. Sin confirmarlo no podrás
+        recuperar tu contraseña si la olvidas.
+      </span>
+      <button type="submit">Reenviar</button>
+    </form>
+  );
+}
+
+// Datos de acceso del titular: email, móvil y contraseña.
+function MisDatos({ user }: { user: User }) {
+  return (
+    <>
+      <div className="sp2" />
+      <details className="card">
+        <summary style={{ cursor: "pointer", fontWeight: 600 }}>Mis datos de acceso</summary>
+        <form action={updateMyAccountAction}>
+          <div className="grid g2">
+            <div>
+              <label>Email</label>
+              <input name="email" type="email" defaultValue={user.email ?? ""} required />
+            </div>
+            <div>
+              <label>Móvil</label>
+              <input name="phone" type="tel" defaultValue={user.phone ?? ""} required />
+            </div>
+          </div>
+          <div className="grid g2">
+            <div>
+              <label>Nueva contraseña (opcional)</label>
+              <input name="password" type="password" minLength={8} autoComplete="new-password" />
+            </div>
+            <div>
+              <label>Contraseña actual (para confirmar)</label>
+              <input name="current" type="password" autoComplete="current-password" required />
+            </div>
+          </div>
+          <div className="sp" />
+          <button type="submit">Guardar mis datos</button>
+        </form>
+      </details>
     </>
   );
 }

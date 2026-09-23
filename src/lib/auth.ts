@@ -73,6 +73,24 @@ export async function createInviteToken(userId: string) {
     .setExpirationTime("72h")
     .sign(secret());
 }
+// Token con el que el paciente toma el control de su cuenta al cumplir 16 años.
+export async function createHandoverToken(patientId: string, days: number) {
+  return new SignJWT({ pid: patientId, kind: "handover" })
+    .setProtectedHeader({ alg: "HS256" })
+    .setIssuedAt()
+    .setExpirationTime(`${days * 24}h`)
+    .sign(secret());
+}
+export async function verifyHandoverToken(token: string): Promise<string | null> {
+  try {
+    const { payload } = await jwtVerify(token, secret());
+    if (payload.kind !== "handover") return null;
+    return payload.pid as string;
+  } catch {
+    return null;
+  }
+}
+
 export async function verifyInviteToken(token: string): Promise<string | null> {
   try {
     const { payload } = await jwtVerify(token, secret());
@@ -83,3 +101,44 @@ export async function verifyInviteToken(token: string): Promise<string | null> {
   }
 }
 
+
+// Confirmación del email (enlace de 7 días). Lleva el email para que un cambio
+// posterior lo invalide.
+export async function createEmailToken(userId: string, email: string) {
+  return new SignJWT({ uid: userId, email, kind: "verify" })
+    .setProtectedHeader({ alg: "HS256" })
+    .setIssuedAt()
+    .setExpirationTime("7d")
+    .sign(secret());
+}
+export async function verifyEmailToken(token: string): Promise<{ uid: string; email: string } | null> {
+  try {
+    const { payload } = await jwtVerify(token, secret());
+    if (payload.kind !== "verify") return null;
+    return { uid: payload.uid as string, email: payload.email as string };
+  } catch {
+    return null;
+  }
+}
+
+// Restablecer contraseña (enlace de 1 hora). Lleva una huella del hash actual:
+// en cuanto la contraseña cambia, el enlace deja de valer (un solo uso).
+const fingerprint = (hash: string | null) => (hash ?? "none").slice(-16);
+export async function createResetToken(userId: string, passwordHash: string | null) {
+  return new SignJWT({ uid: userId, fp: fingerprint(passwordHash), kind: "reset" })
+    .setProtectedHeader({ alg: "HS256" })
+    .setIssuedAt()
+    .setExpirationTime("1h")
+    .sign(secret());
+}
+export async function verifyResetToken(token: string): Promise<User | null> {
+  try {
+    const { payload } = await jwtVerify(token, secret());
+    if (payload.kind !== "reset") return null;
+    const user = await prisma.user.findUnique({ where: { id: payload.uid as string } });
+    if (!user || !user.active || fingerprint(user.passwordHash) !== payload.fp) return null;
+    return user;
+  } catch {
+    return null;
+  }
+}

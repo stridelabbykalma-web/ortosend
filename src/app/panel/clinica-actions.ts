@@ -3,8 +3,17 @@
 // Acciones del panel de clínica: disponibilidad, Flujo B y asistente de captura.
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
-import { requireRole, createInviteToken } from "@/lib/auth";
+import { requireRole } from "@/lib/auth";
 import { checklistOf, notify, pushEvent } from "@/lib/cases";
+import {
+  caducidadInvitacion,
+  enviarInvitacion,
+  estadoInvitacion,
+  nuevoTokenInvitacion,
+  reenviarInvitacion,
+} from "@/lib/invitacion";
+import { isValidPhone, normalizeEmail, normalizePhone } from "@/lib/contacto";
+import { EDAD_MAYORIA_SALUD, esMenor, parseBirth } from "@/lib/edad";
 import { BARO_KINDS, SCAN_KIND } from "@/lib/format";
 import { nombreProyectoRevoScan } from "@/lib/scan";
 import type { Questionnaire } from "@/lib/questionnaire";
@@ -58,47 +67,82 @@ export async function delSlotAction(formData: FormData) {
   redirect("/panel?tab=disp");
 }
 
-// --- Flujo B: caso iniciado en clínica + invitación de cuenta (72 h) ---
-export async function newCaseBAction(formData: FormData) {
+// --- Flujo B: invitación con los datos esenciales del paciente ---
+// La clínica no crea la cuenta: el paciente (o su tutor, si es menor de 16) la
+// crea al aceptar la invitación, acepta los consentimientos y entonces nace el
+// caso. Todo queda registrado por el propio paciente.
+export async function invitePatientAction(formData: FormData) {
   const u = await requireClinicStaff();
   const back = "/panel?tab=agenda";
   const name = String(formData.get("name") ?? "").trim();
-  const phone = String(formData.get("phone") ?? "").trim();
-  const email = String(formData.get("email") ?? "").trim().toLowerCase() || null;
-  const birth = String(formData.get("birth") ?? "");
-  if (!name || !phone) fail(back, "Nombre y móvil del paciente son obligatorios");
-  const dup = await prisma.user.findFirst({
-    where: { OR: [{ phone }, ...(email ? [{ email }] : [])] },
+  const phone = normalizePhone(String(formData.get("phone") ?? ""));
+  const email = normalizeEmail(String(formData.get("email") ?? "")) || null;
+  const birth = parseBirth(String(formData.get("birth") ?? ""));
+  const tutorNombre = String(formData.get("tutorNombre") ?? "").trim();
+  const tutorMovil = normalizePhone(String(formData.get("tutorMovil") ?? ""));
+  const tutorEmail = normalizeEmail(String(formData.get("tutorEmail") ?? "")) || null;
+  const menor = esMenor(birth);
+  if (!name) fail(back, "El nombre del paciente es obligatorio");
+  if (menor && !tutorNombre) fail(back, `Paciente menor de ${EDAD_MAYORIA_SALUD} años: indica su padre, madre o tutor`);
+  if (email && !email.includes("@")) fail(back, "Email no válido");
+  // Destinatario de la invitación: el paciente o, si es menor, su tutor.
+  const toPhone = menor ? tutorMovil : phone;
+  const toEmail = menor ? tutorEmail : email;
+  if (!isValidPhone(toPhone)) fail(back, menor ? "El móvil del tutor es obligatorio" : "Móvil del paciente no válido");
+  if (phone && !isValidPhone(phone)) fail(back, "Móvil del paciente no válido");
+  if (toEmail && !toEmail.includes("@")) fail(back, "Email del tutor no válido");
+  if (menor && email && email === toEmail) fail(back, "El email del menor debe ser distinto del de su tutor");
+  const clinic = await prisma.clinic.findUnique({ where: { id: u.clinicId }, select: { name: true } });
+  const inv = await prisma.invitation.create({
+    data: {
+      clinicId: u.clinicId,
+      createdBy: u.id,
+      createdByName: u.name,
+      token: nuevoTokenInvitacion(),
+      name,
+      birthDate: birth,
+      isMinor: menor,
+      patientEmail: menor ? email : null,
+      patientPhone: menor ? phone || null : null,
+      tutorName: menor ? tutorNombre : null,
+      phone: toPhone,
+      email: toEmail,
+      expiresAt: caducidadInvitacion(),
+    },
   });
-  if (dup) fail(back, "Ya existe una cuenta con ese móvil o email");
-  const now = new Date();
-  const { kase, owner } = await prisma.$transaction(async (tx) => {
-    const owner = await tx.user.create({
-      data: { email, phone, role: "CLIENTE", name, invitedAt: now },
-    });
-    const patient = await tx.patient.create({
-      data: {
-        ownerId: owner.id,
-        name,
-        birthDate: birth ? new Date(birth) : null,
-        // Consentimiento recogido en papel/tablet en la clínica; queda versionado.
-        consents: { salud: { aceptado: true, fecha: now.toISOString(), version: "v2", via: "clinica" } },
-      },
-    });
-    const kase = await tx.case.create({
-      data: { patientId: patient.id, clinicId: u.clinicId, state: "ESTUDIO_EN_CURSO", flow: "B" },
-    });
-    await tx.capture.create({ data: { caseId: kase.id } });
-    return { kase, owner };
+  await enviarInvitacion(inv, clinic?.name ?? "Tu clínica");
+  redirect(
+    back +
+      "&ok=" +
+      encodeURIComponent(
+        `Invitación enviada a ${inv.tutorName ?? inv.name} (${inv.phone}${inv.email ? ` y ${inv.email}` : ""}). El estudio se abre en cuanto la acepte.`
+      )
+  );
+}
+
+export async function resendInvitationAction(formData: FormData) {
+  const u = await requireClinicStaff();
+  const back = "/panel?tab=agenda";
+  const inv = await prisma.invitation.findFirst({
+    where: { id: String(formData.get("invitationId")), clinicId: u.clinicId },
+    include: { clinic: true },
   });
-  const token = await createInviteToken(owner.id);
-  await pushEvent(kase.id, `Caso creado en clínica (Flujo B) por ${u.name}`, u.name);
-  await notify(phone, "invitacion_cuenta", {
-    enlace: `/activar?token=${token}`,
-    validez: "72 h",
-    clinica: u.clinicId,
+  if (!inv) fail(back, "Invitación no encontrada");
+  const estado = estadoInvitacion(inv!);
+  if (estado === "aceptada" || estado === "cancelada") fail(back, `La invitación ya está ${estado}`);
+  await reenviarInvitacion(inv!, inv!.clinic.name);
+  redirect(back + "&ok=" + encodeURIComponent(`Invitación reenviada a ${inv!.tutorName ?? inv!.name}`));
+}
+
+export async function cancelInvitationAction(formData: FormData) {
+  const u = await requireClinicStaff();
+  const back = "/panel?tab=agenda";
+  const r = await prisma.invitation.updateMany({
+    where: { id: String(formData.get("invitationId")), clinicId: u.clinicId, status: "pendiente" },
+    data: { status: "cancelada" },
   });
-  redirect(`/caso/${kase.id}`);
+  if (!r.count) fail(back, "Invitación no encontrada o ya resuelta");
+  redirect(back + "&ok=" + encodeURIComponent("Invitación cancelada"));
 }
 
 // --- Asistente de captura (guardado continuo) ---

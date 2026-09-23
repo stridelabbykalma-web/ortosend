@@ -31,8 +31,9 @@ model User {
   role         Role
   name         String
   active       Boolean  @default(true)
-  invitedAt    DateTime?            // invitación enviada (Flujo B)
+  invitedAt    DateTime?            // invitación enviada (cuentas de profesionales)
   activatedAt  DateTime?
+  emailVerifiedAt DateTime?         // email confirmado desde el enlace enviado (Flujo A)
   clinicId     String?
   clinic       Clinic?  @relation(fields: [clinicId], references: [id])
   professional ProfessionalProfile?
@@ -95,7 +96,35 @@ model Clinic {
   equipment    Equipment[]
   settlements  Settlement[]
   professionalApplications ProfessionalApplication[]
+  invitations  Invitation[]
   createdAt    DateTime     @default(now())
+}
+
+// Invitación de la clínica (Flujo B): solo los datos esenciales del paciente.
+// La cuenta, los consentimientos y el caso se crean cuando el paciente (o su
+// tutor) la acepta desde el enlace, así todo queda registrado por él.
+model Invitation {
+  id            String   @id @default(cuid())
+  clinicId      String
+  clinic        Clinic   @relation(fields: [clinicId], references: [id])
+  createdBy     String              // userId del profesional
+  createdByName String
+  token         String   @unique    // secreto del enlace (se regenera al reenviar)
+  name          String              // paciente
+  birthDate     DateTime?
+  isMinor       Boolean  @default(false)
+  patientEmail  String?             // contacto propio del menor (aviso a los 16)
+  patientPhone  String?
+  tutorName     String?
+  phone         String              // destinatario: paciente o tutor
+  email         String?
+  status        String   @default("pendiente") // pendiente | aceptada | cancelada
+  sentAt        DateTime @default(now())
+  sentCount     Int      @default(1)
+  expiresAt     DateTime
+  acceptedAt    DateTime?
+  caseId        String?  @unique    // caso creado al aceptar
+  createdAt     DateTime @default(now())
 }
 
 // Huecos publicados en la web (Flujo A) — máx. 5 activos por clínica
@@ -104,7 +133,8 @@ model Slot {
   clinicId  String
   clinic    Clinic   @relation(fields: [clinicId], references: [id])
   startsAt  DateTime
-  holdUntil DateTime?          // bloqueo 15 min durante la reserva
+  holdUntil DateTime?          // bloqueo 15 min mientras alguien rellena la reserva
+  holdKey   String?            // quién lo tiene bloqueado (cookie del navegador)
   caseId    String?  @unique   // consumido por una reserva
 }
 
@@ -122,12 +152,18 @@ model Equipment {
 // ---------- Pacientes y casos ----------
 model Patient {
   id        String  @id @default(cuid())
-  ownerId   String            // titular (User CLIENTE); menores: titular = adulto
+  ownerId   String            // titular (User CLIENTE); menores: titular = padre/madre/tutor
   owner     User    @relation(fields: [ownerId], references: [id])
   name      String
   birthDate DateTime?
   dni       String?
-  isMinor   Boolean @default(false)
+  isMinor   Boolean @default(false) // menor de 16 gestionado por su tutor (ver src/lib/edad.ts)
+  email     String?           // contacto propio del menor: recibe el aviso al cumplir 16
+  phone     String?
+  // Traspaso de la cuenta al cumplir 16 años: se avisa por email al menor (y al
+  // titular), y al activar su propia cuenta pasa a ser el único con acceso.
+  handoverNoticeAt DateTime?  // aviso enviado
+  handoverAt       DateTime?  // cuenta traspasada (ownerId ya es el propio paciente)
   consents  Json               // RGPD: salud, WhatsApp — con fecha y versión de texto
   cases     Case[]
 }
@@ -175,6 +211,8 @@ model Case {
   state        CaseState @default(CITA_RESERVADA)
   flow         String    // "A" (web) | "B" (clínica)
   appointmentAt DateTime?
+  reason       String?   // motivo indicado por el cliente al reservar (Flujo A)
+  reminderSentAt DateTime? // recordatorio de cita de la víspera enviado
   // Reparto automático: al abrir, queda asociado; se libera al terminar,
   // cerrar sesión o por inactividad (45 min)
   openBy       String?
@@ -342,13 +380,16 @@ model Settlement {
   paidAt    DateTime?
 }
 
-// Cola de mensajes WhatsApp (canal principal) — solo avisos + enlace,
-// NUNCA contenido clínico. Email como respaldo.
+// Cola de avisos: WhatsApp (canal principal) y email (respaldo y avisos
+// legales como la mayoría de edad). Solo avisos + enlace, NUNCA contenido clínico.
 model Notification {
   id       String   @id @default(cuid())
-  toPhone  String
+  channel  String   @default("whatsapp") // whatsapp | email
+  toPhone  String?
+  toEmail  String?
   template String   // cita_confirmada | recordatorio_24h | estudio_completo | rx_lista_pago |
-                    // pago_d3 | pago_d7 | pago_d15 | enviado | entregado | adaptacion_d20 | revision_anual …
+                    // pago_d3 | pago_d7 | pago_d15 | enviado | entregado | adaptacion_d20 |
+                    // revision_anual | mayoria_edad | mayoria_edad_titular | cuenta_traspasada …
   payload  Json
   sentAt   DateTime?
   createdAt DateTime @default(now())

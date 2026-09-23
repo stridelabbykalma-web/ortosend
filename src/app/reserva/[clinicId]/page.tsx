@@ -1,6 +1,10 @@
+import Link from "next/link";
+import { cookies } from "next/headers";
 import { prisma } from "@/lib/db";
+import { getSessionUser } from "@/lib/auth";
 import { Flash } from "@/components/ui";
-import { reservaAction } from "@/app/publico-actions";
+import { ReservaForm } from "@/components/reserva-form";
+import { HOLD_COOKIE } from "@/lib/reserva";
 import { fmtdt } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -14,9 +18,21 @@ export default async function ReservaPage({
 }) {
   const { clinicId } = await params;
   const { error } = await searchParams;
+  const now = new Date();
+  const holdKey = (await cookies()).get(HOLD_COOKIE)?.value ?? null;
   const clinic = await prisma.clinic.findUnique({
     where: { id: clinicId },
-    include: { slots: { where: { caseId: null, startsAt: { gt: new Date() } }, orderBy: { startsAt: "asc" } } },
+    include: {
+      // Huecos libres: sin caso y sin bloqueo vigente de otro navegador.
+      slots: {
+        where: {
+          caseId: null,
+          startsAt: { gt: now },
+          OR: [{ holdUntil: null }, { holdUntil: { lt: now } }, ...(holdKey ? [{ holdKey }] : [])],
+        },
+        orderBy: { startsAt: "asc" },
+      },
+    },
   });
   if (!clinic || clinic.status !== "ACTIVA") {
     return (
@@ -26,6 +42,21 @@ export default async function ReservaPage({
       </div>
     );
   }
+  const user = await getSessionUser();
+  const cuenta =
+    user?.role === "CLIENTE"
+      ? {
+          nombre: user.name,
+          personas: (
+            await prisma.patient.findMany({
+              where: { ownerId: user.id },
+              orderBy: [{ isMinor: "asc" }, { name: "asc" }],
+              select: { id: true, name: true, isMinor: true },
+            })
+          ).map((p) => ({ id: p.id, name: p.name, isMinor: p.isMinor })),
+        }
+      : null;
+
   return (
     <div className="wrap" style={{ maxWidth: 640 }}>
       <div className="sp2" />
@@ -36,77 +67,27 @@ export default async function ReservaPage({
       </div>
       <div className="sp" />
       <Flash error={error} />
-      <form action={reservaAction}>
-        <input type="hidden" name="clinicId" value={clinic.id} />
-        <div className="card">
-          <b>1. Elige tu hora</b>
-          <div className="grid g4" style={{ marginTop: 10 }}>
-            {clinic.slots.map((s) => (
-              <label key={s.id} className="slotlabel">
-                <input type="radio" name="slotId" value={s.id} required />
-                {fmtdt(s.startsAt)}
-              </label>
-            ))}
-          </div>
-          {clinic.slots.length === 0 && (
-            <div className="note a" style={{ marginTop: 8 }}>
-              Esta clínica no tiene huecos publicados ahora mismo.
+      {user && user.role !== "CLIENTE" ? (
+        <div className="note a">
+          Has iniciado sesión con una cuenta profesional ({user.name}). Cierra sesión para reservar
+          una cita como cliente.
+        </div>
+      ) : (
+        <>
+          {!user && (
+            <div className="tiny" style={{ marginBottom: 10 }}>
+              ¿Ya tienes cuenta en Ortosend?{" "}
+              <Link href={`/login?next=${encodeURIComponent(`/reserva/${clinic.id}`)}`}>Inicia sesión</Link>{" "}
+              y reserva sin volver a registrarte (también para un menor a tu cargo).
             </div>
           )}
-        </div>
-        <div className="sp" />
-        <div className="card">
-          <b>2. Tus datos</b>
-          <label>Nombre y apellidos</label>
-          <input name="name" required />
-          <div className="grid g2">
-            <div>
-              <label>Móvil (será tu vía de contacto por WhatsApp)</label>
-              <input name="phone" required />
-            </div>
-            <div>
-              <label>Email</label>
-              <input name="email" type="email" required />
-            </div>
-          </div>
-          <div className="grid g2">
-            <div>
-              <label>Fecha de nacimiento</label>
-              <input name="birth" type="date" />
-            </div>
-            <div>
-              <label>Motivo (opcional)</label>
-              <select name="motivo" defaultValue="Dolor">
-                <option>Dolor</option>
-                <option>Deporte</option>
-                <option>Prevención / revisión</option>
-                <option>Renovación de plantillas</option>
-              </select>
-            </div>
-          </div>
-          <label>Crea tu contraseña (para seguir tu tratamiento en tu panel)</label>
-          <input name="password" type="password" minLength={8} required />
-          <label className="chk">
-            <input type="checkbox" name="consentSalud" required /> Consiento de forma explícita el
-            tratamiento de mis datos de salud para la prestación del servicio, incluida la
-            grabación de vídeos de mi marcha y fotografías de mis pies durante el estudio. Si
-            reservo para un menor de edad, declaro ser su padre, madre o tutor legal y consentir
-            en su nombre.
-          </label>
-          <label className="chk">
-            <input type="checkbox" name="consentWhatsApp" /> Acepto recibir los avisos del
-            servicio por WhatsApp (solo avisos y enlaces, nunca contenido clínico).
-          </label>
-        </div>
-        <div className="tiny" style={{ marginTop: 10 }}>
-          Responsable: Ortosend. Finalidad: gestionar tu cita, estudio y tratamiento. Derechos de
-          acceso, rectificación y supresión en la <a href="/legal/privacidad">política de privacidad</a>.
-        </div>
-        <div className="sp" />
-        <button type="submit" className="pri wfull" disabled={clinic.slots.length === 0}>
-          Confirmar reserva gratuita
-        </button>
-      </form>
+          <ReservaForm
+            clinicId={clinic.id}
+            slots={clinic.slots.map((s) => ({ id: s.id, label: fmtdt(s.startsAt) }))}
+            cuenta={cuenta}
+          />
+        </>
+      )}
       <div className="sp2" />
     </div>
   );

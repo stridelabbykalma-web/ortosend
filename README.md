@@ -22,18 +22,31 @@ despliega automáticamente.
   Nominatim/OSM y radio de 50 km por haversine (`src/lib/geo.ts`, `/api/clinicas`).
   El mapa solo carga **tras aceptar cookies** (banner propio, criterio AEPD).
 - «Cómo funciona», «Para clínicas» (solicitud de alta) y lista de espera de zonas sin cobertura.
-- **Flujo A**: reserva online con huecos reales (reclamo atómico del slot, sin dobles reservas),
-  alta de cuenta del cliente con consentimientos RGPD versionados (v2, con vídeos/fotos y
-  declaración del tutor para menores).
 - **Textos legales completos**: aviso legal, política de privacidad, términos de venta y
   política de cookies (`/legal/*`), con los datos societarios centralizados en
   `src/lib/legal.ts` (placeholders `[PENDIENTE]` a rellenar con razón social/CIF/domicilio).
+- **Flujo A**: reserva online con huecos reales (bloqueo de 15 min al elegir la hora y reclamo
+  atómico del slot, sin dobles reservas), alta de cuenta del cliente con consentimientos RGPD
+  versionados (`CONSENT_VERSION`), móvil y email normalizados, motivo de la reserva visible en la
+  agenda, y reserva con la cuenta ya existente (para uno mismo o para un menor a cargo).
+  Confirmación por email y, si lo acepta, por WhatsApp; recordatorio la víspera desde el cron.
+  Email de bienvenida con los datos de acceso y **confirmación del email** (`/verificar`, aviso
+  en el panel hasta confirmarlo), y **recuperación de contraseña** (`/recuperar` →
+  `/restablecer`, enlace de 1 h y un solo uso, sin revelar si la cuenta existe).
+  **Menores**: hasta los 16 años los gestiona su padre/madre/tutor desde su cuenta; al cumplirlos
+  el cron avisa por email al menor con un enlace (`/mayoria`, 30 días) para que confirme email y
+  móvil y cree su contraseña, y desde entonces solo él/ella accede (el tutor recibe aviso y pierde
+  el acceso). Detalle en `docs/alta-cliente-flujo-a.md`.
 
 **Autenticación y roles**
 - Sesión con cookie firmada (jose) + bcrypt. 6 roles: ADMIN, ADMIN_CLINICA, PROFESIONAL,
   RECETADOR, TALLER, CLIENTE.
-- **Flujo B**: la clínica crea el caso y el paciente recibe invitación (enlace de activación 72 h,
-  `/activar`).
+- **Flujo B**: la clínica solo emite una invitación con los datos esenciales (también de
+  menores, con su tutor); el paciente la recibe al momento por WhatsApp y email, crea su cuenta
+  en `/invitacion`, revisa sus datos y acepta los consentimientos, y en ese instante nacen su
+  ficha y el caso en estudio. La agenda lista las invitaciones pendientes (abrir en la tablet,
+  copiar enlace, reenviar, cancelar) y el cron reenvía las caducadas (máx. 3 veces). Sin
+  aceptación no hay caso. Detalle en `docs/alta-cliente-flujo-b.md`.
 - Capa sensible: ver el documento clínico exige **re-confirmar la contraseña** (token de lectura
   de 10 min) y queda registrado en `AuditLog` (RGPD).
 
@@ -195,10 +208,13 @@ Lista completa y priorizada en **`docs/ESTADO-Y-PENDIENTES.md`**. Resumen:
 - **Stripe real** (PaymentIntent + webhook; Bizum) y facturas.
 - **Media en Cloudflare R2/S3** por fragmentos con URLs firmadas (hoy los vídeos y fotos se
   guardan en Postgres, con tope de 4 MB por archivo); visor del escaneo 3D.
-- **WhatsApp Business API** (360dialog/Twilio) para la cola de `Notification`; email de respaldo.
+- **WhatsApp Business API** (360dialog/Twilio) para la cola de `Notification`. El email de respaldo
+  ya se encola y sale por Resend si se configuran `RESEND_API_KEY` y `EMAIL_FROM`.
 - Envíos (Sendcloud/Packlink) con webhook de entrega; PDF real de la prescripción.
-- i18n ES/CA, passkeys, PWA offline del asistente de captura.
-- Recordatorio de cita 24 h, seguimiento de adaptación d20 y revisión anual como cron real.
+- i18n ES/CA, passkeys, verificación del móvil por SMS/WhatsApp, PWA offline del asistente de
+  captura.
+- Seguimiento de adaptación d20 y revisión anual como cron real (el recordatorio de cita ya va en
+  `/api/cron`).
 - Onboarding completo de clínicas (contrato, cesión de equipamiento, formación bloqueante).
 
 ## Despliegue en Vercel + Neon
@@ -218,6 +234,8 @@ Para reproducir el despliegue desde cero:
 3. En **Environment Variables** añade:
    - `DATABASE_URL` → la cadena de Neon
    - `AUTH_SECRET` → un texto largo aleatorio
+   - opcionales: `RESEND_API_KEY` y `EMAIL_FROM` para que salgan los emails (confirmaciones,
+     recordatorios y aviso de mayoría de edad); sin ellos quedan encolados en el panel de admin.
 4. **Deploy**. Al terminar tendrás una URL `https://….vercel.app`.
 5. Visita **`https://tu-url/api/seed`** una vez: carga clínicas, cuentas de demo y
    trece casos, con el taller poblado en todas sus fases (solo funciona con la base de

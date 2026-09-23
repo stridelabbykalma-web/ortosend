@@ -51,9 +51,10 @@ export async function PanelAdmin({ tab }: { tab?: string }) {
         <div className="sp" />
         <div className="row between">
           <div className="note" style={{ flex: 1 }}>
-            Automatizaciones: recordatorio de cita 24 h · secuencia de pago días 0/3/7/15/30 · aviso
-            de envío · seguimiento de adaptación día 20 · revisión anual. En producción corren como
-            cron diario (/api/cron).
+            Automatizaciones: recordatorio de cita la víspera · secuencia de pago días 0/3/7/15/30 ·
+            aviso de mayoría de edad (16 años) para que el paciente tome el control de su cuenta ·
+            aviso de envío · seguimiento de adaptación día 20 · revisión anual. En producción corren
+            como cron diario (/api/cron).
           </div>
           <form action={runJobsAction}>
             <button type="submit">Ejecutar mantenimiento ahora</button>
@@ -333,7 +334,9 @@ export async function PanelAdmin({ tab }: { tab?: string }) {
                   <td>
                     <Link href={`/caso/${c.id}`}>#{c.number}</Link>
                   </td>
-                  <td>{c.patient.name}</td>
+                  <td>
+                    {c.patient.name}
+                  </td>
                   <td>{c.clinic.name}</td>
                   <td>{fmtd(c.createdAt)}</td>
                   <td>
@@ -399,10 +402,11 @@ export async function PanelAdmin({ tab }: { tab?: string }) {
     const notifications = await prisma.notification.findMany({ orderBy: { createdAt: "desc" }, take: 50 });
     body = (
       <>
-        <h3>Cola de WhatsApp (simulada)</h3>
+        <h3>Cola de avisos (WhatsApp simulado · email)</h3>
         <div className="muted">
-          Canal principal: solo avisos + enlace, nunca contenido clínico. En producción se envía por
-          WhatsApp Business API (360dialog/Twilio) con email de respaldo.
+          Solo avisos + enlace, nunca contenido clínico. WhatsApp se enviará por WhatsApp Business API
+          (360dialog/Twilio); el email sale por Resend si están configurados RESEND_API_KEY y EMAIL_FROM
+          (si no, queda solo encolado aquí).
         </div>
         <div className="sp" />
         <div className="card">
@@ -410,6 +414,7 @@ export async function PanelAdmin({ tab }: { tab?: string }) {
             <thead>
               <tr>
                 <th>Fecha</th>
+                <th>Canal</th>
                 <th>Destino</th>
                 <th>Plantilla</th>
                 <th>Contenido</th>
@@ -419,7 +424,11 @@ export async function PanelAdmin({ tab }: { tab?: string }) {
               {notifications.map((n) => (
                 <tr key={n.id}>
                   <td className="tiny">{fmtdt(n.createdAt)}</td>
-                  <td>{n.toPhone}</td>
+                  <td className="tiny">
+                    {n.channel === "email" ? "Email" : "WhatsApp"}
+                    {n.sentAt ? " ✓" : ""}
+                  </td>
+                  <td>{n.channel === "email" ? n.toEmail : n.toPhone}</td>
                   <td>
                     <span className="pill n">{n.template}</span>
                   </td>

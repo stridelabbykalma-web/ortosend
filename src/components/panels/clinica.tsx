@@ -3,9 +3,20 @@ import type { User } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { StatePill } from "@/components/ui";
 import { fmtd, fmtdt } from "@/lib/format";
-import { addSlotAction, delSlotAction, newCaseBAction, requestProfessionalAction } from "@/app/panel/clinica-actions";
+import {
+  addSlotAction,
+  cancelInvitationAction,
+  delSlotAction,
+  invitePatientAction,
+  requestProfessionalAction,
+  resendInvitationAction,
+} from "@/app/panel/clinica-actions";
+import { enlaceInvitacion, estadoInvitacion } from "@/lib/invitacion";
+import { CopiarTexto } from "@/components/caso/copiar-texto";
+import { EMPRESA } from "@/lib/legal";
 import { openCaseAction } from "@/app/panel/rx-actions";
 import { REVISION_PREFIJO, esCentral } from "@/lib/rx-route";
+import { EDAD_MAYORIA_SALUD } from "@/lib/edad";
 
 export async function PanelClinica({ user, tab }: { user: User; tab?: string }) {
   const clinic = await prisma.clinic.findUnique({
@@ -32,7 +43,7 @@ export async function PanelClinica({ user, tab }: { user: User; tab?: string }) 
   const t = tab && tabsDef.some(([k]) => k === tab) ? tab : "agenda";
   const cases = await prisma.case.findMany({
     where: { clinicId: clinic.id },
-    include: { patient: true },
+    include: { patient: { include: { owner: true } } },
     orderBy: { createdAt: "desc" },
   });
 
@@ -63,7 +74,13 @@ export async function PanelClinica({ user, tab }: { user: User; tab?: string }) 
                 {agenda.map((c) => (
                   <tr key={c.id}>
                     <td>#{c.number}</td>
-                    <td>{c.patient.name}</td>
+                    <td>
+                      {c.patient.name}
+                      {c.patient.isMinor && (
+                        <div className="tiny">Menor · tutor: {c.patient.owner.name}</div>
+                      )}
+                      {c.reason && <div className="tiny">Motivo: {c.reason}</div>}
+                    </td>
                     <td>{c.appointmentAt ? fmtdt(c.appointmentAt) : "Flujo B"}</td>
                     <td>
                       <StatePill state={c.state} />
@@ -82,31 +99,54 @@ export async function PanelClinica({ user, tab }: { user: User; tab?: string }) 
           )}
         </div>
         <div className="sp" />
+        <InvitacionesPendientes clinicId={clinic.id} />
         <details className="card">
-          <summary style={{ cursor: "pointer", fontWeight: 600 }}>+ Nuevo caso (Flujo B — paciente en clínica)</summary>
-          <form action={newCaseBAction}>
+          <summary style={{ cursor: "pointer", fontWeight: 600 }}>+ Invitar a un paciente (Flujo B — paciente en clínica)</summary>
+          <div className="tiny" style={{ margin: "6px 0 10px" }}>
+            Solo los datos esenciales. El paciente recibe el enlace al momento (WhatsApp y email), crea
+            su cuenta, acepta los consentimientos y en ese instante se abre el estudio en tu agenda. Si
+            no tiene el móvil a mano, abre el enlace desde este dispositivo: la sesión de la clínica se
+            mantiene.
+          </div>
+          <form action={invitePatientAction}>
             <label>Nombre y apellidos del paciente</label>
             <input name="name" required />
             <div className="grid g2">
               <div>
-                <label>Móvil (recibirá la invitación de cuenta, 72 h)</label>
-                <input name="phone" required />
+                <label>Móvil</label>
+                <input name="phone" type="tel" />
               </div>
               <div>
-                <label>Email (opcional)</label>
+                <label>Email</label>
                 <input name="email" type="email" />
               </div>
             </div>
             <label>Fecha de nacimiento</label>
             <input name="birth" type="date" />
+            <details style={{ marginTop: 10 }}>
+              <summary style={{ cursor: "pointer" }}>El paciente es menor de {EDAD_MAYORIA_SALUD} años</summary>
+              <div className="tiny" style={{ margin: "6px 0" }}>
+                La invitación y la cuenta son para su padre, madre o tutor; el móvil y el email de arriba
+                son los del menor (recibirá el aviso para gestionar su cuenta al cumplir {EDAD_MAYORIA_SALUD}
+                años). Déjalos vacíos si no tiene.
+              </div>
+              <label>Nombre y apellidos del tutor</label>
+              <input name="tutorNombre" />
+              <div className="grid g2">
+                <div>
+                  <label>Móvil del tutor (recibirá la invitación)</label>
+                  <input name="tutorMovil" type="tel" />
+                </div>
+                <div>
+                  <label>Email del tutor</label>
+                  <input name="tutorEmail" type="email" />
+                </div>
+              </div>
+            </details>
             <div className="sp" />
             <button type="submit" className="pri">
-              Crear caso e invitar al paciente
+              Enviar invitación
             </button>
-            <div className="tiny" style={{ marginTop: 8 }}>
-              El consentimiento RGPD se recoge en clínica. El paciente activa su cuenta desde el
-              enlace de invitación (WhatsApp).
-            </div>
           </form>
         </details>
       </>
@@ -134,7 +174,9 @@ export async function PanelClinica({ user, tab }: { user: User; tab?: string }) 
                     <td>
                       <Link href={`/caso/${c.id}`}>#{c.number}</Link>
                     </td>
-                    <td>{c.patient.name}</td>
+                    <td>
+                      {c.patient.name}
+                    </td>
                     <td>{fmtd(c.createdAt)}</td>
                     <td>
                       <StatePill state={c.state} />
@@ -478,6 +520,84 @@ export async function PanelClinica({ user, tab }: { user: User; tab?: string }) 
         ))}
       </div>
       {body}
+    </>
+  );
+}
+
+
+// Invitaciones del Flujo B que aún no se han aceptado: enlace para abrir en la
+// tablet de la clínica, reenvío (token nuevo) y cancelación.
+async function InvitacionesPendientes({ clinicId }: { clinicId: string }) {
+  const invs = await prisma.invitation.findMany({
+    where: { clinicId, status: "pendiente" },
+    orderBy: { createdAt: "desc" },
+  });
+  if (!invs.length) return null;
+  return (
+    <>
+      <div className="card" style={{ marginBottom: 14 }}>
+        <b>Invitaciones pendientes de aceptar</b>
+        <div className="tiny" style={{ marginBottom: 8 }}>
+          El estudio aparece en la agenda en cuanto el paciente crea su cuenta y acepta.
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Paciente</th>
+              <th>Enviada a</th>
+              <th>Estado</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {invs.map((i) => {
+              const estado = estadoInvitacion(i);
+              const url = `${EMPRESA.web}${enlaceInvitacion(i.token)}`;
+              return (
+                <tr key={i.id}>
+                  <td>
+                    {i.name}
+                    {i.isMinor && <div className="tiny">Menor · tutor: {i.tutorName}</div>}
+                  </td>
+                  <td className="tiny">
+                    {i.phone}
+                    {i.email ? ` · ${i.email}` : ""}
+                    <div>
+                      {fmtdt(i.sentAt)}
+                      {i.sentCount > 1 ? ` · ${i.sentCount} envíos` : ""}
+                    </div>
+                  </td>
+                  <td>
+                    <span className={`pill ${estado === "caducada" ? "r" : "a"}`}>
+                      {estado === "caducada" ? "Caducada" : `Válida hasta ${fmtdt(i.expiresAt)}`}
+                    </span>
+                  </td>
+                  <td>
+                    <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
+                      {estado === "pendiente" && (
+                        <>
+                          <a href={enlaceInvitacion(i.token)} target="_blank" rel="noreferrer" className="btn">
+                            Abrir aquí
+                          </a>
+                          <CopiarTexto texto={url} />
+                        </>
+                      )}
+                      <form action={resendInvitationAction}>
+                        <input type="hidden" name="invitationId" value={i.id} />
+                        <button type="submit">Reenviar</button>
+                      </form>
+                      <form action={cancelInvitationAction}>
+                        <input type="hidden" name="invitationId" value={i.id} />
+                        <button type="submit">Cancelar</button>
+                      </form>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </>
   );
 }

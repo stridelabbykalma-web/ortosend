@@ -4,8 +4,11 @@
 import { redirect } from "next/navigation";
 import { SignJWT, jwtVerify } from "jose";
 import { prisma } from "@/lib/db";
-import { requireRole, verifyPassword } from "@/lib/auth";
+import { hashPassword, requireRole, verifyPassword } from "@/lib/auth";
 import { audit, notify, pushEvent } from "@/lib/cases";
+import { isValidPhone, normalizeEmail, normalizePhone } from "@/lib/contacto";
+import { enviarAvisoMayoria } from "@/lib/mayoria";
+import { avisarContrasenaCambiada, enviarVerificacionEmail } from "@/lib/cuenta";
 
 const secret = () => new TextEncoder().encode(process.env.AUTH_SECRET || "dev-secret");
 
@@ -80,4 +83,80 @@ export async function verifyDocToken(token: string, caseId: string) {
   } catch {
     return false;
   }
+}
+
+// --- Personas a cargo: contacto del menor (donde recibirá el aviso a los 16) ---
+export async function updatePatientContactAction(formData: FormData) {
+  const u = await requireRole("CLIENTE");
+  const patientId = String(formData.get("patientId"));
+  const back = "/panel";
+  const patient = await prisma.patient.findFirst({ where: { id: patientId, ownerId: u.id } });
+  if (!patient || !patient.isMinor) fail(back, "Persona no encontrada");
+  const email = normalizeEmail(String(formData.get("email") ?? "")) || null;
+  const phone = normalizePhone(String(formData.get("phone") ?? "")) || null;
+  if (email && !email.includes("@")) fail(back, "Email no válido");
+  if (email && email === u.email) fail(back, "El email del menor debe ser distinto del tuyo");
+  if (phone && !isValidPhone(phone)) fail(back, "Móvil no válido");
+  await prisma.patient.update({ where: { id: patientId }, data: { email, phone } });
+  // Si ya tiene la edad y aún no se le había podido avisar, se le avisa ahora.
+  const updated = await prisma.patient.findUnique({ where: { id: patientId } });
+  const r = updated && !updated.handoverNoticeAt ? await enviarAvisoMayoria(updated, u) : "no_procede";
+  redirect(
+    back +
+      "?ok=" +
+      encodeURIComponent(
+        r === "enviado" ? `Datos guardados. Hemos enviado a ${patient!.name} el enlace para gestionar su cuenta.` : "Datos guardados"
+      )
+  );
+}
+
+// Reenvío del aviso de mayoría de edad (enlace caducado o email corregido).
+export async function resendHandoverAction(formData: FormData) {
+  const u = await requireRole("CLIENTE");
+  const patientId = String(formData.get("patientId"));
+  const patient = await prisma.patient.findFirst({ where: { id: patientId, ownerId: u.id } });
+  if (!patient) fail("/panel", "Persona no encontrada");
+  const r = await enviarAvisoMayoria(patient!, u);
+  redirect(
+    "/panel?" +
+      (r === "enviado"
+        ? "ok=" + encodeURIComponent(`Aviso reenviado a ${patient!.email}`)
+        : "error=" + encodeURIComponent(r === "sin_email" ? "Añade primero el email del menor" : "Aún no procede: no ha cumplido la edad"))
+  );
+}
+
+// --- Mis datos de acceso: email, móvil y contraseña (con la contraseña actual) ---
+export async function updateMyAccountAction(formData: FormData) {
+  const u = await requireRole("CLIENTE");
+  const back = "/panel";
+  const current = String(formData.get("current") ?? "");
+  if (!u.passwordHash || !(await verifyPassword(current, u.passwordHash))) fail(back, "La contraseña actual no es correcta");
+  const email = normalizeEmail(String(formData.get("email") ?? ""));
+  const phone = normalizePhone(String(formData.get("phone") ?? ""));
+  const password = String(formData.get("password") ?? "");
+  if (!email.includes("@")) fail(back, "Email no válido");
+  if (!isValidPhone(phone)) fail(back, "Móvil no válido");
+  if (password && password.length < 8) fail(back, "La nueva contraseña debe tener al menos 8 caracteres");
+  const dup = await prisma.user.findFirst({ where: { id: { not: u.id }, OR: [{ email }, { phone }] } });
+  if (dup) fail(back, "Ya existe otra cuenta con ese email o móvil");
+  const emailCambiado = email !== u.email;
+  const updated = await prisma.user.update({
+    where: { id: u.id },
+    data: {
+      email,
+      phone,
+      ...(emailCambiado ? { emailVerifiedAt: null } : {}),
+      ...(password ? { passwordHash: await hashPassword(password) } : {}),
+    },
+  });
+  await audit(u.id, "account.update", `user:${u.id}`);
+  if (emailCambiado) await enviarVerificacionEmail(updated);
+  if (password) await avisarContrasenaCambiada(updated);
+  redirect(
+    back +
+      "?ok=" +
+      encodeURIComponent(
+        emailCambiado ? `Datos actualizados. Te hemos enviado un enlace a ${email} para confirmar el nuevo email.` : "Datos de acceso actualizados"
+      )
+  );
 }
