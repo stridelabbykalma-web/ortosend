@@ -4,25 +4,34 @@ import { prisma } from "@/lib/db";
 import { StatePill } from "@/components/ui";
 import { fmtd, fmtdt } from "@/lib/format";
 import {
-  addSlotAction,
   cancelInvitationAction,
-  delSlotAction,
-  invitePatientAction,
   requestProfessionalAction,
   resendInvitationAction,
 } from "@/app/panel/clinica-actions";
 import { enlaceInvitacion, estadoInvitacion } from "@/lib/invitacion";
 import { CopiarTexto } from "@/components/caso/copiar-texto";
 import { EMPRESA } from "@/lib/legal";
+import { ClinicaAgenda } from "./clinica-agenda";
+import { ClinicaDisponibilidad } from "./clinica-disponibilidad";
 import { openCaseAction } from "@/app/panel/rx-actions";
 import { REVISION_PREFIJO, esCentral } from "@/lib/rx-route";
-import { EDAD_MAYORIA_SALUD } from "@/lib/edad";
 
-export async function PanelClinica({ user, tab }: { user: User; tab?: string }) {
-  const clinic = await prisma.clinic.findUnique({
-    where: { id: user.clinicId! },
-    include: { slots: { where: { caseId: null, startsAt: { gt: new Date() } }, orderBy: { startsAt: "asc" } } },
-  });
+export async function PanelClinica({
+  user,
+  tab,
+  semana,
+  pro,
+  caso,
+  anuladas,
+}: {
+  user: User;
+  tab?: string;
+  semana?: string;
+  pro?: string;
+  caso?: string;
+  anuladas?: string;
+}) {
+  const clinic = await prisma.clinic.findUnique({ where: { id: user.clinicId! } });
   if (!clinic) return <div className="note r">Usuario sin clínica asignada.</div>;
   const profile = await prisma.professionalProfile.findUnique({ where: { userId: user.id } });
   // Cualquier prescriptor verificado de la clínica ve la cola de los casos que la clínica se quedó
@@ -49,108 +58,7 @@ export async function PanelClinica({ user, tab }: { user: User; tab?: string }) 
 
   let body: React.ReactNode = null;
   if (t === "agenda") {
-    const agenda = cases.filter((c) =>
-      ["CITA_RESERVADA", "ESTUDIO_EN_CURSO", "DEVUELTO_CLINICA"].includes(c.state)
-    );
-    body = (
-      <>
-        <div className="row between">
-          <h3>Citas y estudios pendientes</h3>
-        </div>
-        <div className="sp" />
-        <div className="card">
-          {agenda.length ? (
-            <table>
-              <thead>
-                <tr>
-                  <th>Caso</th>
-                  <th>Paciente</th>
-                  <th>Cita</th>
-                  <th>Estado</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {agenda.map((c) => (
-                  <tr key={c.id}>
-                    <td>#{c.number}</td>
-                    <td>
-                      {c.patient.name}
-                      {c.patient.isMinor && (
-                        <div className="tiny">Menor · tutor: {c.patient.owner.name}</div>
-                      )}
-                      {c.reason && <div className="tiny">Motivo: {c.reason}</div>}
-                    </td>
-                    <td>{c.appointmentAt ? fmtdt(c.appointmentAt) : "Flujo B"}</td>
-                    <td>
-                      <StatePill state={c.state} />
-                    </td>
-                    <td>
-                      <Link href={`/caso/${c.id}`} className="btn">
-                        {c.state === "DEVUELTO_CLINICA" ? "Repetir prueba" : "Abrir estudio"}
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <div className="muted">Sin citas pendientes. Los pacientes que reserven online aparecerán aquí.</div>
-          )}
-        </div>
-        <div className="sp" />
-        <InvitacionesPendientes clinicId={clinic.id} />
-        <details className="card">
-          <summary style={{ cursor: "pointer", fontWeight: 600 }}>+ Invitar a un paciente (Flujo B — paciente en clínica)</summary>
-          <div className="tiny" style={{ margin: "6px 0 10px" }}>
-            Solo los datos esenciales. El paciente recibe el enlace al momento (WhatsApp y email), crea
-            su cuenta, acepta los consentimientos y en ese instante se abre el estudio en tu agenda. Si
-            no tiene el móvil a mano, abre el enlace desde este dispositivo: la sesión de la clínica se
-            mantiene.
-          </div>
-          <form action={invitePatientAction}>
-            <label>Nombre y apellidos del paciente</label>
-            <input name="name" required />
-            <div className="grid g2">
-              <div>
-                <label>Móvil</label>
-                <input name="phone" type="tel" />
-              </div>
-              <div>
-                <label>Email</label>
-                <input name="email" type="email" />
-              </div>
-            </div>
-            <label>Fecha de nacimiento</label>
-            <input name="birth" type="date" />
-            <details style={{ marginTop: 10 }}>
-              <summary style={{ cursor: "pointer" }}>El paciente es menor de {EDAD_MAYORIA_SALUD} años</summary>
-              <div className="tiny" style={{ margin: "6px 0" }}>
-                La invitación y la cuenta son para su padre, madre o tutor; el móvil y el email de arriba
-                son los del menor (recibirá el aviso para gestionar su cuenta al cumplir {EDAD_MAYORIA_SALUD}
-                años). Déjalos vacíos si no tiene.
-              </div>
-              <label>Nombre y apellidos del tutor</label>
-              <input name="tutorNombre" />
-              <div className="grid g2">
-                <div>
-                  <label>Móvil del tutor (recibirá la invitación)</label>
-                  <input name="tutorMovil" type="tel" />
-                </div>
-                <div>
-                  <label>Email del tutor</label>
-                  <input name="tutorEmail" type="email" />
-                </div>
-              </div>
-            </details>
-            <div className="sp" />
-            <button type="submit" className="pri">
-              Enviar invitación
-            </button>
-          </form>
-        </details>
-      </>
-    );
+    body = <ClinicaAgenda clinic={clinic} user={user} semana={semana} pro={pro} caso={caso} anuladas={anuladas} />;
   }
   if (t === "casos") {
     body = (
@@ -258,37 +166,7 @@ export async function PanelClinica({ user, tab }: { user: User; tab?: string }) 
     );
   }
   if (t === "disp") {
-    body = (
-      <>
-        <h3>Huecos publicados en la web</h3>
-        <div className="muted">
-          Franjas que tu clínica destina a reservas online (Flujo A). Máximo 5 activos.
-        </div>
-        <div className="sp" />
-        <div className="card">
-          <div className="grid g4">
-            {clinic.slots.map((s) => (
-              <div className="row" key={s.id} style={{ border: "1px solid var(--line)", borderRadius: 8, padding: "6px 10px", justifyContent: "space-between" }}>
-                <span style={{ fontSize: 13 }}>{fmtdt(s.startsAt)}</span>
-                <form action={delSlotAction}>
-                  <input type="hidden" name="slotId" value={s.id} />
-                  <button type="submit" style={{ color: "var(--red)", border: "none", padding: "0 4px" }}>
-                    ×
-                  </button>
-                </form>
-              </div>
-            ))}
-            {clinic.slots.length === 0 && <div className="muted">Sin huecos publicados.</div>}
-          </div>
-          <form className="row" style={{ marginTop: 12 }} action={addSlotAction}>
-            <input name="startsAt" type="datetime-local" style={{ maxWidth: 220 }} required />
-            <button type="submit" disabled={clinic.slots.length >= 5}>
-              Añadir hueco
-            </button>
-          </form>
-        </div>
-      </>
-    );
+    body = <ClinicaDisponibilidad clinic={clinic} user={user} />;
   }
   if (t === "prof" && user.role === "ADMIN_CLINICA") {
     const [pros, applications] = await Promise.all([
@@ -527,7 +405,7 @@ export async function PanelClinica({ user, tab }: { user: User; tab?: string }) 
 
 // Invitaciones del Flujo B que aún no se han aceptado: enlace para abrir en la
 // tablet de la clínica, reenvío (token nuevo) y cancelación.
-async function InvitacionesPendientes({ clinicId }: { clinicId: string }) {
+export async function InvitacionesPendientes({ clinicId }: { clinicId: string }) {
   const invs = await prisma.invitation.findMany({
     where: { clinicId, status: "pendiente" },
     orderBy: { createdAt: "desc" },

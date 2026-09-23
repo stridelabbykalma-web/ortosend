@@ -1,238 +1,207 @@
 "use server";
 
-// Acciones de la web pública: reserva Flujo A, lista de espera y solicitud de clínica.
+// Acciones de la web pública: reserva Flujo A con el calendario real de la
+// clínica (visitante y cliente con sesión), lista de espera y solicitud de
+// clínica. Integra el alta de cuenta con email de bienvenida/verificación y
+// el tratamiento de menores (los gestiona su tutor hasta los 16).
 import { redirect } from "next/navigation";
-import { cookies } from "next/headers";
-import { randomBytes } from "crypto";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { createSession, getSessionUser, hashPassword } from "@/lib/auth";
 import { notifyOwner, pushEvent } from "@/lib/cases";
+import { bookAppointment } from "@/lib/agenda-db";
+import { agendaErrorMessage, parseSlot, type SlotOk } from "@/lib/reserva-form";
+import { fmtdt } from "@/lib/format";
 import { isValidPhone, normalizeEmail, normalizePhone } from "@/lib/contacto";
 import { EDAD_MAYORIA_SALUD, esMenor, parseBirth } from "@/lib/edad";
 import { CONSENT_VERSION } from "@/lib/legal";
-import { HOLD_COOKIE, HOLD_MINUTES } from "@/lib/reserva";
 import { enviarBienvenida } from "@/lib/cuenta";
 
 const reservaSchema = z.object({
   clinicId: z.string().min(1),
-  slotId: z.string().min(1, "Elige una hora"),
-  modo: z.enum(["nuevo", "cuenta"]),
-  motivo: z.string().optional(),
-  // Visitante: crea su cuenta
-  name: z.string().optional(),
-  phone: z.string().optional(),
-  email: z.string().optional(),
+  name: z.string().min(3, "Falta el nombre"),
+  phone: z.string().min(6, "Falta el móvil"),
+  email: z.string().email("Email no válido"),
   birth: z.string().optional(),
-  password: z.string().optional(),
-  // Cliente con sesión: para quién es la cita
-  patientId: z.string().optional(),
-  // Menor a cargo (en ambos modos)
-  menorNombre: z.string().optional(),
-  menorNacimiento: z.string().optional(),
-  menorEmail: z.string().optional(),
-  menorMovil: z.string().optional(),
+  motivo: z.string().optional(),
+  password: z.string().min(8, "La contraseña debe tener al menos 8 caracteres"),
 });
 
-// Bloquea un hueco 15 min para este navegador mientras rellena la reserva.
-// Devuelve si se ha conseguido y hasta qué hora.
-export async function holdSlotAction(slotId: string): Promise<{ ok: boolean; until?: string }> {
-  const jar = await cookies();
-  let key = jar.get(HOLD_COOKIE)?.value;
-  if (!key) {
-    key = randomBytes(16).toString("hex");
-    jar.set(HOLD_COOKIE, key, { httpOnly: true, sameSite: "lax", path: "/", maxAge: 60 * 60 * 24 });
-  }
-  const now = new Date();
-  const until = new Date(now.getTime() + HOLD_MINUTES * 60 * 1000);
-  // Libera cualquier otro hueco que tuviera este navegador.
-  await prisma.slot.updateMany({ where: { holdKey: key, id: { not: slotId } }, data: { holdUntil: null, holdKey: null } });
-  const r = await prisma.slot.updateMany({
-    where: {
-      id: slotId,
-      caseId: null,
-      startsAt: { gt: now },
-      OR: [{ holdUntil: null }, { holdUntil: { lt: now } }, { holdKey: key }],
-    },
-    data: { holdUntil: until, holdKey: key },
-  });
-  return r.count
-    ? { ok: true, until: until.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" }) }
-    : { ok: false };
-}
-
+// Visitante: alta de cuenta + paciente + caso + cita, todo en una transacción.
 export async function reservaAction(formData: FormData) {
-  const parsed = reservaSchema.safeParse(Object.fromEntries(formData));
   const back = (msg: string): never =>
     redirect(`/reserva/${formData.get("clinicId")}?error=` + encodeURIComponent(msg));
+  const slot = parseSlot(formData);
+  if (!slot.ok) back(slot.error);
+  const parsed = reservaSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) back(parsed.error.issues[0].message);
   const d = parsed.data!;
+  if (formData.get("consentSalud") !== "on") back("El consentimiento de datos de salud (RGPD) es necesario");
+
+  const clinic = await prisma.clinic.findUnique({ where: { id: d.clinicId } });
+  if (!clinic || clinic.status !== "ACTIVA" || !clinic.onlineBooking) back("Esta clínica no admite reservas online");
+
   const now = new Date();
-  const motivo = (d.motivo ?? "").trim() || null;
-
-  // --- Quién reserva: titular nuevo (visitante) o cliente con sesión ---
-  const sessionUser = await getSessionUser();
-  let titular: { id: string; name: string; email: string | null; phone: string | null } | null = null;
-  let nuevoTitular: { name: string; email: string; phone: string; birth: Date | null; password: string } | null = null;
-  if (d.modo === "cuenta") {
-    if (!sessionUser || sessionUser.role !== "CLIENTE") back("Inicia sesión con tu cuenta de cliente para reservar");
-    titular = sessionUser!;
-  } else {
-    if (sessionUser?.role === "CLIENTE") back("Ya tienes sesión iniciada: recarga la página para reservar con tu cuenta");
-    const name = (d.name ?? "").trim();
-    const email = normalizeEmail(d.email);
-    const phone = normalizePhone(d.phone);
-    if (name.length < 3) back("Falta el nombre");
-    if (!z.string().email().safeParse(email).success) back("Email no válido");
-    if (!isValidPhone(phone)) back("Móvil no válido");
-    if ((d.password ?? "").length < 8) back("La contraseña debe tener al menos 8 caracteres");
-    const birth = parseBirth(d.birth);
-    if (d.birth && !birth) back("Fecha de nacimiento no válida");
-    const existing = await prisma.user.findFirst({ where: { OR: [{ email }, { phone }] } });
-    if (existing) back("Ya existe una cuenta con ese email o móvil. Inicia sesión para reservar.");
-    nuevoTitular = { name, email, phone, birth, password: d.password! };
-  }
-
-  // --- Para quién es la cita: el propio titular, un menor ya registrado o uno nuevo ---
-  const paraMenor = d.modo === "cuenta" ? d.patientId === "nuevo" : formData.get("paraMenor") === "on";
-  let menor: { name: string; birth: Date; email: string | null; phone: string | null } | null = null;
-  if (paraMenor) {
-    const name = (d.menorNombre ?? "").trim();
-    const birth = parseBirth(d.menorNacimiento);
-    if (name.length < 3) back("Falta el nombre del menor");
-    if (!birth) back("Falta la fecha de nacimiento del menor");
-    if (!esMenor(birth!, now))
-      back(`A partir de los ${EDAD_MAYORIA_SALUD} años el paciente reserva con su propia cuenta y sus propios datos`);
-    const email = normalizeEmail(d.menorEmail) || null;
-    const phone = normalizePhone(d.menorMovil) || null;
-    if (email && !z.string().email().safeParse(email).success) back("El email del menor no es válido");
-    if (phone && !isValidPhone(phone)) back("El móvil del menor no es válido");
-    const emailTitular = titular?.email ?? nuevoTitular?.email ?? null;
-    if (email && emailTitular && email === emailTitular)
-      back("El email del menor debe ser distinto del tuyo: es donde recibirá el aviso para gestionar su cuenta");
-    menor = { name, birth: birth!, email, phone };
-  } else if (nuevoTitular?.birth && esMenor(nuevoTitular.birth, now)) {
+  const email = normalizeEmail(d.email);
+  const phone = normalizePhone(d.phone);
+  if (!isValidPhone(phone)) back("Móvil no válido");
+  const birth = parseBirth(d.birth);
+  if (d.birth && !birth) back("Fecha de nacimiento no válida");
+  if (birth && esMenor(birth, now))
     back(
-      `Si tienes menos de ${EDAD_MAYORIA_SALUD} años, la reserva debe hacerla tu padre, madre o tutor con sus datos marcando «Reservo para un menor»`
+      `Si el paciente tiene menos de ${EDAD_MAYORIA_SALUD} años, la reserva debe hacerla su padre, madre o tutor: crea tu cuenta con tus datos y reserva para «otra persona a mi cargo», o inicia sesión si ya la tienes`
     );
-  }
-  let patientExistente: { id: string; name: string; consents: unknown } | null = null;
-  if (d.modo === "cuenta" && !paraMenor) {
-    const p = await prisma.patient.findFirst({ where: { id: d.patientId ?? "", ownerId: titular!.id } });
-    if (!p) back("Elige para quién es la cita");
-    patientExistente = p;
-  }
-  const necesitaConsentimiento = !patientExistente;
-  if (necesitaConsentimiento && formData.get("consentSalud") !== "on")
-    back("El consentimiento de datos de salud (RGPD) es necesario");
-  const consentWhatsApp = formData.get("consentWhatsApp") === "on";
+  const existing = await prisma.user.findFirst({ where: { OR: [{ email }, { phone }] } });
+  if (existing) back("Ya existe una cuenta con ese email o móvil. Inicia sesión para reservar.");
 
-  // --- Reclama el slot de forma atómica (respetando el bloqueo de 15 min) ---
-  const holdKey = (await cookies()).get(HOLD_COOKIE)?.value ?? null;
-  const slot = await prisma.slot.findUnique({ where: { id: d.slotId } });
-  if (!slot || slot.caseId || slot.clinicId !== d.clinicId || slot.startsAt < now)
-    back("Esa hora ya no está disponible. Elige otra.");
+  const consentWhatsApp = formData.get("consentWhatsApp") === "on";
   const consents = {
     salud: { aceptado: true, fecha: now.toISOString(), version: CONSENT_VERSION, via: "web" },
     whatsapp: { aceptado: consentWhatsApp, fecha: now.toISOString(), version: CONSENT_VERSION },
-    ...(menor ? { tutor: { declarado: true, fecha: now.toISOString(), version: CONSENT_VERSION } } : {}),
   };
-  const result = await prisma
-    .$transaction(async (tx) => {
-      const owner = titular
-        ? titular
-        : await tx.user.create({
-            data: {
-              email: nuevoTitular!.email,
-              phone: nuevoTitular!.phone,
-              passwordHash: await hashPassword(nuevoTitular!.password),
-              role: "CLIENTE",
-              name: nuevoTitular!.name,
-              activatedAt: now,
-            },
-          });
-      const patient =
-        patientExistente ??
-        (await tx.patient.create({
-          data: menor
-            ? {
-                ownerId: owner.id,
-                name: menor.name,
-                birthDate: menor.birth,
-                isMinor: true,
-                email: menor.email,
-                phone: menor.phone,
-                consents,
-              }
-            : {
-                ownerId: owner.id,
-                name: nuevoTitular!.name,
-                birthDate: nuevoTitular!.birth,
-                isMinor: false,
-                consents,
-              },
-        }));
+  let result: { userId: string; caseId: string; startsAt: Date } | null = null;
+  try {
+    result = await prisma.$transaction(async (tx) => {
+      const user = await tx.user.create({
+        data: {
+          email,
+          phone,
+          passwordHash: await hashPassword(d.password),
+          role: "CLIENTE",
+          name: d.name.trim(),
+          activatedAt: now,
+        },
+      });
+      const patient = await tx.patient.create({
+        data: {
+          ownerId: user.id,
+          name: d.name.trim(),
+          birthDate: birth,
+          isMinor: false,
+          consents,
+        },
+      });
       const kase = await tx.case.create({
         data: {
           patientId: patient.id,
           clinicId: d.clinicId,
           state: "CITA_RESERVADA",
           flow: "A",
-          appointmentAt: slot!.startsAt,
-          reason: motivo,
+          reason: (d.motivo ?? "").trim() || null,
         },
       });
-      const claimed = await tx.slot.updateMany({
-        where: {
-          id: d.slotId,
-          caseId: null,
-          OR: [{ holdUntil: null }, { holdUntil: { lt: now } }, ...(holdKey ? [{ holdKey }] : [])],
-        },
-        data: { caseId: kase.id, holdUntil: null, holdKey: null },
+      const appt = await bookAppointment(tx, {
+        clinicId: d.clinicId,
+        caseId: kase.id,
+        startsAt: (slot as SlotOk).startsAt,
+        professionalId: (slot as SlotOk).professionalId,
+        kind: "ESTUDIO",
+        source: "web",
+        notes: d.motivo ? `Motivo indicado al reservar: ${d.motivo}` : null,
+        mode: "online",
       });
-      if (claimed.count === 0) throw new Error("SLOT_TAKEN");
-      return { owner, patient, kase };
-    })
-    .catch((e) => {
-      if (e instanceof Error && e.message === "SLOT_TAKEN") return null;
-      throw e;
+      return { userId: user.id, caseId: kase.id, startsAt: appt.startsAt };
     });
-  if (!result) back("Esa hora acaba de ser reservada por otra persona. Elige otra.");
-  const { owner, patient, kase } = result!;
+  } catch (e) {
+    back(agendaErrorMessage(e));
+  }
 
-  const clinic = await prisma.clinic.findUnique({ where: { id: d.clinicId } });
-  const fechaTexto = slot!.startsAt.toLocaleString("es-ES", { dateStyle: "full", timeStyle: "short" });
-  await pushEvent(
-    kase.id,
-    `Cita reservada online (Flujo A) — ${fechaTexto}${motivo ? ` · motivo: ${motivo}` : ""}${
-      patient.id !== patientExistente?.id && menor ? ` · menor a cargo de ${owner.name}` : ""
-    }`,
-    owner.name
-  );
-  await notifyOwner(owner, patientExistente?.consents ?? consents, "cita_confirmada", {
-    caseId: kase.id,
+  await pushEvent(result!.caseId, `Cita reservada online (Flujo A) — ${fmtdt(result!.startsAt)}${d.motivo ? ` · motivo: ${d.motivo}` : ""}`, d.name);
+  const owner = { id: result!.userId, name: d.name.trim(), email, phone };
+  await notifyOwner(owner, consents, "cita_confirmada", {
+    caseId: result!.caseId,
     nombre: owner.name,
-    paciente: patient.name !== owner.name ? patient.name : undefined,
-    clinica: clinic?.name,
-    direccion: clinic?.address,
-    fecha: slot!.startsAt.toISOString(),
-    fechaTexto,
+    clinica: clinic!.name,
+    direccion: clinic!.address,
+    fecha: result!.startsAt.toISOString(),
+    fechaTexto: result!.startsAt.toLocaleString("es-ES", { dateStyle: "full", timeStyle: "short" }),
     enlace: "/panel",
     nota: "Trae tu calzado habitual. Reserva gratuita: solo pagarás si un profesional prescribe tu tratamiento.",
   });
-  if (!titular) {
-    // Cuenta nueva: bienvenida con los datos de acceso y enlace para confirmar el email.
-    await enviarBienvenida(owner);
-    await createSession(owner.id);
-  }
+  // Cuenta nueva: bienvenida con los datos de acceso y enlace para confirmar el email.
+  await enviarBienvenida(owner);
+  await createSession(result!.userId);
   redirect(
     "/panel?ok=" +
-      encodeURIComponent(
-        `Cita confirmada${patient.name !== owner.name ? ` para ${patient.name}` : ""}. Te hemos enviado los detalles por email${
-          consentWhatsApp ? " y WhatsApp" : ""
-        }.`
-      )
+      encodeURIComponent(`Cita confirmada. Te hemos enviado los detalles por email${consentWhatsApp ? " y WhatsApp" : ""}.`)
   );
+}
+
+// Cliente con sesión: reserva para un paciente suyo (o da de alta a otro a su cargo).
+export async function reservaClienteAction(formData: FormData) {
+  const clinicId = String(formData.get("clinicId") ?? "");
+  const back = (msg: string): never => redirect(`/reserva/${clinicId}?error=` + encodeURIComponent(msg));
+  const user = await getSessionUser();
+  if (!user || user.role !== "CLIENTE") redirect(`/login?next=/reserva/${clinicId}`);
+  const slot = parseSlot(formData);
+  if (!slot.ok) back(slot.error);
+  if (formData.get("consentSalud") !== "on") back("El consentimiento de datos de salud (RGPD) es necesario");
+  const clinic = await prisma.clinic.findUnique({ where: { id: clinicId } });
+  if (!clinic || clinic.status !== "ACTIVA" || !clinic.onlineBooking) back("Esta clínica no admite reservas online");
+
+  const patientId = String(formData.get("patientId") ?? "");
+  const now = new Date();
+  let patient: { id: string; name: string } | null = null;
+  if (patientId && patientId !== "nuevo") {
+    patient = await prisma.patient.findFirst({ where: { id: patientId, ownerId: user!.id } });
+    if (!patient) back("Paciente no válido");
+  } else {
+    const newName = String(formData.get("newName") ?? "").trim();
+    if (newName.length < 3) back("Indica el nombre y apellidos del paciente");
+    const newBirth = parseBirth(String(formData.get("newBirth") ?? ""));
+    const menor = esMenor(newBirth, now);
+    patient = await prisma.patient.create({
+      data: {
+        ownerId: user!.id,
+        name: newName,
+        birthDate: newBirth,
+        isMinor: menor,
+        consents: {
+          salud: { aceptado: true, fecha: now.toISOString(), version: CONSENT_VERSION, via: "titular" },
+          ...(menor ? { tutor: { declarado: true, fecha: now.toISOString(), version: CONSENT_VERSION } } : {}),
+        },
+      },
+    });
+  }
+  // Un paciente no puede tener dos estudios abiertos a la vez.
+  const abierto = await prisma.case.findFirst({
+    where: { patientId: patient!.id, state: { in: ["CITA_RESERVADA", "ESTUDIO_EN_CURSO", "ESTUDIO_COMPLETO", "EN_PRESCRIPCION", "EN_CONTACTO"] } },
+  });
+  if (abierto) back(`${patient!.name} ya tiene un estudio en marcha (caso #${abierto.number}). Cambia su cita desde el panel.`);
+
+  let result: { caseId: string; startsAt: Date } | null = null;
+  try {
+    result = await prisma.$transaction(async (tx) => {
+      const kase = await tx.case.create({
+        data: { patientId: patient!.id, clinicId, state: "CITA_RESERVADA", flow: "A" },
+      });
+      const appt = await bookAppointment(tx, {
+        clinicId,
+        caseId: kase.id,
+        startsAt: (slot as SlotOk).startsAt,
+        professionalId: (slot as SlotOk).professionalId,
+        kind: "ESTUDIO",
+        source: "web",
+        bookedBy: user!.id,
+        mode: "online",
+      });
+      return { caseId: kase.id, startsAt: appt.startsAt };
+    });
+  } catch (e) {
+    back(agendaErrorMessage(e));
+  }
+  await pushEvent(result!.caseId, `Cita reservada online desde la cuenta del cliente — ${fmtdt(result!.startsAt)}`, user!.name);
+  await notifyOwner(user!, { whatsapp: { aceptado: true } }, "cita_confirmada", {
+    caseId: result!.caseId,
+    nombre: user!.name,
+    paciente: patient!.name !== user!.name ? patient!.name : undefined,
+    clinica: clinic!.name,
+    direccion: clinic!.address,
+    fecha: result!.startsAt.toISOString(),
+    fechaTexto: result!.startsAt.toLocaleString("es-ES", { dateStyle: "full", timeStyle: "short" }),
+    enlace: "/panel",
+  });
+  redirect("/panel?ok=" + encodeURIComponent(`Cita confirmada para ${patient!.name}: ${fmtdt(result!.startsAt)}`));
 }
 
 const appSchema = z.object({

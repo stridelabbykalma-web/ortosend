@@ -138,28 +138,30 @@ export async function runJobs() {
       reminders++;
     }
   }
-  // 3) Recordatorio de cita (Flujo A): la víspera, por WhatsApp si lo aceptó y por email.
+  // 3) Recordatorio de cita 24 h (citas activas que empiezan en las próximas 25 h),
+  // por WhatsApp si lo aceptó y por email.
   let citas = 0;
-  const proximas = await prisma.case.findMany({
+  const soon = await prisma.appointment.findMany({
     where: {
-      state: "CITA_RESERVADA",
+      status: { in: ["RESERVADA", "CONFIRMADA"] },
       reminderSentAt: null,
-      appointmentAt: { gt: now, lt: new Date(now.getTime() + REMINDER_WINDOW_H * 3600 * 1000) },
+      startsAt: { gt: now, lt: new Date(now.getTime() + 25 * 3600 * 1000) },
     },
-    include: { patient: { include: { owner: true } }, clinic: true },
+    include: { clinic: true, case: { include: { patient: { include: { owner: true } } } } },
   });
-  for (const c of proximas) {
-    await notifyOwner(c.patient.owner, c.patient.consents, "recordatorio_24h", {
-      caseId: c.id,
-      nombre: c.patient.owner.name,
-      paciente: c.patient.name !== c.patient.owner.name ? c.patient.name : undefined,
-      clinica: c.clinic.name,
-      direccion: c.clinic.address,
-      fechaTexto: c.appointmentAt!.toLocaleString("es-ES", { dateStyle: "full", timeStyle: "short" }),
+  for (const a of soon) {
+    await notifyOwner(a.case.patient.owner, a.case.patient.consents, "recordatorio_24h", {
+      caseId: a.caseId,
+      appointmentId: a.id,
+      nombre: a.case.patient.owner.name,
+      paciente: a.case.patient.name !== a.case.patient.owner.name ? a.case.patient.name : undefined,
+      clinica: a.clinic.name,
+      direccion: a.clinic.address,
+      fechaTexto: a.startsAt.toLocaleString("es-ES", { dateStyle: "full", timeStyle: "short" }),
       enlace: "/panel",
-      nota: "Recordatorio de tu cita de mañana. Trae tu calzado habitual y ropa cómoda.",
+      nota: "Recordatorio de tu cita de mañana. Trae tu calzado habitual. Si no puedes venir, cambia la hora desde tu panel.",
     });
-    await prisma.case.update({ where: { id: c.id }, data: { reminderSentAt: now } });
+    await prisma.appointment.update({ where: { id: a.id }, data: { reminderSentAt: now } });
     citas++;
   }
   // 4) Mayoría de edad (16 años): aviso al paciente para que tome el control de su cuenta.

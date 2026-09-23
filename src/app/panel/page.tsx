@@ -12,18 +12,18 @@ export const dynamic = "force-dynamic";
 export default async function PanelPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string; ok?: string; error?: string }>;
+  searchParams: Promise<{ tab?: string; ok?: string; error?: string; semana?: string; pro?: string; caso?: string; anuladas?: string }>;
 }) {
   const user = await getSessionUser();
   if (!user) redirect("/login");
-  const { tab, ok, error } = await searchParams;
+  const { tab, ok, error, semana, pro, caso, anuladas } = await searchParams;
   return (
     <div className="wrap">
       <div className="sp2" />
       <Flash ok={ok} error={error} />
       {user.role === "CLIENTE" && <PanelCliente user={user} />}
       {(user.role === "PROFESIONAL" || user.role === "ADMIN_CLINICA") && (
-        <PanelClinica user={user} tab={tab} />
+        <PanelClinica user={user} tab={tab} semana={semana} pro={pro} caso={caso} anuladas={anuladas} />
       )}
       {user.role === "RECETADOR" && <PanelRecetador user={user} />}
       {user.role === "TALLER" && <PanelTaller user={user} tab={tab} />}

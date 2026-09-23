@@ -14,6 +14,7 @@ import {
 } from "@/lib/invitacion";
 import { isValidPhone, normalizeEmail, normalizePhone } from "@/lib/contacto";
 import { EDAD_MAYORIA_SALUD, esMenor, parseBirth } from "@/lib/edad";
+import { completeTodaysAppointment } from "@/lib/agenda-db";
 import { BARO_KINDS, SCAN_KIND } from "@/lib/format";
 import { nombreProyectoRevoScan } from "@/lib/scan";
 import type { Questionnaire } from "@/lib/questionnaire";
@@ -21,8 +22,6 @@ import type { Exam } from "@/lib/exploracion";
 import { nucleoCompleto, ramasSinCubrir } from "@/lib/tests-podologicos";
 import { RX_ROUTES, type RxRoute } from "@/lib/rx-route";
 import type { User } from "@prisma/client";
-
-const MAX_SLOTS = 5;
 
 // Nombre seguro para rutas de archivo a partir del nombre del paciente.
 function slugify(t: string) {
@@ -44,33 +43,11 @@ async function requireClinicStaff(): Promise<User & { clinicId: string }> {
   return u as User & { clinicId: string };
 }
 
-// --- Disponibilidad (huecos web, máx. 5 activos) ---
-export async function addSlotAction(formData: FormData) {
-  const u = await requireClinicStaff();
-  const back = "/panel?tab=disp";
-  const startsAt = String(formData.get("startsAt") ?? "");
-  if (!startsAt) fail(back, "Indica fecha y hora");
-  const when = new Date(startsAt);
-  if (isNaN(+when) || when < new Date()) fail(back, "La fecha debe ser futura");
-  const active = await prisma.slot.count({
-    where: { clinicId: u.clinicId, caseId: null, startsAt: { gt: new Date() } },
-  });
-  if (active >= MAX_SLOTS) fail(back, `Máximo ${MAX_SLOTS} huecos activos publicados`);
-  await prisma.slot.create({ data: { clinicId: u.clinicId, startsAt: when } });
-  redirect(back);
-}
-
-export async function delSlotAction(formData: FormData) {
-  const u = await requireClinicStaff();
-  const id = String(formData.get("slotId"));
-  await prisma.slot.deleteMany({ where: { id, clinicId: u.clinicId, caseId: null } });
-  redirect("/panel?tab=disp");
-}
-
 // --- Flujo B: invitación con los datos esenciales del paciente ---
 // La clínica no crea la cuenta: el paciente (o su tutor, si es menor de 16) la
 // crea al aceptar la invitación, acepta los consentimientos y entonces nace el
 // caso. Todo queda registrado por el propio paciente.
+// (La disponibilidad ya no va por huecos sueltos: ver agenda-actions.ts.)
 export async function invitePatientAction(formData: FormData) {
   const u = await requireClinicStaff();
   const back = "/panel?tab=agenda";
@@ -155,6 +132,8 @@ async function captureFor(caseId: string, u: User) {
     kase.capture ?? (await prisma.capture.create({ data: { caseId } }));
   if (kase.state === "CITA_RESERVADA") {
     await prisma.case.update({ where: { id: caseId }, data: { state: "ESTUDIO_EN_CURSO" } });
+    // El paciente ha venido: la cita del día queda como realizada.
+    await completeTodaysAppointment(prisma, caseId);
     await pushEvent(caseId, "Estudio iniciado en clínica", u.name);
   }
   return { kase, capture };

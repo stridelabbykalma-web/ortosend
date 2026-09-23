@@ -40,6 +40,11 @@ model User {
   patients     Patient[]            // un titular puede gestionar varios pacientes (hijos)
   createdAt    DateTime @default(now())
   auditLogs    AuditLog[]
+  // Agenda (profesional de clínica): horario semanal, excepciones y citas asignadas
+  availabilityRules      AvailabilityRule[]
+  availabilityExceptions AvailabilityException[]
+  appointments           Appointment[]
+  calendarToken String?  @unique     // suscripción iCal privada (/api/ical/<token>)
 }
 
 // Ficha obligatoria del profesional (las cuentas las crea Ortosend)
@@ -90,8 +95,18 @@ model Clinic {
   status       ClinicStatus @default(SOLICITUD)
   hasPrescriber Boolean     @default(false) // si no: casos → cola central
   contractUrl  String?
+  // Ajustes de la agenda y de la reserva online
+  timezone         String  @default("Europe/Madrid")
+  slotMinutes      Int     @default(45)   // duración de la cita de estudio
+  minNoticeHours   Int     @default(24)   // antelación mínima para reservar online
+  bookingHorizonDays Int   @default(45)   // hasta cuántos días vista se puede reservar
+  onlineBooking    Boolean @default(true) // publica su agenda en la web
+  patientPicksPro  Boolean @default(false) // el paciente puede elegir profesional
+  calendarToken    String? @unique        // suscripción iCal de toda la clínica
+  availabilityRules      AvailabilityRule[]
+  availabilityExceptions AvailabilityException[]
+  appointments           Appointment[]
   users        User[]
-  slots        Slot[]
   cases        Case[]
   equipment    Equipment[]
   settlements  Settlement[]
@@ -127,15 +142,95 @@ model Invitation {
   createdAt     DateTime @default(now())
 }
 
-// Huecos publicados en la web (Flujo A) — máx. 5 activos por clínica
-model Slot {
-  id        String   @id @default(cuid())
-  clinicId  String
-  clinic    Clinic   @relation(fields: [clinicId], references: [id])
-  startsAt  DateTime
-  holdUntil DateTime?          // bloqueo 15 min mientras alguien rellena la reserva
-  holdKey   String?            // quién lo tiene bloqueado (cookie del navegador)
-  caseId    String?  @unique   // consumido por una reserva
+// ---------- Agenda y citas ----------
+// Cada clínica tiene una agenda propia (sala/equipo, con capacidad) y cada
+// profesional la suya. La disponibilidad online es la unión de todas las que
+// tengan `online = true`, recortada por las excepciones y las citas ya dadas.
+// Los minutos son de reloj local de la clínica (timezone); 540 = 09:00.
+
+// Horario semanal recurrente. professionalId null = agenda de la clínica.
+model AvailabilityRule {
+  id             String   @id @default(cuid())
+  clinicId       String
+  clinic         Clinic   @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  professionalId String?
+  professional   User?    @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+  weekday        Int      // ISO: 1 lunes … 7 domingo
+  startMin       Int
+  endMin         Int
+  capacity       Int      @default(1) // citas simultáneas (agenda de clínica: nº de salas)
+  online         Boolean  @default(true) // reservable desde la web; si no, solo la da la clínica
+  createdAt      DateTime @default(now())
+
+  @@index([clinicId, weekday])
+}
+
+enum ExceptionKind {
+  CIERRE    // festivo, vacaciones, baja: no se dan citas
+  APERTURA  // franja extra fuera del horario semanal
+}
+
+// Excepción por fechas (rango inclusivo). Sin horas = el día entero.
+model AvailabilityException {
+  id             String        @id @default(cuid())
+  clinicId       String
+  clinic         Clinic        @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  professionalId String?       // null = afecta a toda la clínica (todas las agendas)
+  professional   User?         @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+  kind           ExceptionKind
+  startsOn       DateTime      @db.Date
+  endsOn         DateTime      @db.Date
+  startMin       Int?
+  endMin         Int?
+  capacity       Int           @default(1)
+  online         Boolean       @default(true)
+  note           String?
+  createdAt      DateTime      @default(now())
+
+  @@index([clinicId, startsOn, endsOn])
+}
+
+enum AppointmentStatus {
+  RESERVADA
+  CONFIRMADA     // el paciente confirmó desde el recordatorio
+  COMPLETADA     // el paciente vino (el estudio arrancó)
+  CANCELADA
+  NO_PRESENTADO
+}
+
+enum AppointmentKind {
+  ESTUDIO      // primera visita: estudio completo
+  REPETICION   // repetir una prueba (caso devuelto a clínica), sin coste
+  REVISION     // revisión anual / seguimiento
+  AJUSTE       // ajuste post-entrega
+}
+
+// Cita concreta. Un caso puede tener varias a lo largo de su vida (estudio,
+// repetición, revisión…); la vigente se refleja en Case.appointmentAt.
+model Appointment {
+  id             String            @id @default(cuid())
+  clinicId       String
+  clinic         Clinic            @relation(fields: [clinicId], references: [id])
+  professionalId String?           // null = agenda de la clínica
+  professional   User?             @relation(fields: [professionalId], references: [id])
+  caseId         String
+  case           Case              @relation(fields: [caseId], references: [id])
+  kind           AppointmentKind   @default(ESTUDIO)
+  status         AppointmentStatus @default(RESERVADA)
+  startsAt       DateTime
+  endsAt         DateTime
+  source         String            // web | clinica | cliente (reprogramada desde el panel)
+  bookedBy       String?           // userId de quien la dio (null = visitante web)
+  notes          String?
+  cancelledAt    DateTime?
+  cancelledBy    String?
+  cancelReason   String?
+  reminderSentAt DateTime?         // recordatorio 24 h encolado
+  createdAt      DateTime          @default(now())
+
+  @@index([clinicId, startsAt])
+  @@index([professionalId, startsAt])
+  @@index([caseId])
 }
 
 // Equipamiento en cesión (inventario Ortosend)
@@ -210,9 +305,10 @@ model Case {
   clinic       Clinic    @relation(fields: [clinicId], references: [id])
   state        CaseState @default(CITA_RESERVADA)
   flow         String    // "A" (web) | "B" (clínica)
-  appointmentAt DateTime?
+  appointmentAt DateTime?  // próxima cita vigente (desnormalizado de Appointment)
   reason       String?   // motivo indicado por el cliente al reservar (Flujo A)
   reminderSentAt DateTime? // recordatorio de cita de la víspera enviado
+  appointments Appointment[]
   // Reparto automático: al abrir, queda asociado; se libera al terminar,
   // cerrar sesión o por inactividad (45 min)
   openBy       String?

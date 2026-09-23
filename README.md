@@ -22,14 +22,14 @@ despliega automáticamente.
   Nominatim/OSM y radio de 50 km por haversine (`src/lib/geo.ts`, `/api/clinicas`).
   El mapa solo carga **tras aceptar cookies** (banner propio, criterio AEPD).
 - «Cómo funciona», «Para clínicas» (solicitud de alta) y lista de espera de zonas sin cobertura.
+- **Flujo A**: reserva online con **calendario real** de la clínica (mes con días disponibles,
+  horas del día, elección de profesional si la clínica lo permite), reserva atómica sin dobles
+  reservas, alta de cuenta del cliente con consentimientos RGPD versionados. El cliente con
+  cuenta reserva para sí o para otra persona a su cargo, y **cambia o anula** su cita desde el
+  panel. Detalle en `docs/sistema-de-citas.md`.
 - **Textos legales completos**: aviso legal, política de privacidad, términos de venta y
   política de cookies (`/legal/*`), con los datos societarios centralizados en
   `src/lib/legal.ts` (placeholders `[PENDIENTE]` a rellenar con razón social/CIF/domicilio).
-- **Flujo A**: reserva online con huecos reales (bloqueo de 15 min al elegir la hora y reclamo
-  atómico del slot, sin dobles reservas), alta de cuenta del cliente con consentimientos RGPD
-  versionados (`CONSENT_VERSION`), móvil y email normalizados, motivo de la reserva visible en la
-  agenda, y reserva con la cuenta ya existente (para uno mismo o para un menor a cargo).
-  Confirmación por email y, si lo acepta, por WhatsApp; recordatorio la víspera desde el cron.
   Email de bienvenida con los datos de acceso y **confirmación del email** (`/verificar`, aviso
   en el panel hasta confirmarlo), y **recuperación de contraseña** (`/recuperar` →
   `/restablecer`, enlace de 1 h y un solo uso, sin revelar si la cuenta existe).
@@ -51,8 +51,14 @@ despliega automáticamente.
   de 10 min) y queda registrado en `AuditLog` (RGPD).
 
 **Panel clínica**
-- Agenda (citas Flujo A + casos Flujo B), disponibilidad (máx. 5 huecos), profesionales y
-  formación 5/5, liquidaciones (placeholder).
+- **Agenda semanal** por clínica y por profesional (citas de estudio, repetición, revisión y
+  ajuste; dar, cambiar y anular citas, no presentado, fuera de horario), casos pendientes de
+  cita, y **suscripción iCal** para ver la agenda en Outlook/Google/Apple Calendar.
+- **Disponibilidad**: horario semanal por agenda (la de la clínica con capacidad y la de cada
+  profesional), cierres (festivos, vacaciones, bajas) y aperturas puntuales por fechas,
+  ajustes de la reserva online (duración de cita, antelación mínima, horizonte, publicar o
+  no, elegir profesional) y vista previa de lo que ve el paciente.
+- Profesionales y formación 5/5, liquidaciones (placeholder).
 - **Solicitudes de alta de profesionales**: el admin de clínica pide el alta con la ficha
   completa (nombre, DNI, titulación, nº de colegiado y colegio si prescribe) y el equipo de
   Ortosend la aprueba (crea la cuenta + invitación 72 h, colegiación verificada) o la
@@ -176,11 +182,15 @@ despliega automáticamente.
   profesionales con estado de colegiación, todos los casos (cerrar con revisión anual,
   reactivar pagos), lista de espera y **cola de WhatsApp simulada** (solo avisos + enlace,
   nunca contenido clínico).
-- Mantenimiento (`/api/cron` o botón): caducidad de enlaces de pago y recordatorios d3/7/15.
+- Mantenimiento (`/api/cron` o botón): caducidad de enlaces de pago, recordatorios d3/7/15 y
+  **recordatorio de cita 24 h**.
 
 **Modelo de datos y máquina de estados**
-- `prisma/schema.prisma`: modelo completo (11 estados + excepciones, capturas con confirmación
-  de servidor, prescripción inmutable, pagos, envíos, incidencias, liquidaciones, auditoría).
+- `prisma/schema.prisma`: modelo completo (11 estados + excepciones, agenda —horario semanal,
+  excepciones y citas por clínica y profesional—, capturas con confirmación de servidor,
+  prescripción inmutable, pagos, envíos, incidencias, liquidaciones, auditoría).
+- `src/lib/agenda.ts`: motor de disponibilidad (zona horaria, ventanas, huecos) y
+  `src/lib/agenda-db.ts`: reserva atómica con bloqueo por clínica.
 - `src/lib/states.ts`: transiciones permitidas por rol y guardas (sin prescripción no hay pago;
   sin pago no se fabrica).
 
@@ -193,13 +203,14 @@ prescripción → pago → taller → entrega → cierre, más cola central, gua
 npm install
 cp .env.example .env      # rellenar DATABASE_URL y AUTH_SECRET como mínimo
 npx prisma migrate deploy # o `migrate dev` si cambias el esquema
-npx prisma db seed        # datos de demo (3 clínicas, todos los roles, 13 casos: taller en todas sus fases)
+npx prisma db seed        # datos de demo (3 clínicas con horarios, todos los roles, taller en todas sus fases)
 npm run dev
 ```
 
 Cuentas de demo (contraseña `ortosend123`):
 `admin@` · `clinica@` · `profesionalreceta@` · `profesionalnoreceta@` · `tecnico.cassa@` ·
-`recetador@` · `taller@` (todas `…@ortosend.com`), y clientes `jordi@demo.com` y `pere@demo.com`.
+`recetador@` · `taller@` (todas `…@ortosend.com`), y clientes `jordi@demo.com`, `pere@demo.com` y
+`marta@demo.com` (con cita reservada).
 
 ## Pendiente (siguientes fases)
 
@@ -213,8 +224,9 @@ Lista completa y priorizada en **`docs/ESTADO-Y-PENDIENTES.md`**. Resumen:
 - Envíos (Sendcloud/Packlink) con webhook de entrega; PDF real de la prescripción.
 - i18n ES/CA, passkeys, verificación del móvil por SMS/WhatsApp, PWA offline del asistente de
   captura.
-- Seguimiento de adaptación d20 y revisión anual como cron real (el recordatorio de cita ya va en
-  `/api/cron`).
+- Seguimiento de adaptación d20 y revisión anual como cron real (el recordatorio de cita 24 h ya
+  se encola en `runJobs`); confirmación de asistencia desde el recordatorio y lista de espera
+  por hueco.
 - Onboarding completo de clínicas (contrato, cesión de equipamiento, formación bloqueante).
 
 ## Despliegue en Vercel + Neon
