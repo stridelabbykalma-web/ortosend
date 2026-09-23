@@ -14,4 +14,21 @@ export const EMPRESA = {
 // consentimiento del paciente; súbela cuando cambie el texto legal.
 export const CONSENT_VERSION = "v2";
 
+// ¿Ha firmado el paciente el consentimiento de datos de salud? Sin él no se
+// captura nada del estudio. Los casos de clínica (Flujo B) antiguos lo marcaban
+// como aceptado al crear el caso (via "clinica") sin firma del paciente: no cuentan.
+export function consentimientoFirmado(consents: unknown): boolean {
+  const salud = (consents as { salud?: { aceptado?: boolean; via?: string } } | null)?.salud;
+  return !!salud?.aceptado && salud.via !== "clinica";
+}
+
+// Menor de edad: marcado en la ficha o por fecha de nacimiento.
+export function esMenor(p: { isMinor: boolean; birthDate: Date | null }): boolean {
+  if (p.isMinor) return true;
+  if (!p.birthDate) return false;
+  const mayoria = new Date(p.birthDate);
+  mayoria.setFullYear(mayoria.getFullYear() + 18);
+  return mayoria > new Date();
+}
+
 export const FECHA_TEXTOS = "septiembre de 2026";

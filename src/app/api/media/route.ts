@@ -7,6 +7,7 @@ import { requireRole } from "@/lib/auth";
 import { audit, pushEvent } from "@/lib/cases";
 import { MEDIA_LABEL, FOTO_KINDS, VIDEO_KINDS } from "@/lib/format";
 import { sanitizeHelbing } from "@/lib/helbing";
+import { consentimientoFirmado } from "@/lib/legal";
 import { marchaDesdeInformes, sanitizeMarcha, type MarchaInforme } from "@/lib/marcha";
 
 export const runtime = "nodejs";
@@ -44,11 +45,16 @@ export async function POST(req: Request) {
       { status: 413 }
     );
 
-  const kase = await prisma.case.findUnique({ where: { id: caseId }, include: { capture: true } });
+  const kase = await prisma.case.findUnique({ where: { id: caseId }, include: { capture: true, patient: true } });
   if (!kase || kase.clinicId !== user.clinicId)
     return NextResponse.json({ error: "Caso no accesible" }, { status: 404 });
   if (!["CITA_RESERVADA", "ESTUDIO_EN_CURSO", "DEVUELTO_CLINICA"].includes(kase.state))
     return NextResponse.json({ error: "El estudio no está en curso" }, { status: 409 });
+  if (!consentimientoFirmado(kase.patient.consents))
+    return NextResponse.json(
+      { error: "El paciente aún no ha aceptado la invitación ni firmado los consentimientos" },
+      { status: 409 }
+    );
 
   const capture =
     kase.capture ?? (await prisma.capture.create({ data: { caseId } }));

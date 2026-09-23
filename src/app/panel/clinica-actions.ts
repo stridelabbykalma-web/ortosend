@@ -11,6 +11,7 @@ import type { Questionnaire } from "@/lib/questionnaire";
 import type { Exam } from "@/lib/exploracion";
 import { nucleoCompleto, ramasSinCubrir } from "@/lib/tests-podologicos";
 import { RX_ROUTES, type RxRoute } from "@/lib/rx-route";
+import { consentimientoFirmado } from "@/lib/legal";
 import type { User } from "@prisma/client";
 
 const MAX_SLOTS = 5;
@@ -81,8 +82,8 @@ export async function newCaseBAction(formData: FormData) {
         ownerId: owner.id,
         name,
         birthDate: birth ? new Date(birth) : null,
-        // Consentimiento recogido en papel/tablet en la clínica; queda versionado.
-        consents: { salud: { aceptado: true, fecha: now.toISOString(), version: "v2", via: "clinica" } },
+        // Sin consentimientos: los firma el propio paciente al aceptar la invitación.
+        consents: {},
       },
     });
     const kase = await tx.case.create({
@@ -97,6 +98,7 @@ export async function newCaseBAction(formData: FormData) {
     enlace: `/activar?token=${token}`,
     validez: "72 h",
     clinica: u.clinicId,
+    nota: "Acepta la invitación para empezar tu estudio: confirma que quieres ser atendido y firma los consentimientos.",
   });
   redirect(`/caso/${kase.id}`);
 }
@@ -107,6 +109,8 @@ async function captureFor(caseId: string, u: User) {
   if (!kase || kase.clinicId !== u.clinicId) throw new Error("Caso no accesible");
   if (!["CITA_RESERVADA", "ESTUDIO_EN_CURSO", "DEVUELTO_CLINICA"].includes(kase.state))
     throw new Error("El estudio no está en curso");
+  if (!consentimientoFirmado(kase.patient.consents))
+    throw new Error("El paciente aún no ha aceptado la invitación ni firmado los consentimientos");
   const capture =
     kase.capture ?? (await prisma.capture.create({ data: { caseId } }));
   if (kase.state === "CITA_RESERVADA") {
@@ -114,6 +118,27 @@ async function captureFor(caseId: string, u: User) {
     await pushEvent(caseId, "Estudio iniciado en clínica", u.name);
   }
   return { kase, capture };
+}
+
+// Reenvía la invitación del Flujo B (el enlace caduca a las 72 h) mientras el
+// paciente no la haya aceptado.
+export async function resendInviteAction(formData: FormData) {
+  const u = await requireClinicStaff();
+  const caseId = String(formData.get("caseId"));
+  const kase = await prisma.case.findUnique({ where: { id: caseId }, include: { patient: { include: { owner: true } } } });
+  if (!kase || kase.clinicId !== u.clinicId) fail("/panel", "Caso no accesible");
+  const owner = kase!.patient.owner;
+  if (consentimientoFirmado(kase!.patient.consents)) fail(`/caso/${caseId}`, "El paciente ya ha aceptado la invitación");
+  if (!owner.phone) fail(`/caso/${caseId}`, "El paciente no tiene móvil registrado");
+  const token = await createInviteToken(owner.id);
+  await notify(owner.phone!, "invitacion_cuenta", {
+    enlace: `/activar?token=${token}`,
+    validez: "72 h",
+    clinica: u.clinicId,
+    nota: "Acepta la invitación para empezar tu estudio: confirma que quieres ser atendido y firma los consentimientos.",
+  });
+  await pushEvent(caseId, "Invitación reenviada al paciente", u.name);
+  redirect(`/caso/${caseId}?ok=` + encodeURIComponent("Invitación reenviada por WhatsApp (válida 72 h)"));
 }
 
 // --- Guardado por secciones del modo guiado (una pantalla = una sección) ---
@@ -376,6 +401,8 @@ export async function sendCaseAction(formData: FormData) {
   const fromRepeat = kase!.state === "DEVUELTO_CLINICA";
   if (!["ESTUDIO_EN_CURSO", "DEVUELTO_CLINICA"].includes(kase!.state))
     fail(`/caso/${caseId}`, "El estudio no está en curso");
+  if (!consentimientoFirmado(kase!.patient.consents))
+    fail(`/caso/${caseId}`, "El paciente aún no ha aceptado la invitación ni firmado los consentimientos");
 
   // Quién receta se eligió antes de empezar el estudio (chooseRxRouteAction).
   const rxRoute = kase!.rxRoute as RxRoute | null;

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { User } from "@prisma/client";
 import { prisma } from "@/lib/db";
+import { consentimientoFirmado } from "@/lib/legal";
 import { StatePill } from "@/components/ui";
 import { fmtd, fmtdt } from "@/lib/format";
 import { addSlotAction, delSlotAction, newCaseBAction, requestProfessionalAction } from "@/app/panel/clinica-actions";
@@ -67,6 +68,9 @@ export async function PanelClinica({ user, tab }: { user: User; tab?: string }) 
                     <td>{c.appointmentAt ? fmtdt(c.appointmentAt) : "Flujo B"}</td>
                     <td>
                       <StatePill state={c.state} />
+                      {!consentimientoFirmado(c.patient.consents) && (
+                        <span className="pill a" style={{ marginLeft: 6 }}>Invitación sin aceptar</span>
+                      )}
                     </td>
                     <td>
                       <Link href={`/caso/${c.id}`} className="btn">
@@ -104,8 +108,8 @@ export async function PanelClinica({ user, tab }: { user: User; tab?: string }) 
               Crear caso e invitar al paciente
             </button>
             <div className="tiny" style={{ marginTop: 8 }}>
-              El consentimiento RGPD se recoge en clínica. El paciente activa su cuenta desde el
-              enlace de invitación (WhatsApp).
+              El paciente recibe al momento una invitación por WhatsApp: acepta ser atendido, firma
+              los consentimientos RGPD y crea su contraseña. El estudio se abre cuando la acepta.
             </div>
           </form>
         </details>

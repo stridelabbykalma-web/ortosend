@@ -12,6 +12,8 @@ import { unlockRxAction } from "@/app/panel/cliente-actions";
 import { verifyDocToken } from "@/app/panel/cliente-actions";
 import { fmtd } from "@/lib/format";
 import { esCentral } from "@/lib/rx-route";
+import { consentimientoFirmado } from "@/lib/legal";
+import { resendInviteAction } from "@/app/panel/clinica-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -78,7 +80,34 @@ export default async function CasoPage({
   const inTaller = ["ENTRADA_TALLER", "DISENO", "FABRICACION", "CALIDAD", "ENVIADO"].includes(k.state);
 
   let inner: React.ReactNode;
-  if (isClinicStaff && inCapture) {
+  if (isClinicStaff && inCapture && !consentimientoFirmado(k.patient.consents)) {
+    // Flujo B: el estudio no se abre hasta que el paciente acepta la invitación
+    // y firma los consentimientos desde su móvil.
+    inner = (
+      <>
+        <div className="card" style={{ maxWidth: 560 }}>
+          <h3>Esperando a que {k.patient.name} acepte la invitación</h3>
+          <p className="muted" style={{ margin: "6px 0" }}>
+            Le hemos enviado un WhatsApp con su invitación. Desde su móvil acepta ser atendido,
+            firma los consentimientos RGPD (datos de salud, vídeos y fotos del estudio) y crea su
+            contraseña. Hasta entonces no se puede capturar nada del estudio.
+          </p>
+          <p className="tiny">Actualiza esta página cuando el paciente te confirme que la ha aceptado.</p>
+          <div className="sp" />
+          <div className="row" style={{ gap: 8 }}>
+            <Link href={`/caso/${k.id}`} className="btn pri">
+              Comprobar de nuevo
+            </Link>
+            <form action={resendInviteAction}>
+              <input type="hidden" name="caseId" value={k.id} />
+              <button type="submit">Reenviar invitación</button>
+            </form>
+          </div>
+        </div>
+        <Historial events={k.events} />
+      </>
+    );
+  } else if (isClinicStaff && inCapture) {
     const pasoNum = paso ? Number(paso) || undefined : undefined;
     inner = (
       <>
