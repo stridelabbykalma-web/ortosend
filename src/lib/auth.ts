@@ -16,18 +16,29 @@ export async function verifyPassword(plain: string, hash: string) {
   return bcrypt.compare(plain, hash);
 }
 
+// Duración de la sesión por tipo de cuenta. El personal (clínica, profesional,
+// recetador, taller, admin) accede a datos de salud y a menudo desde
+// dispositivos compartidos: su cookie es de sesión (muere al cerrar el
+// navegador) y el token caduca a las 12 h aunque no lo cierren. El cliente
+// mantiene la sesión 30 días en su propio móvil.
+const STAFF_HOURS = 12;
+const CLIENT_DAYS = 30;
+
 export async function createSession(userId: string) {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } });
+  const esCliente = user?.role === "CLIENTE";
   const token = await new SignJWT({ uid: userId })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
-    .setExpirationTime("30d")
+    .setExpirationTime(esCliente ? `${CLIENT_DAYS}d` : `${STAFF_HOURS}h`)
     .sign(secret());
   const jar = await cookies();
   jar.set(COOKIE, token, {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
-    maxAge: 60 * 60 * 24 * 30,
+    // Sin maxAge la cookie es de sesión: desaparece al cerrar el navegador.
+    ...(esCliente ? { maxAge: 60 * 60 * 24 * CLIENT_DAYS } : {}),
     path: "/",
   });
 }
