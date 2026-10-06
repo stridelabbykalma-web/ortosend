@@ -32,6 +32,7 @@ Tests: `npm test` (necesita Postgres; ver «Tests» abajo).
 | `MANYCHAT_FLOW_RECORDATORIO` | ID del flujo «Alta · Recordatorio» (24 h sin terminar). |
 | `MANYCHAT_FLOW_ACCESO` | ID del flujo «Alta · Perfil listo». |
 | `MANYCHAT_FLOW_CODIGO` | ID del flujo «Alta · Código de acceso». |
+| `MANYCHAT_FLOWS_AVISOS` | Avisos del tratamiento: qué flujo usa cada aviso, en JSON (ver §10). |
 
 El ID de un flujo se ve en la URL al editarlo: `.../cms/files/content20241006123456_789012` → `content20241006123456_789012`.
 
@@ -47,12 +48,17 @@ Las URL públicas salen de `EMPRESA.web` en `src/lib/legal.ts`. Cámbialo a `htt
 | `ortosend_paciente` | Ortosend (API) | Nombre de pila del paciente (para que el tutor sepa de quién se trata). |
 | `ortosend_codigo` | Ortosend (API) | Código de 6 cifras para crear la contraseña. |
 | `ortosend_url_acceso` | Ortosend (API) | `https://ortosend.com/acceso`. |
+| `ortosend_aviso_fecha` | Ortosend (API) | Fecha y hora de la cita, en texto («martes, 14 de octubre de 2026, 10:00»). |
+| `ortosend_aviso_clinica` | Ortosend (API) | Nombre de la clínica. |
+| `ortosend_aviso_direccion` | Ortosend (API) | Dirección de la clínica. |
+| `ortosend_aviso_enlace` | Ortosend (API) | Enlace al panel del paciente. |
+| `ortosend_aviso_seguimiento` | Ortosend (API) | Número de seguimiento del envío. |
 | `ortosend_siguiente` | ManyChat (respuesta del webhook) | Qué mostrar a continuación. |
 | `ortosend_url_gestion` | ManyChat (respuesta del webhook) | Enlace de 24 h para retirar consentimientos. |
 
 **Settings → Tags**: `consent_ok` y `marketing_ok` (las pone y quita Ortosend).
 
-> Ortosend solo puede escribir en los cuatro primeros campos: cualquier otro se
+> Ortosend solo puede escribir en los campos marcados «Ortosend (API)»: cualquier otro se
 > rechaza en el código antes de salir (`src/lib/manychat.ts`). Nunca se envían datos de salud.
 
 ## 3. ManyChat: la llamada al webhook (External Request)
@@ -204,3 +210,70 @@ npm test
 
 Cada ejecución crea un esquema temporal, aplica todas las migraciones (con los triggers) y lo borra al
 terminar. ManyChat se sustituye por un doble que registra cada llamada.
+
+## 10. Avisos del tratamiento por WhatsApp
+
+Además del alta, **todos los avisos al paciente** salen por ManyChat: citas, estudio, prescripción y
+pago, envío y entrega. Así toda la conversación con el paciente queda en un único chat.
+
+**Cómo funciona.** Cada tipo de aviso es un flujo de ManyChat que empieza con un **mensaje
+pre-aprobado por Meta** (WhatsApp exige que un mensaje enviado más de 24 h después de la última
+respuesta del paciente sea un texto revisado por Meta). Ortosend rellena los huecos (`ortosend_aviso_*`)
+y lanza el flujo.
+
+- Si el paciente **no aceptó** avisos por WhatsApp, o el aviso **no tiene flujo** configurado
+  todavía (p. ej. Meta aún no ha aprobado su mensaje), o ManyChat falla → el aviso sale **por email**.
+  No se pierde nada mientras vas activando avisos.
+- El texto interno del aviso (`nota`) **nunca** va a ManyChat: puede llevar detalles clínicos (p. ej.
+  la recomendación al no prescribir) y solo sale por email al propio paciente.
+- Los cambios de titularidad de la cuenta (mayoría de edad) salen por WhatsApp **y además** por email.
+
+**Configuración.** En Vercel, `MANYCHAT_FLOWS_AVISOS` con el ID del flujo de cada aviso. Varios avisos
+pueden compartir flujo (p. ej. los tres recordatorios de pago):
+
+```json
+{
+  "cita_confirmada": "content2026…_1",
+  "cita_cambiada": "content2026…_2",
+  "cita_cancelada": "content2026…_3",
+  "recordatorio_24h": "content2026…_4",
+  "estudio_completo": "content2026…_5",
+  "repetir_prueba": "content2026…_6",
+  "propuesta_llamada": "content2026…_7",
+  "rx_lista_pago": "content2026…_8",
+  "pago_d3": "content2026…_9", "pago_d7": "content2026…_9", "pago_d15": "content2026…_9",
+  "pago_recibido": "content2026…_10",
+  "enviado": "content2026…_11",
+  "entregado": "content2026…_12",
+  "no_prescrito": "content2026…_13",
+  "cuenta_traspasada": "content2026…_14",
+  "mayoria_edad_titular": "content2026…_14",
+  "invitacion_profesional": "content2026…_15"
+}
+```
+
+Puedes empezar con unos pocos y añadir el resto según Meta los apruebe: los que falten salen por email.
+
+**Mensajes para enviar a aprobación** (categoría *Utility*). En ManyChat, los huecos se rellenan con
+los campos indicados. `{{nombre}}` es el campo de sistema *First Name*.
+
+| Aviso | Texto propuesto | Botón |
+|---|---|---|
+| `cita_confirmada` | Hola {{nombre}}, tu cita en {{ortosend_aviso_clinica}} queda confirmada para el {{ortosend_aviso_fecha}}. Dirección: {{ortosend_aviso_direccion}}. Trae tu calzado habitual. | URL: `{{ortosend_aviso_enlace}}` «Ver mi cita» |
+| `cita_cambiada` | Hola {{nombre}}, tu cita en {{ortosend_aviso_clinica}} ha cambiado. Nueva fecha: {{ortosend_aviso_fecha}}. Dirección: {{ortosend_aviso_direccion}}. | «Ver mi cita» |
+| `cita_cancelada` | Hola {{nombre}}, tu cita del {{ortosend_aviso_fecha}} en {{ortosend_aviso_clinica}} ha sido anulada. Puedes elegir otra hora desde tu panel. | «Elegir otra hora» |
+| `recordatorio_24h` | Hola {{nombre}}, te recordamos tu cita de mañana en {{ortosend_aviso_clinica}} ({{ortosend_aviso_direccion}}): {{ortosend_aviso_fecha}}. | «Ver mi cita» |
+| `estudio_completo` | Hola {{nombre}}, tu estudio está completo. Te avisaremos en cuanto tengamos la valoración (máximo 48 h laborables). | — |
+| `repetir_prueba` | Hola {{nombre}}, necesitamos completar una prueba de tu estudio. Tu clínica te contactará para una cita breve, sin coste. | — |
+| `propuesta_llamada` | Hola {{nombre}}, el profesional que está valorando tu estudio quiere hacerte unas preguntas. Te llamará en breve. | — |
+| `rx_lista_pago` | Hola {{nombre}}, tu valoración está lista. Entra en tu panel para verla y completar el pago. | «Ver mi valoración» |
+| `pago_d3` / `pago_d7` / `pago_d15` | Hola {{nombre}}, tu valoración sigue lista y tu enlace de pago activo. Complétalo para que empecemos a fabricar. | «Ir al pago» |
+| `pago_recibido` | Hola {{nombre}}, hemos recibido tu pago. Empezamos a fabricar: lo recibirás en unos 5 días laborables. | — |
+| `enviado` | Hola {{nombre}}, tu pedido ya está en camino. Seguimiento: {{ortosend_aviso_seguimiento}}. | «Ver mi pedido» |
+| `entregado` | Hola {{nombre}}, tu pedido ha sido entregado. En unos días te preguntaremos qué tal. | — |
+| `no_prescrito` | Hola {{nombre}}, ya tenemos la valoración de tu estudio. No se te cobrará nada. Entra en tu panel para ver los detalles. | «Ver valoración» |
+| `cuenta_traspasada` / `mayoria_edad_titular` | Hola {{nombre}}, ha habido un cambio en la titularidad de una cuenta que gestionas en Ortosend. Revisa tu email para ver los detalles. | — |
+| `invitacion_profesional` | Hola {{nombre}}, tu cuenta de profesional en Ortosend está creada. Revisa tu email para activarla. | — |
+
+> Los textos no mencionan salud, pies ni plantillas ortopédicas: un WhatsApp puede verlo cualquiera
+> que tenga el móvil en la mano. Para `no_prescrito`, el motivo solo se ve dentro del panel.

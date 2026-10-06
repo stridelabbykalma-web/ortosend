@@ -8,7 +8,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { createSession, getSessionUser, hashPassword } from "@/lib/auth";
-import { notifyOwner, pushEvent } from "@/lib/cases";
+import { notifyOwner, pushEvent, avisarPaciente } from "@/lib/cases";
 import { bookAppointment } from "@/lib/agenda-db";
 import { agendaErrorMessage, parseSlot, type SlotOk } from "@/lib/reserva-form";
 import { fmtdt } from "@/lib/format";
@@ -193,10 +193,8 @@ export async function reservaClienteAction(formData: FormData) {
     back(agendaErrorMessage(e));
   }
   await pushEvent(result!.caseId, `Cita reservada online desde la cuenta del cliente — ${fmtdt(result!.startsAt)}`, user!.name);
-  await notifyOwner(user!, { whatsapp: { aceptado: true } }, "cita_confirmada", {
+  await avisarPaciente(patient!.id, "cita_confirmada", {
     caseId: result!.caseId,
-    nombre: user!.name,
-    paciente: patient!.name !== user!.name ? patient!.name : undefined,
     clinica: clinic!.name,
     direccion: clinic!.address,
     fecha: result!.startsAt.toISOString(),

@@ -12,10 +12,29 @@ export const CAMPOS = {
   paciente: "ortosend_paciente", // nombre de pila del paciente (para que el tutor sepa de quién es)
   codigo: "ortosend_codigo", // código de 6 cifras para crear la contraseña
   urlAcceso: "ortosend_url_acceso",
+  // Avisos del tratamiento (citas, pago, envío…): solo logística, nunca contenido clínico.
+  avisoFecha: "ortosend_aviso_fecha",
+  avisoClinica: "ortosend_aviso_clinica",
+  avisoDireccion: "ortosend_aviso_direccion",
+  avisoEnlace: "ortosend_aviso_enlace",
+  avisoSeguimiento: "ortosend_aviso_seguimiento",
 } as const;
 const PERMITIDOS = new Set<string>(Object.values(CAMPOS));
 
 export const ETIQUETAS = { consentOk: "consent_ok", marketingOk: "marketing_ok" } as const;
+
+// Flujo de ManyChat de cada aviso del tratamiento, en MANYCHAT_FLOWS_AVISOS como
+// JSON: {"cita_confirmada":"content2024…","enviado":"content2024…"}. Un aviso sin
+// flujo configurado (p. ej. su mensaje aún no está aprobado por Meta) sale por email.
+export function flujoAviso(template: string): string | null {
+  try {
+    const map = JSON.parse(process.env.MANYCHAT_FLOWS_AVISOS || "{}") as Record<string, unknown>;
+    const v = map[template];
+    return typeof v === "string" && v ? v : null;
+  } catch {
+    return null;
+  }
+}
 
 // Flujos de ManyChat (su «flow_ns»). Ver docs/ALTA-WHATSAPP.md.
 export const FLUJOS = {

@@ -5,7 +5,7 @@
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { requireRole } from "@/lib/auth";
-import { notify, notifyOwner, pushEvent, titularDe, titularDePaciente } from "@/lib/cases";
+import { notifyOwner, pushEvent, titularDe, avisarPaciente } from "@/lib/cases";
 import { PAY_LINK_DAYS, PAY_REMINDERS_DAYS, SOFT_EXPIRY_MONTHS } from "@/lib/states";
 import { nacimientoLimiteMayoria } from "@/lib/edad";
 import { enviarAvisoMayoria } from "@/lib/mayoria";
@@ -79,9 +79,11 @@ export async function reactivatePayAction(formData: FormData) {
     data: { state: "PENDIENTE_PAGO", payLinkExpiresAt: expires },
   });
   await pushEvent(caseId, "Enlace de pago reactivado (30 días)", u.name);
-  const owner = await titularDePaciente(kase.patientId);
-  if (owner?.phone)
-    await notify(owner.phone, "rx_lista_pago", { nota: "Tu enlace de pago vuelve a estar activo 30 días más." });
+  await avisarPaciente(kase.patientId, "rx_lista_pago", {
+    caseId,
+    enlace: "/panel",
+    nota: "Tu enlace de pago vuelve a estar activo 30 días más.",
+  });
   redirect("/panel?tab=cas");
 }
 
@@ -126,16 +128,15 @@ export async function runJobs() {
     );
     const due = PAY_REMINDERS_DAYS.filter((d) => sentAtDay >= d);
     if (!due.length) continue;
-    const owner = await titularDePaciente(c.patientId);
-    if (!owner?.phone) continue;
     for (const d of due) {
       const template = `pago_d${d}`;
+      // Ya avisado por cualquier canal (WhatsApp o email).
       const already = await prisma.notification.findFirst({
-        where: { template, toPhone: owner.phone, payload: { path: ["caseId"], equals: c.id } },
+        where: { template, payload: { path: ["caseId"], equals: c.id } },
       });
       if (already) continue;
       const nota = "Tu prescripción sigue lista y tu enlace de pago activo. Completa el pago para iniciar la fabricación.";
-      await notify(owner.phone, template, { caseId: c.id, nota });
+      await avisarPaciente(c.patientId, template, { caseId: c.id, enlace: "/panel", nota });
       reminders++;
     }
   }
@@ -234,7 +235,8 @@ export async function professionalApplicationAction(formData: FormData) {
   });
   const { createInviteToken } = await import("@/lib/auth");
   const token = await createInviteToken(user.id);
-  await notify(app.phone, "invitacion_profesional", {
+  // Aviso al profesional: WhatsApp (si su flujo está configurado) o, si no, email.
+  await notifyOwner({ name: app.fullName, phone: app.phone, email: app.email }, { whatsapp: { aceptado: true } }, "invitacion_profesional", {
     enlace: `/activar?token=${token}`,
     validez: "72 h",
     nota: `Bienvenido/a al equipo de ${app.clinic.name} en Ortosend. Activa tu cuenta y completa la formación (5 módulos).`,

@@ -5,7 +5,7 @@ import { auditar, exigirTratamientoPermitido, tratamientoPermitido } from "@/lib
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { requireRole } from "@/lib/auth";
-import { checklistOf, notify, pushEvent, titularDePaciente } from "@/lib/cases";
+import { checklistOf, pushEvent, titularDePaciente, avisarPaciente } from "@/lib/cases";
 import { completeTodaysAppointment } from "@/lib/agenda-db";
 import { BARO_KINDS, SCAN_KIND } from "@/lib/format";
 import { nombreProyectoRevoScan } from "@/lib/scan";
@@ -364,13 +364,10 @@ export async function sendCaseAction(formData: FormData) {
     fromRepeat ? `Prueba repetida y reenviada a prescripción: ${destino}` : `Estudio completo. Enviado a prescripción: ${destino}`,
     u.name
   );
-  if (kase!.patient) {
-    const owner = await titularDePaciente(kase!.patientId);
-    if (owner?.phone)
-      await notify(owner.phone, "estudio_completo", {
-        nota: "Tu estudio está completo y en valoración. Te avisaremos en un máximo de 48 h laborables.",
-      });
-  }
+  await avisarPaciente(kase!.patientId, "estudio_completo", {
+    caseId,
+    nota: "Tu estudio está completo y en valoración. Te avisaremos en un máximo de 48 h laborables.",
+  });
   if (rxRoute === "CLINICA") {
     // Si quien envía es prescriptor, aterriza en la receta; si no (p. ej. el
     // administrador), el caso queda en la cola de prescripciones de la clínica.

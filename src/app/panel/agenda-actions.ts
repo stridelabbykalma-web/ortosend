@@ -7,7 +7,7 @@ import { randomBytes } from "crypto";
 import type { AppointmentKind, User } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { requireRole } from "@/lib/auth";
-import { notify, pushEvent, titularDe } from "@/lib/cases";
+import { pushEvent, avisarPaciente } from "@/lib/cases";
 import { activeAppointmentOf, bookAppointment, cancelAppointment } from "@/lib/agenda-db";
 import { agendaErrorMessage, parseSlot, type SlotOk } from "@/lib/reserva-form";
 import { localToDateColumn, parseDateKey, parseHHMM, zonedToUtc } from "@/lib/agenda";
@@ -98,14 +98,12 @@ export async function darCitaAction(formData: FormData) {
     `${replace ? "Cita cambiada" : "Cita dada"} por la clínica: ${fmtdt(appt!.startsAt)} (${pro?.name ?? "agenda de la clínica"})`,
     u.name
   );
-  const phone = titularDe(kase!.patient).phone;
-  if (phone)
-    await notify(phone, replace ? "cita_cambiada" : "cita_confirmada", {
-      caseId,
-      clinica: kase!.clinic.name,
-      direccion: kase!.clinic.address,
-      fecha: appt!.startsAt.toISOString(),
-    });
+  await avisarPaciente(kase!.patientId, replace ? "cita_cambiada" : "cita_confirmada", {
+    caseId,
+    clinica: kase!.clinic.name,
+    direccion: kase!.clinic.address,
+    fecha: appt!.startsAt.toISOString(),
+  });
   ok(back, `Cita ${replace ? "cambiada" : "dada"} a ${kase!.patient.name}: ${fmtdt(appt!.startsAt)}`);
 }
 
@@ -132,9 +130,8 @@ export async function cancelarCitaClinicaAction(formData: FormData) {
       : `Cita del ${fmtdt(appt!.startsAt)} anulada por la clínica${reason ? `: ${reason}` : ""}`,
     u.name
   );
-  const phone = titularDe(appt!.case.patient).phone;
-  if (phone && !noShow)
-    await notify(phone, "cita_cancelada", {
+  if (!noShow)
+    await avisarPaciente(appt!.case.patientId, "cita_cancelada", {
       caseId: appt!.caseId,
       clinica: appt!.clinic.name,
       fecha: appt!.startsAt.toISOString(),

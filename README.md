@@ -48,7 +48,8 @@ despliega automáticamente.
   muestra el estado en vivo; al aceptar los cuatro obligatorios se abre la ficha. Después el
   profesional envía el acceso y el paciente crea su contraseña con DNI + móvil + código de
   WhatsApp. Retirar un consentimiento (perfil, enlace por WhatsApp con «BAJA» o el profesional)
-  deja la ficha en solo lectura. Configuración y flujos de ManyChat en `docs/ALTA-WHATSAPP.md`.
+  deja la ficha en solo lectura. El resto de avisos al paciente (citas, pago, envío…) también salen
+  por ManyChat, con el email como respaldo. Configuración y flujos en `docs/ALTA-WHATSAPP.md`.
 - Capa sensible: ver el documento clínico exige **re-confirmar la contraseña** (token de lectura
   de 10 min) y queda registrado en `AuditLog` (RGPD).
 
@@ -221,8 +222,9 @@ Lista completa y priorizada en **`docs/ESTADO-Y-PENDIENTES.md`**. Resumen:
 - **Stripe real** (PaymentIntent + webhook; Bizum) y facturas.
 - **Media en Cloudflare R2/S3** por fragmentos con URLs firmadas (hoy los vídeos y fotos se
   guardan en Postgres, con tope de 4 MB por archivo); visor del escaneo 3D.
-- **WhatsApp por ManyChat** para el resto de avisos de la cola de `Notification` (el alta ya va por ManyChat). El email de respaldo
-  ya se encola y sale por Resend si se configuran `RESEND_API_KEY` y `EMAIL_FROM`.
+- **WhatsApp por ManyChat**: el código ya está; falta crear los flujos y que Meta apruebe los mensajes
+  (`docs/ALTA-WHATSAPP.md` §10). El email de respaldo sale por Resend si se configuran
+  `RESEND_API_KEY` y `EMAIL_FROM`.
 - Envíos (Sendcloud/Packlink) con webhook de entrega; PDF real de la prescripción.
 - i18n ES/CA, passkeys, verificación del móvil por SMS/WhatsApp, PWA offline del asistente de
   captura.

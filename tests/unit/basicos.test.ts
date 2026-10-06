@@ -42,7 +42,17 @@ describe("ManyChat", () => {
     delete process.env.MANYCHAT_API_KEY;
     await expect(manychat().ponerCampos("sub_1", { diagnostico: "fascitis" } as never)).rejects.toThrow(/no permitido/);
     expect(Object.values(CAMPOS).sort()).toEqual(
-      ["ortosend_codigo", "ortosend_paciente", "ortosend_ref", "ortosend_url_acceso"].sort()
+      [
+        "ortosend_codigo",
+        "ortosend_paciente",
+        "ortosend_ref",
+        "ortosend_url_acceso",
+        "ortosend_aviso_fecha",
+        "ortosend_aviso_clinica",
+        "ortosend_aviso_direccion",
+        "ortosend_aviso_enlace",
+        "ortosend_aviso_seguimiento",
+      ].sort()
     );
   });
 });

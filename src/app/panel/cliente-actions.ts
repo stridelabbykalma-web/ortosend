@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { SignJWT, jwtVerify } from "jose";
 import { prisma } from "@/lib/db";
 import { hashPassword, requireRole, verifyPassword } from "@/lib/auth";
-import { audit, notify, pushEvent } from "@/lib/cases";
+import { audit, pushEvent, avisarPaciente } from "@/lib/cases";
 import { isValidPhone, normalizeEmail, normalizePhone } from "@/lib/contacto";
 import { enviarAvisoMayoria } from "@/lib/mayoria";
 import { avisarContrasenaCambiada, enviarVerificacionEmail } from "@/lib/cuenta";
@@ -55,10 +55,10 @@ export async function payAction(formData: FormData) {
     }`,
     u.name
   );
-  if (u.phone)
-    await notify(u.phone, "pago_recibido", {
-      nota: "Pago recibido. Empezamos a fabricar tus plantillas: las recibirás en 5 días laborables.",
-    });
+  await avisarPaciente(kase.patientId, "pago_recibido", {
+    caseId,
+    nota: "Pago recibido. Empezamos a fabricar tus plantillas: las recibirás en 5 días laborables.",
+  });
   redirect("/panel?ok=" + encodeURIComponent("Pago recibido. ¡Empezamos a fabricar!"));
 }
 
@@ -204,13 +204,12 @@ export async function reprogramarCitaAction(formData: FormData) {
       : `Cita reservada por el cliente (${kind === "REPETICION" ? "repetir prueba" : "estudio"}) — ${fmtdt(startsAt)}`,
     u.name
   );
-  if (u.phone)
-    await notify(u.phone, actual ? "cita_cambiada" : "cita_confirmada", {
-      caseId,
-      clinica: kase.clinic.name,
-      direccion: kase.clinic.address,
-      fecha: startsAt!.toISOString(),
-    });
+  await avisarPaciente(kase.patientId, actual ? "cita_cambiada" : "cita_confirmada", {
+    caseId,
+    clinica: kase.clinic.name,
+    direccion: kase.clinic.address,
+    fecha: startsAt!.toISOString(),
+  });
   redirect("/panel?ok=" + encodeURIComponent(`Cita ${actual ? "cambiada" : "confirmada"}: ${fmtdt(startsAt)}`));
 }
 
@@ -223,12 +222,11 @@ export async function cancelarCitaAction(formData: FormData) {
   const reason = String(formData.get("reason") ?? "").trim() || null;
   await cancelAppointment(prisma, actual!.id, u.id, reason);
   await pushEvent(caseId, `Cita del ${fmtdt(actual!.startsAt)} anulada por el cliente${reason ? `: ${reason}` : ""}`, u.name);
-  if (u.phone)
-    await notify(u.phone, "cita_cancelada", {
-      caseId,
-      clinica: kase.clinic.name,
-      fecha: actual!.startsAt.toISOString(),
-      nota: "Tu cita queda anulada. Puedes reservar otra hora cuando quieras desde tu panel.",
-    });
+  await avisarPaciente(kase.patientId, "cita_cancelada", {
+    caseId,
+    clinica: kase.clinic.name,
+    fecha: actual!.startsAt.toISOString(),
+    nota: "Tu cita queda anulada. Puedes reservar otra hora cuando quieras desde tu panel.",
+  });
   redirect("/panel?ok=" + encodeURIComponent("Cita anulada. Puedes elegir otra hora cuando quieras."));
 }

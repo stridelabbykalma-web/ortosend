@@ -7,7 +7,7 @@ import { auditar, exigirTratamientoPermitido } from "@/lib/alta";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { requireRole } from "@/lib/auth";
-import { notify, pushEvent, releaseStale, titularDePaciente } from "@/lib/cases";
+import { pushEvent, releaseStale, avisarPaciente } from "@/lib/cases";
 import { QC_CHECKS, TALLER_STATES } from "@/lib/taller";
 import type { CaseState } from "@prisma/client";
 
@@ -27,9 +27,6 @@ async function tallerCase(caseId: string) {
   return { u, kase };
 }
 
-async function patientPhone(patientId: string) {
-  return (await titularDePaciente(patientId))?.phone ?? null;
-}
 
 // Siguiente caso pendiente: el más antiguo sin abrir. Con `state` en el
 // formulario, solo dentro de esa fase (cada puesto del taller tira de la suya).
@@ -97,11 +94,10 @@ export async function captureIncidentAction(formData: FormData) {
     prisma.capture.updateMany({ where: { caseId: kase.id }, data: { completedAt: null } }),
   ]);
   await pushEvent(kase.id, "Incidencia de captura — devuelto a clínica sin coste para el cliente", u.name);
-  const phone = await patientPhone(kase.patientId);
-  if (phone)
-    await notify(phone, "repetir_prueba", {
-      nota: "Necesitamos completar una prueba de tu estudio; tu clínica te contactará, sin coste.",
-    });
+  await avisarPaciente(kase.patientId, "repetir_prueba", {
+    caseId: kase.id,
+    nota: "Necesitamos completar una prueba de tu estudio; tu clínica te contactará, sin coste.",
+  });
   redirect("/panel?ok=" + encodeURIComponent(`Caso #${kase.number} devuelto a la clínica`));
 }
 
@@ -216,14 +212,15 @@ export async function qcOkAction(formData: FormData) {
     }),
   ]);
   await pushEvent(kase.id, `Calidad superada — enviado (seguimiento ${trk})`, u.name);
-  const phone = await patientPhone(kase.patientId);
-  if (phone)
-    await notify(phone, "enviado", {
-      nota:
-        kase.delivery === "CLINICA"
-          ? `Tus plantillas van de camino a tu clínica (${kase.clinic.name}); te avisarán para recogerlas.`
-          : `Tus plantillas están en camino. Seguimiento: ${trk}`,
-    });
+  await avisarPaciente(kase.patientId, "enviado", {
+    caseId: kase.id,
+    clinica: kase.clinic.name,
+    seguimiento: kase.delivery === "CLINICA" ? "" : trk,
+    nota:
+      kase.delivery === "CLINICA"
+        ? `Tus plantillas van de camino a tu clínica (${kase.clinic.name}); te avisarán para recogerlas.`
+        : `Tus plantillas están en camino. Seguimiento: ${trk}`,
+  });
   redirect("/panel?tab=envios&ok=" + encodeURIComponent(`Caso #${kase.number} enviado`));
 }
 
@@ -274,11 +271,10 @@ export async function deliveredAction(formData: FormData) {
     "Entrega confirmada. Inicia periodo de adaptación (seguimiento día 20) y queda programada la revisión anual",
     u.name
   );
-  const phone = await patientPhone(kase.patientId);
-  if (phone)
-    await notify(phone, "entregado", {
-      nota: "¡Entregadas! Recuerda: adaptación progresiva 2-3 semanas. Te preguntaremos qué tal en unos días.",
-    });
+  await avisarPaciente(kase.patientId, "entregado", {
+    caseId: kase.id,
+    nota: "¡Entregadas! Recuerda: adaptación progresiva 2-3 semanas. Te preguntaremos qué tal en unos días.",
+  });
   const back = String(formData.get("back") ?? "") === "panel" ? "/panel?tab=envios" : "/panel";
   redirect(back + (back.includes("?") ? "&" : "?") + "ok=" + encodeURIComponent(`Caso #${kase.number} entregado`));
 }
