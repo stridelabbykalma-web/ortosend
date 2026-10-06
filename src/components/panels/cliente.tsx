@@ -10,6 +10,8 @@ import {
   updatePatientContactAction,
 } from "@/app/panel/cliente-actions";
 import { resendVerificationAction } from "@/app/(auth)/actions";
+import { gestionarDesdePerfilAction } from "@/app/panel/consentimiento-actions";
+import { ListaConsentimientos } from "@/components/consent/lista";
 import { fmtd, fmtdt, PRICE_LABEL } from "@/lib/format";
 import { EDAD_MAYORIA_SALUD, HANDOVER_TOKEN_DAYS, fechaMayoria } from "@/lib/edad";
 
@@ -34,7 +36,9 @@ export async function PanelCliente({ user }: { user: User }) {
             Buscar clínica
           </Link>
         </div>
-        <MisDatos user={user} />
+        <MisConsentimientos user={user} />
+        <MisConsentimientos user={user} />
+      <MisDatos user={user} />
       </>
     );
   }
@@ -362,5 +366,29 @@ function MisDatos({ user }: { user: User }) {
         </form>
       </details>
     </>
+  );
+}
+
+// Consentimientos registrados (alta por WhatsApp): retirarlos es igual de fácil que darlos.
+async function MisConsentimientos({ user }: { user: User }) {
+  const pacientes = await prisma.patient.findMany({
+    where: { ownerId: user.id, consentLogs: { some: {} } },
+    orderBy: { createdAt: "asc" },
+  });
+  if (!pacientes.length) return null;
+  return (
+    <details className="card" style={{ marginTop: 14 }}>
+      <summary style={{ cursor: "pointer", fontWeight: 600 }}>Mis consentimientos</summary>
+      <div className="tiny" style={{ margin: "6px 0 10px" }}>
+        Puedes retirar cualquiera en un clic. Tu historia clínica se conserva el tiempo que exige la ley, pero se
+        detienen el tratamiento y las comunicaciones.
+      </div>
+      {pacientes.map((p) => (
+        <div key={p.id} style={{ marginBottom: 12 }}>
+          {pacientes.length > 1 && <b>{[p.name, p.lastName].filter(Boolean).join(" ")}</b>}
+          <ListaConsentimientos patientId={p.id} action={gestionarDesdePerfilAction} ocultos={{}} />
+        </div>
+      ))}
+    </details>
   );
 }

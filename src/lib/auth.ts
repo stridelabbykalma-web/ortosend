@@ -76,12 +76,13 @@ export async function requireRole(...roles: Role[]): Promise<User> {
   return u;
 }
 
-// Token de invitación (Flujo B) y de activación de cuenta — 72 h.
+// Token de activación de cuenta (profesionales) — 72 h.
+export const INVITE_HOURS = 72;
 export async function createInviteToken(userId: string) {
   return new SignJWT({ uid: userId, kind: "invite" })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
-    .setExpirationTime("72h")
+    .setExpirationTime(`${INVITE_HOURS}h`)
     .sign(secret());
 }
 // Token con el que el paciente toma el control de su cuenta al cumplir 16 años.
@@ -152,4 +153,36 @@ export async function verifyResetToken(token: string): Promise<User | null> {
   } catch {
     return null;
   }
+}
+
+// Paso intermedio de /acceso: DNI y móvil ya escritos, a la espera del código
+// de WhatsApp. Se guardan en una cookie firmada (no en la URL) durante 15 min.
+const ACCESO_COOKIE = "ortosend_acceso";
+export async function guardarAccesoPendiente(dni: string, telefono: string) {
+  const token = await new SignJWT({ dni, tel: telefono, kind: "acceso" })
+    .setProtectedHeader({ alg: "HS256" })
+    .setIssuedAt()
+    .setExpirationTime("15m")
+    .sign(secret());
+  (await cookies()).set(ACCESO_COOKIE, token, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    maxAge: 15 * 60,
+    path: "/acceso",
+  });
+}
+export async function leerAccesoPendiente(): Promise<{ dni: string; telefono: string } | null> {
+  const t = (await cookies()).get(ACCESO_COOKIE)?.value;
+  if (!t) return null;
+  try {
+    const { payload } = await jwtVerify(t, secret());
+    if (payload.kind !== "acceso") return null;
+    return { dni: String(payload.dni), telefono: String(payload.tel) };
+  } catch {
+    return null;
+  }
+}
+export async function borrarAccesoPendiente() {
+  (await cookies()).delete({ name: ACCESO_COOKIE, path: "/acceso" });
 }

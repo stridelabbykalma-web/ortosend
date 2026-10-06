@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { Capture, Case, Incident, MediaAsset, Patient } from "@prisma/client";
-import { checklistOf } from "@/lib/cases";
+import { checklistOf, titularDe } from "@/lib/cases";
 import { BARO_KINDS, CAPTURA_VISUAL, FOTO_KINDS, SCAN_KIND, VIDEO_KINDS } from "@/lib/format";
 import {
   ACTIVIDAD_OPTS,
@@ -80,7 +80,7 @@ import { CAPTURE_GUIDES, durationLabel } from "@/lib/capture-guide";
 import { AutosaveForm } from "./autosave-form";
 
 type CaseWithCapture = Case & {
-  patient: Patient & { owner?: { phone: string | null } | null };
+  patient: Patient & { owner?: { name: string; phone: string | null; email: string | null } | null };
   capture: (Capture & { media: MediaAsset[] }) | null;
   incidents: Incident[];
 };
@@ -865,7 +865,7 @@ export async function CapturaGuiada({
   // compartida de la clínica con este nombre, y por él lo encuentra el taller.
   const nombreProyecto =
     s.t === "file" && s.kind === SCAN_KIND
-      ? nombreProyectoRevoScan(kase.patient.name, kase.patient.owner?.phone, kase.number)
+      ? nombreProyectoRevoScan(kase.patient.name, titularDe(kase.patient).phone, kase.number)
       : null;
 
   const navFooter = (

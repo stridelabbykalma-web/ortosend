@@ -1,4 +1,5 @@
 // Utilidades sobre casos: eventos, notificaciones, reparto y liberación.
+import type { Patient, User } from "@prisma/client";
 import { prisma } from "./db";
 import { OPEN_CASE_TIMEOUT_MIN } from "./states";
 import { BARO_KINDS, CAPTURA_VISUAL, SCAN_KIND } from "./format";
@@ -42,8 +43,25 @@ export async function notifyOwner(
   if (owner.email) await notifyEmail(owner.email, template, payload);
 }
 
-export async function audit(userId: string, action: string, target: string) {
-  await prisma.auditLog.create({ data: { userId, action, target } });
+export async function audit(userId: string, action: string, target: string, patientId?: string | null) {
+  await prisma.auditLog.create({ data: { userId, action, target, patientId: patientId ?? null } });
+}
+
+// Persona de contacto de un paciente: el titular de la cuenta o, si el paciente
+// dado de alta por su profesional aún no la ha creado, él mismo o su tutor.
+export type Titular = { name: string; phone: string | null; email: string | null };
+type PacienteConTitular = Pick<Patient, "name" | "lastName" | "isMinor" | "phone" | "email" | "tutorName" | "tutorPhone" | "tutorEmail"> & {
+  owner?: Pick<User, "name" | "phone" | "email"> | null;
+};
+export function titularDe(p: PacienteConTitular): Titular {
+  if (p.owner) return { name: p.owner.name, phone: p.owner.phone, email: p.owner.email };
+  return p.isMinor
+    ? { name: p.tutorName ?? "", phone: p.tutorPhone, email: p.tutorEmail }
+    : { name: [p.name, p.lastName].filter(Boolean).join(" "), phone: p.phone, email: p.email };
+}
+export async function titularDePaciente(patientId: string): Promise<Titular | null> {
+  const p = await prisma.patient.findUnique({ where: { id: patientId }, include: { owner: true } });
+  return p ? titularDe(p) : null;
 }
 
 // Libera casos abiertos por un usuario (al cerrar sesión).

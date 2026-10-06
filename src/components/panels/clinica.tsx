@@ -2,15 +2,12 @@ import Link from "next/link";
 import type { User } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { StatePill } from "@/components/ui";
-import { fmtd, fmtdt } from "@/lib/format";
-import {
-  cancelInvitationAction,
-  requestProfessionalAction,
-  resendInvitationAction,
-} from "@/app/panel/clinica-actions";
-import { enlaceInvitacion, estadoInvitacion } from "@/lib/invitacion";
-import { CopiarTexto } from "@/components/caso/copiar-texto";
-import { EMPRESA } from "@/lib/legal";
+import { fmtd } from "@/lib/format";
+import { requestProfessionalAction } from "@/app/panel/clinica-actions";
+import { preAltaAction } from "@/app/panel/alta-actions";
+import { DECLARACION_PROFESIONAL, estadoPanel } from "@/lib/alta";
+import { PreAltaForm } from "@/components/alta/prealta-form";
+import { PacientesEnVivo } from "@/components/alta/pacientes-en-vivo";
 import { ClinicaAgenda } from "./clinica-agenda";
 import { ClinicaDisponibilidad } from "./clinica-disponibilidad";
 import { openCaseAction } from "@/app/panel/rx-actions";
@@ -39,6 +36,7 @@ export async function PanelClinica({
 
   const tabsDef: [string, string][] = [
     ["agenda", "Agenda"],
+    ["altas", "Altas de pacientes"],
     ["casos", "Mis casos"],
     ...(isPrescriber ? ([["rx", "Prescripciones"]] as [string, string][]) : []),
     ["disp", "Disponibilidad"],
@@ -57,6 +55,28 @@ export async function PanelClinica({
   });
 
   let body: React.ReactNode = null;
+  if (t === "altas") {
+    const inicial = await estadoPanel(clinic.id);
+    body = (
+      <>
+        <details className="card" open={!inicial.length}>
+          <summary style={{ cursor: "pointer", fontWeight: 600 }}>+ Dar de alta a un paciente</summary>
+          <div className="tiny" style={{ margin: "6px 0 10px" }}>
+            El paciente (o su tutor, si es menor de 16 años) recibe un WhatsApp de Ortosend y acepta uno a uno
+            los documentos legales. Cuando acepta los obligatorios se abre su ficha clínica y lo verás aquí
+            como «Aceptado», sin recargar.
+          </div>
+          <PreAltaForm action={preAltaAction} declaracion={DECLARACION_PROFESIONAL} />
+        </details>
+        <div className="sp" />
+        <div className="card">
+          <b>Altas recientes</b>
+          <div className="sp" />
+          <PacientesEnVivo inicial={inicial} />
+        </div>
+      </>
+    );
+  }
   if (t === "agenda") {
     body = <ClinicaAgenda clinic={clinic} user={user} semana={semana} pro={pro} caso={caso} anuladas={anuladas} />;
   }
@@ -398,84 +418,6 @@ export async function PanelClinica({
         ))}
       </div>
       {body}
-    </>
-  );
-}
-
-
-// Invitaciones del Flujo B que aún no se han aceptado: enlace para abrir en la
-// tablet de la clínica, reenvío (token nuevo) y cancelación.
-export async function InvitacionesPendientes({ clinicId }: { clinicId: string }) {
-  const invs = await prisma.invitation.findMany({
-    where: { clinicId, status: "pendiente" },
-    orderBy: { createdAt: "desc" },
-  });
-  if (!invs.length) return null;
-  return (
-    <>
-      <div className="card" style={{ marginBottom: 14 }}>
-        <b>Invitaciones pendientes de aceptar</b>
-        <div className="tiny" style={{ marginBottom: 8 }}>
-          El estudio aparece en la agenda en cuanto el paciente crea su cuenta y acepta.
-        </div>
-        <table>
-          <thead>
-            <tr>
-              <th>Paciente</th>
-              <th>Enviada a</th>
-              <th>Estado</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {invs.map((i) => {
-              const estado = estadoInvitacion(i);
-              const url = `${EMPRESA.web}${enlaceInvitacion(i.token)}`;
-              return (
-                <tr key={i.id}>
-                  <td>
-                    {i.name}
-                    {i.isMinor && <div className="tiny">Menor · tutor: {i.tutorName}</div>}
-                  </td>
-                  <td className="tiny">
-                    {i.phone}
-                    {i.email ? ` · ${i.email}` : ""}
-                    <div>
-                      {fmtdt(i.sentAt)}
-                      {i.sentCount > 1 ? ` · ${i.sentCount} envíos` : ""}
-                    </div>
-                  </td>
-                  <td>
-                    <span className={`pill ${estado === "caducada" ? "r" : "a"}`}>
-                      {estado === "caducada" ? "Caducada" : `Válida hasta ${fmtdt(i.expiresAt)}`}
-                    </span>
-                  </td>
-                  <td>
-                    <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
-                      {estado === "pendiente" && (
-                        <>
-                          <a href={enlaceInvitacion(i.token)} target="_blank" rel="noreferrer" className="btn">
-                            Abrir aquí
-                          </a>
-                          <CopiarTexto texto={url} />
-                        </>
-                      )}
-                      <form action={resendInvitationAction}>
-                        <input type="hidden" name="invitationId" value={i.id} />
-                        <button type="submit">Reenviar</button>
-                      </form>
-                      <form action={cancelInvitationAction}>
-                        <input type="hidden" name="invitationId" value={i.id} />
-                        <button type="submit">Cancelar</button>
-                      </form>
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
     </>
   );
 }

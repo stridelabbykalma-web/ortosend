@@ -1,3 +1,5 @@
+> **Obsoleto.** El alta por enlace web descrita aquí se sustituyó por el alta con consentimiento por WhatsApp: ver [`ALTA-WHATSAPP.md`](ALTA-WHATSAPP.md). Se conserva como histórico.
+
 # Alta de cliente — Flujo B (lo inicia la clínica)
 
 La clínica no crea la cuenta del paciente: solo emite una **invitación con los datos

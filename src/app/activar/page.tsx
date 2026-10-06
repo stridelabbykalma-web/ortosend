@@ -2,7 +2,7 @@ import { activateAction } from "@/app/(auth)/actions";
 import { Flash } from "@/components/ui";
 import { verifyInviteToken } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { INVITE_HOURS } from "@/lib/invitacion";
+import { INVITE_HOURS } from "@/lib/auth";
 import { EDAD_MAYORIA_SALUD } from "@/lib/edad";
 
 export const dynamic = "force-dynamic";

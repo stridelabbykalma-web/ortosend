@@ -3,10 +3,11 @@
 // Acciones del taller: siguiente-caso (global o por fase), aceptación técnica,
 // diseño, fabricación (mecanizado CNC por lotes → confección), calidad con
 // checklist y foto obligatorias, envío con seguimiento, entrega e incidencias.
+import { auditar, exigirTratamientoPermitido } from "@/lib/alta";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { requireRole } from "@/lib/auth";
-import { notify, pushEvent, releaseStale } from "@/lib/cases";
+import { notify, pushEvent, releaseStale, titularDePaciente } from "@/lib/cases";
 import { QC_CHECKS, TALLER_STATES } from "@/lib/taller";
 import type { CaseState } from "@prisma/client";
 
@@ -21,12 +22,13 @@ async function tallerCase(caseId: string) {
     include: { patient: true, clinic: true, prescription: true, payment: true, shipment: true },
   });
   if (!kase || !TALLER_STATES.includes(kase.state)) throw new Error("Caso no activo en taller");
+  await exigirTratamientoPermitido(kase.patientId);
+  await auditar(u.id, "case.edit", kase.patientId, { caseId, rol: "taller" });
   return { u, kase };
 }
 
-async function patientPhone(ownerId: string) {
-  const owner = await prisma.user.findUnique({ where: { id: ownerId } });
-  return owner?.phone ?? null;
+async function patientPhone(patientId: string) {
+  return (await titularDePaciente(patientId))?.phone ?? null;
 }
 
 // Siguiente caso pendiente: el más antiguo sin abrir. Con `state` en el
@@ -95,7 +97,7 @@ export async function captureIncidentAction(formData: FormData) {
     prisma.capture.updateMany({ where: { caseId: kase.id }, data: { completedAt: null } }),
   ]);
   await pushEvent(kase.id, "Incidencia de captura — devuelto a clínica sin coste para el cliente", u.name);
-  const phone = await patientPhone(kase.patient.ownerId);
+  const phone = await patientPhone(kase.patientId);
   if (phone)
     await notify(phone, "repetir_prueba", {
       nota: "Necesitamos completar una prueba de tu estudio; tu clínica te contactará, sin coste.",
@@ -214,7 +216,7 @@ export async function qcOkAction(formData: FormData) {
     }),
   ]);
   await pushEvent(kase.id, `Calidad superada — enviado (seguimiento ${trk})`, u.name);
-  const phone = await patientPhone(kase.patient.ownerId);
+  const phone = await patientPhone(kase.patientId);
   if (phone)
     await notify(phone, "enviado", {
       nota:
@@ -272,7 +274,7 @@ export async function deliveredAction(formData: FormData) {
     "Entrega confirmada. Inicia periodo de adaptación (seguimiento día 20) y queda programada la revisión anual",
     u.name
   );
-  const phone = await patientPhone(kase.patient.ownerId);
+  const phone = await patientPhone(kase.patientId);
   if (phone)
     await notify(phone, "entregado", {
       nota: "¡Entregadas! Recuerda: adaptación progresiva 2-3 semanas. Te preguntaremos qué tal en unos días.",

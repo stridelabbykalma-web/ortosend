@@ -2,10 +2,11 @@
 
 // Acciones de prescripción (prescriptor de clínica o recetador central):
 // reparto automático, firma, contacto, repetición, no-prescripción y borrador.
+import { exigirTratamientoPermitido } from "@/lib/alta";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { requireRole } from "@/lib/auth";
-import { audit, notify, notifyEmail, pushEvent, releaseStale } from "@/lib/cases";
+import { audit, notify, notifyEmail, pushEvent, releaseStale, titularDePaciente } from "@/lib/cases";
 import { PAY_LINK_DAYS } from "@/lib/states";
 import { PRICE_CENTS } from "@/lib/format";
 import type { Case } from "@prisma/client";
@@ -25,6 +26,7 @@ async function requirePrescriberFor(caseId: string) {
     include: { clinic: true, patient: true, prescription: true },
   });
   if (!kase) throw new Error("Caso no encontrado");
+  await exigirTratamientoPermitido(kase.patientId);
   if (u.role === "RECETADOR") {
     if (!esCentral(kase)) throw new Error("Este caso lo receta el prescriptor de su clínica");
   } else {
@@ -64,9 +66,8 @@ export async function openCaseAction(formData: FormData) {
   redirect(`/caso/${caseId}`);
 }
 
-async function ownerPhone(kase: Case & { patient: { ownerId: string } }) {
-  const owner = await prisma.user.findUnique({ where: { id: kase.patient.ownerId } });
-  return owner?.phone ?? null;
+async function ownerPhone(kase: Case) {
+  return (await titularDePaciente(kase.patientId))?.phone ?? null;
 }
 
 // Firma de la prescripción → documento clínico + enlace de pago (30 días).
@@ -113,8 +114,8 @@ export async function signRxAction(formData: FormData) {
     }),
   ]);
   await pushEvent(caseId, `Prescripción firmada por ${u.name} (col. ${profile.collegiateNum})`, u.name);
-  await audit(u.id, "prescription.sign", `case:${kase.number}`);
-  const owner = await prisma.user.findUnique({ where: { id: kase.patient.ownerId } });
+  await audit(u.id, "prescription.sign", `case:${kase.number}`, kase.patientId);
+  const owner = await titularDePaciente(kase.patientId);
   const nota = "Tu prescripción está lista. Entra en tu panel para verla y completar el pago (199,99 €, enlace válido 30 días).";
   if (owner?.phone) await notify(owner.phone, "rx_lista_pago", { nota });
   if (owner?.email) await notifyEmail(owner.email, "rx_lista_pago", { nombre: owner.name, nota, enlace: "/panel" });
@@ -222,6 +223,6 @@ export async function reviewBackAction(formData: FormData) {
     },
   });
   await pushEvent(caseId, `Segunda opinión devuelta a la clínica para que firme: ${review}`, u.name);
-  await audit(u.id, "prescription.review", `case:${kase.number}`);
+  await audit(u.id, "prescription.review", `case:${kase.number}`, kase.patientId);
   redirect("/panel?ok=" + encodeURIComponent(`Segunda opinión del caso #${kase.number} devuelta a la clínica`));
 }

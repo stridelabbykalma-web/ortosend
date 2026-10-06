@@ -103,6 +103,13 @@ export function renderEmail(template: string, p: Payload): { subject: string; te
           p.validez
         )}):\n\n${link(p)}\n\nSi caduca, tu clínica puede reenviártelo.${firma}`,
       };
+    case "acceso_listo":
+      return {
+        subject: `Tu perfil en ${EMPRESA.nombreComercial} está listo`,
+        text: `Hola ${str(p.nombre)},\n\nTu profesional ya ha preparado ${
+          str(p.paciente) ? `el perfil de ${str(p.paciente)}` : "tu perfil"
+        }. Para entrar, crea tu contraseña aquí con tu DNI y tu móvil; te enviaremos un código por WhatsApp para confirmar que eres tú:\n\n${link(p)}${firma}`,
+      };
     default:
       return {
         subject: `Aviso de ${EMPRESA.nombreComercial}`,

@@ -30,3 +30,16 @@ export function normalizeIdentifier(raw: string) {
   const t = raw.trim();
   return t.includes("@") ? normalizeEmail(t) : normalizePhone(t);
 }
+
+// DNI/NIE: mayúsculas, sin espacios, puntos ni guiones ("12.345.678-z" → "12345678Z").
+export function normalizeDni(raw: string | null | undefined): string {
+  return (raw ?? "").toUpperCase().replace(/[\s.\-]/g, "");
+}
+
+// Comprueba la letra de control del DNI (8 cifras + letra) y del NIE (X/Y/Z + 7 cifras + letra).
+export function isValidDni(dni: string): boolean {
+  const m = /^([XYZ]|\d)(\d{7})([A-Z])$/.exec(dni);
+  if (!m) return false;
+  const first = { X: "0", Y: "1", Z: "2" }[m[1]] ?? m[1];
+  return "TRWAGMYFPDXBNJZSQVHLCKE"[Number(first + m[2]) % 23] === m[3];
+}

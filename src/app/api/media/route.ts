@@ -1,6 +1,7 @@
 // Subida real de capturas del estudio (vídeos del protocolo y fotos clínicas).
 // El check verde de la checklist solo existe cuando esta ruta confirma y
 // persiste el archivo (prototipo: Postgres; producción: R2/S3 por fragmentos).
+import { tratamientoPermitido } from "@/lib/alta";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireRole } from "@/lib/auth";
@@ -49,6 +50,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Caso no accesible" }, { status: 404 });
   if (!["CITA_RESERVADA", "ESTUDIO_EN_CURSO", "DEVUELTO_CLINICA"].includes(kase.state))
     return NextResponse.json({ error: "El estudio no está en curso" }, { status: 409 });
+  const paciente = await prisma.patient.findUnique({ where: { id: kase.patientId }, select: { status: true } });
+  if (!paciente || !tratamientoPermitido(paciente))
+    return NextResponse.json({ error: "El paciente no tiene los consentimientos en vigor" }, { status: 409 });
 
   const capture =
     kase.capture ?? (await prisma.capture.create({ data: { caseId } }));
@@ -131,6 +135,6 @@ export async function POST(req: Request) {
     `Captura subida y confirmada: ${MEDIA_LABEL[kind] ?? kind}`,
     user.name
   );
-  await audit(user.id, "media.upload", `case:${kase.number}:${kind}`);
+  await audit(user.id, "media.upload", `case:${kase.number}:${kind}`, kase.patientId);
   return NextResponse.json({ ok: true, id: asset.id, url: asset.url });
 }

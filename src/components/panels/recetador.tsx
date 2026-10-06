@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { User } from "@prisma/client";
 import { prisma } from "@/lib/db";
-import { releaseStale } from "@/lib/cases";
+import { releaseStale, titularDe } from "@/lib/cases";
 import { Kpi } from "@/components/ui";
 import { nextRxAction } from "@/app/panel/rx-actions";
 import { CENTRAL_WHERE } from "@/lib/rx-route";
@@ -58,7 +58,7 @@ export async function PanelRecetador({ user }: { user: User }) {
                   <tr key={c.id}>
                     <td>#{c.number}</td>
                     <td>{c.patient.name}</td>
-                    <td>{c.patient.owner.phone ?? "—"}</td>
+                    <td>{titularDe(c.patient).phone ?? "—"}</td>
                     <td>
                       <Link href={`/caso/${c.id}`} className="btn">
                         Retomar

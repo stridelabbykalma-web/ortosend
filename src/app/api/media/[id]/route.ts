@@ -30,7 +30,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     (user.role === "RECETADOR" && esCentral(kase));
   if (!allowed) return NextResponse.json({ error: "Sin permiso" }, { status: 403 });
 
-  await audit(user.id, "media.view", `case:${kase.number}:${asset.kind}`);
+  await audit(user.id, "media.view", `case:${kase.number}:${asset.kind}`, kase.patientId);
 
   if (!asset.blob) return NextResponse.json({ error: "No encontrado" }, { status: 404 });
   return new NextResponse(Buffer.from(asset.blob.bytes), {

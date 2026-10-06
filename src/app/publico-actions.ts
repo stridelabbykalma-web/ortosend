@@ -74,6 +74,7 @@ export async function reservaAction(formData: FormData) {
       });
       const patient = await tx.patient.create({
         data: {
+          status: "ACEPTADO",
           ownerId: user.id,
           name: d.name.trim(),
           birthDate: birth,
@@ -152,6 +153,7 @@ export async function reservaClienteAction(formData: FormData) {
     const menor = esMenor(newBirth, now);
     patient = await prisma.patient.create({
       data: {
+        status: "ACEPTADO",
         ownerId: user!.id,
         name: newName,
         birthDate: newBirth,

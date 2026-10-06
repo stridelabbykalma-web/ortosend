@@ -13,6 +13,7 @@ import { verifyDocToken } from "@/app/panel/cliente-actions";
 import { fmtd } from "@/lib/format";
 import { esCentral } from "@/lib/rx-route";
 import { TALLER_STATES } from "@/lib/taller";
+import { tratamientoPermitido } from "@/lib/alta";
 
 export const dynamic = "force-dynamic";
 
@@ -54,7 +55,10 @@ export default async function CasoPage({
   if (!isOwner && !isClinicStaff && !isCentral && !isTaller && !isAdmin) redirect("/panel");
 
   // Registro de accesos a datos de salud (RGPD)
-  if (!isOwner) await audit(user.id, "case.view", `case:${k.number}`);
+  if (!isOwner) await audit(user.id, "case.view", `case:${k.number}`, k.patientId);
+  // Sin los consentimientos obligatorios en vigor (retirados o pendientes de
+  // volver a aceptar) la ficha se ve pero no se edita ni avanza.
+  const permitido = tratamientoPermitido(k.patient);
 
   const profile =
     isClinicStaff || isCentral
@@ -79,7 +83,14 @@ export default async function CasoPage({
   const inTaller = TALLER_STATES.includes(k.state);
 
   let inner: React.ReactNode;
-  if (isClinicStaff && inCapture) {
+  if (!permitido && !isOwner) {
+    inner = (
+      <>
+        <Expediente kase={k} />
+        <Historial events={k.events} />
+      </>
+    );
+  } else if (isClinicStaff && inCapture) {
     const pasoNum = paso ? Number(paso) || undefined : undefined;
     inner = (
       <>
@@ -183,6 +194,14 @@ export default async function CasoPage({
         {k.clinic.name} · creado {fmtd(k.createdAt)} · flujo {k.flow}
       </div>
       <div className="sp" />
+      {!permitido && (
+        <div className="note r" style={{ marginBottom: 12 }}>
+          {k.patient.status === "REVOCADO"
+            ? "El paciente ha retirado un consentimiento obligatorio. La ficha se conserva por obligación legal, pero está en solo lectura: no se puede editar, prescribir ni fabricar."
+            : "El paciente aún no ha aceptado los documentos obligatorios. La ficha está en solo lectura."}{" "}
+          {isClinicStaff && <Link href={`/panel/paciente/${k.patientId}`}>Ver estado del paciente</Link>}
+        </div>
+      )}
       {inner}
       <div className="sp2" />
       <Link href="/panel">← Volver al panel</Link>

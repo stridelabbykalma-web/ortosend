@@ -1,5 +1,5 @@
 import type { Capture, Case, MediaAsset, Patient, Prescription, User } from "@prisma/client";
-import { checklistOf } from "@/lib/cases";
+import { checklistOf, titularDe } from "@/lib/cases";
 import { questionnaireLines, type Questionnaire } from "@/lib/questionnaire";
 import { examLines, type Exam } from "@/lib/exploracion";
 import { alertasDe } from "@/lib/tests-podologicos";
@@ -11,7 +11,7 @@ import { VideoAnalizado } from "@/components/caso/video-analizado";
 import type { MarchaInforme, MarchaTrack } from "@/lib/marcha";
 
 type CaseFull = Case & {
-  patient: Patient & { owner: User };
+  patient: Patient & { owner: User | null };
   clinic: { name: string };
   capture: (Capture & { media: MediaAsset[] }) | null;
   prescription: Prescription | null;
@@ -81,7 +81,7 @@ export function Expediente({ kase }: { kase: CaseFull }) {
           <Escaneos
             media={cp?.media ?? []}
             hecho={cl.escaneos}
-            proyecto={nombreProyectoRevoScan(kase.patient.name, kase.patient.owner.phone, kase.number)}
+            proyecto={nombreProyectoRevoScan(kase.patient.name, titularDe(kase.patient).phone, kase.number)}
             clinica={kase.clinic.name}
           />
         </div>
@@ -96,8 +96,8 @@ export function Expediente({ kase }: { kase: CaseFull }) {
           <div className="muted">
             {kase.patient.isMinor ? (
               <>
-                Menor · tutor: {kase.patient.owner.name} ({kase.patient.owner.phone ?? "—"} ·{" "}
-                {kase.patient.owner.email ?? "—"})
+                Menor · tutor: {titularDe(kase.patient).name} ({titularDe(kase.patient).phone ?? "—"} ·{" "}
+                {titularDe(kase.patient).email ?? "—"})
                 {(kase.patient.phone || kase.patient.email) && (
                   <div className="tiny">
                     Contacto propio: {kase.patient.phone ?? "—"} · {kase.patient.email ?? "—"}
@@ -106,7 +106,7 @@ export function Expediente({ kase }: { kase: CaseFull }) {
               </>
             ) : (
               <>
-                {kase.patient.owner.phone ?? "—"} · {kase.patient.owner.email ?? "—"}
+                {titularDe(kase.patient).phone ?? "—"} · {titularDe(kase.patient).email ?? "—"}
               </>
             )}
             {kase.reason && <div className="tiny">Motivo indicado al reservar: {kase.reason}</div>}

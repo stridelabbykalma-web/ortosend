@@ -75,7 +75,7 @@ export async function unlockRxAction(formData: FormData) {
     .setProtectedHeader({ alg: "HS256" })
     .setExpirationTime("10m")
     .sign(secret());
-  await audit(u.id, "prescription.view", `case:${kase.number}`);
+  await audit(u.id, "prescription.view", `case:${kase.number}`, kase.patientId);
   redirect(`/caso/${caseId}?doc=${encodeURIComponent(doc)}`);
 }
 
