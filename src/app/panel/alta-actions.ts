@@ -31,10 +31,15 @@ export async function preAltaAction(formData: FormData) {
   const u = await staff();
   const r = await crearPreAlta(u, leerPreAlta(formData));
   if (!r.ok) volver("/panel?tab=altas", "error", r.error);
-  const nombre = r.patient.name;
-  if (!r.envio.ok)
-    volver(`/panel/paciente/${r.patient.id}`, "error", `Alta creada, pero el WhatsApp no salió: ${r.envio.error}. Puedes reenviarlo.`);
-  volver("/panel?tab=altas", "ok", `WhatsApp enviado a ${r.patient.isMinor ? `${r.patient.tutorName} (tutor de ${nombre})` : nombre}. Verás aquí cómo acepta cada documento.`);
+  // Siempre a la ficha: ahí está el QR para que el paciente escriba ALTA desde su móvil.
+  const quien = r.patient.isMinor ? `${r.patient.tutorName} (tutor de ${r.patient.name})` : r.patient.name;
+  volver(
+    `/panel/paciente/${r.patient.id}`,
+    "ok",
+    r.envio.ok
+      ? `Alta creada y WhatsApp enviado a ${quien}. También puede empezar escaneando el QR o escribiendo ALTA.`
+      : `Alta creada. Pide a ${quien} que escanee el QR o escriba ALTA a nuestro WhatsApp para empezar (el envío automático no salió: ${r.envio.error}).`
+  );
 }
 
 export async function reenviarAction(formData: FormData) {

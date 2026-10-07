@@ -8,6 +8,8 @@ export const EMPRESA = {
   registro: "[DATOS DE INSCRIPCIÓN EN EL REGISTRO MERCANTIL PENDIENTES]",
   email: "hola@ortosend.com",
   web: "https://ortosend-five.vercel.app",
+  // WhatsApp de la empresa (ManyChat), en formato internacional sin «+».
+  whatsapp: process.env.WHATSAPP_EMPRESA || "34644954520",
 };
 
 // Versión vigente de los textos de consentimiento. Se guarda junto a cada
@@ -17,3 +19,6 @@ export const EMPRESA = {
 export const CONSENT_VERSION = "v3";
 
 export const FECHA_TEXTOS = "septiembre de 2026";
+
+// Enlace que abre WhatsApp con «ALTA» ya escrito hacia el número de la empresa.
+export const enlaceAlta = () => `https://wa.me/${EMPRESA.whatsapp}?text=ALTA`;

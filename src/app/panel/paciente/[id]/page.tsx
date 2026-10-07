@@ -8,6 +8,8 @@ import { REENVIABLE, auditar, destinatario, nombreCompleto, puedeVerFicha, trata
 import { dniTitular } from "@/lib/acceso";
 import { ESTADO_PACIENTE } from "@/lib/consent/estados";
 import { fmtd, fmtdt } from "@/lib/format";
+import { enlaceAlta } from "@/lib/legal";
+import QRCode from "qrcode";
 import { enviarAccesoAction, guardarDniAction, reenviarAction, revocarEnNombreAction } from "@/app/panel/alta-actions";
 
 export const dynamic = "force-dynamic";
@@ -41,6 +43,15 @@ export default async function PacientePage({
   const esClinica = user.role !== "ADMIN";
   const fichaAbierta = p.status === "ACEPTADO" || p.status === "REVOCADO" || p.cases.length > 0;
   const dni = dniTitular(p);
+  // Alta en curso: el paciente (o su tutor) puede empezar escribiendo ALTA desde su móvil.
+  const vigente = p.consentInvitations.find((i) => !i.invalidatedAt);
+  const puedeEmpezar =
+    esClinica &&
+    ["PENDIENTE", "ERROR_ENVIO", "RECHAZADO"].includes(p.status) &&
+    !!vigente &&
+    !vigente.completedAt &&
+    vigente.expiresAt > new Date();
+  const qr = puedeEmpezar ? await QRCode.toDataURL(enlaceAlta(), { margin: 1, width: 220 }) : null;
 
   return (
     <div className="wrap" style={{ maxWidth: 820 }}>
@@ -56,6 +67,26 @@ export default async function PacientePage({
         {p.isMinor ? ` · menor: los mensajes van a su tutor, ${p.tutorName}` : ""}
       </div>
       <div className="sp" />
+
+      {qr && (
+        <>
+          <div className="card" style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "center" }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={qr} alt="QR para escribir ALTA por WhatsApp" width={180} height={180} />
+            <div style={{ flex: 1, minWidth: 220 }}>
+              <b>Para empezar, {p.isMinor ? "el tutor" : "el paciente"} escribe ALTA por WhatsApp</b>
+              <div className="muted" style={{ margin: "6px 0" }}>
+                Que escanee este QR con la cámara de <b>su móvil ({dest.telefono})</b> y pulse enviar. Le llegarán los
+                documentos uno a uno. Tiene que ser desde ese número: así sabemos que es él.
+              </div>
+              <div className="tiny" style={{ wordBreak: "break-all" }}>
+                O que abra este enlace: <a href={enlaceAlta()}>{enlaceAlta()}</a>
+              </div>
+            </div>
+          </div>
+          <div className="sp" />
+        </>
+      )}
 
       <div className="card">
         <b>WhatsApp</b>

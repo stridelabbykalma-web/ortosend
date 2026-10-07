@@ -277,3 +277,29 @@ los campos indicados. `{{nombre}}` es el campo de sistema *First Name*.
 
 > Los textos no mencionan salud, pies ni plantillas ortopédicas: un WhatsApp puede verlo cualquiera
 > que tenga el móvil en la mano. Para `no_prescrito`, el motivo solo se ve dentro del panel.
+
+## 11. Empezar escribiendo ALTA (sin plantilla)
+
+El paciente (o su tutor) puede empezar el alta escribiendo **ALTA** al WhatsApp de la empresa: por
+ejemplo, escaneando en la consulta el QR que aparece en la ficha del paciente del panel
+(`https://wa.me/<número>?text=ALTA`). Como escribe él primero, se abre la ventana de 24 h de WhatsApp
+y todos los mensajes son libres: no hace falta la plantilla de bienvenida aprobada.
+
+- La web reconoce al paciente por el **móvil del contacto** (WhatsApp garantiza el número): busca su
+  alta pendiente (no caducada ni terminada) y le asigna un ref nuevo.
+- Solo funciona si un profesional ha hecho antes la pre-alta con ese móvil. Desde cualquier otro
+  número la respuesta es «inválido». En menores, el móvil que cuenta es el del tutor.
+- Si el envío automático de la bienvenida falló, el paciente pasa de «Error de envío» a «Pendiente»
+  en cuanto escribe ALTA.
+
+**En ManyChat** (flujo «Alta · Invitación»):
+1. Disparador del flujo: palabra clave **ALTA** («El usuario envía un mensaje que contiene alta»).
+2. En **ER Empezar**, cuerpo con el teléfono del contacto (insertado con el selector de campos):
+   ```json
+   { "ref": "{{ortosend_ref}}", "subscriber_id": "{{Id de contacto}}", "telefono": "{{Teléfono}}", "accion": "empezar" }
+   ```
+3. En **ER Empezar**, mapeo de respuesta adicional: `$.ref` → `ortosend_ref`
+   (además de `$.siguiente` → `ortosend_siguiente`).
+
+La web responde siempre a «empezar» con el ref vigente para que ManyChat lo guarde y lo usen los
+botones de los documentos.
