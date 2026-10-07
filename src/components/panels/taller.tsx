@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { nombreCompleto } from "@/lib/nombre";
 import type { Prisma, User } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { releaseStale } from "@/lib/cases";
@@ -109,7 +110,7 @@ export async function PanelTaller({ user, tab }: { user: User; tab?: string }) {
         {mineOpen ? (
           <div className="note a row between">
             <span>
-              Tienes el caso <b>#{mineOpen.number}</b> ({mineOpen.patient.name}) abierto en{" "}
+              Tienes el caso <b>#{mineOpen.number}</b> ({nombreCompleto(mineOpen.patient)}) abierto en{" "}
               {PHASES.find(([s]) => s === mineOpen.state)?.[1].toLowerCase()}.
             </span>
             <Link href={`/caso/${mineOpen.id}`} className="btn pri">
@@ -167,7 +168,7 @@ export async function PanelTaller({ user, tab }: { user: User; tab?: string }) {
                         <b>#{c.number}</b>
                         <SlaChip sla={sla} />
                       </div>
-                      <div style={{ marginTop: 2 }}>{c.patient.name}</div>
+                      <div style={{ marginTop: 2 }}>{nombreCompleto(c.patient)}</div>
                       <div className="tiny">
                         {c.clinic.town} · {c.delivery === "CLINICA" ? "recogida en clínica" : "domicilio"}
                       </div>
@@ -237,7 +238,7 @@ export async function PanelTaller({ user, tab }: { user: User; tab?: string }) {
                       <td style={{ width: 60 }}>
                         <Link href={`/caso/${c.id}`}>#{c.number}</Link>
                       </td>
-                      <td>{c.patient.name}</td>
+                      <td>{nombreCompleto(c.patient)}</td>
                       <td className="tiny">{c.clinic.town}</td>
                       <td style={{ textAlign: "right" }}>
                         <SlaChip sla={slaOf.get(c.id) ?? null} />
@@ -259,7 +260,7 @@ export async function PanelTaller({ user, tab }: { user: User; tab?: string }) {
                       <td style={{ width: 60 }}>
                         <Link href={`/caso/${c.id}`}>#{c.number}</Link>
                       </td>
-                      <td>{c.patient.name}</td>
+                      <td>{nombreCompleto(c.patient)}</td>
                       <td>
                         <form action={setLotAction} className="row" style={{ gap: 6, flexWrap: "nowrap" }}>
                           <input type="hidden" name="caseId" value={c.id} />
@@ -298,7 +299,7 @@ export async function PanelTaller({ user, tab }: { user: User; tab?: string }) {
                   <tr key={c.id}>
                     <td>#{c.number}</td>
                     <td>
-                      {c.patient.name}
+                      {nombreCompleto(c.patient)}
                       {rehacerAbierto(c) && (
                         <>
                           {" "}
@@ -352,7 +353,7 @@ export async function PanelTaller({ user, tab }: { user: User; tab?: string }) {
                     <td>
                       <Link href={`/caso/${c.id}`}>#{c.number}</Link>
                     </td>
-                    <td>{c.patient.name}</td>
+                    <td>{nombreCompleto(c.patient)}</td>
                     <td className="muted">{destino(c)}</td>
                     <td>
                       <form action={updateShipmentAction} className="row" style={{ gap: 6, flexWrap: "nowrap" }}>
@@ -418,7 +419,7 @@ export async function PanelTaller({ user, tab }: { user: User; tab?: string }) {
                     <td className="tiny">{fmtd(i.createdAt)}</td>
                     <td>
                       <Link href={`/caso/${i.case.id}`}>#{i.case.number}</Link>
-                      <div className="tiny">{i.case.patient.name}</div>
+                      <div className="tiny">{nombreCompleto(i.case.patient)}</div>
                     </td>
                     <td>
                       <span className={`pill ${i.type === "CAPTURA_INVALIDA" ? "a" : "r"}`}>{tipo(i.type)}</span>
@@ -462,7 +463,7 @@ export async function PanelTaller({ user, tab }: { user: User; tab?: string }) {
                         {fmtd(i.closedAt)}
                       </td>
                       <td>
-                        <Link href={`/caso/${i.case.id}`}>#{i.case.number}</Link> · {i.case.patient.name}
+                        <Link href={`/caso/${i.case.id}`}>#{i.case.number}</Link> · {nombreCompleto(i.case.patient)}
                       </td>
                       <td className="muted">
                         {tipo(i.type)}: {i.reason}
@@ -508,7 +509,7 @@ export async function PanelTaller({ user, tab }: { user: User; tab?: string }) {
                     <td>
                       <Link href={`/caso/${c.id}`}>#{c.number}</Link>
                     </td>
-                    <td>{c.patient.name}</td>
+                    <td>{nombreCompleto(c.patient)}</td>
                     <td className="muted">{c.clinic.name}</td>
                     <td>{c.lot ?? "—"}</td>
                     <td>{c.material ?? "—"}</td>

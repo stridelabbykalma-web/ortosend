@@ -2,6 +2,7 @@
 
 // Agenda del panel de clínica: dar/cancelar/reprogramar citas, horario semanal,
 // excepciones (cierres y aperturas), ajustes de reserva online y feed iCal.
+import { nombreCompleto } from "@/lib/nombre";
 import { redirect } from "next/navigation";
 import { randomBytes } from "crypto";
 import type { AppointmentKind, User } from "@prisma/client";
@@ -104,7 +105,7 @@ export async function darCitaAction(formData: FormData) {
     direccion: kase!.clinic.address,
     fecha: appt!.startsAt.toISOString(),
   });
-  ok(back, `Cita ${replace ? "cambiada" : "dada"} a ${kase!.patient.name}: ${fmtdt(appt!.startsAt)}`);
+  ok(back, `Cita ${replace ? "cambiada" : "dada"} a ${nombreCompleto(kase!.patient)}: ${fmtdt(appt!.startsAt)}`);
 }
 
 export async function cancelarCitaClinicaAction(formData: FormData) {

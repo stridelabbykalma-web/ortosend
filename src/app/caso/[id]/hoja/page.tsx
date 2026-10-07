@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { nombreCompleto } from "@/lib/nombre";
 import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { getSessionUser } from "@/lib/auth";
@@ -93,7 +94,7 @@ export default async function HojaPage({ params }: { params: Promise<{ id: strin
           <tbody>
             <tr>
               <th>Paciente</th>
-              <td>{k.patient.name}</td>
+              <td>{nombreCompleto(k.patient)}</td>
               <th>Clínica</th>
               <td>{k.clinic.name} ({k.clinic.town})</td>
             </tr>
@@ -175,8 +176,8 @@ export default async function HojaPage({ params }: { params: Promise<{ id: strin
         <div className="hoja-bloque etiquetas">
           <div className="tiny">ETIQUETAS DE MOLDE (recortar)</div>
           <div className="grid g2" style={{ gap: 12 }}>
-            <Etiqueta t={izq} numero={k.number} talla={talla} nombre={k.patient.name} lote={k.lot} />
-            <Etiqueta t={dcho} numero={k.number} talla={talla} nombre={k.patient.name} lote={k.lot} />
+            <Etiqueta t={izq} numero={k.number} talla={talla} nombre={nombreCompleto(k.patient)} lote={k.lot} />
+            <Etiqueta t={dcho} numero={k.number} talla={talla} nombre={nombreCompleto(k.patient)} lote={k.lot} />
           </div>
         </div>
         <div className="tiny" style={{ marginTop: 14 }}>

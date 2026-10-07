@@ -1,6 +1,7 @@
 // Pestaña «Agenda» del panel de clínica: semana con las citas de todas las
 // agendas (o de un profesional), casos pendientes de cita, dar/cambiar/anular
 // citas y enlaces de suscripción iCal.
+import { nombreCompleto } from "@/lib/nombre";
 import Link from "next/link";
 import type { Clinic, User } from "@prisma/client";
 import { prisma } from "@/lib/db";
@@ -155,7 +156,7 @@ export async function ClinicaAgenda({
                 return (
                   <details key={a.id} className={`appt ${cls}`}>
                     <summary style={{ cursor: "pointer", listStyle: "none" }}>
-                      <span className="t">{hora.format(a.startsAt)}</span> {a.case.patient.name}
+                      <span className="t">{hora.format(a.startsAt)}</span> {nombreCompleto(a.case.patient)}
                       <div className="who">
                         {APPOINTMENT_KIND_LABEL[a.kind]} · {a.professional?.name.split("(")[0].trim() ?? "Clínica"}
                         {a.status !== "RESERVADA" && <> · {APPOINTMENT_STATUS_LABEL[a.status]}</>}
@@ -228,7 +229,7 @@ export async function ClinicaAgenda({
                 {pendientes.map((c) => (
                   <tr key={c.id}>
                     <td>#{c.number}</td>
-                    <td>{c.patient.name}</td>
+                    <td>{nombreCompleto(c.patient)}</td>
                     <td>
                       <StatePill state={c.state} />
                     </td>
@@ -247,7 +248,7 @@ export async function ClinicaAgenda({
       )}
 
       <div className="card" id="darcita">
-        <b>{casoSel ? `Dar cita a ${casoSel.patient.name} (caso #${casoSel.number})` : "Dar cita a un paciente"}</b>
+        <b>{casoSel ? `Dar cita a ${nombreCompleto(casoSel.patient)} (caso #${casoSel.number})` : "Dar cita a un paciente"}</b>
         <form action={darCitaAction}>
           <input type="hidden" name="back" value={back} />
           {!casoSel && (
@@ -259,7 +260,7 @@ export async function ClinicaAgenda({
                 </option>
                 {casosParaCita.map((c) => (
                   <option key={c.id} value={c.id}>
-                    #{c.number} · {c.patient.name} · {c.state.replace(/_/g, " ").toLowerCase()}
+                    #{c.number} · {nombreCompleto(c.patient)} · {c.state.replace(/_/g, " ").toLowerCase()}
                     {c.appointmentAt ? ` · cita ${fmtdt(c.appointmentAt)}` : ""}
                   </option>
                 ))}
