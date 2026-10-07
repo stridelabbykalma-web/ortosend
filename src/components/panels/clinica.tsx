@@ -94,6 +94,7 @@ export async function PanelClinica({
                   <th>Paciente</th>
                   <th>Creado</th>
                   <th>Estado</th>
+                  <th></th>
                 </tr>
               </thead>
               <tbody>
@@ -108,6 +109,11 @@ export async function PanelClinica({
                     <td>{fmtd(c.createdAt)}</td>
                     <td>
                       <StatePill state={c.state} />
+                    </td>
+                    <td>
+                      <Link href={`/caso/${c.id}`} className={`btn${["CITA_RESERVADA", "ESTUDIO_EN_CURSO", "DEVUELTO_CLINICA"].includes(c.state) ? " pri" : ""}`}>
+                        {["CITA_RESERVADA", "ESTUDIO_EN_CURSO", "DEVUELTO_CLINICA"].includes(c.state) ? "Abrir estudio" : "Ver caso"}
+                      </Link>
                     </td>
                   </tr>
                 ))}
