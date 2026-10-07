@@ -428,3 +428,66 @@ describe("7. webhook HTTP", () => {
     expect(await res.json()).toMatchObject({ estado: "ok", siguiente: "salud" });
   });
 });
+
+describe("8. empezar escribiendo ALTA (sin ref, por el móvil)", () => {
+  it("si el envío automático falló, el paciente empieza con ALTA y recibe su ref", async () => {
+    mc.fallar = true;
+    const t = nuevoTel();
+    const r = await crearPreAlta(pro, datos({ telefono: t }));
+    mc.fallar = false;
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.patient.status).toBe("ERROR_ENVIO");
+    // ManyChat manda el marcador sin sustituir porque ortosend_ref está vacío
+    const out = await procesarWebhook({ ref: "{{cuf_15036653}}", subscriberId: "sub_nuevo", telefono: `+34${t}`, accion: "empezar" });
+    expect(out).toMatchObject({ estado: "ok", siguiente: "privacidad" });
+    expect(out.ref).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect((await prisma.patient.findUniqueOrThrow({ where: { id: r.patient.id } })).status).toBe("PENDIENTE");
+    // con ese ref sigue el flujo normal
+    expect(await responder(out.ref!, "privacidad", "acepto", "sub_nuevo")).toMatchObject({ siguiente: "salud" });
+    const log = await prisma.consentLog.findFirstOrThrow({ where: { patientId: r.patient.id } });
+    expect(log.externalRef).toBe("sub_nuevo");
+  });
+
+  it("si el campo tiene un ref viejo (invitación anterior), recupera la vigente por el móvil", async () => {
+    const { patient, ref: viejo } = await altaAdulto();
+    await reenviar(patient.id, pro);
+    const out = await procesarWebhook({ ref: viejo, telefono: `+34${patient.phone}`, accion: "empezar" });
+    expect(out).toMatchObject({ estado: "ok", siguiente: "privacidad" });
+    expect(out.ref).not.toBe(viejo);
+  });
+
+  it("con ref válido devuelve el mismo ref (ManyChat lo vuelve a guardar)", async () => {
+    const { ref, patient } = await altaAdulto();
+    expect(await procesarWebhook({ ref, telefono: `+34${patient.phone}`, accion: "empezar" })).toMatchObject({ estado: "ok", ref });
+  });
+
+  it("un móvil sin alta pendiente recibe «inválido» y no se crea nada", async () => {
+    const antes = await prisma.consentLog.count();
+    const out = await procesarWebhook({ ref: "", telefono: "+34699999999", accion: "empezar" });
+    expect(out).toEqual({ estado: "invalido", siguiente: "invalido", ref: "" });
+    expect(await prisma.consentLog.count()).toBe(antes);
+  });
+
+  it("sin ref no se puede responder documentos (solo empezar busca por móvil)", async () => {
+    const { patient } = await altaAdulto();
+    expect(await procesarWebhook({ ref: "", telefono: `+34${patient.phone}`, accion: "respuesta", documento: "privacidad", respuesta: "acepto" })).toMatchObject({ estado: "invalido" });
+  });
+
+  it("una vez aceptada, escribir ALTA otra vez no reabre nada", async () => {
+    const { patient, ref } = await altaAdulto();
+    await aceptarObligatorios(ref);
+    await responder(ref, "marketing", "rechazo");
+    const out = await procesarWebhook({ ref: "", telefono: `+34${patient.phone}`, accion: "empezar" });
+    expect(out.estado).toBe("invalido");
+  });
+
+  it("menor: lo reclama el móvil del tutor, no el del menor", async () => {
+    const tutorTel = nuevoTel();
+    const menorTel = nuevoTel();
+    const r = await crearPreAlta(pro, datos({ fechaNacimiento: "2014-03-01", telefono: menorTel, tutorNombre: "Marc Soler", tutorTelefono: tutorTel }));
+    expect(r.ok).toBe(true);
+    expect((await procesarWebhook({ ref: "", telefono: `+34${menorTel}`, accion: "empezar" })).estado).toBe("invalido");
+    expect((await procesarWebhook({ ref: "", telefono: `+34${tutorTel}`, accion: "empezar" })).estado).toBe("ok");
+  });
+});

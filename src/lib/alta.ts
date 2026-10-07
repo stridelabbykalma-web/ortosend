@@ -214,6 +214,9 @@ export type AccionWebhook = "empezar" | "respuesta" | "revisar";
 export type EntradaWebhook = {
   ref: string;
   subscriberId?: string | null;
+  // Móvil del contacto de WhatsApp. Permite empezar sin «ref» cuando es el propio
+  // paciente quien escribe ALTA (QR en la consulta): WhatsApp garantiza el número.
+  telefono?: string | null;
   accion: AccionWebhook;
   documento?: string | null; // slug
   respuesta?: "acepto" | "rechazo" | null;
@@ -225,6 +228,8 @@ export type SalidaWebhook = {
   siguiente: string;
   documento_rechazado?: string;
   paciente?: string;
+  // Solo en «empezar»: el ref vigente, para que ManyChat lo guarde en ortosend_ref.
+  ref?: string;
 };
 
 type Ultimas = Partial<Record<ConsentType, ConsentAction>>;
@@ -255,11 +260,54 @@ function salida(u: Ultimas, paciente: string): SalidaWebhook {
 const INVALIDO: SalidaWebhook = { estado: "invalido", siguiente: "invalido" };
 const CADUCADO: SalidaWebhook = { estado: "caducado", siguiente: "caducado" };
 
+// ManyChat deja el marcador sin sustituir ({{cuf_123}}) cuando el campo está vacío.
+const limpio = (v: string | null | undefined) => {
+  const t = (v ?? "").trim();
+  return !t || t.startsWith("{{") ? "" : t;
+};
+
+// El paciente (o su tutor) escribe ALTA desde su móvil: se busca su alta pendiente por
+// número y se le asigna un ref nuevo (el anterior, si se llegó a enviar, deja de valer).
+async function reclamarPorTelefono(telefonoRaw: string, subscriberId: string | null) {
+  const toPhone = normalizePhone(telefonoRaw);
+  if (!toPhone) return null;
+  const inv = await prisma.consentInvitation.findFirst({
+    where: { toPhone, invalidatedAt: null, completedAt: null, expiresAt: { gt: new Date() } },
+    orderBy: { createdAt: "desc" },
+  });
+  if (!inv) return null;
+  const ref = nuevoSecreto();
+  await prisma.consentInvitation.update({
+    where: { id: inv.id },
+    data: { refHash: hashSecreto(ref), ...(subscriberId ? { manychatSubscriberId: subscriberId } : {}) },
+  });
+  await prisma.patient.updateMany({ where: { id: inv.patientId, status: "ERROR_ENVIO" }, data: { status: "PENDIENTE" } });
+  return ref;
+}
+
 export async function procesarWebhook(e: EntradaWebhook): Promise<SalidaWebhook> {
-  if (!e.ref) return INVALIDO;
+  const ref = limpio(e.ref);
+  let out = ref ? await procesarConRef({ ...e, ref }) : INVALIDO;
+  if (e.accion !== "empezar") return out;
+  // Al empezar sin ref válido (escribió ALTA, o el campo tiene uno de una invitación
+  // anterior), se intenta por el móvil del contacto.
+  let vigente = ref;
+  const telefono = limpio(e.telefono);
+  if (out.estado === "invalido" && telefono) {
+    const nuevo = await reclamarPorTelefono(telefono, limpio(e.subscriberId) || null);
+    if (nuevo) {
+      vigente = nuevo;
+      out = await procesarConRef({ ...e, ref: nuevo, subscriberId: limpio(e.subscriberId) || null });
+    }
+  }
+  return { ...out, ref: out.estado === "invalido" ? "" : vigente };
+}
+
+async function procesarConRef(e: EntradaWebhook): Promise<SalidaWebhook> {
   const inv = await prisma.consentInvitation.findUnique({ where: { refHash: hashSecreto(e.ref) } });
   if (!inv) return INVALIDO;
-  if (e.subscriberId && inv.manychatSubscriberId && e.subscriberId !== inv.manychatSubscriberId) return INVALIDO;
+  const sub = limpio(e.subscriberId);
+  if (sub && inv.manychatSubscriberId && sub !== inv.manychatSubscriberId) return INVALIDO;
   if (inv.invalidatedAt) return INVALIDO;
 
   type Efecto = { aceptado?: boolean; marketing?: boolean };
@@ -305,7 +353,7 @@ export async function procesarWebhook(e: EntradaWebhook): Promise<SalidaWebhook>
       actor: inv.recipient === "tutor" ? "tutor" : "paciente",
       channel: "whatsapp",
       invitationId: inv.id,
-      externalRef: e.subscriberId ?? inv.manychatSubscriberId,
+      externalRef: sub || inv.manychatSubscriberId,
     });
     u[tipo] = action;
     if (action === "RECHAZADO" && esObligatorio(tipo)) {

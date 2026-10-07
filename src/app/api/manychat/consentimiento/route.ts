@@ -1,7 +1,8 @@
 // Webhook que llama el flujo de ManyChat en cada paso del consentimiento:
 // «Empezar», cada «Acepto / No acepto» y «Revisar». La respuesta dice qué
 // mostrar a continuación (ManyChat la guarda en el campo ortosend_siguiente).
-// Cuerpo: { ref, subscriber_id, accion, documento?, respuesta? }
+// Cuerpo: { ref, subscriber_id, telefono?, accion, documento?, respuesta? }
+// Al «empezar» sin ref válido busca el alta pendiente por el móvil (el paciente escribió ALTA).
 import { NextResponse } from "next/server";
 import { procesarWebhook, type AccionWebhook } from "@/lib/alta";
 import { leerJson, texto, webhookAutorizado } from "@/lib/manychat-webhook";
@@ -19,6 +20,7 @@ export async function POST(req: Request) {
   const out = await procesarWebhook({
     ref: texto(b.ref),
     subscriberId: texto(b.subscriber_id) || null,
+    telefono: texto(b.telefono) || null,
     accion,
     documento: texto(b.documento).toLowerCase() || null,
     respuesta: respuesta === "acepto" || respuesta === "rechazo" ? respuesta : null,
