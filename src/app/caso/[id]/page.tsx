@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { nombreCompleto } from "@/lib/nombre";
 import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { getSessionUser } from "@/lib/auth";
@@ -152,7 +153,7 @@ export default async function CasoPage({
             <div className="tiny">Documento clínico firmado electrónicamente · se conserva 5 años</div>
             <div className="sp" />
             <p>
-              <b>Paciente:</b> {k.patient.name} · <b>Clínica del estudio:</b> {k.clinic.name}
+              <b>Paciente:</b> {nombreCompleto(k.patient)} · <b>Clínica del estudio:</b> {k.clinic.name}
             </p>
             <p>
               <b>Prescriptor:</b> {k.prescription.prescriberName} (col. {k.prescription.collegiateNum})
@@ -186,7 +187,7 @@ export default async function CasoPage({
       <Flash error={error} ok={ok} />
       <div className="row between">
         <h2>
-          Caso #{k.number} — {k.patient.name}
+          Caso #{k.number} — {nombreCompleto(k.patient)}
         </h2>
         <StatePill state={k.state} />
       </div>

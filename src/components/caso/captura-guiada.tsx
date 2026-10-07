@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { nombreCompleto } from "@/lib/nombre";
 import type { Capture, Case, Incident, MediaAsset, Patient } from "@prisma/client";
 import { checklistOf, titularDe } from "@/lib/cases";
 import { BARO_KINDS, CAPTURA_VISUAL, FOTO_KINDS, SCAN_KIND, VIDEO_KINDS } from "@/lib/format";
@@ -983,7 +984,7 @@ export async function CapturaGuiada({
           (done ? (
             <>
               <div className="note g">
-                {s.hecho} Queda asociado a <b>{kase.patient.name}</b> (caso #{kase.number}).
+                {s.hecho} Queda asociado a <b>{nombreCompleto(kase.patient)}</b> (caso #{kase.number}).
                 {nombreProyecto && (
                   <>
                     {" "}
@@ -1028,11 +1029,11 @@ export async function CapturaGuiada({
                 {nombreProyecto ? (
                   <>
                     Márcalo cuando el escaneo esté guardado con ese nombre: queda asociado a{" "}
-                    <b>{kase.patient.name}</b> (caso #{kase.number}).
+                    <b>{nombreCompleto(kase.patient)}</b> (caso #{kase.number}).
                   </>
                 ) : (
                   <>
-                    Se guardará asociado a <b>{kase.patient.name}</b> — caso #{kase.number}. No
+                    Se guardará asociado a <b>{nombreCompleto(kase.patient)}</b> — caso #{kase.number}. No
                     hace falta renombrar el archivo: el nombre del paciente y el caso se añaden
                     solos.
                   </>

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { nombreCompleto } from "@/lib/nombre";
 import type { User } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { StatePill } from "@/components/ui";
@@ -104,7 +105,7 @@ export async function PanelClinica({
                       <Link href={`/caso/${c.id}`}>#{c.number}</Link>
                     </td>
                     <td>
-                      {c.patient.name}
+                      {nombreCompleto(c.patient)}
                     </td>
                     <td>{fmtd(c.createdAt)}</td>
                     <td>
@@ -156,7 +157,7 @@ export async function PanelClinica({
                 {queue.map((c) => (
                   <tr key={c.id}>
                     <td>#{c.number}</td>
-                    <td>{c.patient.name}</td>
+                    <td>{nombreCompleto(c.patient)}</td>
                     <td>
                       <StatePill state={c.state} />{" "}
                       {c.rxDraft?.startsWith(REVISION_PREFIJO) && (

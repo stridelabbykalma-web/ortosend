@@ -7,6 +7,7 @@
 //
 // Todo lo que cambia el estado de un paciente pasa por aquí, para que el panel,
 // el webhook, el cron y los tests compartan las mismas reglas.
+import { nombreCompleto } from "./nombre";
 import type { ConsentAction, ConsentInvitation, ConsentType, Patient, PatientStatus, Prisma, User } from "@prisma/client";
 import { prisma } from "./db";
 import { isValidPhone, normalizeEmail, normalizePhone } from "./contacto";
@@ -32,7 +33,7 @@ export function destinatario(p: Pick<Patient, "isMinor" | "name" | "lastName" | 
     : { recipient: "paciente" as const, nombre: p.name, telefono: p.phone ?? "", email: p.email };
 }
 
-export const nombreCompleto = (p: Pick<Patient, "name" | "lastName">) => [p.name, p.lastName].filter(Boolean).join(" ");
+export { nombreCompleto };
 
 // ---------------------------------------------------------------- pre-alta
 

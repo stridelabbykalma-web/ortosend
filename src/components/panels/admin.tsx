@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { nombreCompleto } from "@/lib/nombre";
 import { prisma } from "@/lib/db";
 import { Kpi, StatePill } from "@/components/ui";
 import { fmtd, fmtdt } from "@/lib/format";
@@ -335,7 +336,7 @@ export async function PanelAdmin({ tab }: { tab?: string }) {
                     <Link href={`/caso/${c.id}`}>#{c.number}</Link>
                   </td>
                   <td>
-                    {c.patient.name}
+                    {nombreCompleto(c.patient)}
                   </td>
                   <td>{c.clinic.name}</td>
                   <td>{fmtd(c.createdAt)}</td>

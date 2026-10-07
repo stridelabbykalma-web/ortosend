@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { nombreCompleto } from "@/lib/nombre";
 import type { User } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { releaseStale, titularDe } from "@/lib/cases";
@@ -57,7 +58,7 @@ export async function PanelRecetador({ user }: { user: User }) {
                 {contact.map((c) => (
                   <tr key={c.id}>
                     <td>#{c.number}</td>
-                    <td>{c.patient.name}</td>
+                    <td>{nombreCompleto(c.patient)}</td>
                     <td>{titularDe(c.patient).phone ?? "—"}</td>
                     <td>
                       <Link href={`/caso/${c.id}`} className="btn">
