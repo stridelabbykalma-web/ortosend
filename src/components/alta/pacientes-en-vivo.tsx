@@ -72,9 +72,17 @@ export function PacientesEnVivo({ inicial }: { inicial: EstadoPanel[] }) {
                   {p.status === "PENDIENTE" && p.expiraAt && <div>Caduca {hora(p.expiraAt)}</div>}
                 </td>
                 <td>
-                  <Link href={`/panel/paciente/${p.id}`} className="btn">
-                    {p.status === "ACEPTADO" ? "Abrir ficha" : "Ver"}
-                  </Link>
+                  <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
+                    {/* Aceptado: entra directo a la ficha clínica del caso */}
+                    {p.status === "ACEPTADO" && p.casoId && (
+                      <Link href={`/caso/${p.casoId}`} className="btn pri">
+                        Abrir ficha clínica
+                      </Link>
+                    )}
+                    <Link href={`/panel/paciente/${p.id}`} className="btn">
+                      {p.status === "ACEPTADO" ? "Consentimientos" : "Ver"}
+                    </Link>
+                  </div>
                 </td>
               </tr>
             );
