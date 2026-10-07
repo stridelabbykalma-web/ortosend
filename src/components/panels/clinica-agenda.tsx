@@ -20,9 +20,6 @@ import {
 } from "@/lib/agenda";
 import { availabilityOf, loadClinicAgenda } from "@/lib/agenda-db";
 import { cancelarCitaClinicaAction, darCitaAction, icalTokenAction } from "@/app/panel/agenda-actions";
-import { invitePatientAction } from "@/app/panel/clinica-actions";
-import { InvitacionesPendientes } from "./clinica";
-import { EDAD_MAYORIA_SALUD } from "@/lib/edad";
 import { Calendario } from "@/components/reserva/calendario";
 
 const DIA_LARGO = ["", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"];
@@ -342,57 +339,10 @@ export async function ClinicaAgenda({
       </div>
       <div className="sp" />
 
-      <InvitacionesPendientes clinicId={clinic.id} />
-      <div className="sp" />
-      <details className="card">
-        <summary style={{ cursor: "pointer", fontWeight: 600 }}>+ Invitar a un paciente (Flujo B — paciente en clínica)</summary>
-        <div className="tiny" style={{ margin: "6px 0 10px" }}>
-          Solo los datos esenciales. El paciente recibe el enlace al momento (WhatsApp y email), crea
-          su cuenta, acepta los consentimientos y en ese instante se abre el estudio en tu agenda. Si
-          no tiene el móvil a mano, abre el enlace desde este dispositivo: la sesión de la clínica se
-          mantiene.
-        </div>
-        <form action={invitePatientAction}>
-          <label>Nombre y apellidos del paciente</label>
-          <input name="name" required />
-          <div className="grid g2">
-            <div>
-              <label>Móvil</label>
-              <input name="phone" type="tel" />
-            </div>
-            <div>
-              <label>Email</label>
-              <input name="email" type="email" />
-            </div>
-          </div>
-          <label>Fecha de nacimiento</label>
-          <input name="birth" type="date" />
-          <details style={{ marginTop: 10 }}>
-            <summary style={{ cursor: "pointer" }}>El paciente es menor de {EDAD_MAYORIA_SALUD} años</summary>
-            <div className="tiny" style={{ margin: "6px 0" }}>
-              La invitación y la cuenta son para su padre, madre o tutor; el móvil y el email de arriba
-              son los del menor (recibirá el aviso para gestionar su cuenta al cumplir {EDAD_MAYORIA_SALUD}
-              años). Déjalos vacíos si no tiene.
-            </div>
-            <label>Nombre y apellidos del tutor</label>
-            <input name="tutorNombre" />
-            <div className="grid g2">
-              <div>
-                <label>Móvil del tutor (recibirá la invitación)</label>
-                <input name="tutorMovil" type="tel" />
-              </div>
-              <div>
-                <label>Email del tutor</label>
-                <input name="tutorEmail" type="email" />
-              </div>
-            </div>
-          </details>
-          <div className="sp" />
-          <button type="submit" className="pri">
-            Enviar invitación
-          </button>
-        </form>
-      </details>
+      <div className="note">
+        ¿Paciente nuevo en la clínica? Dale de alta en <Link href="/panel?tab=altas">Altas de pacientes</Link>: recibe
+        un WhatsApp, acepta los documentos y su ficha aparece aquí para darle cita.
+      </div>
       <div className="sp" />
 
       <details className="card">

@@ -41,12 +41,15 @@ despliega automáticamente.
 **Autenticación y roles**
 - Sesión con cookie firmada (jose) + bcrypt. 6 roles: ADMIN, ADMIN_CLINICA, PROFESIONAL,
   RECETADOR, TALLER, CLIENTE.
-- **Flujo B**: la clínica solo emite una invitación con los datos esenciales (también de
-  menores, con su tutor); el paciente la recibe al momento por WhatsApp y email, crea su cuenta
-  en `/invitacion`, revisa sus datos y acepta los consentimientos, y en ese instante nacen su
-  ficha y el caso en estudio. La agenda lista las invitaciones pendientes (abrir en la tablet,
-  copiar enlace, reenviar, cancelar) y el cron reenvía las caducadas (máx. 3 veces). Sin
-  aceptación no hay caso. Detalle en `docs/alta-cliente-flujo-b.md`.
+- **Alta por WhatsApp** (sustituye al Flujo B por enlace web): el profesional hace la pre-alta
+  en «Altas de pacientes» y el paciente (o su tutor, si tiene menos de 16 años) acepta uno a uno
+  los documentos legales dentro del chat de WhatsApp (ManyChat). Cada respuesta queda en
+  `consent_log` (solo inserción, con hash encadenado) con la versión exacta del texto. El panel
+  muestra el estado en vivo; al aceptar los cuatro obligatorios se abre la ficha. Después el
+  profesional envía el acceso y el paciente crea su contraseña con DNI + móvil + código de
+  WhatsApp. Retirar un consentimiento (perfil, enlace por WhatsApp con «BAJA» o el profesional)
+  deja la ficha en solo lectura. El resto de avisos al paciente (citas, pago, envío…) también salen
+  por ManyChat, con el email como respaldo. Configuración y flujos en `docs/ALTA-WHATSAPP.md`.
 - Capa sensible: ver el documento clínico exige **re-confirmar la contraseña** (token de lectura
   de 10 min) y queda registrado en `AuditLog` (RGPD).
 
@@ -219,8 +222,9 @@ Lista completa y priorizada en **`docs/ESTADO-Y-PENDIENTES.md`**. Resumen:
 - **Stripe real** (PaymentIntent + webhook; Bizum) y facturas.
 - **Media en Cloudflare R2/S3** por fragmentos con URLs firmadas (hoy los vídeos y fotos se
   guardan en Postgres, con tope de 4 MB por archivo); visor del escaneo 3D.
-- **WhatsApp Business API** (360dialog/Twilio) para la cola de `Notification`. El email de respaldo
-  ya se encola y sale por Resend si se configuran `RESEND_API_KEY` y `EMAIL_FROM`.
+- **WhatsApp por ManyChat**: el código ya está; falta crear los flujos y que Meta apruebe los mensajes
+  (`docs/ALTA-WHATSAPP.md` §10). El email de respaldo sale por Resend si se configuran
+  `RESEND_API_KEY` y `EMAIL_FROM`.
 - Envíos (Sendcloud/Packlink) con webhook de entrega; PDF real de la prescripción.
 - i18n ES/CA, passkeys, verificación del móvil por SMS/WhatsApp, PWA offline del asistente de
   captura.

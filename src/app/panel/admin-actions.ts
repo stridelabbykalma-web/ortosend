@@ -5,11 +5,12 @@
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { requireRole } from "@/lib/auth";
-import { notify, notifyOwner, pushEvent } from "@/lib/cases";
+import { notifyOwner, pushEvent, titularDe, avisarPaciente } from "@/lib/cases";
 import { PAY_LINK_DAYS, PAY_REMINDERS_DAYS, SOFT_EXPIRY_MONTHS } from "@/lib/states";
 import { nacimientoLimiteMayoria } from "@/lib/edad";
 import { enviarAvisoMayoria } from "@/lib/mayoria";
-import { MAX_AUTO_RESENDS, reenviarInvitacion } from "@/lib/invitacion";
+import { caducarVencidas, enviarRecordatorios, reintentarConfirmaciones } from "@/lib/alta";
+import { limpiarRateLimit } from "@/lib/rate-limit";
 
 function fail(path: string, msg: string): never {
   redirect(`${path}${path.includes("?") ? "&" : "?"}error=` + encodeURIComponent(msg));
@@ -78,9 +79,11 @@ export async function reactivatePayAction(formData: FormData) {
     data: { state: "PENDIENTE_PAGO", payLinkExpiresAt: expires },
   });
   await pushEvent(caseId, "Enlace de pago reactivado (30 días)", u.name);
-  const owner = await prisma.user.findUnique({ where: { id: kase.patient.ownerId } });
-  if (owner?.phone)
-    await notify(owner.phone, "rx_lista_pago", { nota: "Tu enlace de pago vuelve a estar activo 30 días más." });
+  await avisarPaciente(kase.patientId, "rx_lista_pago", {
+    caseId,
+    enlace: "/panel",
+    nota: "Tu enlace de pago vuelve a estar activo 30 días más.",
+  });
   redirect("/panel?tab=cas");
 }
 
@@ -93,7 +96,7 @@ export async function runJobsAction() {
   redirect(
     "/panel?ok=" +
       encodeURIComponent(
-        `Mantenimiento: ${res.expired} enlaces caducados, ${res.reminders} recordatorios de pago, ${res.citas} recordatorios de cita, ${res.mayoria} avisos de mayoría de edad, ${res.invitaciones} invitaciones reenviadas`
+        `Mantenimiento: ${res.expired} enlaces caducados, ${res.reminders} recordatorios de pago, ${res.citas} recordatorios de cita, ${res.mayoria} avisos de mayoría de edad, ${res.invitaciones} recordatorios de alta por WhatsApp, ${res.caducadas} altas caducadas`
       )
   );
 }
@@ -125,16 +128,15 @@ export async function runJobs() {
     );
     const due = PAY_REMINDERS_DAYS.filter((d) => sentAtDay >= d);
     if (!due.length) continue;
-    const owner = await prisma.user.findUnique({ where: { id: c.patient.ownerId } });
-    if (!owner?.phone) continue;
     for (const d of due) {
       const template = `pago_d${d}`;
+      // Ya avisado por cualquier canal (WhatsApp o email).
       const already = await prisma.notification.findFirst({
-        where: { template, toPhone: owner.phone, payload: { path: ["caseId"], equals: c.id } },
+        where: { template, payload: { path: ["caseId"], equals: c.id } },
       });
       if (already) continue;
       const nota = "Tu prescripción sigue lista y tu enlace de pago activo. Completa el pago para iniciar la fabricación.";
-      await notify(owner.phone, template, { caseId: c.id, nota });
+      await avisarPaciente(c.patientId, template, { caseId: c.id, enlace: "/panel", nota });
       reminders++;
     }
   }
@@ -150,11 +152,12 @@ export async function runJobs() {
     include: { clinic: true, case: { include: { patient: { include: { owner: true } } } } },
   });
   for (const a of soon) {
-    await notifyOwner(a.case.patient.owner, a.case.patient.consents, "recordatorio_24h", {
+    const titular = titularDe(a.case.patient);
+    await notifyOwner(titular, a.case.patient.consents, "recordatorio_24h", {
       caseId: a.caseId,
       appointmentId: a.id,
-      nombre: a.case.patient.owner.name,
-      paciente: a.case.patient.name !== a.case.patient.owner.name ? a.case.patient.name : undefined,
+      nombre: titular.name,
+      paciente: a.case.patient.name !== titular.name ? a.case.patient.name : undefined,
       clinica: a.clinic.name,
       direccion: a.clinic.address,
       fechaTexto: a.startsAt.toLocaleString("es-ES", { dateStyle: "full", timeStyle: "short" }),
@@ -171,19 +174,15 @@ export async function runJobs() {
     include: { owner: true },
   });
   for (const p of mayores) {
-    if ((await enviarAvisoMayoria(p, p.owner)) === "enviado") mayoria++;
+    if (p.owner && (await enviarAvisoMayoria(p, p.owner)) === "enviado") mayoria++;
   }
-  // 5) Invitaciones de clínica (Flujo B) caducadas sin aceptar: reenvío automático, limitado.
-  let invitaciones = 0;
-  const caducadas = await prisma.invitation.findMany({
-    where: { status: "pendiente", expiresAt: { lt: now }, sentCount: { lte: MAX_AUTO_RESENDS } },
-    include: { clinic: true },
-  });
-  for (const inv of caducadas) {
-    await reenviarInvitacion(inv, inv.clinic.name, "Tu enlace anterior caducó: aquí tienes uno nuevo para crear tu cuenta y seguir tu estudio.");
-    invitaciones++;
-  }
-  return { expired: expiredCases.length, reminders, citas, mayoria, invitaciones };
+  // 5) Alta por WhatsApp: caducidad (72 h), recordatorio a las 24 h y
+  // reintento de las etiquetas de ManyChat que fallaron al aceptar.
+  const caducadas = await caducarVencidas();
+  const invitaciones = await enviarRecordatorios(now);
+  await reintentarConfirmaciones();
+  await limpiarRateLimit();
+  return { expired: expiredCases.length, reminders, citas, mayoria, invitaciones, caducadas };
 }
 
 // --- Altas de profesionales solicitadas por las clínicas ---
@@ -236,7 +235,8 @@ export async function professionalApplicationAction(formData: FormData) {
   });
   const { createInviteToken } = await import("@/lib/auth");
   const token = await createInviteToken(user.id);
-  await notify(app.phone, "invitacion_profesional", {
+  // Aviso al profesional: WhatsApp (si su flujo está configurado) o, si no, email.
+  await notifyOwner({ name: app.fullName, phone: app.phone, email: app.email }, { whatsapp: { aceptado: true } }, "invitacion_profesional", {
     enlace: `/activar?token=${token}`,
     validez: "72 h",
     nota: `Bienvenido/a al equipo de ${app.clinic.name} en Ortosend. Activa tu cuenta y completa la formación (5 módulos).`,

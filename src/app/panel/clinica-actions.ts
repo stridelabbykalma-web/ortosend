@@ -1,19 +1,11 @@
 "use server";
 
 // Acciones del panel de clínica: disponibilidad, Flujo B y asistente de captura.
+import { auditar, exigirTratamientoPermitido, tratamientoPermitido } from "@/lib/alta";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { requireRole } from "@/lib/auth";
-import { checklistOf, notify, pushEvent } from "@/lib/cases";
-import {
-  caducidadInvitacion,
-  enviarInvitacion,
-  estadoInvitacion,
-  nuevoTokenInvitacion,
-  reenviarInvitacion,
-} from "@/lib/invitacion";
-import { isValidPhone, normalizeEmail, normalizePhone } from "@/lib/contacto";
-import { EDAD_MAYORIA_SALUD, esMenor, parseBirth } from "@/lib/edad";
+import { checklistOf, pushEvent, titularDePaciente, avisarPaciente } from "@/lib/cases";
 import { completeTodaysAppointment } from "@/lib/agenda-db";
 import { BARO_KINDS, SCAN_KIND } from "@/lib/format";
 import { nombreProyectoRevoScan } from "@/lib/scan";
@@ -43,89 +35,15 @@ async function requireClinicStaff(): Promise<User & { clinicId: string }> {
   return u as User & { clinicId: string };
 }
 
-// --- Flujo B: invitación con los datos esenciales del paciente ---
-// La clínica no crea la cuenta: el paciente (o su tutor, si es menor de 16) la
-// crea al aceptar la invitación, acepta los consentimientos y entonces nace el
-// caso. Todo queda registrado por el propio paciente.
-// (La disponibilidad ya no va por huecos sueltos: ver agenda-actions.ts.)
-export async function invitePatientAction(formData: FormData) {
-  const u = await requireClinicStaff();
-  const back = "/panel?tab=agenda";
-  const name = String(formData.get("name") ?? "").trim();
-  const phone = normalizePhone(String(formData.get("phone") ?? ""));
-  const email = normalizeEmail(String(formData.get("email") ?? "")) || null;
-  const birth = parseBirth(String(formData.get("birth") ?? ""));
-  const tutorNombre = String(formData.get("tutorNombre") ?? "").trim();
-  const tutorMovil = normalizePhone(String(formData.get("tutorMovil") ?? ""));
-  const tutorEmail = normalizeEmail(String(formData.get("tutorEmail") ?? "")) || null;
-  const menor = esMenor(birth);
-  if (!name) fail(back, "El nombre del paciente es obligatorio");
-  if (menor && !tutorNombre) fail(back, `Paciente menor de ${EDAD_MAYORIA_SALUD} años: indica su padre, madre o tutor`);
-  if (email && !email.includes("@")) fail(back, "Email no válido");
-  // Destinatario de la invitación: el paciente o, si es menor, su tutor.
-  const toPhone = menor ? tutorMovil : phone;
-  const toEmail = menor ? tutorEmail : email;
-  if (!isValidPhone(toPhone)) fail(back, menor ? "El móvil del tutor es obligatorio" : "Móvil del paciente no válido");
-  if (phone && !isValidPhone(phone)) fail(back, "Móvil del paciente no válido");
-  if (toEmail && !toEmail.includes("@")) fail(back, "Email del tutor no válido");
-  if (menor && email && email === toEmail) fail(back, "El email del menor debe ser distinto del de su tutor");
-  const clinic = await prisma.clinic.findUnique({ where: { id: u.clinicId }, select: { name: true } });
-  const inv = await prisma.invitation.create({
-    data: {
-      clinicId: u.clinicId,
-      createdBy: u.id,
-      createdByName: u.name,
-      token: nuevoTokenInvitacion(),
-      name,
-      birthDate: birth,
-      isMinor: menor,
-      patientEmail: menor ? email : null,
-      patientPhone: menor ? phone || null : null,
-      tutorName: menor ? tutorNombre : null,
-      phone: toPhone,
-      email: toEmail,
-      expiresAt: caducidadInvitacion(),
-    },
-  });
-  await enviarInvitacion(inv, clinic?.name ?? "Tu clínica");
-  redirect(
-    back +
-      "&ok=" +
-      encodeURIComponent(
-        `Invitación enviada a ${inv.tutorName ?? inv.name} (${inv.phone}${inv.email ? ` y ${inv.email}` : ""}). El estudio se abre en cuanto la acepte.`
-      )
-  );
-}
-
-export async function resendInvitationAction(formData: FormData) {
-  const u = await requireClinicStaff();
-  const back = "/panel?tab=agenda";
-  const inv = await prisma.invitation.findFirst({
-    where: { id: String(formData.get("invitationId")), clinicId: u.clinicId },
-    include: { clinic: true },
-  });
-  if (!inv) fail(back, "Invitación no encontrada");
-  const estado = estadoInvitacion(inv!);
-  if (estado === "aceptada" || estado === "cancelada") fail(back, `La invitación ya está ${estado}`);
-  await reenviarInvitacion(inv!, inv!.clinic.name);
-  redirect(back + "&ok=" + encodeURIComponent(`Invitación reenviada a ${inv!.tutorName ?? inv!.name}`));
-}
-
-export async function cancelInvitationAction(formData: FormData) {
-  const u = await requireClinicStaff();
-  const back = "/panel?tab=agenda";
-  const r = await prisma.invitation.updateMany({
-    where: { id: String(formData.get("invitationId")), clinicId: u.clinicId, status: "pendiente" },
-    data: { status: "cancelada" },
-  });
-  if (!r.count) fail(back, "Invitación no encontrada o ya resuelta");
-  redirect(back + "&ok=" + encodeURIComponent("Invitación cancelada"));
-}
+// El alta de pacientes nuevos (pre-alta + consentimiento por WhatsApp) está en
+// alta-actions.ts. La disponibilidad va por agenda-actions.ts.
 
 // --- Asistente de captura (guardado continuo) ---
 async function captureFor(caseId: string, u: User) {
   const kase = await prisma.case.findUnique({ where: { id: caseId }, include: { capture: true, patient: true } });
   if (!kase || kase.clinicId !== u.clinicId) throw new Error("Caso no accesible");
+  await exigirTratamientoPermitido(kase.patientId);
+  await auditar(u.id, "case.edit", kase.patientId, { caseId, rol: "clinica" });
   if (!["CITA_RESERVADA", "ESTUDIO_EN_CURSO", "DEVUELTO_CLINICA"].includes(kase.state))
     throw new Error("El estudio no está en curso");
   const capture =
@@ -367,7 +285,7 @@ export async function markMediaAction(formData: FormData) {
     // Scan en la carpeta compartida de la clínica, que es como lo busca el taller.
     let meta: object | undefined;
     if (kind === SCAN_KIND) {
-      const owner = await prisma.user.findUnique({ where: { id: kase.patient.ownerId }, select: { phone: true } });
+      const owner = await titularDePaciente(kase.patientId);
       meta = { proyecto: nombreProyectoRevoScan(kase.patient.name, owner?.phone, kase.number) };
     }
     await prisma.mediaAsset.create({
@@ -396,6 +314,7 @@ export async function sendCaseAction(formData: FormData) {
     include: { capture: { include: { media: true } }, patient: true, clinic: true },
   });
   if (!kase || kase.clinicId !== u.clinicId) fail("/panel", "Caso no accesible");
+  if (!tratamientoPermitido(kase!.patient)) fail(`/caso/${caseId}`, "El paciente no tiene los consentimientos en vigor");
   const fromRepeat = kase!.state === "DEVUELTO_CLINICA";
   if (!["ESTUDIO_EN_CURSO", "DEVUELTO_CLINICA"].includes(kase!.state))
     fail(`/caso/${caseId}`, "El estudio no está en curso");
@@ -445,13 +364,10 @@ export async function sendCaseAction(formData: FormData) {
     fromRepeat ? `Prueba repetida y reenviada a prescripción: ${destino}` : `Estudio completo. Enviado a prescripción: ${destino}`,
     u.name
   );
-  if (kase!.patient) {
-    const owner = await prisma.user.findUnique({ where: { id: kase!.patient.ownerId } });
-    if (owner?.phone)
-      await notify(owner.phone, "estudio_completo", {
-        nota: "Tu estudio está completo y en valoración. Te avisaremos en un máximo de 48 h laborables.",
-      });
-  }
+  await avisarPaciente(kase!.patientId, "estudio_completo", {
+    caseId,
+    nota: "Tu estudio está completo y en valoración. Te avisaremos en un máximo de 48 h laborables.",
+  });
   if (rxRoute === "CLINICA") {
     // Si quien envía es prescriptor, aterriza en la receta; si no (p. ej. el
     // administrador), el caso queda en la cola de prescripciones de la clínica.
@@ -499,6 +415,7 @@ export async function chooseRxRouteAction(formData: FormData) {
   if (!kase || kase.clinicId !== u.clinicId) fail("/panel", "Caso no accesible");
   if (!["CITA_RESERVADA", "ESTUDIO_EN_CURSO", "DEVUELTO_CLINICA"].includes(kase!.state))
     fail(`/caso/${caseId}`, "El caso ya está enviado: no se puede cambiar quién receta");
+  await exigirTratamientoPermitido(kase!.patientId);
   // Las opciones de receta propia dependen de la clínica (que tenga un prescriptor
   // verificado), no de quien rellena: el administrador también puede elegirlas.
   const pedida = String(formData.get("rxRoute") ?? "");

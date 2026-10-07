@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { getSessionUser } from "@/lib/auth";
-import { audit } from "@/lib/cases";
+import { audit, titularDe } from "@/lib/cases";
 import { fmtd } from "@/lib/format";
 import { nombreProyectoRevoScan } from "@/lib/scan";
 import { PROD_STEPS, QC_CHECKS, fichaTecnica, trabajoPorPie, type TrabajoPie } from "@/lib/taller";
@@ -63,12 +63,12 @@ export default async function HojaPage({ params }: { params: Promise<{ id: strin
   });
   if (!kase) notFound();
   const k = kase!;
-  await audit(user.id, "case.hoja", `case:${k.number}`);
+  await audit(user.id, "case.hoja", `case:${k.number}`, k.patientId);
 
   const q = k.capture?.questionnaire as Questionnaire | null;
   const e = k.capture?.physicalExam as Exam | null;
   const ficha = fichaTecnica(q, e, k);
-  const proyecto = nombreProyectoRevoScan(k.patient.name, k.patient.owner.phone, k.number);
+  const proyecto = nombreProyectoRevoScan(k.patient.name, titularDe(k.patient).phone, k.number);
   const talla = q?.tallaCalzado ? `T ${q.tallaCalzado}` : "";
   const [izq, dcho] = trabajoPorPie(k.prescription, e, q);
 

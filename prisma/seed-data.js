@@ -252,7 +252,7 @@ async function seedDemo(prisma) {
     },
   });
   const perePat = await prisma.patient.create({
-    data: { ownerId: pere.id, name: "Pere Vidal", birthDate: new Date("1980-04-12"), consents: consent("web") },
+    data: { status: "ACEPTADO", ownerId: pere.id, name: "Pere Vidal", birthDate: new Date("1980-04-12"), consents: consent("web") },
   });
   const caso1 = await prisma.case.create({
     data: { patientId: perePat.id, clinicId: c2.id, state: "EN_PRESCRIPCION", flow: "A" },
@@ -363,7 +363,7 @@ async function seedDemo(prisma) {
     },
   });
   const jordiPat = await prisma.patient.create({
-    data: { ownerId: jordi.id, name: "Jordi Ferrer", birthDate: new Date("1975-09-02"), consents: consent("web") },
+    data: { status: "ACEPTADO", ownerId: jordi.id, name: "Jordi Ferrer", birthDate: new Date("1975-09-02"), consents: consent("web") },
   });
   const caso2 = await prisma.case.create({
     data: {
@@ -518,7 +518,7 @@ async function seedDemo(prisma) {
       },
     });
     const pat = await prisma.patient.create({
-      data: { ownerId: owner.id, name: o.nombre, birthDate: new Date(o.nac), consents: consent("web") },
+      data: { status: "ACEPTADO", ownerId: owner.id, name: o.nombre, birthDate: new Date(o.nac), consents: consent("web") },
     });
     const kase = await prisma.case.create({
       data: {
@@ -802,7 +802,7 @@ async function seedDemo(prisma) {
     },
   });
   const martaPat = await prisma.patient.create({
-    data: { ownerId: marta.id, name: "Marta Roca", birthDate: new Date("1990-02-20"), consents: consent("web") },
+    data: { status: "ACEPTADO", ownerId: marta.id, name: "Marta Roca", birthDate: new Date("1990-02-20"), consents: consent("web") },
   });
   const lunes = nextMondayMadrid();
   const citaInicio = madrid(lunes.y, lunes.m, lunes.d, 9, 45);

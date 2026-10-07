@@ -2,13 +2,13 @@
 
 // Acciones de prescripción (prescriptor de clínica o recetador central):
 // reparto automático, firma, contacto, repetición, no-prescripción y borrador.
+import { exigirTratamientoPermitido } from "@/lib/alta";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { requireRole } from "@/lib/auth";
-import { audit, notify, notifyEmail, pushEvent, releaseStale } from "@/lib/cases";
+import { audit, pushEvent, releaseStale, avisarPaciente } from "@/lib/cases";
 import { PAY_LINK_DAYS } from "@/lib/states";
 import { PRICE_CENTS } from "@/lib/format";
-import type { Case } from "@prisma/client";
 import { CENTRAL_WHERE, REVISION_PREFIJO, esCentral } from "@/lib/rx-route";
 
 function fail(path: string, msg: string): never {
@@ -25,6 +25,7 @@ async function requirePrescriberFor(caseId: string) {
     include: { clinic: true, patient: true, prescription: true },
   });
   if (!kase) throw new Error("Caso no encontrado");
+  await exigirTratamientoPermitido(kase.patientId);
   if (u.role === "RECETADOR") {
     if (!esCentral(kase)) throw new Error("Este caso lo receta el prescriptor de su clínica");
   } else {
@@ -64,10 +65,6 @@ export async function openCaseAction(formData: FormData) {
   redirect(`/caso/${caseId}`);
 }
 
-async function ownerPhone(kase: Case & { patient: { ownerId: string } }) {
-  const owner = await prisma.user.findUnique({ where: { id: kase.patient.ownerId } });
-  return owner?.phone ?? null;
-}
 
 // Firma de la prescripción → documento clínico + enlace de pago (30 días).
 export async function signRxAction(formData: FormData) {
@@ -113,11 +110,9 @@ export async function signRxAction(formData: FormData) {
     }),
   ]);
   await pushEvent(caseId, `Prescripción firmada por ${u.name} (col. ${profile.collegiateNum})`, u.name);
-  await audit(u.id, "prescription.sign", `case:${kase.number}`);
-  const owner = await prisma.user.findUnique({ where: { id: kase.patient.ownerId } });
+  await audit(u.id, "prescription.sign", `case:${kase.number}`, kase.patientId);
   const nota = "Tu prescripción está lista. Entra en tu panel para verla y completar el pago (199,99 €, enlace válido 30 días).";
-  if (owner?.phone) await notify(owner.phone, "rx_lista_pago", { nota });
-  if (owner?.email) await notifyEmail(owner.email, "rx_lista_pago", { nombre: owner.name, nota, enlace: "/panel" });
+  await avisarPaciente(kase.patientId, "rx_lista_pago", { caseId, nota, enlace: "/panel" });
   redirect("/panel?ok=" + encodeURIComponent(`Caso #${kase.number} prescrito y enviado a pago`));
 }
 
@@ -133,11 +128,10 @@ export async function contactAction(formData: FormData) {
     data: { state: "EN_CONTACTO", assignedTo: u.id, openBy: null, openAt: null },
   });
   await pushEvent(caseId, `Contacto con el paciente solicitado: ${note}`, u.name);
-  const phone = await ownerPhone(kase);
-  if (phone)
-    await notify(phone, "propuesta_llamada", {
-      nota: `${u.name.split("(")[0].trim()} está valorando tu estudio y quiere hacerte unas preguntas. Te llamará en breve.`,
-    });
+  await avisarPaciente(kase.patientId, "propuesta_llamada", {
+    caseId,
+    nota: `${u.name.split("(")[0].trim()} está valorando tu estudio y quiere hacerte unas preguntas. Te llamará en breve.`,
+  });
   redirect("/panel?ok=" + encodeURIComponent(`Caso #${kase.number} asignado a ti hasta resolverlo`));
 }
 
@@ -159,11 +153,10 @@ export async function repeatAction(formData: FormData) {
   const capture = await prisma.capture.findUnique({ where: { caseId } });
   if (capture) await prisma.capture.update({ where: { caseId }, data: { completedAt: null } });
   await pushEvent(caseId, `Devuelto a clínica — repetir: ${what}${why ? ` (${why})` : ""}`, u.name);
-  const phone = await ownerPhone(kase);
-  if (phone)
-    await notify(phone, "repetir_prueba", {
-      nota: "Necesitamos completar una prueba de tu estudio; tu clínica te contactará para una cita breve, sin coste.",
-    });
+  await avisarPaciente(kase.patientId, "repetir_prueba", {
+    caseId,
+    nota: "Necesitamos completar una prueba de tu estudio; tu clínica te contactará para una cita breve, sin coste.",
+  });
   redirect("/panel?ok=" + encodeURIComponent(`Caso #${kase.number} devuelto a la clínica`));
 }
 
@@ -178,11 +171,10 @@ export async function noPrescribeAction(formData: FormData) {
     data: { state: "NO_PRESCRITO", openBy: null, openAt: null },
   });
   await pushEvent(caseId, `No prescrito.${reason ? ` Recomendación: ${reason}` : ""}`, u.name);
-  const phone = await ownerPhone(kase);
-  if (phone)
-    await notify(phone, "no_prescrito", {
-      nota: `Hemos valorado tu estudio con detalle y el tratamiento con plantillas no está indicado; no se te cobrará nada.${reason ? ` Nuestra recomendación: ${reason}` : ""}`,
-    });
+  await avisarPaciente(kase.patientId, "no_prescrito", {
+    caseId,
+    nota: `Hemos valorado tu estudio con detalle y el tratamiento con plantillas no está indicado; no se te cobrará nada.${reason ? ` Nuestra recomendación: ${reason}` : ""}`,
+  });
   redirect("/panel?ok=" + encodeURIComponent(`Caso #${kase.number} cerrado sin prescripción`));
 }
 
@@ -222,6 +214,6 @@ export async function reviewBackAction(formData: FormData) {
     },
   });
   await pushEvent(caseId, `Segunda opinión devuelta a la clínica para que firme: ${review}`, u.name);
-  await audit(u.id, "prescription.review", `case:${kase.number}`);
+  await audit(u.id, "prescription.review", `case:${kase.number}`, kase.patientId);
   redirect("/panel?ok=" + encodeURIComponent(`Segunda opinión del caso #${kase.number} devuelta a la clínica`));
 }

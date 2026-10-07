@@ -1,3 +1,4 @@
+import { titularDe } from "@/lib/cases";
 import { handoverAction } from "@/app/(auth)/actions";
 import { Flash } from "@/components/ui";
 import { verifyHandoverToken } from "@/lib/auth";
@@ -33,7 +34,7 @@ export default async function MayoriaPage({
         <form className="card" action={handoverAction}>
           <p className="muted">
             Hola, <b>{patient!.name}</b>. Has cumplido {EDAD_MAYORIA_SALUD} años: desde ahora decides tú sobre tu
-            tratamiento. Hasta hoy lo gestionaba <b>{patient!.owner.name}</b>; en cuanto confirmes tus datos,
+            tratamiento. Hasta hoy lo gestionaba <b>{titularDe(patient!).name}</b>; en cuanto confirmes tus datos,
             solo tú podrás acceder a tu expediente.
           </p>
           <input type="hidden" name="token" value={token} />
@@ -44,7 +45,7 @@ export default async function MayoriaPage({
           <label>Crea tu contraseña (mínimo 8 caracteres)</label>
           <input name="password" type="password" minLength={8} autoComplete="new-password" required />
           <div className="tiny" style={{ marginTop: 8 }}>
-            Tu email y tu móvil deben ser distintos de los de {patient!.owner.name}. Podrás cambiarlos después
+            Tu email y tu móvil deben ser distintos de los de {titularDe(patient!).name}. Podrás cambiarlos después
             desde tu panel.
           </div>
           <div className="sp" />

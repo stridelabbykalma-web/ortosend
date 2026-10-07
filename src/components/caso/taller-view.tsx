@@ -3,7 +3,7 @@ import type { Capture, Case, Clinic, Incident, MediaAsset, Patient, Payment, Pre
 import { CheckLine } from "@/components/ui";
 import { FotoCalidad } from "@/components/caso/foto-calidad";
 import { CopiarTexto } from "@/components/caso/copiar-texto";
-import { checklistOf } from "@/lib/cases";
+import { checklistOf, titularDe } from "@/lib/cases";
 import { PRICE_LABEL, SCAN_KIND, fmtd } from "@/lib/format";
 import { nombreProyectoRevoScan } from "@/lib/scan";
 import { PROD_STEPS, QC_CHECKS, fichaTecnica, prodStepIndex, slaDe, trabajoPorPie } from "@/lib/taller";
@@ -23,7 +23,7 @@ import {
 } from "@/app/panel/taller-actions";
 
 type CaseTaller = Case & {
-  patient: Patient & { owner: User };
+  patient: Patient & { owner: User | null };
   clinic: Clinic;
   capture: (Capture & { media: MediaAsset[] }) | null;
   prescription: Prescription | null;
@@ -57,7 +57,7 @@ export function TallerView({ kase }: { kase: CaseTaller }) {
   const scanMarcado = kase.capture?.media.find((m) => m.kind === SCAN_KIND && m.confirmedAt);
   const proyecto =
     (scanMarcado?.meta as { proyecto?: string } | null)?.proyecto ??
-    nombreProyectoRevoScan(kase.patient.name, kase.patient.owner.phone, kase.number);
+    nombreProyectoRevoScan(kase.patient.name, titularDe(kase.patient).phone, kase.number);
   const sla = slaDe(kase);
   const rehacer = kase.incidents.filter((i) => i.type === "REHACER_DEFECTO" && !i.closedAt);
   const rx = kase.prescription;

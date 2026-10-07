@@ -2,6 +2,7 @@
 // Se guarda como captura del caso (kind foto_calidad) y el caso apunta a ella;
 // sin esta foto no se aprueba calidad. Se sirve por /api/media/[id] con el
 // mismo control de acceso que el resto de capturas.
+import { tratamientoPermitido } from "@/lib/alta";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireRole } from "@/lib/auth";
@@ -35,6 +36,9 @@ export async function POST(req: Request) {
   if (!kase) return NextResponse.json({ error: "Caso no encontrado" }, { status: 404 });
   if (kase.state !== "CALIDAD")
     return NextResponse.json({ error: "El caso no está en control de calidad" }, { status: 409 });
+  const paciente = await prisma.patient.findUnique({ where: { id: kase.patientId }, select: { status: true } });
+  if (!paciente || !tratamientoPermitido(paciente))
+    return NextResponse.json({ error: "El paciente ha retirado su consentimiento: fabricación detenida" }, { status: 409 });
 
   const capture = kase.capture ?? (await prisma.capture.create({ data: { caseId } }));
   const bytes = new Uint8Array(await file.arrayBuffer());
@@ -58,6 +62,6 @@ export async function POST(req: Request) {
   });
 
   await pushEvent(caseId, "Foto del par adjuntada en control de calidad", user.name);
-  await audit(user.id, "media.upload", `case:${kase.number}:${QC_KIND}`);
+  await audit(user.id, "media.upload", `case:${kase.number}:${QC_KIND}`, kase.patientId);
   return NextResponse.json({ ok: true, id: asset.id, url: asset.url });
 }
