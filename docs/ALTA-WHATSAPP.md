@@ -303,3 +303,20 @@ y todos los mensajes son libres: no hace falta la plantilla de bienvenida aproba
 
 La web responde siempre a «empezar» con el ref vigente para que ManyChat lo guarde y lo usen los
 botones de los documentos.
+
+## 12. Dos vías de entrada
+
+1. **Desde la web**: el paciente reserva y se registra él mismo. Marca las mismas 5 casillas
+   (privacidad, datos de salud, tratamiento, condiciones obligatorias; marketing opcional), cada
+   una con enlace al texto vigente (`/legal/documento/<slug>`). Cada documento se guarda en
+   `consent_log` con canal `web_registro` y la versión exacta del texto. Llega con perfil y
+   consentimientos hechos.
+2. **Alta del profesional**: pre-alta en el panel y consentimientos por WhatsApp (resto de este documento).
+
+Reglas comunes:
+- La cuenta se identifica por **email**; el móvil solo sirve para avisos y **puede repetirse** entre
+  cuentas (pareja, familia). Ya no es único en `User`. Entrar con móvil solo funciona si es de una única cuenta.
+- El pre-alta rechaza duplicados: mismo email, o mismo nombre + apellidos + fecha de nacimiento que un
+  paciente pendiente/aceptado (p. ej. ya registrado en la web).
+- Un móvil solo puede tener **un alta por WhatsApp en curso** a la vez (ManyChat guarda un único `ref` por contacto).
+- En `/acceso`, un adulto con móvil compartido recibe su propia cuenta; un tutor con varios hijos reutiliza la suya.

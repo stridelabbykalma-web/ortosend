@@ -142,7 +142,9 @@ export async function crearCuentaConCodigo(dniRaw: string, telefonoRaw: string, 
   const used = await prisma.accessCode.updateMany({ where: { id: ac.id, usedAt: null }, data: { usedAt: new Date() } });
   if (!used.count) return generico;
 
-  const existente = await prisma.user.findUnique({ where: { phone: telefono } });
+  // Solo se reutiliza una cuenta de tutor (madre con dos hijos) si ese móvil es de una única cuenta.
+  const cuentas = lista[0].isMinor ? await prisma.user.findMany({ where: { phone: telefono }, take: 2 }) : [];
+  const existente = cuentas.length === 1 ? cuentas[0] : null;
   if (existente) {
     // Ya tiene cuenta (p. ej. una madre con dos hijos): se le añaden los pacientes.
     // Nunca se cambia su contraseña desde aquí: entra con la que tiene.

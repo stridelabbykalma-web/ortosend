@@ -30,7 +30,7 @@ export type NuevoRegistro = {
   actorUserId?: string | null;
   ip?: string | null;
   userAgent?: string | null;
-  channel: "whatsapp" | "web_gestion" | "web_perfil" | "panel";
+  channel: "whatsapp" | "web_gestion" | "web_perfil" | "web_registro" | "panel";
   invitationId?: string | null;
   externalRef?: string | null;
 };

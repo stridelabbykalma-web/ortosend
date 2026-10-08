@@ -26,7 +26,7 @@ enum Role {
 model User {
   id                     String                  @id @default(cuid())
   email                  String?                 @unique
-  phone                  String?                 @unique
+  phone                  String?
   passwordHash           String? // null hasta activar cuenta (invitación Flujo B)
   role                   Role
   name                   String
@@ -46,6 +46,8 @@ model User {
   availabilityExceptions AvailabilityException[]
   appointments           Appointment[]
   calendarToken          String?                 @unique // suscripción iCal privada (/api/ical/<token>)
+
+  @@index([phone])
 }
 
 // Ficha obligatoria del profesional (las cuentas las crea Ortosend)

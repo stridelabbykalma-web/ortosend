@@ -88,6 +88,12 @@ export async function crearPreAlta(pro: Profesional, d: DatosPreAlta): Promise<R
     if (tutorEmail && !tutorEmail.includes("@")) return { ok: false, error: "Email del tutor no válido" };
   }
   const toPhone = menor ? tutorTelefono : telefono;
+  const duplicado = await buscarDuplicado(d, birth, email);
+  if (duplicado)
+    return {
+      ok: false,
+      error: `${nombreCompleto(duplicado)} ya tiene perfil en Ortosend${duplicado.status === "ACEPTADO" ? " con los consentimientos aceptados" : ""}. No hace falta darle de alta otra vez.`,
+    };
   // Un móvil solo puede tener un alta en curso: ManyChat guarda un único «ref» por contacto.
   const enCurso = await invitacionActivaDelTelefono(toPhone);
   if (enCurso)
@@ -115,6 +121,30 @@ export async function crearPreAlta(pro: Profesional, d: DatosPreAlta): Promise<R
   await auditar(pro.id, "patient.prealta", patient.id, { menor, destinatario: menor ? "tutor" : "paciente" });
   const envio = await enviarInvitacion(patient.id, pro.id);
   return { ok: true, patient: (await prisma.patient.findUniqueOrThrow({ where: { id: patient.id } })), envio };
+}
+
+// El móvil puede compartirse entre pacientes (pareja, familia): la identidad es el email
+// o nombre + fecha de nacimiento, nunca el teléfono.
+async function buscarDuplicado(d: DatosPreAlta, birth: Date, email: string | null) {
+  const completo = `${d.nombre} ${d.apellidos}`;
+  const porEmail = email
+    ? [{ email }, { owner: { is: { email } } }]
+    : [];
+  return prisma.patient.findFirst({
+    where: {
+      status: { in: ["PENDIENTE", "ACEPTADO"] },
+      OR: [
+        ...porEmail,
+        {
+          birthDate: birth,
+          OR: [
+            { name: { equals: d.nombre, mode: "insensitive" }, lastName: { equals: d.apellidos, mode: "insensitive" } },
+            { name: { equals: completo, mode: "insensitive" } },
+          ],
+        },
+      ],
+    },
+  });
 }
 
 async function invitacionActivaDelTelefono(toPhone: string, salvoPaciente?: string) {

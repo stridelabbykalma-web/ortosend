@@ -33,9 +33,10 @@ let pro: { id: string; name: string; clinicId: string | null };
 let tel = 600100000;
 const nuevoTel = () => String(++tel);
 
+let n = 0;
 const datos = (over: Partial<DatosPreAlta> = {}): DatosPreAlta => ({
   nombre: "Lucía",
-  apellidos: "Martín Soler",
+  apellidos: `Martín Soler ${++n}`,
   telefono: nuevoTel(),
   email: "",
   fechaNacimiento: "1988-05-10",
@@ -347,8 +348,18 @@ describe("5. acceso con DNI + móvil + código", () => {
     expect((await prisma.patient.findUniqueOrThrow({ where: { id: p.id } })).ownerId).toBeNull();
   });
 
-  it("si el móvil ya tiene cuenta, añade el paciente sin tocar la contraseña", async () => {
+  it("un adulto con móvil compartido recibe su propia cuenta", async () => {
+    const p = await pacienteAceptadoConAcceso("Z1234567R");
+    const otra = await prisma.user.create({ data: { role: "CLIENTE", name: "Pareja", phone: p.phone, passwordHash: "hash-original" } });
+    await solicitarCodigo("Z1234567R", p.phone!);
+    const r = await crearCuentaConCodigo("Z1234567R", p.phone!, mc.campo(CAMPOS.codigo)!, "clave-propia-larga");
+    expect(r).toMatchObject({ ok: true, nueva: true });
+    if (r.ok) expect(r.userId).not.toBe(otra.id);
+  });
+
+  it("si el móvil ya tiene cuenta de tutor, añade al menor sin tocar la contraseña", async () => {
     const p = await pacienteAceptadoConAcceso("Y1234567X");
+    await prisma.patient.update({ where: { id: p.id }, data: { isMinor: true, tutorName: "Tutor", tutorPhone: p.phone, tutorDni: "Y1234567X" } });
     const existente = await prisma.user.create({ data: { role: "CLIENTE", name: "Ya existía", phone: p.phone, passwordHash: "hash-original" } });
     await solicitarCodigo("Y1234567X", p.phone!);
     const r = await crearCuentaConCodigo("Y1234567X", p.phone!, mc.campo(CAMPOS.codigo)!, "otra-clave-larga");
@@ -489,5 +500,28 @@ describe("8. empezar escribiendo ALTA (sin ref, por el móvil)", () => {
     expect(r.ok).toBe(true);
     expect((await procesarWebhook({ ref: "", telefono: `+34${menorTel}`, accion: "empezar" })).estado).toBe("invalido");
     expect((await procesarWebhook({ ref: "", telefono: `+34${tutorTel}`, accion: "empezar" })).estado).toBe("ok");
+  });
+});
+
+describe("dos vías de entrada: web y profesional", () => {
+  it("no duplica a un paciente que ya se registró en la web (mismo email)", async () => {
+    const owner = await prisma.user.create({ data: { role: "CLIENTE", name: "Pedro Web", phone: nuevoTel(), email: "pedro.web@test.com" } });
+    await prisma.patient.create({ data: { ownerId: owner.id, name: "Pedro Web", status: "ACEPTADO", birthDate: new Date("1980-01-01") } });
+    const r = await crearPreAlta(pro, datos({ nombre: "Pedro", apellidos: "Web", email: "pedro.web@test.com" }));
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toMatch(/ya tiene perfil/);
+  });
+
+  it("no duplica por nombre y fecha de nacimiento", async () => {
+    const owner = await prisma.user.create({ data: { role: "CLIENTE", name: "Rosa Web", phone: nuevoTel(), email: "rosa.web@test.com" } });
+    await prisma.patient.create({ data: { ownerId: owner.id, name: "Rosa Web Gil", status: "ACEPTADO", birthDate: new Date("1975-03-02") } });
+    const r = await crearPreAlta(pro, datos({ nombre: "rosa", apellidos: "web gil", fechaNacimiento: "1975-03-02" }));
+    expect(r.ok).toBe(false);
+  });
+
+  it("un móvil puede compartirse entre cuentas distintas", async () => {
+    const phone = nuevoTel();
+    await prisma.user.create({ data: { role: "CLIENTE", name: "Marido", phone, email: "marido@test.com" } });
+    await expect(prisma.user.create({ data: { role: "CLIENTE", name: "Mujer", phone, email: "mujer@test.com" } })).resolves.toBeTruthy();
   });
 });
