@@ -54,3 +54,25 @@ def test_linea_del_arco_dentro_del_pie(plano):
     assert len(pts) > 20
     xs = [p[0] for p in pts]
     assert min(xs) < 30 and max(xs) > 115  # cruza el pie de lado a lado
+
+
+def test_arco_pasa_por_delante_de_las_5_cabezas(plano):
+    r, X, Y, z, mascara = plano
+    refs = Referencias(dict(REFS.puntos, mtt2=(65.0, 238.0), mtt3=(80.0, 236.0), mtt4=(93.0, 226.0)))
+    rec = Recorte(adelanto=3.0)
+    z2 = aplicar(z, 3.0, refs, rec, mascara, X, Y, 0.5)
+    e = refs.sistema().eje
+    for k in ("mtt1", "mtt2", "mtt3", "mtt4", "mtt5"):
+        p = np.array(refs.puntos[k])
+        for d, esperado in ((1.5, 25.0), (5.0, 3.0)):  # 1,5 mm delante queda molde; 5 mm ya no
+            x, y = p + d * e
+            j, i = int(round(y / 0.5)), int(round(x / 0.5))
+            assert z2[j, i] == pytest.approx(esperado, abs=0.5), (k, d)
+
+
+def test_2_cabezas_y_5_cabezas_con_curvatura_cero_son_rectos(plano):
+    r, X, Y, z, mascara = plano
+    refs5 = Referencias(dict(REFS.puntos, mtt2=(65.0, 238.0), mtt3=(80.0, 236.0)))
+    a = aplicar(z, 3.0, REFS, Recorte(curvatura=0.0), mascara, X, Y, 0.5)
+    b = aplicar(z, 3.0, refs5, Recorte(curvatura=0.0), mascara, X, Y, 0.5)
+    assert np.allclose(a, b)

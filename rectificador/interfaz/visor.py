@@ -10,7 +10,8 @@ from ortomolde.campo import Campo
 from ortomolde.pies import Pie
 from ortomolde.referencias import NOMBRES, ORDEN
 
-COLORES = {"mtt1": "#e4572e", "mtt5": "#2e86de", "talon": "#2ecc71"}
+COLORES = {"mtt1": "#e4572e", "mtt2": "#f39c12", "mtt3": "#d4ac0d", "mtt4": "#8e44ad",
+           "mtt5": "#2e86de", "talon": "#2ecc71"}
 COLOR_EJE = "#f1c40f"
 COLOR_METATARSAL = "#ff9f43"
 COLOR_ARCO = "#00d2d3"
@@ -97,9 +98,11 @@ class Visor(QtInteractor):
             if k in pie.referencias.puntos:
                 x, y = pie.referencias.puntos[k]
                 z = float(self._z(x, y))
-                poner(k, pv.Sphere(radius=3.0, center=(x, y, z + 1.5)), color=COLORES[k])
+                grande = k in ("mtt1", "mtt5", "talon")
+                poner(k, pv.Sphere(radius=3.0 if grande else 2.3, center=(x, y, z + 1.5)), color=COLORES[k])
                 actor = f"{clave}_{k}_texto"
-                self.add_point_labels([[x, y, z + 6]], [NOMBRES[k]], name=actor, font_size=12,
+                texto = NOMBRES[k] if grande else k[-1] + ".º"
+                self.add_point_labels([[x, y, z + 6]], [texto], name=actor, font_size=12 if grande else 10,
                                       text_color="white", shape_color=COLORES[k], shape_opacity=0.8,
                                       show_points=False, always_visible=True, render=False)
                 nombres.append(actor)

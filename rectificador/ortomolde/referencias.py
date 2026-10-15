@@ -1,7 +1,8 @@
 """Referencias anatómicas de un pie y el sistema de coordenadas que se deriva de ellas.
 
-El usuario marca 3 puntos sobre el molde: cabeza del 1.er MTT, cabeza del 5.º MTT y talón.
-De ahí salen:
+El usuario marca sobre el molde: cabeza del 1.er MTT, cabeza del 5.º MTT y talón
+(obligatorias) y, si quiere, las cabezas del 2.º, 3.º y 4.º MTT (el recorte en arco pasa
+entonces por delante de todas). De ahí salen:
   - eje del pie: del talón al punto medio de las dos cabezas;
   - lado interno (medial): el lado del 1.er MTT;
   - línea metatarsal: de la 1.ª a la 5.ª cabeza;
@@ -19,8 +20,15 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-NOMBRES = {"mtt1": "Cabeza 1.er MTT", "mtt5": "Cabeza 5.º MTT", "talon": "Talón"}
-ORDEN = ("mtt1", "mtt5", "talon")
+NOMBRES = {
+    "mtt1": "Cabeza 1.er MTT", "mtt2": "Cabeza 2.º MTT", "mtt3": "Cabeza 3.er MTT",
+    "mtt4": "Cabeza 4.º MTT", "mtt5": "Cabeza 5.º MTT", "talon": "Talón",
+}
+OBLIGATORIAS = ("mtt1", "mtt5", "talon")
+OPCIONALES = ("mtt2", "mtt3", "mtt4")
+ORDEN = ("mtt1", "mtt2", "mtt3", "mtt4", "mtt5", "talon")  # orden en pantalla
+ORDEN_CLIC = OBLIGATORIAS + OPCIONALES  # orden al marcar con clic: primero las obligatorias
+CABEZAS = ("mtt1", "mtt2", "mtt3", "mtt4", "mtt5")
 
 
 @dataclass
@@ -29,11 +37,12 @@ class Referencias:
 
     @property
     def completas(self) -> bool:
-        return all(k in self.puntos for k in ORDEN)
+        """Están las obligatorias (1.er MTT, 5.º MTT y talón)."""
+        return all(k in self.puntos for k in OBLIGATORIAS)
 
     def siguiente(self) -> str | None:
         """La próxima referencia que falta por marcar."""
-        return next((k for k in ORDEN if k not in self.puntos), None)
+        return next((k for k in ORDEN_CLIC if k not in self.puntos), None)
 
     def a_dict(self) -> dict:
         return {k: [round(float(v[0]), 3), round(float(v[1]), 3)] for k, v in self.puntos.items()}
@@ -119,35 +128,73 @@ def geometria(r: Referencias, mascara: np.ndarray, dx: float, dy: float, cfg: di
 
 def proponer(mascara: np.ndarray, lado: str, dx: float, dy: float, cfg: dict,
              altura: np.ndarray | None = None) -> Referencias:
-    """Referencias APROXIMADAS a partir de la forma del pie (dedos hacia +Y, planta arriba),
-    según proporciones típicas. Sirven de punto de partida: el usuario las corrige.
+    """Referencias APROXIMADAS para empezar (el usuario las corrige). Molde con la planta
+    hacia arriba y dedos hacia +Y.
 
-    Con `altura`, los bordes se miden en la parte alta de la planta (no al pie de la pared)."""
+    - Talón: centro del pie a `propuesta_talon` del largo.
+    - Cabezas metatarsales: se trazan 5 líneas a lo largo del antepié (repartidas de dentro
+      a fuera) y en cada una se busca dónde se hundió más el pie en la espuma (lo más alto
+      del molde) dentro de la franja de las cabezas. Así se respeta la fórmula metatarsal
+      de cada paciente. Si no hay altura o no se ve un máximo claro, se usan proporciones típicas.
+    """
     jj, ii = np.nonzero(mascara)
-    j0, j1 = jj.min(), jj.max()
-    largo = j1 - j0
-
-    def fila(frac):
-        return int(round(j0 + frac * largo))
-
-    def bordes(j):
-        fila_m = mascara[j]
-        if altura is not None:
-            h = np.where(fila_m, altura[j], -np.inf)
-            base = altura[j][fila_m].min()
-            fila_m = fila_m & (h > base + 0.7 * (h.max() - base))
-        xs = np.nonzero(fila_m)[0]
-        return xs.min() * dx, xs.max() * dx
-
+    pts = np.column_stack([ii * dx, jj * dy])
+    centro = pts.mean(axis=0)
+    # Eje largo del pie (componente principal), hacia los dedos (+Y).
+    _, _, vt = np.linalg.svd(pts - centro, full_matrices=False)
+    eje = vt[0] if vt[0][1] > 0 else -vt[0]
+    perp = np.array([-eje[1], eje[0]])
     # Pie izquierdo con la planta hacia arriba: lado interno hacia -X.
-    interno_menor = lado == "izquierdo"
-    jt = fila(cfg["propuesta_talon"])
-    a, b = bordes(jt)
-    talon = ((a + b) / 2, jt * dy)
-    j1m = fila(cfg["propuesta_mtt1"])
-    a, b = bordes(j1m)
-    x1 = a + cfg["propuesta_mtt1_borde"] if interno_menor else b - cfg["propuesta_mtt1_borde"]
-    j5m = fila(cfg["propuesta_mtt5"])
-    a, b = bordes(j5m)
-    x5 = b - cfg["propuesta_mtt5_borde"] if interno_menor else a + cfg["propuesta_mtt5_borde"]
-    return Referencias({"mtt1": (float(x1), j1m * dy), "mtt5": (float(x5), j5m * dy), "talon": talon})
+    medial = perp if (perp[0] < 0) == (lado == "izquierdo") else -perp
+    u = (pts - centro) @ eje
+    u0, largo = u.min(), u.max() - u.min()
+    sh = altura is not None
+    if sh:
+        from scipy import ndimage
+        alt = ndimage.gaussian_filter(altura, 3.0 / dx)
+
+    def valor(p):
+        i, j = int(round(p[0] / dx)), int(round(p[1] / dy))
+        if not (0 <= j < mascara.shape[0] and 0 <= i < mascara.shape[1]) or not mascara[j, i]:
+            return None
+        return alt[j, i] if sh else 1.0
+
+    def bordes(uf):
+        """Extremos interno y externo (v) de la parte alta de la planta a la altura uf."""
+        base = centro + (u0 + uf * largo) * eje
+        vs = np.arange(-90.0, 90.0, 0.5)
+        vals = [valor(base + v * medial) for v in vs]
+        ok = np.array([x is not None for x in vals])
+        h = np.array([x if x is not None else -np.inf for x in vals])
+        if sh and ok.any():
+            hmin = h[ok].min()
+            ok &= h > hmin + 0.7 * (h[ok].max() - hmin)
+        vv = vs[ok]
+        return base, vv.max(), vv.min()  # (punto del eje, v interno, v externo)
+
+    base, vi, ve = bordes(cfg["propuesta_talon"])
+    talon = base + medial * (vi + ve) / 2
+    puntos = {"talon": (float(talon[0]), float(talon[1]))}
+
+    # Proporciones típicas (de dentro a fuera) si no se encuentra un máximo claro.
+    tipicas = np.linspace(cfg["propuesta_mtt1"], cfg["propuesta_mtt5"], 5)
+    base, vi, ve = bordes((cfg["propuesta_mtt1"] + cfg["propuesta_mtt5"]) / 2)
+    ancho = vi - ve
+    fr_int = cfg["propuesta_mtt1_borde"] / ancho
+    fr_ext = 1 - cfg["propuesta_mtt5_borde"] / ancho
+    for k, nombre in enumerate(CABEZAS):
+        v = vi - (fr_int + (fr_ext - fr_int) * k / 4) * ancho
+        uf = tipicas[k]
+        if sh:
+            us = np.arange(0.55, 0.80, 0.0025)
+            perfil = []
+            for f in us:
+                x = valor(centro + (u0 + f * largo) * eje + v * medial)
+                perfil.append(-np.inf if x is None else x)
+            perfil = np.array(perfil)
+            m = int(np.argmax(perfil))
+            if 0 < m < len(us) - 1 and np.isfinite(perfil[m]):
+                uf = us[m]
+        p = centro + (u0 + uf * largo) * eje + v * medial
+        puntos[nombre] = (float(p[0]), float(p[1]))
+    return Referencias(puntos)

@@ -69,9 +69,12 @@ También acepta un recuadro ya limpio (lo detecta solo).
    cabeza del 1.er MTT, cabeza del 5.º MTT y talón. Con las tres aparecen el eje del pie (amarillo),
    la línea metatarsal (naranja), la zona del arco (turquesa) y el talón interno/externo.
    Para corregir una: pulsa su botón **Marcar** y vuelve a hacer clic derecho.
-   **Proponer referencias** las coloca de forma aproximada (proporciones típicas) para empezar.
+   Opcionalmente, las cabezas del 2.º, 3.º y 4.º MTT: si están, el recorte pasa por delante de las 5.
+   **Proponer referencias** las coloca todas para empezar: las cabezas donde el pie se hundió más en la
+   espuma en el antepié (respeta la fórmula metatarsal del paciente) y el talón por proporciones típicas.
 4. **Recorte en arco**: con las referencias puestas, el molde termina en un arco (línea roja) 3 mm por
-   delante de las cabezas metatarsales siguiendo la parábola metatarsal; por delante se vacía hasta la base.
+   delante de las cabezas metatarsales (de todas las marcadas) siguiendo la parábola metatarsal; por
+   delante se vacía hasta la base.
    Se puede adelantar/atrasar y cambiar la curvatura en el panel de cada pie.
 5. *Archivo → Exportar…* guarda los 3 archivos.
 

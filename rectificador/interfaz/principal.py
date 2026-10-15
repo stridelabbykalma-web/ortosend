@@ -22,12 +22,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from interfaz.visor import COLORES, Visor  # noqa: E402
 from ortomolde.exportar import exportar  # noqa: E402
 from ortomolde.proyecto import Proyecto  # noqa: E402
-from ortomolde.referencias import NOMBRES, ORDEN  # noqa: E402
+from ortomolde.referencias import NOMBRES, OPCIONALES, ORDEN  # noqa: E402
 
 AYUDA = (
     "<b>Marcar referencias:</b> clic <b>derecho</b> sobre el pie.<br>"
-    "Se marcan en orden: 1.er MTT, 5.º MTT y talón. Para corregir una, pulsa su botón y "
-    "vuelve a hacer clic derecho (o haz clic derecho cerca de ella cuando ya estén las tres).<br>"
+    "Se marcan en orden: 1.er MTT, 5.º MTT y talón (obligatorias) y luego, si quieres, "
+    "2.º, 3.º y 4.º MTT (el recorte pasa por delante de todas las cabezas). "
+    "Para corregir una, pulsa su botón y vuelve a hacer clic derecho. "
+    "<b>Proponer referencias</b> las coloca todas automáticamente para empezar.<br>"
     "Girar: arrastrar con el botón izquierdo · Desplazar: Mayús + arrastrar · Zoom: rueda."
 )
 
@@ -118,7 +120,7 @@ class PanelPie(QGroupBox):
                 xt, yt, zt = proyecto.a_taller(x, y, proyecto.altura_en(x, y))
                 texto = f"{NOMBRES[k]}: X {xt:.1f}  Y {yt:.1f}  Z {zt:.1f}"
             else:
-                texto = f"{NOMBRES[k]}: <i>sin marcar</i>"
+                texto = f"{NOMBRES[k]}: <i>{'opcional' if k in OPCIONALES else 'sin marcar'}</i>"
             self.etiquetas[k].setText(texto)
         for b in self.grupo.buttons():
             b.setChecked(b.property("referencia") == activa)

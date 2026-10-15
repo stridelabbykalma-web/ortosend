@@ -4,9 +4,12 @@ El molde termina en un arco que sigue la parábola metatarsal, `adelanto` mm por
 de las cabezas. Por delante del arco no queda nada: se vacía hasta la base plana
 (desaparecen los dedos).
 
-La parábola pasa por la 1.ª y la 5.ª cabeza y sobresale `flecha × curvatura` mm por
-delante de la línea que las une, con el punto más adelantado en `posicion_vertice`
-(0 = 1.er MTT, 1 = 5.º MTT). "Delante" se mide en la dirección del eje del pie.
+Si están marcadas las cabezas del 2.º, 3.º y 4.º MTT, el arco pasa por delante de TODAS
+(curva suave por las 5 cabezas, sin pasarse entre ellas). Si no, se supone una parábola
+que pasa por la 1.ª y la 5.ª y sobresale `flecha` mm por delante de la línea que las une,
+con el punto más adelantado en `posicion_vertice` (0 = 1.er MTT, 1 = 5.º MTT).
+`curvatura` escala lo que sobresale la curva (1 = tal cual, 0 = recto).
+"Delante" se mide en la dirección del eje del pie.
 """
 
 from __future__ import annotations
@@ -43,22 +46,52 @@ class Recorte:
 CAIDA_MAXIMA = 0.5  # mm hacia atrás por mm de lado, más allá de la 1.ª y la 5.ª cabeza
 
 
-def _avance(t: np.ndarray, r: Recorte, cuerda: float = 60.0) -> np.ndarray:
-    """Cuánto sobresale el arco por delante de la línea 1.º-5.º MTT en la posición t
-    (t = 0 en el 1.er MTT, t = 1 en el 5.º; `cuerda` = distancia entre ellos en mm).
+def _perfil(refs: Referencias, r: Recorte):
+    """Función t -> cuánto sobresale el arco (mm) por delante de la línea 1.º-5.º MTT,
+    sin contar el adelanto. t = 0 en el 1.er MTT y t = 1 en el 5.º."""
+    from scipy.interpolate import PchipInterpolator
 
-    Entre las cabezas es la parábola metatarsal. Fuera de ellas sigue en la misma dirección,
-    pero solo se echa hacia atrás suavemente (como mucho CAIDA_MAXIMA mm por mm)."""
-    t = np.asarray(t, float)
-    t0 = float(np.clip(r.posicion_vertice, 0.05, 0.95))
-    f = r.flecha * r.curvatura
-    a = np.where(t <= t0, (t - t0) / t0, (t - t0) / (1 - t0))
-    dentro = f * (1 - a * a)
-    # Pendientes en los extremos (mm por unidad de t), limitadas.
+    cuerda = _cuerda(refs)
+    medias = [k for k in ("mtt2", "mtt3", "mtt4") if k in refs.puntos]
+    if medias:
+        X = np.array([refs.puntos[k][0] for k in medias])
+        Y = np.array([refs.puntos[k][1] for k in medias])
+        tm, sm = coordenadas_arco(refs, X, Y)
+        t = np.concatenate([[0.0], tm, [1.0]])
+        sv = np.concatenate([[0.0], sm, [0.0]]) * r.curvatura
+        orden = np.argsort(t)
+        t, sv = t[orden], sv[orden]
+        t, idx = np.unique(t, return_index=True)
+        sv = sv[idx]
+        if len(t) >= 2 and t[0] <= 0.0 and t[-1] >= 1.0:
+            curva = PchipInterpolator(t, sv)
+            d0, d1 = float(curva(0.0, 1)), float(curva(1.0, 1))
+
+            def dentro(tt):
+                return curva(np.clip(tt, 0.0, 1.0))
+        else:
+            medias = []
+    if not medias:
+        t0 = float(np.clip(r.posicion_vertice, 0.05, 0.95))
+        f = r.flecha * r.curvatura
+        d0, d1 = 2 * f / t0, -2 * f / (1 - t0)
+
+        def dentro(tt):
+            a = np.where(tt <= t0, (tt - t0) / t0, (tt - t0) / (1 - t0))
+            return f * (1 - a * a)
+
+    # Fuera de las cabezas: sigue en la misma dirección, pero solo se echa hacia atrás
+    # suavemente (nunca hacia delante ni más de CAIDA_MAXIMA mm por mm).
     limite = CAIDA_MAXIMA * cuerda
-    pend0 = min(2 * f / t0, limite)
-    pend1 = min(2 * f / (1 - t0), limite)
-    return np.where(t < 0, pend0 * t, np.where(t > 1, -pend1 * (t - 1), dentro))
+    pend0 = float(np.clip(d0, 0.0, limite))
+    pend1 = float(np.clip(-d1, 0.0, limite))
+    s0, s1 = float(dentro(0.0)), float(dentro(1.0))
+
+    def avance(tt):
+        tt = np.asarray(tt, float)
+        return np.where(tt < 0, s0 + pend0 * tt, np.where(tt > 1, s1 - pend1 * (tt - 1), dentro(tt)))
+
+    return avance
 
 
 def _cuerda(refs: Referencias) -> float:
@@ -83,7 +116,7 @@ def coordenadas_arco(refs: Referencias, X: np.ndarray, Y: np.ndarray):
 def zona_recortada(refs: Referencias, r: Recorte, X: np.ndarray, Y: np.ndarray) -> np.ndarray:
     """True por delante del arco."""
     t, s = coordenadas_arco(refs, X, Y)
-    return s > _avance(t, r, _cuerda(refs)) + r.adelanto
+    return s > _perfil(refs, r)(t) + r.adelanto
 
 
 def linea_del_arco(refs: Referencias, r: Recorte, mascara: np.ndarray, dx: float, dy: float,
@@ -92,9 +125,10 @@ def linea_del_arco(refs: Referencias, r: Recorte, mascara: np.ndarray, dx: float
     m1 = np.array(refs.puntos["mtt1"], float)
     m5 = np.array(refs.puntos["mtt5"], float)
     e = refs.sistema().eje
+    avance = _perfil(refs, r)
     puntos = []
     for t in np.linspace(-0.8, 1.8, n):
-        p = m1 + t * (m5 - m1) + e * (_avance(np.array(t), r, _cuerda(refs)) + r.adelanto - atras)
+        p = m1 + t * (m5 - m1) + e * (float(avance(t)) + r.adelanto - atras)
         i, j = int(round(p[0] / dx)), int(round(p[1] / dy))
         if 0 <= j < mascara.shape[0] and 0 <= i < mascara.shape[1] and mascara[j, i]:
             puntos.append((float(p[0]), float(p[1])))
@@ -108,7 +142,7 @@ def aplicar(z: np.ndarray, fondo: float, refs: Referencias, r: Recorte, mascara:
         return z
     zona_pie = ndimage.binary_dilation(mascara, iterations=int(round(10 / paso)))
     t, s = coordenadas_arco(refs, X, Y)
-    limite = _avance(t, r, _cuerda(refs)) + r.adelanto
+    limite = _perfil(refs, r)(t) + r.adelanto
     # Fracción de material que queda: 1 detrás del arco, 0 delante, y una transición de una
     # celda justo en el arco para que el borde siga la curva exacta (sin escalera).
     queda = np.clip((limite - s) / paso + 0.5, 0.0, 1.0)
