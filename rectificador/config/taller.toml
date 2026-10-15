@@ -44,3 +44,8 @@ suavizado = 0.5
 tolerancia_plano = 0.6
 # En qué mitad del recuadro va el pie izquierdo: "izquierda" (X pequeñas) o "derecha".
 pie_izquierdo_en = "izquierda"
+
+[suavizado]
+# Quita impurezas del molde (hoyitos, bultitos, marcas) más pequeñas que unas 2 veces este
+# valor, sin cambiar la forma del pie. 0 = sin suavizar. Se puede cambiar en la ventana.
+radio = 3.0

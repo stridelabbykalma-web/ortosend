@@ -12,8 +12,9 @@ from pathlib import Path
 from PySide6.QtCore import QObject, QThread, Qt, Signal
 from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import (
-    QApplication, QButtonGroup, QFileDialog, QGroupBox, QHBoxLayout, QLabel, QMainWindow,
-    QMessageBox, QProgressDialog, QPushButton, QScrollArea, QSplitter, QVBoxLayout, QWidget,
+    QApplication, QButtonGroup, QCheckBox, QDoubleSpinBox, QFileDialog, QGroupBox, QHBoxLayout,
+    QLabel, QMainWindow, QMessageBox, QProgressDialog, QPushButton, QScrollArea, QSplitter,
+    QVBoxLayout, QWidget,
 )
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -115,6 +116,7 @@ class VentanaPrincipal(QMainWindow):
         self.boton_lados.setToolTip("Si el programa se ha equivocado de pie, pulsa aquí.")
         self.boton_lados.clicked.connect(self.intercambiar_lados)
         self.lay_panel.addWidget(self.boton_lados)
+        self.lay_panel.addWidget(self._grupo_molde())
         self.paneles = {c: PanelPie(self, c) for c in ("p0", "p1")}
         for p in self.paneles.values():
             self.lay_panel.addWidget(p)
@@ -135,6 +137,40 @@ class VentanaPrincipal(QMainWindow):
         self.setCentralWidget(division)
         self._menus()
         self._refrescar_panel()
+
+    def _grupo_molde(self) -> QGroupBox:
+        grupo = QGroupBox("Molde")
+        lay = QVBoxLayout(grupo)
+        fila = QHBoxLayout()
+        fila.addWidget(QLabel("Suavizado (quitar impurezas):"))
+        self.caja_suavizado = QDoubleSpinBox()
+        self.caja_suavizado.setRange(0.0, 8.0)
+        self.caja_suavizado.setSingleStep(0.5)
+        self.caja_suavizado.setDecimals(1)
+        self.caja_suavizado.setSuffix(" mm")
+        self.caja_suavizado.setToolTip(
+            "Quita hoyitos, bultitos y marcas más pequeños que unas 2 veces este valor,\n"
+            "sin cambiar la forma del pie. 0 = sin suavizar.")
+        self.caja_suavizado.valueChanged.connect(self.cambiar_suavizado)
+        fila.addWidget(self.caja_suavizado)
+        lay.addLayout(fila)
+        self.ver_original = QCheckBox("Ver el escaneo sin suavizar (para comparar)")
+        self.ver_original.toggled.connect(lambda _: self._mostrar_molde(reiniciar_camara=False))
+        lay.addWidget(self.ver_original)
+        return grupo
+
+    def cambiar_suavizado(self, valor: float):
+        if self.proyecto is None or abs(self.proyecto.suavizado - valor) < 1e-9:
+            return
+        self.proyecto.suavizado = float(valor)
+        self.ver_original.setChecked(False)
+        self._mostrar_molde(reiniciar_camara=False)
+        self._redibujar_pies()
+
+    def _mostrar_molde(self, reiniciar_camara: bool):
+        p = self.proyecto
+        campo = p.original if self.ver_original.isChecked() else p.calcular()
+        self.visor.mostrar_molde(campo, reiniciar_camara=reiniciar_camara)
 
     def _menus(self):
         archivo = self.menuBar().addMenu("&Archivo")
@@ -185,7 +221,10 @@ class VentanaPrincipal(QMainWindow):
             self._progreso.close()
         self.proyecto = proyecto
         self.activa = None
-        self.visor.mostrar_molde(proyecto.original)
+        self.caja_suavizado.blockSignals(True)
+        self.caja_suavizado.setValue(proyecto.suavizado)
+        self.caja_suavizado.blockSignals(False)
+        self._mostrar_molde(reiniciar_camara=True)
         self._redibujar_pies()
         self._refrescar_panel()
 
@@ -232,7 +271,7 @@ class VentanaPrincipal(QMainWindow):
         if not self.proyecto:
             return
         self.proyecto.intercambiar_lados()
-        self.visor.mostrar_molde(self.proyecto.original, reiniciar_camara=False)
+        self._mostrar_molde(reiniciar_camara=False)
         self._redibujar_pies()
         self._refrescar_panel()
 

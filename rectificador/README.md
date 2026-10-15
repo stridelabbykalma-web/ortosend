@@ -21,7 +21,11 @@ Es un programa independiente: no toca ni importa los otros scripts del taller, s
 6. Pone los dedos hacia +Y (la parte más ancha del pie, las cabezas metatarsales, queda hacia los dedos), propone cuál es el izquierdo y cuál el derecho (mirando el arco interno) y coloca cada
    pie centrado en su mitad del recuadro, sobre una base plana.
 
-Ajustes en `config/taller.toml`, sección `[limpieza]` (grosor de base, mitad del pie izquierdo, suavizado...).
+7. **Suavizado del molde**: quita hoyitos, bultitos y marcas del escáner o de la espuma (todo lo que se
+   notaría en la plantilla) sin cambiar la forma del pie. Por defecto 3 mm; se ajusta en la ventana
+   y se puede comparar con el escaneo sin suavizar. Nunca se pierde nada: se aplica cada vez sobre el original.
+
+Ajustes en `config/taller.toml`, secciones `[limpieza]` y `[suavizado]` (grosor de base, mitad del pie izquierdo, suavizado...).
 También acepta un recuadro ya limpio (lo detecta solo).
 
 ## Qué recibe y qué devuelve
