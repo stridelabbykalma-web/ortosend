@@ -2,7 +2,8 @@
 
 ## 1. Instalar Python (solo una vez)
 
-1. Entra en https://www.python.org/downloads/ y descarga Python (3.11 o más nuevo).
+1. Entra en https://www.python.org/downloads/ y descarga **Python 3.13** (también valen 3.11 y 3.12;
+   la versión más nueva puede no funcionar todavía con el visor 3D).
 2. Al instalar, **marca la casilla «Add Python to PATH»** (abajo del todo en la primera pantalla).
 3. Pulsa *Install Now* y espera a que termine.
 
@@ -34,6 +35,9 @@ Ratón en el visor: girar = arrastrar con el botón izquierdo · desplazar = May
 
 ## Si algo falla
 
-Manda:
-- una **captura de pantalla** de la ventana (o de la ventana negra si sale un error), y
-- el archivo **`instalacion.log`** de la carpeta `rectificador`, si el fallo fue al instalar.
+Manda una **foto o captura** de la ventana (si falla al instalar, la ventana negra enseña las
+últimas líneas del registro). El registro completo está en
+`%LOCALAPPDATA%\RectificadorOrtosend\instalacion.log` (pega esa ruta en la barra del Explorador).
+
+Lo que el programa instala va a `%LOCALAPPDATA%\RectificadorOrtosend` (fuera del Escritorio y de
+OneDrive). Para reinstalar desde cero, borra esa carpeta y vuelve a abrir `arrancar.bat`.
