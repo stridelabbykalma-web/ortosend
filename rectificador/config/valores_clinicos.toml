@@ -1,0 +1,42 @@
+# VALORES CLÍNICOS POR DEFECTO — PROVISIONALES, a revisar por el podólogo.
+# Todo en milímetros salvo que se indique otra cosa.
+# Las alturas se escriben pensando en la PLANTILLA (como se prescriben).
+# El programa se encarga de invertirlas al aplicarlas al molde.
+#
+# Estos valores solo se usan al AÑADIR una pieza nueva. Después cada pieza
+# guarda sus propios valores en la receta del paciente.
+
+[general]
+# Ancho de la transición suave en el borde de las piezas (sin escalones).
+suavizado_borde = 8.0
+
+[recorte_arco]
+# El molde termina en un arco este número de mm por delante de las cabezas metatarsales.
+adelanto = 3.0
+# 1.0 = sigue la parábola metatarsal tal cual; 0 = recta; >1 = más curvada.
+curvatura = 1.0
+
+[relleno_arco]
+# Cuánto se rebaja el arco de la plantilla (se añade material al molde).
+altura = 4.0
+largo = 70.0
+ancho = 35.0
+
+[oliva]
+# Elemento retrocapital: centrado entre 2.º y 3.er MTT, por detrás de la línea metatarsal.
+altura = 5.0
+largo = 25.0
+ancho = 20.0
+# Distancia del centro de la oliva por detrás de la línea metatarsal.
+retraso = 8.0
+
+[descarga_1mtt]
+# Hueco en la plantilla bajo la cabeza del 1.er MTT (se añade material al molde).
+profundidad = 3.0
+diametro = 20.0
+
+[skive_medial]
+# Cuña bajo el talón medial (se quita material del molde).
+# Se puede indicar en mm (altura en el borde medial) o en grados; el programa convierte.
+altura = 4.0
+largo = 45.0

@@ -1,0 +1,26 @@
+# Datos fijos del taller. Cambiar solo si cambia la máquina, la fresa o el bloque.
+# Unidades: milímetros.
+
+[recuadro]
+# Medidas del recuadro que entrega el script de limpieza (los dos pies juntos).
+# X = ancho (los dos pies lado a lado), Y = largo (dirección talón-dedos).
+# PENDIENTE: confirmar con un STL real cuál de los dos ejes mide 330.
+ancho_x = 288.0
+largo_y = 330.0
+# Altura disponible del bloque de espuma: nada puede quedar por encima.
+alto_z = 38.0
+
+[fresa]
+# Fresa de punta de bola. Ningún hueco puede tener un radio menor que este.
+diametro = 12.0
+
+[calculo]
+# Separación entre puntos de la rejilla de alturas. Más pequeño = más detalle y más lento.
+rejilla = 0.5
+
+[fusion]
+# Fusion 360 del taller: unidades en cm y como máximo 10.000 triángulos por malla.
+max_triangulos = 10000
+# Margen de seguridad por debajo del máximo.
+objetivo_triangulos = 9500
+escala = 0.1
