@@ -15,6 +15,11 @@ suavizado_borde = 8.0
 adelanto = 3.0
 # 1.0 = sigue la parábola metatarsal tal cual; 0 = recta; >1 = más curvada.
 curvatura = 1.0
+# Parábola metatarsal: cuánto sobresale (mm) el punto más adelantado (2.º-3.er MTT) por
+# delante de la línea 1.er-5.º MTT, con curvatura 1. PROVISIONAL.
+flecha = 10.0
+# Dónde está ese punto más adelantado, de 0 (1.er MTT) a 1 (5.º MTT). PROVISIONAL.
+posicion_vertice = 0.35
 
 [relleno_arco]
 # Cuánto se rebaja el arco de la plantilla (se añade material al molde).
@@ -42,6 +47,13 @@ altura = 4.0
 largo = 45.0
 
 [referencias]
+# Propuesta automática aproximada (luego se corrige con el clic). Fracciones del largo
+# del pie medidas desde el talón; distancias al borde en mm. PROVISIONAL.
+propuesta_talon = 0.12
+propuesta_mtt1 = 0.72
+propuesta_mtt5 = 0.63
+propuesta_mtt1_borde = 15.0
+propuesta_mtt5_borde = 12.0
 # Zona del arco, medida a lo largo del eje del pie desde el talón (0) hasta la línea
 # metatarsal (1). Solo el lado interno. PROVISIONAL.
 arco_inicio = 0.25

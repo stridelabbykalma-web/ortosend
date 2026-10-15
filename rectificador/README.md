@@ -47,7 +47,7 @@ También acepta un recuadro ya limpio (lo detecta solo).
 | 1 | Leer STL, campo de alturas, exportar los 3 archivos | ✅ hecho (probado con molde sintético) |
 | 1b | Limpieza del escaneo en bruto | ✅ hecho (probado con escaneo sintético; falta uno real) |
 | 2 | Ventana con visor 3D: pies, izquierdo/derecho, marcar 3 referencias con clic | ✅ hecho (probado con escaneo real) |
-| 3 | Recorte en arco por delante de las cabezas metatarsales | pendiente |
+| 3 | Recorte en arco por delante de las cabezas metatarsales | ✅ hecho (probado con escaneo real, referencias propuestas) |
 | 4 | Piezas: relleno de arco, oliva, descarga 1.er MTT, skive medial | pendiente |
 | 5 | Edición interactiva de piezas, deshacer/rehacer | pendiente |
 | 6 | Comprobación de la fresa Ø12, corte transversal, prueba con STL real | pendiente |
@@ -69,7 +69,11 @@ También acepta un recuadro ya limpio (lo detecta solo).
    cabeza del 1.er MTT, cabeza del 5.º MTT y talón. Con las tres aparecen el eje del pie (amarillo),
    la línea metatarsal (naranja), la zona del arco (turquesa) y el talón interno/externo.
    Para corregir una: pulsa su botón **Marcar** y vuelve a hacer clic derecho.
-4. *Archivo → Exportar…* guarda los 3 archivos.
+   **Proponer referencias** las coloca de forma aproximada (proporciones típicas) para empezar.
+4. **Recorte en arco**: con las referencias puestas, el molde termina en un arco (línea roja) 3 mm por
+   delante de las cabezas metatarsales siguiendo la parábola metatarsal; por delante se vacía hasta la base.
+   Se puede adelantar/atrasar y cambiar la curvatura en el panel de cada pie.
+5. *Archivo → Exportar…* guarda los 3 archivos.
 
 Ratón: girar = arrastrar con el botón izquierdo · desplazar = Mayús + arrastrar · zoom = rueda.
 

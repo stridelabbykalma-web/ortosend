@@ -8,6 +8,7 @@ import numpy as np
 from scipy import ndimage
 
 from .campo import Campo
+from .recorte import Recorte
 from .referencias import Referencias
 
 
@@ -16,6 +17,7 @@ class Pie:
     lado: str  # "izquierdo" o "derecho"
     mascara: np.ndarray  # (ny, nx) True dentro del pie
     referencias: Referencias = field(default_factory=Referencias)
+    recorte: Recorte = field(default_factory=Recorte)
 
     @property
     def nombre(self) -> str:

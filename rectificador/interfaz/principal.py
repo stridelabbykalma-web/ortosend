@@ -75,9 +75,40 @@ class PanelPie(QGroupBox):
             boton.setProperty("referencia", k)
             fila.addWidget(boton)
             lay.addLayout(fila)
-        borrar = QPushButton("Borrar referencias de este pie")
+        fila = QHBoxLayout()
+        proponer = QPushButton("Proponer referencias")
+        proponer.setToolTip("Coloca las 3 referencias de forma aproximada (proporciones típicas del pie).\n"
+                            "Después corrígelas con el botón Marcar y clic derecho.")
+        proponer.clicked.connect(lambda: self.ventana.proponer_referencias(self.clave))
+        fila.addWidget(proponer)
+        borrar = QPushButton("Borrar referencias")
         borrar.clicked.connect(lambda: self.ventana.borrar_referencias(self.clave))
-        lay.addWidget(borrar)
+        fila.addWidget(borrar)
+        lay.addLayout(fila)
+
+        # Recorte en arco
+        self.recortar = QCheckBox("Recortar en arco por delante de las cabezas metatarsales")
+        self.recortar.toggled.connect(lambda v: self.ventana.cambiar_recorte(self.clave, activo=v))
+        lay.addWidget(self.recortar)
+        fila = QHBoxLayout()
+        fila.addWidget(QLabel("Adelanto:"))
+        self.adelanto = QDoubleSpinBox()
+        self.adelanto.setRange(-30.0, 40.0)
+        self.adelanto.setSingleStep(1.0)
+        self.adelanto.setDecimals(1)
+        self.adelanto.setSuffix(" mm")
+        self.adelanto.setToolTip("Distancia del arco por delante de las cabezas (negativo = por detrás).")
+        self.adelanto.valueChanged.connect(lambda v: self.ventana.cambiar_recorte(self.clave, adelanto=v))
+        fila.addWidget(self.adelanto)
+        fila.addWidget(QLabel("Curvatura:"))
+        self.curvatura = QDoubleSpinBox()
+        self.curvatura.setRange(0.0, 3.0)
+        self.curvatura.setSingleStep(0.1)
+        self.curvatura.setDecimals(1)
+        self.curvatura.setToolTip("0 = recto · 1 = parábola metatarsal · más = más curvado.")
+        self.curvatura.valueChanged.connect(lambda v: self.ventana.cambiar_recorte(self.clave, curvatura=v))
+        fila.addWidget(self.curvatura)
+        lay.addLayout(fila)
 
     def actualizar(self, pie, proyecto, activa: str | None):
         self.setTitle(f"{pie.nombre}  (mitad {'izquierda' if self.clave == 'p0' else 'derecha'})")
@@ -91,6 +122,15 @@ class PanelPie(QGroupBox):
             self.etiquetas[k].setText(texto)
         for b in self.grupo.buttons():
             b.setChecked(b.property("referencia") == activa)
+        for w, valor in ((self.recortar, pie.recorte.activo), (self.adelanto, pie.recorte.adelanto),
+                         (self.curvatura, pie.recorte.curvatura)):
+            w.blockSignals(True)
+            w.setChecked(valor) if isinstance(w, QCheckBox) else w.setValue(valor)
+            w.blockSignals(False)
+        listo = pie.referencias.completas
+        for w in (self.recortar, self.adelanto, self.curvatura):
+            w.setEnabled(listo)
+        self.recortar.setToolTip("" if listo else "Marca antes las 3 referencias de este pie.")
 
 
 class VentanaPrincipal(QMainWindow):
@@ -257,6 +297,25 @@ class VentanaPrincipal(QMainWindow):
             _, nombre = hecho
             self.statusBar().showMessage(f"{pie.nombre}: marcada {NOMBRES[nombre]}.", 4000)
         self.activa = None
+        self._actualizar_todo()
+
+    def proponer_referencias(self, clave: str):
+        if not self.proyecto:
+            return
+        self.proyecto.proponer_referencias(self.proyecto.pies[int(clave[1])])
+        self._actualizar_todo()
+
+    def cambiar_recorte(self, clave: str, **cambios):
+        if not self.proyecto:
+            return
+        r = self.proyecto.pies[int(clave[1])].recorte
+        for k, v in cambios.items():
+            setattr(r, k, v)
+        self._actualizar_todo()
+
+    def _actualizar_todo(self):
+        """Recalcula el molde y redibuja todo (tras cualquier cambio)."""
+        self._mostrar_molde(reiniciar_camara=False)
         self._redibujar_pies()
         self._refrescar_panel()
 
@@ -265,8 +324,7 @@ class VentanaPrincipal(QMainWindow):
             return
         pie = self.proyecto.pies[int(clave[1])]
         pie.referencias.puntos.clear()
-        self._redibujar_pies()
-        self._refrescar_panel()
+        self._actualizar_todo()
 
     def intercambiar_lados(self):
         if not self.proyecto:
@@ -285,7 +343,7 @@ class VentanaPrincipal(QMainWindow):
             except ValueError as e:
                 geom = None
                 self.statusBar().showMessage(str(e), 6000)
-            self.visor.dibujar_pie(self._clave(pie), pie, geom)
+            self.visor.dibujar_pie(self._clave(pie), pie, geom, self.proyecto.linea_recorte(pie))
 
     def _refrescar_panel(self):
         p = self.proyecto

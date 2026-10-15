@@ -95,9 +95,9 @@ def geometria(r: Referencias, mascara: np.ndarray, dx: float, dy: float, cfg: di
     """Líneas y zonas derivadas de las referencias, en coordenadas (x, y) del molde."""
     s = r.sistema()
     m1, m5 = np.array(r.puntos["mtt1"], float), np.array(r.puntos["mtt5"], float)
-    # Eje: desde el borde trasero del talón hasta algo más allá de las cabezas.
+    # Eje: desde el borde trasero del talón hasta el punto medio de las cabezas.
     atras = _borde(mascara, dx, dy, s.origen, -s.eje)
-    eje = [s.a_global(-atras, 0), s.a_global(s.largo * 1.25, 0)]
+    eje = [s.a_global(-atras, 0), s.a_global(s.largo, 0)]
     # Talón interno / externo.
     t_med = s.origen + s.medial * _borde(mascara, dx, dy, s.origen, s.medial)
     t_lat = s.origen - s.medial * _borde(mascara, dx, dy, s.origen, -s.medial)
@@ -115,3 +115,39 @@ def geometria(r: Referencias, mascara: np.ndarray, dx: float, dy: float, cfg: di
         "talon_lateral": tuple(map(float, t_lat)),
         "zona_arco": [tuple(map(float, p)) for p in zona],
     }
+
+
+def proponer(mascara: np.ndarray, lado: str, dx: float, dy: float, cfg: dict,
+             altura: np.ndarray | None = None) -> Referencias:
+    """Referencias APROXIMADAS a partir de la forma del pie (dedos hacia +Y, planta arriba),
+    según proporciones típicas. Sirven de punto de partida: el usuario las corrige.
+
+    Con `altura`, los bordes se miden en la parte alta de la planta (no al pie de la pared)."""
+    jj, ii = np.nonzero(mascara)
+    j0, j1 = jj.min(), jj.max()
+    largo = j1 - j0
+
+    def fila(frac):
+        return int(round(j0 + frac * largo))
+
+    def bordes(j):
+        fila_m = mascara[j]
+        if altura is not None:
+            h = np.where(fila_m, altura[j], -np.inf)
+            base = altura[j][fila_m].min()
+            fila_m = fila_m & (h > base + 0.7 * (h.max() - base))
+        xs = np.nonzero(fila_m)[0]
+        return xs.min() * dx, xs.max() * dx
+
+    # Pie izquierdo con la planta hacia arriba: lado interno hacia -X.
+    interno_menor = lado == "izquierdo"
+    jt = fila(cfg["propuesta_talon"])
+    a, b = bordes(jt)
+    talon = ((a + b) / 2, jt * dy)
+    j1m = fila(cfg["propuesta_mtt1"])
+    a, b = bordes(j1m)
+    x1 = a + cfg["propuesta_mtt1_borde"] if interno_menor else b - cfg["propuesta_mtt1_borde"]
+    j5m = fila(cfg["propuesta_mtt5"])
+    a, b = bordes(j5m)
+    x5 = b - cfg["propuesta_mtt5_borde"] if interno_menor else a + cfg["propuesta_mtt5_borde"]
+    return Referencias({"mtt1": (float(x1), j1m * dy), "mtt5": (float(x5), j5m * dy), "talon": talon})

@@ -19,7 +19,9 @@ from . import __version__, config
 from .campo import Campo, detectar_fondo, malla_a_campo
 from .limpieza import InformeLimpieza, componer, limpiar
 from .pies import Pie, detectar_pies
-from .referencias import Referencias, geometria
+from . import recorte as recorte_mod
+from .recorte import Recorte
+from .referencias import Referencias, geometria, proponer
 from .suavizado import suavizar
 
 VERSION_RECETA = 1
@@ -73,6 +75,8 @@ class Proyecto:
         p = cls(ruta, campo, fondo, taller, clinicos, huella(ruta), tipo, informe,
                 lijado=taller.get("lijado", {}).get("taco", 6.0))
         p.pies = detectar_pies(campo, fondo, taller["limpieza"]["pie_izquierdo_en"])
+        for pie in p.pies:
+            pie.recorte = Recorte.por_defecto(clinicos)
         return p
 
     # ------------------------------------------------------------------ estado
@@ -110,6 +114,7 @@ class Proyecto:
                 continue
             dx, dy = _esquina(p.mascara, self.original) - esquina_vieja
             p.referencias = Referencias({k: (x + dx, y + dy) for k, (x, y) in viejo.referencias.puntos.items()})
+            p.recorte = viejo.recorte
 
     def poner_referencia(self, x: float, y: float, nombre: str | None = None) -> tuple[Pie, str] | None:
         """Marca una referencia en el pie que hay bajo (x, y).
@@ -127,6 +132,19 @@ class Proyecto:
             nombre = min(refs.puntos, key=lambda k: np.hypot(refs.puntos[k][0] - x, refs.puntos[k][1] - y))
         refs.puntos[nombre] = (float(x), float(y))
         return pie, nombre
+
+    def proponer_referencias(self, pie: Pie) -> None:
+        """Coloca referencias aproximadas (proporciones típicas del pie) para corregir luego."""
+        r = self.original.rejilla
+        pie.referencias = proponer(pie.mascara, pie.lado, r.dx, r.dy, self.clinicos["referencias"],
+                                   self.molde_lijado())
+
+    def linea_recorte(self, pie: Pie) -> list | None:
+        if not (pie.recorte.activo and pie.referencias.completas):
+            return None
+        r = self.original.rejilla
+        # Se dibuja 1 mm por detrás del corte, sobre el molde que queda.
+        return recorte_mod.linea_del_arco(pie.referencias, pie.recorte, pie.mascara, r.dx, r.dy, atras=1.0)
 
     def geometria(self, pie: Pie) -> dict | None:
         if not pie.referencias.completas:
@@ -152,11 +170,15 @@ class Proyecto:
         return self._cache_lijado[1]
 
     def calcular(self) -> Campo:
-        """Resultado = original lijado + correcciones (de momento ninguna), dentro del bloque.
+        """Resultado = original lijado + correcciones + recorte en arco, dentro del bloque.
 
         Siempre se parte del escaneo original: nada se acumula ni se pierde.
         """
         z = self.molde_lijado().copy()
+        X, Y = self.original.rejilla.malla()
+        for pie in self.pies:
+            z = recorte_mod.aplicar(z, self.fondo, pie.referencias, pie.recorte, pie.mascara, X, Y,
+                                    self.original.rejilla.dx)
         z = np.clip(z, 0.0, self.taller["recuadro"]["alto_z"])
         return self.original.copia(z)
 
@@ -173,7 +195,7 @@ class Proyecto:
     def receta(self) -> dict:
         pies = []
         for p in self.pies:
-            d = {"lado": p.lado, "referencias": p.referencias.a_dict()}
+            d = {"lado": p.lado, "referencias": p.referencias.a_dict(), "recorte_arco": p.recorte.a_dict()}
             d["referencias_taller"] = {
                 k: [round(c, 3) for c in self.a_taller(x, y, self.altura_en(x, y))]
                 for k, (x, y) in p.referencias.puntos.items()

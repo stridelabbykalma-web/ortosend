@@ -14,6 +14,7 @@ COLORES = {"mtt1": "#e4572e", "mtt5": "#2e86de", "talon": "#2ecc71"}
 COLOR_EJE = "#f1c40f"
 COLOR_METATARSAL = "#ff9f43"
 COLOR_ARCO = "#00d2d3"
+COLOR_RECORTE = "#ff3b30"
 ELEVACION = 1.0  # las líneas se dibujan un poco por encima de la superficie
 
 
@@ -82,7 +83,7 @@ class Visor(QtInteractor):
         for nombre in self._actores_pie.pop(clave, []):
             self.remove_actor(nombre, render=False)
 
-    def dibujar_pie(self, clave: str, pie: Pie, geom: dict | None) -> None:
+    def dibujar_pie(self, clave: str, pie: Pie, geom: dict | None, recorte: list | None = None) -> None:
         """Referencias marcadas y, si están las 3, el eje, la línea metatarsal y el arco."""
         self.borrar_pie(clave)
         nombres = []
@@ -110,6 +111,8 @@ class Visor(QtInteractor):
             for k in ("talon_medial", "talon_lateral"):
                 x, y = geom[k]
                 poner(k, pv.Sphere(radius=1.8, center=(x, y, float(self._z(x, y)) + 1.0)), color=COLORES["talon"])
+        if recorte and len(recorte) > 1:
+            poner("recorte", self._linea(recorte), color=COLOR_RECORTE, line_width=5, render_lines_as_tubes=True)
         # Rótulo del lado, más allá de los dedos.
         jj, ii = np.nonzero(pie.mascara)
         r = self.campo.rejilla
