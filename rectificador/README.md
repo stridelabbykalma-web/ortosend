@@ -68,7 +68,7 @@ También acepta un recuadro ya limpio (lo detecta solo).
 2. Comprueba que cada pie tiene bien puesto su nombre (PIE IZQUIERDO / PIE DERECHO).
    Si no, pulsa **Intercambiar izquierdo ↔ derecho**.
 3. Marca las referencias de cada pie con **clic derecho** sobre el molde, en este orden:
-   cabeza del 1.er MTT, cabeza del 5.º MTT y talón. Con las tres aparecen el eje del pie (amarillo),
+   cabeza del 1.er MTT, cabeza del 5.º MTT y talón. Con las tres aparecen el eje del pie (amarillo, del talón al punto entre el 2.º y el 3.er MTT),
    la línea metatarsal (naranja), la zona del arco (turquesa) y el talón interno/externo.
    Para corregir una: pulsa su botón **Marcar** y vuelve a hacer clic derecho.
    Opcionalmente, las cabezas del 2.º, 3.º y 4.º MTT: si están, el recorte pasa por delante de las 5.

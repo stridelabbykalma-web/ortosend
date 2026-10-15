@@ -70,9 +70,11 @@ def test_arco_pasa_por_delante_de_las_5_cabezas(plano):
             assert z2[j, i] == pytest.approx(esperado, abs=0.5), (k, d)
 
 
-def test_2_cabezas_y_5_cabezas_con_curvatura_cero_son_rectos(plano):
+def test_curvatura_cero_es_recto_aunque_haya_5_cabezas(plano):
     r, X, Y, z, mascara = plano
     refs5 = Referencias(dict(REFS.puntos, mtt2=(65.0, 238.0), mtt3=(80.0, 236.0)))
-    a = aplicar(z, 3.0, REFS, Recorte(curvatura=0.0), mascara, X, Y, 0.5)
-    b = aplicar(z, 3.0, refs5, Recorte(curvatura=0.0), mascara, X, Y, 0.5)
-    assert np.allclose(a, b)
+    z2 = aplicar(z, 3.0, refs5, Recorte(adelanto=3.0, curvatura=0.0), mascara, X, Y, 0.5)
+    t, s = coordenadas_arco(refs5, X, Y)
+    entre = (t > 0.05) & (t < 0.95) & mascara
+    assert (z2[entre & (s < 2.0)] == 25.0).all()  # todo queda hasta 3 mm delante de la línea 1.º-5.º
+    assert (z2[entre & (s > 4.0)] == 3.0).all()

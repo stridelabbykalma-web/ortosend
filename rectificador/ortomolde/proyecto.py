@@ -59,6 +59,8 @@ class Proyecto:
         """
         taller = taller or config.taller()
         clinicos = clinicos or config.valores_clinicos()
+        from . import referencias as _ref
+        _ref.EJE_SIN_2_3 = clinicos.get("referencias", {}).get("eje_sin_2_3", _ref.EJE_SIN_2_3)
         ruta = Path(ruta_stl)
         malla = trimesh.load(ruta, force="mesh")
         rec = taller["recuadro"]

@@ -97,3 +97,15 @@ def test_receta_con_referencias(proyecto_bruto):
     for d in receta["pies"]:
         for x, y, z in d["referencias_taller"].values():
             assert z <= 0  # Z0 en la cara superior del bloque
+
+
+def test_eje_sale_entre_2_y_3_metatarsiano():
+    base = {"talon": (70.0, 60.0), "mtt1": (50.0, 230.0), "mtt5": (105.0, 215.0)}
+    con = Referencias(dict(base, mtt2=(62.0, 236.0), mtt3=(76.0, 236.0))).sistema()
+    delante = np.array([69.0, 236.0])
+    assert con.largo == pytest.approx(np.linalg.norm(delante - [70, 60]))
+    assert np.allclose(con.a_global(con.largo, 0), delante)
+    sin = Referencias(base).sistema()
+    esperado = np.array([50, 230]) + 0.375 * (np.array([105, 215]) - [50, 230])
+    assert np.allclose(sin.a_global(sin.largo, 0), esperado)
+    assert sin.a_local(50, 230)[1] > 0  # el 1.er MTT sigue en el lado interno

@@ -3,7 +3,8 @@
 El usuario marca sobre el molde: cabeza del 1.er MTT, cabeza del 5.º MTT y talón
 (obligatorias) y, si quiere, las cabezas del 2.º, 3.º y 4.º MTT (el recorte en arco pasa
 entonces por delante de todas). De ahí salen:
-  - eje del pie: del talón al punto medio de las dos cabezas;
+  - eje del pie: del talón al punto medio entre la 2.ª y la 3.ª cabeza (si no están
+    marcadas, a la altura donde suelen estar, sobre la línea 1.ª-5.ª);
   - lado interno (medial): el lado del 1.er MTT;
   - línea metatarsal: de la 1.ª a la 5.ª cabeza;
   - zona del arco: lado interno, entre dos fracciones del eje (config);
@@ -29,6 +30,9 @@ OPCIONALES = ("mtt2", "mtt3", "mtt4")
 ORDEN = ("mtt1", "mtt2", "mtt3", "mtt4", "mtt5", "talon")  # orden en pantalla
 ORDEN_CLIC = OBLIGATORIAS + OPCIONALES  # orden al marcar con clic: primero las obligatorias
 CABEZAS = ("mtt1", "mtt2", "mtt3", "mtt4", "mtt5")
+# Sin 2.ª y 3.ª cabeza marcadas: el eje sale de la línea 1.ª->5.ª a esta fracción (0 = 1.ª, 1 = 5.ª).
+# Se ajusta desde config/valores_clinicos.toml ([referencias] eje_sin_2_3) al abrir un proyecto.
+EJE_SIN_2_3 = 0.375
 
 
 @dataclass
@@ -62,14 +66,17 @@ class SistemaPie:
     origen: np.ndarray  # talón
     eje: np.ndarray  # unitario, hacia los dedos
     medial: np.ndarray  # unitario, hacia el lado interno
-    largo: float  # talón -> punto medio de las cabezas
+    largo: float  # talón -> punto delantero del eje (entre 2.ª y 3.ª cabeza)
 
     @classmethod
     def desde(cls, r: Referencias) -> "SistemaPie":
         t = np.array(r.puntos["talon"], float)
         m1, m5 = np.array(r.puntos["mtt1"], float), np.array(r.puntos["mtt5"], float)
-        medio = (m1 + m5) / 2
-        eje = medio - t
+        if "mtt2" in r.puntos and "mtt3" in r.puntos:
+            delante = (np.array(r.puntos["mtt2"], float) + np.array(r.puntos["mtt3"], float)) / 2
+        else:
+            delante = m1 + EJE_SIN_2_3 * (m5 - m1)
+        eje = delante - t
         largo = float(np.linalg.norm(eje))
         if largo < 50:
             raise ValueError("El talón está demasiado cerca de las cabezas metatarsales: revisa las referencias.")
@@ -104,7 +111,7 @@ def geometria(r: Referencias, mascara: np.ndarray, dx: float, dy: float, cfg: di
     """Líneas y zonas derivadas de las referencias, en coordenadas (x, y) del molde."""
     s = r.sistema()
     m1, m5 = np.array(r.puntos["mtt1"], float), np.array(r.puntos["mtt5"], float)
-    # Eje: desde el borde trasero del talón hasta el punto medio de las cabezas.
+    # Eje: desde el borde trasero del talón hasta el punto entre la 2.ª y la 3.ª cabeza.
     atras = _borde(mascara, dx, dy, s.origen, -s.eje)
     eje = [s.a_global(-atras, 0), s.a_global(s.largo, 0)]
     # Talón interno / externo.

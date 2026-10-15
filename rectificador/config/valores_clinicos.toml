@@ -47,6 +47,9 @@ altura = 4.0
 largo = 45.0
 
 [referencias]
+# El eje del pie va del talón al punto medio entre la 2.ª y la 3.ª cabeza metatarsal.
+# Si no están marcadas, sale de la línea 1.ª-5.ª a esta fracción (0 = 1.ª, 1 = 5.ª). PROVISIONAL.
+eje_sin_2_3 = 0.375
 # Propuesta automática aproximada (luego se corrige con el clic). Fracciones del largo
 # del pie medidas desde el talón; distancias al borde en mm. PROVISIONAL.
 propuesta_talon = 0.12
