@@ -5,3 +5,4 @@ __pycache__/
 # El molde sintético se genera con herramientas/generar_sintetico.py (pesa ~38 MB)
 ejemplos/sintetico.stl
 salida/
+ejemplos/sintetico_bruto.stl

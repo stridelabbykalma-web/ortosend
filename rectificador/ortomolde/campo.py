@@ -31,6 +31,11 @@ class Rejilla:
         ny = int(round(largo / paso)) + 1
         return cls(nx, ny, ancho / (nx - 1), largo / (ny - 1))
 
+    @classmethod
+    def con_paso(cls, ancho: float, largo: float, paso: float) -> "Rejilla":
+        """Paso exacto (el recuadro puede quedar hasta un paso más corto)."""
+        return cls(int(np.floor(ancho / paso + 1e-9)) + 1, int(np.floor(largo / paso + 1e-9)) + 1, paso, paso)
+
     @property
     def ancho(self) -> float:
         return self.dx * (self.nx - 1)
@@ -69,11 +74,12 @@ class Campo:
 # Malla -> campo de alturas
 # ---------------------------------------------------------------------------
 
-def rasterizar(vertices: np.ndarray, caras: np.ndarray, rejilla: Rejilla) -> np.ndarray:
+def rasterizar(vertices: np.ndarray, caras: np.ndarray, rejilla: Rejilla, rellenar: bool = True) -> np.ndarray:
     """Altura máxima de la malla en cada nodo de la rejilla (z-buffer visto desde arriba).
 
-    Los nodos que no caen bajo ningún triángulo toman la altura del nodo más cercano
-    que sí cae (pasa solo en los bordes por redondeo).
+    Con `rellenar`, los nodos que no caen bajo ningún triángulo toman la altura del nodo
+    más cercano que sí cae (pasa solo en los bordes por redondeo). Sin `rellenar` se
+    devuelven como NaN (agujeros del escaneo).
     """
     tri = vertices[caras].astype(np.float64)  # (m, 3, 3)
     # Pasar x, y a unidades de rejilla.
@@ -112,6 +118,9 @@ def rasterizar(vertices: np.ndarray, caras: np.ndarray, rejilla: Rejilla) -> np.
     vacio = ~np.isfinite(z)
     if vacio.all():
         raise ValueError("La malla no cubre el recuadro: no se ha podido calcular ninguna altura.")
+    if not rellenar:
+        z[vacio] = np.nan
+        return z
     if vacio.any():
         _, (jj, ii) = ndimage.distance_transform_edt(vacio, return_indices=True)
         z = z[jj, ii]

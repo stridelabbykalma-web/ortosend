@@ -24,3 +24,23 @@ max_triangulos = 10000
 # Margen de seguridad por debajo del máximo.
 objetivo_triangulos = 9500
 escala = 0.1
+
+[limpieza]
+# Limpieza del escaneo en bruto del Revopoint (los dos bloques con la huella hundida).
+# Medidas de un bloque de espuma: los dos juntos forman el recuadro.
+bloque_ancho = 144.0
+bloque_largo = 330.0
+# Grosor de base plana que se deja debajo del pie en el molde. PROVISIONAL: confirmar.
+base = 3.0
+# Profundidad a partir de la cual se considera que hay huella (mm).
+umbral_huella = 1.5
+# Área mínima de una huella para contar como pie (mm²).
+area_minima_pie = 3000.0
+# Se amplía la huella este margen para no cortar el borde del pie (mm).
+margen_huella = 3.0
+# Suavizado del ruido del escáner (mm). 0 = sin suavizar.
+suavizado = 0.5
+# Tolerancia para detectar la cara superior plana de los bloques (mm).
+tolerancia_plano = 0.6
+# En qué mitad del recuadro va el pie izquierdo: "izquierda" (X pequeñas) o "derecha".
+pie_izquierdo_en = "izquierda"
