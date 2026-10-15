@@ -39,7 +39,7 @@ También acepta un recuadro ya limpio (lo detecta solo).
 |---|---|---|
 | 1 | Leer STL, campo de alturas, exportar los 3 archivos | ✅ hecho (probado con molde sintético) |
 | 1b | Limpieza del escaneo en bruto | ✅ hecho (probado con escaneo sintético; falta uno real) |
-| 2 | Separar pies, izquierdo/derecho, marcar 3 referencias con clic | pendiente |
+| 2 | Ventana con visor 3D: pies, izquierdo/derecho, marcar 3 referencias con clic | ✅ hecho (probado con escaneo real) |
 | 3 | Recorte en arco por delante de las cabezas metatarsales | pendiente |
 | 4 | Piezas: relleno de arco, oliva, descarga 1.er MTT, skive medial | pendiente |
 | 5 | Edición interactiva de piezas, deshacer/rehacer | pendiente |
@@ -51,12 +51,25 @@ También acepta un recuadro ya limpio (lo detecta solo).
 2. Descarga esta carpeta `rectificador`.
 3. Doble clic en `arrancar.bat`. La primera vez tarda unos minutos porque instala lo necesario.
 
-## Uso actual (hito 1, sin ventana todavía)
+## Uso
 
-Desde una consola en la carpeta `rectificador`:
+**Con ventana**: doble clic en `arrancar.bat` (o `python -m interfaz.principal` desde esta carpeta).
+
+1. *Archivo → Abrir escaneo…* y elige el STL del Revopoint. Tarda unos segundos en limpiarlo.
+2. Comprueba que cada pie tiene bien puesto su nombre (PIE IZQUIERDO / PIE DERECHO).
+   Si no, pulsa **Intercambiar izquierdo ↔ derecho**.
+3. Marca las referencias de cada pie con **clic derecho** sobre el molde, en este orden:
+   cabeza del 1.er MTT, cabeza del 5.º MTT y talón. Con las tres aparecen el eje del pie (amarillo),
+   la línea metatarsal (naranja), la zona del arco (turquesa) y el talón interno/externo.
+   Para corregir una: pulsa su botón **Marcar** y vuelve a hacer clic derecho.
+4. *Archivo → Exportar…* guarda los 3 archivos.
+
+Ratón: girar = arrastrar con el botón izquierdo · desplazar = Mayús + arrastrar · zoom = rueda.
+
+**Sin ventana** (por consola):
 
 ```
-python herramientas\rectificar.py C:\ruta\al\molde.stl C:\ruta\salida NOMBRE
+python herramientas\rectificar.py C:\ruta\al\escaneo.stl C:\ruta\salida NOMBRE
 ```
 
 Para generar los moldes de prueba: `python herramientas\generar_sintetico.py` (crea `ejemplos\sintetico.stl` y `ejemplos\sintetico_bruto.stl`).

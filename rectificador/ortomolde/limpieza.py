@@ -460,13 +460,20 @@ def limpiar(malla: trimesh.Trimesh, taller: dict, lados: dict[int, str] | None =
         b = inf.bloques[0]
         b.lado = "izquierdo" if b.confianza_lado > 0 else "derecho"
 
-    destino = Rejilla.para_recuadro(rec["ancho_x"], rec["largo_y"], paso)
-    alt, inf.pies = compactar([(recortar_pie(b.prof, b.zona), b.lado) for b in inf.bloques],
-                              destino, cfg["pie_izquierdo_en"])
-    alt = cfg["base"] + alt
-    if alt.max() > rec["alto_z"]:
+    campo = componer(inf, taller)
+    if campo.z.max() > rec["alto_z"]:
         inf.avisos.append(
-            f"La huella más profunda ({alt.max() - cfg['base']:.1f} mm) más la base "
+            f"La huella más profunda ({campo.z.max() - cfg['base']:.1f} mm) más la base "
             f"({cfg['base']:.1f} mm) supera la altura del bloque ({rec['alto_z']:.0f} mm)."
         )
-    return Campo(destino, alt, np.zeros(3)), inf
+    return campo, inf
+
+
+def componer(inf: InformeLimpieza, taller: dict) -> Campo:
+    """Coloca los pies ya limpios en el recuadro según su lado (b.lado). Rápido: sirve para
+    cambiar izquierdo/derecho sin repetir la limpieza."""
+    rec, cfg = taller["recuadro"], taller["limpieza"]
+    destino = Rejilla.para_recuadro(rec["ancho_x"], rec["largo_y"], taller["calculo"]["rejilla"])
+    alt, inf.pies = compactar([(recortar_pie(b.prof, b.zona), b.lado) for b in inf.bloques],
+                              destino, cfg["pie_izquierdo_en"])
+    return Campo(destino, cfg["base"] + alt, np.zeros(3))

@@ -1,0 +1,296 @@
+"""Ventana principal del rectificador de moldes.
+
+Arrancar (desde la carpeta rectificador):  python -m interfaz.principal [ESCANEO.stl]
+"""
+
+from __future__ import annotations
+
+import sys
+import traceback
+from pathlib import Path
+
+from PySide6.QtCore import QObject, QThread, Qt, Signal
+from PySide6.QtGui import QAction, QKeySequence
+from PySide6.QtWidgets import (
+    QApplication, QButtonGroup, QFileDialog, QGroupBox, QHBoxLayout, QLabel, QMainWindow,
+    QMessageBox, QProgressDialog, QPushButton, QScrollArea, QSplitter, QVBoxLayout, QWidget,
+)
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from interfaz.visor import COLORES, Visor  # noqa: E402
+from ortomolde.exportar import exportar  # noqa: E402
+from ortomolde.proyecto import Proyecto  # noqa: E402
+from ortomolde.referencias import NOMBRES, ORDEN  # noqa: E402
+
+AYUDA = (
+    "<b>Marcar referencias:</b> clic <b>derecho</b> sobre el pie.<br>"
+    "Se marcan en orden: 1.er MTT, 5.º MTT y talón. Para corregir una, pulsa su botón y "
+    "vuelve a hacer clic derecho (o haz clic derecho cerca de ella cuando ya estén las tres).<br>"
+    "Girar: arrastrar con el botón izquierdo · Desplazar: Mayús + arrastrar · Zoom: rueda."
+)
+
+
+class Cargador(QObject):
+    """Abre (y limpia) el escaneo en segundo plano para que la ventana no se congele."""
+
+    terminado = Signal(object)
+    fallo = Signal(str)
+
+    def __init__(self, ruta: str):
+        super().__init__()
+        self.ruta = ruta
+
+    def trabajar(self):
+        try:
+            self.terminado.emit(Proyecto.abrir(self.ruta))
+        except Exception as e:  # noqa: BLE001 - se muestra al usuario
+            traceback.print_exc()
+            self.fallo.emit(str(e))
+
+
+class PanelPie(QGroupBox):
+    """Estado de las referencias de un pie y botones para corregirlas."""
+
+    def __init__(self, ventana: "VentanaPrincipal", clave: str):
+        super().__init__()
+        self.ventana, self.clave = ventana, clave
+        lay = QVBoxLayout(self)
+        self.etiquetas: dict[str, QLabel] = {}
+        self.grupo = QButtonGroup(self)
+        self.grupo.setExclusive(False)
+        for k in ORDEN:
+            fila = QHBoxLayout()
+            punto = QLabel("●")
+            punto.setStyleSheet(f"color: {COLORES[k]}; font-size: 16px;")
+            fila.addWidget(punto)
+            self.etiquetas[k] = QLabel()
+            fila.addWidget(self.etiquetas[k], 1)
+            boton = QPushButton("Marcar")
+            boton.setCheckable(True)
+            boton.setToolTip(f"Pulsa y haz clic derecho sobre el pie para marcar: {NOMBRES[k]}")
+            boton.clicked.connect(lambda marcado, k=k: self.ventana.elegir_referencia(self.clave, k if marcado else None))
+            self.grupo.addButton(boton)
+            boton.setProperty("referencia", k)
+            fila.addWidget(boton)
+            lay.addLayout(fila)
+        borrar = QPushButton("Borrar referencias de este pie")
+        borrar.clicked.connect(lambda: self.ventana.borrar_referencias(self.clave))
+        lay.addWidget(borrar)
+
+    def actualizar(self, pie, proyecto, activa: str | None):
+        self.setTitle(f"{pie.nombre}  (mitad {'izquierda' if self.clave == 'p0' else 'derecha'})")
+        for k in ORDEN:
+            if k in pie.referencias.puntos:
+                x, y = pie.referencias.puntos[k]
+                xt, yt, zt = proyecto.a_taller(x, y, proyecto.altura_en(x, y))
+                texto = f"{NOMBRES[k]}: X {xt:.1f}  Y {yt:.1f}  Z {zt:.1f}"
+            else:
+                texto = f"{NOMBRES[k]}: <i>sin marcar</i>"
+            self.etiquetas[k].setText(texto)
+        for b in self.grupo.buttons():
+            b.setChecked(b.property("referencia") == activa)
+
+
+class VentanaPrincipal(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Rectificador de moldes – Ortosend")
+        self.resize(1400, 850)
+        self.proyecto: Proyecto | None = None
+        self.activa: tuple[str, str] | None = None  # (pie, referencia) que se va a marcar
+        self._hilo = None
+
+        self.visor = Visor(self, al_hacer_clic=self.clic_en_molde)
+        panel = QWidget()
+        self.lay_panel = QVBoxLayout(panel)
+        self.info = QLabel("Abre un escaneo (Archivo → Abrir escaneo…).")
+        self.info.setWordWrap(True)
+        self.lay_panel.addWidget(self.info)
+        self.avisos = QLabel()
+        self.avisos.setWordWrap(True)
+        self.avisos.setStyleSheet("color: #c0392b;")
+        self.lay_panel.addWidget(self.avisos)
+        self.boton_lados = QPushButton("Intercambiar izquierdo ↔ derecho")
+        self.boton_lados.setToolTip("Si el programa se ha equivocado de pie, pulsa aquí.")
+        self.boton_lados.clicked.connect(self.intercambiar_lados)
+        self.lay_panel.addWidget(self.boton_lados)
+        self.paneles = {c: PanelPie(self, c) for c in ("p0", "p1")}
+        for p in self.paneles.values():
+            self.lay_panel.addWidget(p)
+        ayuda = QLabel(AYUDA)
+        ayuda.setWordWrap(True)
+        ayuda.setStyleSheet("color: #555; font-size: 11px;")
+        self.lay_panel.addWidget(ayuda)
+        self.lay_panel.addStretch(1)
+        desplazable = QScrollArea()
+        desplazable.setWidget(panel)
+        desplazable.setWidgetResizable(True)
+        desplazable.setMinimumWidth(440)
+
+        division = QSplitter(Qt.Horizontal)
+        division.addWidget(self.visor)
+        division.addWidget(desplazable)
+        division.setStretchFactor(0, 1)
+        self.setCentralWidget(division)
+        self._menus()
+        self._refrescar_panel()
+
+    def _menus(self):
+        archivo = self.menuBar().addMenu("&Archivo")
+        for texto, atajo, accion in (
+            ("Abrir escaneo…", QKeySequence.Open, self.abrir_dialogo),
+            ("Exportar…", QKeySequence("Ctrl+E"), self.exportar),
+            ("Salir", QKeySequence.Quit, self.close),
+        ):
+            a = QAction(texto, self)
+            a.setShortcut(atajo)
+            a.triggered.connect(accion)
+            archivo.addAction(a)
+        ver = self.menuBar().addMenu("&Ver")
+        for texto, accion in (("Vista inicial", lambda: self.visor.vista_inicial()),
+                              ("Vista de planta (desde arriba)", lambda: self.visor.vista_planta())):
+            a = QAction(texto, self)
+            a.triggered.connect(accion)
+            ver.addAction(a)
+
+    # ---------------------------------------------------------------- abrir
+
+    def abrir_dialogo(self):
+        ruta, _ = QFileDialog.getOpenFileName(self, "Abrir escaneo", "", "Mallas STL (*.stl)")
+        if ruta:
+            self.abrir(ruta)
+
+    def abrir(self, ruta: str, esperar: bool = False):
+        """Abre el escaneo en segundo plano. Con `esperar` (pruebas) lo hace en este hilo."""
+        if esperar:
+            self._cargado(Proyecto.abrir(ruta))
+            return
+        self._progreso = QProgressDialog("Leyendo y limpiando el escaneo…", None, 0, 0, self)
+        self._progreso.setWindowTitle("Abriendo")
+        self._progreso.setWindowModality(Qt.WindowModal)
+        self._progreso.show()
+        self._hilo = QThread(self)
+        self._cargador = Cargador(ruta)
+        self._cargador.moveToThread(self._hilo)
+        self._hilo.started.connect(self._cargador.trabajar)
+        self._cargador.terminado.connect(self._cargado)
+        self._cargador.fallo.connect(self._fallo)
+        self._cargador.terminado.connect(self._hilo.quit)
+        self._cargador.fallo.connect(self._hilo.quit)
+        self._hilo.start()
+
+    def _cargado(self, proyecto: Proyecto):
+        if getattr(self, "_progreso", None):
+            self._progreso.close()
+        self.proyecto = proyecto
+        self.activa = None
+        self.visor.mostrar_molde(proyecto.original)
+        self._redibujar_pies()
+        self._refrescar_panel()
+
+    def _fallo(self, mensaje: str):
+        self._progreso.close()
+        QMessageBox.critical(self, "No se ha podido abrir", mensaje)
+
+    # ---------------------------------------------------------------- referencias
+
+    def _clave(self, pie) -> str:
+        return f"p{self.proyecto.pies.index(pie)}"
+
+    def elegir_referencia(self, clave: str, nombre: str | None):
+        self.activa = (clave, nombre) if nombre else None
+        self._refrescar_panel()
+
+    def clic_en_molde(self, x: float, y: float, z: float):
+        if self.proyecto is None:
+            return
+        pie = self.proyecto.pie_en(x, y)
+        if pie is None:
+            self.statusBar().showMessage("Ese punto no está sobre ningún pie.", 4000)
+            return
+        nombre = None
+        if self.activa and self.activa[0] == self._clave(pie):
+            nombre = self.activa[1]
+        hecho = self.proyecto.poner_referencia(x, y, nombre)
+        if hecho:
+            _, nombre = hecho
+            self.statusBar().showMessage(f"{pie.nombre}: marcada {NOMBRES[nombre]}.", 4000)
+        self.activa = None
+        self._redibujar_pies()
+        self._refrescar_panel()
+
+    def borrar_referencias(self, clave: str):
+        if not self.proyecto:
+            return
+        pie = self.proyecto.pies[int(clave[1])]
+        pie.referencias.puntos.clear()
+        self._redibujar_pies()
+        self._refrescar_panel()
+
+    def intercambiar_lados(self):
+        if not self.proyecto:
+            return
+        self.proyecto.intercambiar_lados()
+        self.visor.mostrar_molde(self.proyecto.original, reiniciar_camara=False)
+        self._redibujar_pies()
+        self._refrescar_panel()
+
+    def _redibujar_pies(self):
+        for clave in ("p0", "p1"):
+            self.visor.borrar_pie(clave)
+        for pie in self.proyecto.pies:
+            try:
+                geom = self.proyecto.geometria(pie)
+            except ValueError as e:
+                geom = None
+                self.statusBar().showMessage(str(e), 6000)
+            self.visor.dibujar_pie(self._clave(pie), pie, geom)
+
+    def _refrescar_panel(self):
+        p = self.proyecto
+        self.boton_lados.setEnabled(p is not None and len(p.pies) > 0)
+        if p is None:
+            for panel in self.paneles.values():
+                panel.hide()
+            return
+        self.info.setText(
+            f"<b>{p.ruta_stl.name}</b><br>"
+            f"{'Escaneo en bruto (limpiado automáticamente)' if p.tipo == 'bruto' else 'Molde ya limpio'} · "
+            f"{len(p.pies)} pie(s) encontrado(s)"
+        )
+        self.avisos.setText("<br>".join(f"⚠ {a}" for a in p.avisos))
+        for clave, panel in self.paneles.items():
+            k = int(clave[1])
+            if k < len(p.pies):
+                activa = self.activa[1] if self.activa and self.activa[0] == clave else None
+                panel.actualizar(p.pies[k], p, activa)
+                panel.show()
+            else:
+                panel.hide()
+
+    # ---------------------------------------------------------------- exportar
+
+    def exportar(self):
+        if not self.proyecto:
+            return
+        sugerido = str(self.proyecto.ruta_stl.with_suffix("").name).upper()
+        ruta, _ = QFileDialog.getSaveFileName(self, "Exportar molde", sugerido + ".stl", "Mallas STL (*.stl)")
+        if not ruta:
+            return
+        ruta = Path(ruta)
+        rutas = exportar(self.proyecto.calcular(), ruta.parent, ruta.stem, self.proyecto.receta(), self.proyecto.taller)
+        QMessageBox.information(self, "Exportado", "Archivos guardados:\n" + "\n".join(str(r) for r in rutas.values()))
+
+
+def main():
+    app = QApplication(sys.argv)
+    ventana = VentanaPrincipal()
+    ventana.show()
+    if len(sys.argv) > 1:
+        ventana.abrir(sys.argv[1])
+    sys.exit(app.exec())
+
+
+if __name__ == "__main__":
+    main()

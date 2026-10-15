@@ -40,3 +40,9 @@ diametro = 20.0
 # Se puede indicar en mm (altura en el borde medial) o en grados; el programa convierte.
 altura = 4.0
 largo = 45.0
+
+[referencias]
+# Zona del arco, medida a lo largo del eje del pie desde el talón (0) hasta la línea
+# metatarsal (1). Solo el lado interno. PROVISIONAL.
+arco_inicio = 0.25
+arco_fin = 0.80
