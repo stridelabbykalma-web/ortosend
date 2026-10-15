@@ -36,7 +36,10 @@ class InformeLimpieza:
     tam_bloques: tuple[float, float] = (0.0, 0.0)
     matriz: list[list[float]] | None = None  # escaneo -> sistema de los bloques (antes de volcar)
     giro_180: bool = False  # se giró para dejar los dedos hacia +Y
+    n_bloques: int = 2
     pies: list[dict] = field(default_factory=list)  # lado, mitad, profundidad máx...
+    # Mapas intermedios para revisar la limpieza (no se guardan en la receta).
+    mapas: dict = field(default_factory=dict, repr=False)
 
     def a_dict(self) -> dict:
         return {
@@ -44,6 +47,7 @@ class InformeLimpieza:
             "tam_bloques_mm": list(self.tam_bloques),
             "matriz_escaneo_a_bloques": self.matriz,
             "giro_180_dedos": self.giro_180,
+            "n_bloques": self.n_bloques,
             "pies": self.pies,
         }
 
@@ -139,6 +143,44 @@ def rectangulo_minimo(p2: np.ndarray):
     return origen, u, v, a1 - a0, b1 - b0
 
 
+def zona_principal_del_plano(p2: np.ndarray, celda: float = 1.5) -> np.ndarray:
+    """Se queda con los puntos del plano que forman la superficie continua más grande.
+
+    Descarta trozos sueltos que cruzan el plano por casualidad (paredes, otros objetos).
+    Devuelve una máscara sobre p2.
+    """
+    lo = p2.min(axis=0)
+    ij = np.floor((p2 - lo) / celda).astype(int)
+    ocup = np.zeros(ij.max(axis=0) + 1, bool)
+    ocup[ij[:, 0], ij[:, 1]] = True
+    ocup = ndimage.binary_closing(ocup, iterations=1)
+    # Abrir corta los puentes finos que unen con el bloque de al lado o con restos.
+    ocup = ndimage.binary_opening(ocup, iterations=3)
+    etiquetas, n = ndimage.label(ocup)
+    if n == 0:
+        return np.ones(len(p2), bool)
+    mayor = 1 + int(np.argmax(ndimage.sum(ocup, etiquetas, index=np.arange(1, n + 1))))
+    return etiquetas[ij[:, 0], ij[:, 1]] == mayor
+
+
+def columnas_de_bloques(z: np.ndarray, paso: float, cfg: dict) -> tuple[int, int]:
+    """Columnas (en X) que pertenecen a bloques enteros.
+
+    La ranura entre dos bloques se ve como columnas casi sin superficie a la altura de
+    la cara (el escáner apenas ve dentro: cobertura < 80 %). Los tramos entre ranuras más estrechos que
+    medio bloque son franjas de otro bloque y se descartan.
+    """
+    hay = np.isfinite(z) & (z > -30.0)
+    cobertura = hay.mean(axis=0)
+    ranura = ndimage.binary_opening(cobertura < 0.8, iterations=1)
+    etiquetas, n = ndimage.label(~ranura)
+    tramos = [np.nonzero(etiquetas == k)[0] for k in range(1, n + 1)]
+    bloques = [t for t in tramos if len(t) * paso >= 0.5 * cfg["bloque_ancho"]]
+    if not bloques:
+        return 0, z.shape[1] - 1
+    return int(bloques[0][0]), int(bloques[-1][-1])
+
+
 # ---------------------------------------------------------------------------
 # 3. Huecos
 # ---------------------------------------------------------------------------
@@ -193,15 +235,26 @@ def separar_huellas(prof: np.ndarray, paso: float, cfg: dict):
     return salida, list(range(1, min(len(orden), 2) + 1))
 
 
-def dedos_hacia_mas_y(etiquetas: np.ndarray, pies: list[int]) -> bool:
-    """True si los dedos ya apuntan a +Y (el antepié es más ancho que el talón)."""
-    voto = 0.0
+def dedos_hacia_mas_y(etiquetas: np.ndarray, pies: list[int], prof: np.ndarray | None = None) -> bool:
+    """True si los dedos ya apuntan a +Y.
+
+    Criterio principal: el talón se hunde más en la espuma que los dedos. Si la diferencia
+    es pequeña, se usa la anchura (el antepié es más ancho que el talón).
+    """
+    voto_prof, voto_ancho = 0.0, 0.0
     for k in pies:
-        ancho = (etiquetas == k).sum(axis=1)
+        zona = etiquetas == k
+        ancho = zona.sum(axis=1)
         filas = np.nonzero(ancho)[0]
         tercio = max(1, (filas[-1] - filas[0]) // 3)
-        voto += ancho[filas[-1] - tercio:filas[-1] + 1].mean() - ancho[filas[0]:filas[0] + tercio + 1].mean()
-    return voto >= 0
+        atras = slice(filas[0], filas[0] + tercio + 1)
+        delante = slice(filas[-1] - tercio, filas[-1] + 1)
+        voto_ancho += ancho[delante].mean() - ancho[atras].mean()
+        if prof is not None:
+            voto_prof += prof[atras][zona[atras]].mean() - prof[delante][zona[delante]].mean()
+    if abs(voto_prof) >= 1.0 * len(pies):
+        return voto_prof > 0
+    return voto_ancho >= 0
 
 
 def lado_del_pie(alt: np.ndarray, zona: np.ndarray) -> str:
@@ -232,10 +285,7 @@ def compactar(alt: np.ndarray, etiquetas: np.ndarray, pies: dict[int, str], dest
         j0, j1, i0, i1 = jj.min(), jj.max() + 1, ii.min(), ii.max() + 1
         recorte = np.where(zona[j0:j1, i0:i1], alt[j0:j1, i0:i1], 0.0)
         a_la_izquierda = (lado == "izquierdo") == (izq_en == "izquierda")
-        if len(pies) == 1:
-            x_ini, x_fin = 0, destino.nx
-        else:
-            x_ini, x_fin = (0, mitad) if a_la_izquierda else (mitad, destino.nx)
+        x_ini, x_fin = (0, mitad) if a_la_izquierda else (mitad, destino.nx)
         h, w = recorte.shape
         if w > x_fin - x_ini or h > destino.ny:
             raise ValueError(
@@ -278,7 +328,8 @@ def limpiar(malla: trimesh.Trimesh, taller: dict, lados: dict[int, str] | None =
     u0 /= np.linalg.norm(u0)
     v0 = np.cross(n, u0)
     P = malla.triangles_center[en_plano] - c
-    origen2, u2, v2, ancho, largo = rectangulo_minimo(np.column_stack([P @ u0, P @ v0]))
+    p2 = np.column_stack([P @ u0, P @ v0])
+    origen2, u2, v2, ancho, largo = rectangulo_minimo(p2[zona_principal_del_plano(p2)])
     ex = u2[0] * u0 + u2[1] * v0
     ey = v2[0] * u0 + v2[1] * v0
     ez = np.cross(ex, ey)  # sistema directo (sin espejo)
@@ -287,16 +338,6 @@ def limpiar(malla: trimesh.Trimesh, taller: dict, lados: dict[int, str] | None =
         origen2 = origen2 + ancho * u2
     o = c + origen2[0] * u0 + origen2[1] * v0
     R = np.vstack([ex, ey, ez])
-    M = np.eye(4)
-    M[:3, :3] = R
-    M[:3, 3] = -R @ o
-    inf.matriz = M.round(6).tolist()
-    inf.tam_bloques = (round(float(ancho), 1), round(float(largo), 1))
-    if abs(ancho - rec["ancho_x"]) > 15 or abs(largo - rec["largo_y"]) > 15:
-        inf.avisos.append(
-            f"Los bloques miden {ancho:.0f} × {largo:.0f} mm; se esperaba {rec['ancho_x']:.0f} × "
-            f"{rec['largo_y']:.0f}. Revisa que el escaneo incluya los dos bloques enteros."
-        )
 
     # 3. Mapa de profundidad visto desde arriba (solo dentro de los bloques).
     V = (np.asarray(malla.vertices) - o) @ R.T
@@ -309,12 +350,38 @@ def limpiar(malla: trimesh.Trimesh, taller: dict, lados: dict[int, str] | None =
     )
     rej = Rejilla.con_paso(ancho, largo, paso)
     z = rasterizar(V, F[dentro], rej, rellenar=False)
+
+    # Si se ha colado una franja del bloque de al lado (casi a la misma altura), se corta
+    # por la ranura entre bloques.
+    i0, i1 = columnas_de_bloques(z, paso, cfg)
+    if (i0, i1) != (0, z.shape[1] - 1):
+        z = z[:, i0:i1 + 1]
+        o = o + i0 * paso * ex
+        ancho = (i1 - i0) * paso
+
+    M = np.eye(4)
+    M[:3, :3] = R
+    M[:3, 3] = -R @ o
+    inf.matriz = M.round(6).tolist()
+    inf.tam_bloques = (round(float(ancho), 1), round(float(largo), 1))
+    n_bloques = int(np.clip(round(ancho / cfg["bloque_ancho"]), 1, 2))
+    inf.n_bloques = n_bloques
+    if abs(ancho - n_bloques * cfg["bloque_ancho"]) > 15 or abs(largo - cfg["bloque_largo"]) > 15:
+        inf.avisos.append(
+            f"La cara de los bloques mide {ancho:.0f} × {largo:.0f} mm; se esperaba "
+            f"{n_bloques * cfg['bloque_ancho']:.0f} × {cfg['bloque_largo']:.0f}. "
+            "Revisa que el escaneo incluya los bloques enteros."
+        )
     agujero = np.isnan(z)
     prof = np.where(agujero, 0.0, np.maximum(-z, 0.0))
     prof = np.where(agujero, prof, ndimage.median_filter(prof, size=3))
 
+    inf.mapas["profundidad_bruta"] = prof.copy()
+    inf.mapas["plano_2d"] = (p2, zona_principal_del_plano(p2), origen2, u2, v2, ancho, largo)
+
     # 4. Huellas.
     etiquetas, pies = separar_huellas(prof, paso, cfg)
+    inf.mapas["etiquetas"] = etiquetas.copy()
     if not pies:
         raise ValueError("No encuentro ninguna huella de pie en el escaneo.")
     if len(pies) == 1:
@@ -330,7 +397,7 @@ def limpiar(malla: trimesh.Trimesh, taller: dict, lados: dict[int, str] | None =
     prof, etiquetas = prof[:, ::-1], etiquetas[:, ::-1]
 
     # 6. Dedos hacia +Y (giro de 180° alrededor de Z si hace falta).
-    if not dedos_hacia_mas_y(etiquetas, pies):
+    if not dedos_hacia_mas_y(etiquetas, pies, prof):
         prof, etiquetas = prof[::-1, ::-1], etiquetas[::-1, ::-1]
         inf.giro_180 = True
 
