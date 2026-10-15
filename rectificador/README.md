@@ -54,6 +54,8 @@ También acepta un recuadro ya limpio (lo detecta solo).
 
 ## Instalar en Windows (una sola vez)
 
+> Guía paso a paso para probarlo: **[PROBAR.md](PROBAR.md)**.
+
 1. Instala **Python 3.11 o superior** desde https://www.python.org (marca la casilla *Add Python to PATH*).
 2. Descarga esta carpeta `rectificador`.
 3. Doble clic en `arrancar.bat`. La primera vez tarda unos minutos porque instala lo necesario.
