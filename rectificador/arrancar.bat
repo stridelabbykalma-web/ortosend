@@ -25,6 +25,12 @@ for %%V in (3.13 3.12 3.11) do (
         py -%%V -c "import sys" >nul 2>nul && set "PY=py -%%V"
     )
 )
+rem Nombres que crea el nuevo instalador de Python (python3.13.exe...).
+for %%V in (3.13 3.12 3.11) do (
+    if not defined PY (
+        python%%V -c "import sys" >nul 2>nul && set "PY=python%%V"
+    )
+)
 if not defined PY (
     py -3 -c "import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)" >nul 2>nul && set "PY=py -3"
 )
@@ -78,6 +84,7 @@ powershell -NoProfile -Command "Get-Content -Tail 25 -LiteralPath $env:LOG"
 echo ------------------------------------------------------------
 echo Haz una foto de esta ventana y mandala. El registro completo esta en:
 echo   %LOG%
-echo Si arriba pone Python 3.14 o mas nuevo, instala Python 3.13 desde python.org
-echo y vuelve a hacer doble clic en arrancar.bat
+echo Si arriba pone Python 3.14 o mas nuevo, instala Python 3.13. En una ventana "cmd" escribe:
+echo     pymanager install 3.13
+echo (o descargalo de python.org) y vuelve a hacer doble clic en arrancar.bat
 pause
