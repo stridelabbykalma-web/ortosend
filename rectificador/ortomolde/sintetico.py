@@ -57,20 +57,24 @@ def malla_sintetica(**kw):
 
 def campo_limpio_esperado(taller: dict, paso: float = 0.5) -> Campo:
     """Lo que debería devolver la limpieza para el escaneo en bruto sintético."""
-    from .limpieza import compactar, separar_huellas
+    from .limpieza import compactar, recortar_pie, separar_huellas
 
     rec, cfg = taller["recuadro"], taller["limpieza"]
     c = campo_sintetico(rec["ancho_x"], rec["largo_y"], paso, fondo=0.0)
     etiquetas, pies = separar_huellas(c.z, paso, cfg)
     x = {k: np.nonzero(etiquetas == k)[1].mean() for k in pies}
     lados = {k: ("izquierdo" if x[k] == min(x.values()) else "derecho") for k in pies}
-    alt, _ = compactar(c.z, etiquetas, lados, c.rejilla, cfg["pie_izquierdo_en"])
+    alt, _ = compactar([(recortar_pie(c.z, etiquetas == k), lados[k]) for k in pies],
+                       c.rejilla, cfg["pie_izquierdo_en"])
     return Campo(c.rejilla, cfg["base"] + alt, np.zeros(3))
 
 
-def malla_bruta(taller: dict, paso: float = 0.5, semilla: int = 1):
+def malla_bruta(taller: dict, paso: float = 0.5, semilla: int = 1, inclinar_derecho: float = 0.0):
     """Escaneo en bruto sintético: mesa + dos bloques con la huella hundida, ruido,
-    agujeros, un resto suelto, inclinado y girado como saldría del escáner."""
+    agujeros, un resto suelto, inclinado y girado como saldría del escáner.
+
+    `inclinar_derecho` (grados) inclina el bloque de la derecha respecto al otro, como
+    pasa en los escaneos reales."""
     import trimesh
 
     rng = np.random.default_rng(semilla)
@@ -81,7 +85,7 @@ def malla_bruta(taller: dict, paso: float = 0.5, semilla: int = 1):
     prof = prof[:, ::-1][::-1, ::-1]
     prof = np.roll(prof, int(12 / paso), axis=0)  # pies no centrados en el bloque
 
-    margen, hueco = 25.0, 1.0
+    margen, hueco = 25.0, 4.0
     mesa = Rejilla.con_paso(rec["ancho_x"] + hueco + 2 * margen, rec["largo_y"] + 2 * margen, paso)
     z = np.zeros((mesa.ny, mesa.nx))
     m, h = int(margen / paso), int(hueco / paso)
@@ -91,6 +95,11 @@ def malla_bruta(taller: dict, paso: float = 0.5, semilla: int = 1):
     z[m:m + prof.shape[0], m + mitad + h:m + mitad + h + prof.shape[1] - mitad] = alto - prof[:, mitad:]
 
     X, Y = mesa.malla()
+    if inclinar_derecho:
+        bloque_der = np.zeros_like(z, bool)
+        bloque_der[m:m + prof.shape[0], m + mitad + h:m + mitad + h + prof.shape[1] - mitad] = True
+        x_eje = (m + mitad + h) * paso
+        z = np.where(bloque_der, z + np.tan(np.radians(inclinar_derecho)) * (X - x_eje), z)
     v = np.column_stack([X.ravel(), Y.ravel(), z.ravel()])
     v[:, 2] += rng.normal(0, 0.05, len(v))
     idx = np.arange(mesa.ny * mesa.nx).reshape(mesa.ny, mesa.nx)

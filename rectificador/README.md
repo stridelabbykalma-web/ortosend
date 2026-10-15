@@ -11,12 +11,14 @@ Es un programa independiente: no toca ni importa los otros scripts del taller, s
 
 ### Limpieza del escaneo (automática)
 
-1. Busca la cara superior plana de los dos bloques (descarta la mesa y los restos sueltos) y endereza el escaneo.
-2. Encaja el rectángulo de los bloques y lo lleva a los ejes del recuadro (X ancho, Y largo).
+1. Busca la cara superior plana de **cada bloque por separado** (cada uno puede estar apoyado con una
+   inclinación distinta; descarta la mesa y los restos sueltos) y lo endereza.
+2. Encaja el rectángulo de cada bloque y lo lleva a los ejes del recuadro (X ancho, Y largo).
+   Admite escaneos con uno o con los dos bloques.
 3. Quita picos de ruido y rellena los agujeros del escaneo dentro de la huella.
 4. Separa las dos huellas y borra todo lo que no es pie.
 5. **Vuelca el molde** como si se diera la vuelta al bloque (giro, nunca espejo): el pie izquierdo sigue siendo izquierdo.
-6. Pone los dedos hacia +Y, propone cuál es el izquierdo y cuál el derecho (mirando el arco interno) y coloca cada
+6. Pone los dedos hacia +Y (la parte más ancha del pie, las cabezas metatarsales, queda hacia los dedos), propone cuál es el izquierdo y cuál el derecho (mirando el arco interno) y coloca cada
    pie centrado en su mitad del recuadro, sobre una base plana.
 
 Ajustes en `config/taller.toml`, sección `[limpieza]` (grosor de base, mitad del pie izquierdo, suavizado...).

@@ -31,23 +31,43 @@ from .campo import Campo, Rejilla, rasterizar
 
 
 @dataclass
+class Bloque:
+    """Un bloque de espuma ya procesado (huella en bulto, dedos hacia +Y)."""
+
+    matriz: np.ndarray  # 4×4: coordenadas del escaneo -> sistema del bloque (antes de volcar)
+    ancho: float
+    largo: float
+    prof: np.ndarray  # altura del pie en bulto sobre la cara del bloque (0 fuera del pie)
+    zona: np.ndarray  # máscara del pie
+    giro_180: bool = False
+    lado: str = ""
+    confianza_lado: float = 0.0  # >0 parece izquierdo, <0 parece derecho
+
+    def a_dict(self) -> dict:
+        return {
+            "matriz_escaneo_a_bloque": self.matriz.round(6).tolist(),
+            "tam_mm": [round(float(self.ancho), 1), round(float(self.largo), 1)],
+            "giro_180_dedos": self.giro_180,
+            "lado": self.lado,
+        }
+
+
+@dataclass
 class InformeLimpieza:
     avisos: list[str] = field(default_factory=list)
-    tam_bloques: tuple[float, float] = (0.0, 0.0)
-    matriz: list[list[float]] | None = None  # escaneo -> sistema de los bloques (antes de volcar)
-    giro_180: bool = False  # se giró para dejar los dedos hacia +Y
-    n_bloques: int = 2
+    bloques: list[Bloque] = field(default_factory=list)
     pies: list[dict] = field(default_factory=list)  # lado, mitad, profundidad máx...
     # Mapas intermedios para revisar la limpieza (no se guardan en la receta).
     mapas: dict = field(default_factory=dict, repr=False)
 
+    @property
+    def n_bloques(self) -> int:
+        return len(self.bloques)
+
     def a_dict(self) -> dict:
         return {
             "avisos": self.avisos,
-            "tam_bloques_mm": list(self.tam_bloques),
-            "matriz_escaneo_a_bloques": self.matriz,
-            "giro_180_dedos": self.giro_180,
-            "n_bloques": self.n_bloques,
+            "bloques": [b.a_dict() for b in self.bloques],
             "pies": self.pies,
         }
 
@@ -62,14 +82,19 @@ def _ajustar_plano(puntos, pesos):
     return c, vt[2]
 
 
-def buscar_plano_superior(malla: trimesh.Trimesh, tolerancia: float, semilla: int = 0):
-    """Devuelve (punto, normal hacia arriba, máscara de caras del plano)."""
+def buscar_plano_superior(malla: trimesh.Trimesh, tolerancia: float, semilla: int = 0,
+                          validas: np.ndarray | None = None):
+    """Devuelve (punto, normal hacia arriba, máscara de caras del plano).
+
+    `validas` limita la búsqueda a esas caras (para buscar el segundo bloque).
+    """
     rng = np.random.default_rng(semilla)
     C = malla.triangles_center
     A = malla.area_faces
     N = malla.face_normals
-    prob = A / A.sum()
-    muestra = rng.choice(len(C), size=min(60_000, len(C)), replace=False, p=prob)
+    prob = A * (validas if validas is not None else 1.0)
+    prob = prob / prob.sum()
+    muestra = rng.choice(len(C), size=min(60_000, int((prob > 0).sum())), replace=False, p=prob)
     # La muestra se elige proporcional al área: cada cara elegida representa la misma
     # superficie, así que dentro de la muestra se cuenta por número de caras.
     Cm, Nm = C[muestra], N[muestra]
@@ -88,10 +113,9 @@ def buscar_plano_superior(malla: trimesh.Trimesh, tolerancia: float, semilla: in
         area = Am[dentro].sum()
         if area < 0.05 * total:
             continue
-        c, n = _ajustar_plano(Cm[dentro], Am[dentro])
-        d = (Cm - c) @ n
-        dentro = np.abs(d) < tolerancia
-        area = Am[dentro].sum()
+        # Se puntúa el plano tal cual (sin reajustar): si hay dos bloques con distinta
+        # inclinación, reajustar aquí mezclaría los dos.
+        c = p[0]
         # Hacia dónde mira la superficie: el escáner ve las caras desde fuera, así que
         # las normales del plano apuntan hacia arriba. Si no son fiables (malla mal
         # orientada), se toma el lado que deja menos material por encima.
@@ -101,7 +125,9 @@ def buscar_plano_superior(malla: trimesh.Trimesh, tolerancia: float, semilla: in
                 n, d = -n, -d
         elif Am[d > 3 * tolerancia + 1].sum() > Am[d < -3 * tolerancia - 1].sum():
             n, d = -n, -d
-        arriba = Am[d > 3 * tolerancia + 1].sum()
+        # "Encima" = más de 20 mm por encima: así la mesa (con los bloques 38 mm por encima)
+        # queda descartada, pero no la cara de un bloque por estar el otro algo inclinado.
+        arriba = Am[d > 20.0].sum()
         candidatos.append((area, arriba / total, c, n))
 
     # La cara superior: casi nada por encima. De esos, el de más área.
@@ -109,11 +135,17 @@ def buscar_plano_superior(malla: trimesh.Trimesh, tolerancia: float, semilla: in
     if not validos:
         raise ValueError("No encuentro la cara superior plana de los bloques en el escaneo.")
     _, _, c, n = max(validos, key=lambda k: k[0])
+    # Afinar el plano ganador con sus propias caras, cada vez más estricto.
+    for tol in (tolerancia, 0.6 * tolerancia, 0.6 * tolerancia):
+        mascara = np.abs((C - c) @ n) < tol
+        if validas is not None:
+            mascara &= validas
+        c, n2 = _ajustar_plano(C[mascara], A[mascara])
+        n = n2 if n2 @ n > 0 else -n2
     mascara = np.abs((C - c) @ n) < tolerancia
-    c, n2 = _ajustar_plano(C[mascara], A[mascara])
-    if n2 @ n < 0:
-        n2 = -n2
-    return c, n2, mascara
+    if validas is not None:
+        mascara &= validas
+    return c, n, mascara
 
 
 # ---------------------------------------------------------------------------
@@ -143,42 +175,26 @@ def rectangulo_minimo(p2: np.ndarray):
     return origen, u, v, a1 - a0, b1 - b0
 
 
-def zona_principal_del_plano(p2: np.ndarray, celda: float = 1.5) -> np.ndarray:
+def zona_principal_del_plano(p2: np.ndarray, celda: float = 1.0) -> np.ndarray:
     """Se queda con los puntos del plano que forman la superficie continua más grande.
 
-    Descarta trozos sueltos que cruzan el plano por casualidad (paredes, otros objetos).
+    Se rellena el hueco de la huella para que el borde fino que la rodea no se pierda,
+    y se cortan puentes finos (paredes, restos, otros objetos que cruzan el plano).
     Devuelve una máscara sobre p2.
     """
     lo = p2.min(axis=0)
     ij = np.floor((p2 - lo) / celda).astype(int)
     ocup = np.zeros(ij.max(axis=0) + 1, bool)
     ocup[ij[:, 0], ij[:, 1]] = True
+    # Cerrar solo huecos de 1-2 mm (ruido): la ranura entre bloques (3 mm o más) se respeta.
     ocup = ndimage.binary_closing(ocup, iterations=1)
-    # Abrir corta los puentes finos que unen con el bloque de al lado o con restos.
-    ocup = ndimage.binary_opening(ocup, iterations=3)
+    ocup = ndimage.binary_fill_holes(ocup)
+    ocup = ndimage.binary_opening(ocup, iterations=4)
     etiquetas, n = ndimage.label(ocup)
     if n == 0:
         return np.ones(len(p2), bool)
     mayor = 1 + int(np.argmax(ndimage.sum(ocup, etiquetas, index=np.arange(1, n + 1))))
     return etiquetas[ij[:, 0], ij[:, 1]] == mayor
-
-
-def columnas_de_bloques(z: np.ndarray, paso: float, cfg: dict) -> tuple[int, int]:
-    """Columnas (en X) que pertenecen a bloques enteros.
-
-    La ranura entre dos bloques se ve como columnas casi sin superficie a la altura de
-    la cara (el escáner apenas ve dentro: cobertura < 80 %). Los tramos entre ranuras más estrechos que
-    medio bloque son franjas de otro bloque y se descartan.
-    """
-    hay = np.isfinite(z) & (z > -30.0)
-    cobertura = hay.mean(axis=0)
-    ranura = ndimage.binary_opening(cobertura < 0.8, iterations=1)
-    etiquetas, n = ndimage.label(~ranura)
-    tramos = [np.nonzero(etiquetas == k)[0] for k in range(1, n + 1)]
-    bloques = [t for t in tramos if len(t) * paso >= 0.5 * cfg["bloque_ancho"]]
-    if not bloques:
-        return 0, z.shape[1] - 1
-    return int(bloques[0][0]), int(bloques[-1][-1])
 
 
 # ---------------------------------------------------------------------------
@@ -235,30 +251,21 @@ def separar_huellas(prof: np.ndarray, paso: float, cfg: dict):
     return salida, list(range(1, min(len(orden), 2) + 1))
 
 
-def dedos_hacia_mas_y(etiquetas: np.ndarray, pies: list[int], prof: np.ndarray | None = None) -> bool:
+def dedos_hacia_mas_y(zona: np.ndarray, paso: float) -> bool:
     """True si los dedos ya apuntan a +Y.
 
-    Criterio principal: el talón se hunde más en la espuma que los dedos. Si la diferencia
-    es pequeña, se usa la anchura (el antepié es más ancho que el talón).
+    La parte más ancha del pie (cabezas metatarsales) está siempre más cerca de los dedos
+    que del talón. La profundidad no sirve: unas veces se hunde más el talón y otras el antepié.
     """
-    voto_prof, voto_ancho = 0.0, 0.0
-    for k in pies:
-        zona = etiquetas == k
-        ancho = zona.sum(axis=1)
-        filas = np.nonzero(ancho)[0]
-        tercio = max(1, (filas[-1] - filas[0]) // 3)
-        atras = slice(filas[0], filas[0] + tercio + 1)
-        delante = slice(filas[-1] - tercio, filas[-1] + 1)
-        voto_ancho += ancho[delante].mean() - ancho[atras].mean()
-        if prof is not None:
-            voto_prof += prof[atras][zona[atras]].mean() - prof[delante][zona[delante]].mean()
-    if abs(voto_prof) >= 1.0 * len(pies):
-        return voto_prof > 0
-    return voto_ancho >= 0
+    ancho = ndimage.gaussian_filter1d(zona.sum(axis=1).astype(float), 10.0 / paso)
+    filas = np.nonzero(zona.any(axis=1))[0]
+    a, b = filas[0], filas[-1]
+    anchas = np.nonzero(ancho >= 0.95 * ancho.max())[0]
+    return (anchas.mean() - a) / max(b - a, 1) > 0.5
 
 
-def lado_del_pie(alt: np.ndarray, zona: np.ndarray) -> str:
-    """Izquierdo/derecho mirando el mediopié del molde (planta hacia arriba, dedos a +Y).
+def confianza_izquierdo(alt: np.ndarray, zona: np.ndarray) -> float:
+    """>0 si parece pie izquierdo, <0 si parece derecho (molde en bulto, dedos a +Y).
 
     El arco interno apenas se marca en la espuma, así que en el molde es la parte más baja
     del mediopié. En un pie izquierdo visto así, el lado interno queda hacia -X.
@@ -271,19 +278,24 @@ def lado_del_pie(alt: np.ndarray, zona: np.ndarray) -> str:
     x_geo = ii[msk].mean()
     x_peso = np.average(ii[msk], weights=np.maximum(sub[msk], 1e-6))
     # El peso se va hacia el lado externo (más alto); el interno es el contrario.
-    return "izquierdo" if x_peso > x_geo else "derecho"
+    return float(x_peso - x_geo) / max(1.0, float(msk.any(axis=0).sum()))
 
 
-def compactar(alt: np.ndarray, etiquetas: np.ndarray, pies: dict[int, str], destino: Rejilla, izq_en: str):
-    """Coloca cada pie centrado en su mitad del recuadro. Devuelve (altura, info por pie)."""
+def recortar_pie(alt: np.ndarray, zona: np.ndarray) -> np.ndarray:
+    jj, ii = np.nonzero(zona)
+    j0, j1, i0, i1 = jj.min(), jj.max() + 1, ii.min(), ii.max() + 1
+    return np.where(zona[j0:j1, i0:i1], alt[j0:j1, i0:i1], 0.0)
+
+
+def compactar(pies: list[tuple[np.ndarray, str]], destino: Rejilla, izq_en: str):
+    """Coloca cada pie (recorte, lado) centrado en su mitad del recuadro.
+
+    Devuelve (altura, info por pie).
+    """
     sal = np.zeros((destino.ny, destino.nx))
     info = []
     mitad = destino.nx // 2
-    for k, lado in pies.items():
-        zona = etiquetas == k
-        jj, ii = np.nonzero(zona)
-        j0, j1, i0, i1 = jj.min(), jj.max() + 1, ii.min(), ii.max() + 1
-        recorte = np.where(zona[j0:j1, i0:i1], alt[j0:j1, i0:i1], 0.0)
+    for recorte, lado in pies:
         a_la_izquierda = (lado == "izquierdo") == (izq_en == "izquierda")
         x_ini, x_fin = (0, mitad) if a_la_izquierda else (mitad, destino.nx)
         h, w = recorte.shape
@@ -304,11 +316,54 @@ def compactar(alt: np.ndarray, etiquetas: np.ndarray, pies: dict[int, str], dest
     return sal, info
 
 
+def _sistema_del_plano(malla, c, n, en_plano):
+    """Rectángulo de la cara sobre el plano -> (R, o, ancho, largo, datos para revisar)."""
+    u0 = np.cross(n, [1.0, 0, 0] if abs(n[0]) < 0.9 else [0, 1.0, 0])
+    u0 /= np.linalg.norm(u0)
+    v0 = np.cross(n, u0)
+    P = malla.triangles_center[en_plano] - c
+    p2 = np.column_stack([P @ u0, P @ v0])
+    zona = zona_principal_del_plano(p2)
+    origen2, u2, v2, ancho, largo = rectangulo_minimo(p2[zona])
+    ex = u2[0] * u0 + u2[1] * v0
+    ey = v2[0] * u0 + v2[1] * v0
+    ez = np.cross(ex, ey)  # sistema directo (sin espejo)
+    if ez @ n < 0:
+        ex = -ex
+        ez = -ez
+        origen2 = origen2 + ancho * u2
+    o = c + origen2[0] * u0 + origen2[1] * v0
+    return np.vstack([ex, ey, ez]), o, ancho, largo, (p2, zona, origen2, u2, v2, ancho, largo)
+
+
+def _procesar_bloque(z: np.ndarray, paso: float, cfg: dict) -> tuple[np.ndarray, np.ndarray, bool] | None:
+    """Mapa de alturas visto desde arriba de UN bloque -> (pie en bulto, zona, giro_180)."""
+    agujero = np.isnan(z)
+    prof = np.where(agujero, 0.0, np.maximum(-z, 0.0))
+    prof = np.where(agujero, prof, ndimage.median_filter(prof, size=3))
+    etiquetas, pies = separar_huellas(prof, paso, cfg)
+    if not pies:
+        return None
+    zona = etiquetas == 1  # una huella por bloque: la mayor
+    prof = rellenar_agujeros(prof, agujero & zona)
+    if cfg["suavizado"] > 0:
+        prof = np.where(zona, ndimage.gaussian_filter(prof, cfg["suavizado"] / paso), prof)
+    prof = np.where(zona, np.maximum(prof, 0.0), 0.0)
+    # Volcar el bloque: giro de 180° alrededor del eje Y -> x pasa a (ancho - x).
+    prof, zona = prof[:, ::-1], zona[:, ::-1]
+    # Dedos hacia +Y (giro de 180° alrededor de Z si hace falta).
+    giro = not dedos_hacia_mas_y(zona, paso)
+    if giro:
+        prof, zona = prof[::-1, ::-1], zona[::-1, ::-1]
+    return prof, zona, giro
+
+
 def limpiar(malla: trimesh.Trimesh, taller: dict, lados: dict[int, str] | None = None) -> tuple[Campo, InformeLimpieza]:
     """Escaneo en bruto -> campo del recuadro con los pies en bulto.
 
-    `lados` permite forzar izquierdo/derecho ({1: "izquierdo", 2: "derecho"}, por orden de tamaño
-    de huella) si el usuario corrige la propuesta automática.
+    Cada bloque se trata por separado (cada uno puede estar apoyado con una inclinación
+    distinta). `lados` permite forzar izquierdo/derecho ({0: "izquierdo", 1: "derecho"},
+    por orden de bloque en el informe) si el usuario corrige la propuesta automática.
     """
     cfg = taller["limpieza"]
     rec = taller["recuadro"]
@@ -321,97 +376,93 @@ def limpiar(malla: trimesh.Trimesh, taller: dict, lados: dict[int, str] | None =
     areas = np.bincount(grupo, weights=malla.area_faces)
     if len(areas) > 1:
         malla = malla.submesh([np.nonzero(areas[grupo] >= 0.01 * areas.max())[0]], append=True, repair=False)
-
-    # 1-2. Plano y rectángulo -> sistema de los bloques (X ancho, Y largo, Z normal al plano, 0 en la cara).
-    c, n, en_plano = buscar_plano_superior(malla, cfg["tolerancia_plano"])
-    u0 = np.cross(n, [1.0, 0, 0] if abs(n[0]) < 0.9 else [0, 1.0, 0])
-    u0 /= np.linalg.norm(u0)
-    v0 = np.cross(n, u0)
-    P = malla.triangles_center[en_plano] - c
-    p2 = np.column_stack([P @ u0, P @ v0])
-    origen2, u2, v2, ancho, largo = rectangulo_minimo(p2[zona_principal_del_plano(p2)])
-    ex = u2[0] * u0 + u2[1] * v0
-    ey = v2[0] * u0 + v2[1] * v0
-    ez = np.cross(ex, ey)  # sistema directo (sin espejo)
-    if ez @ n < 0:
-        ex = -ex
-        origen2 = origen2 + ancho * u2
-    o = c + origen2[0] * u0 + origen2[1] * v0
-    R = np.vstack([ex, ey, ez])
-
-    # 3. Mapa de profundidad visto desde arriba (solo dentro de los bloques).
-    V = (np.asarray(malla.vertices) - o) @ R.T
+    V0 = np.asarray(malla.vertices)
     F = np.asarray(malla.faces)
-    tri = V[F]
-    dentro = (
-        (tri[:, :, 0].min(1) > 0.3) & (tri[:, :, 0].max(1) < ancho - 0.3)
-        & (tri[:, :, 1].min(1) > 0.3) & (tri[:, :, 1].max(1) < largo - 0.3)
-        & (tri[:, :, 2].max(1) < 3.0) & (tri[:, :, 2].min(1) > -rec["alto_z"] - 10)
-    )
-    rej = Rejilla.con_paso(ancho, largo, paso)
-    z = rasterizar(V, F[dentro], rej, rellenar=False)
 
-    # Si se ha colado una franja del bloque de al lado (casi a la misma altura), se corta
-    # por la ranura entre bloques.
-    i0, i1 = columnas_de_bloques(z, paso, cfg)
-    if (i0, i1) != (0, z.shape[1] - 1):
-        z = z[:, i0:i1 + 1]
-        o = o + i0 * paso * ex
-        ancho = (i1 - i0) * paso
+    libres = np.ones(len(F), bool)
+    for intento in range(3):
+        # 1-2. Cara superior y rectángulo -> sistema del bloque (X ancho, Y largo, Z normal, 0 en la cara).
+        try:
+            c, n, en_plano = buscar_plano_superior(malla, cfg["tolerancia_plano"], validas=libres)
+        except ValueError:
+            if intento == 0:
+                raise
+            break
+        area = malla.area_faces[en_plano].sum()
+        if intento == 0:
+            c_primero, n_primero, area_primero = c, n, area
+        elif (n @ n_primero < np.cos(np.radians(25)) or area < 0.3 * area_primero
+              or abs((c - c_primero) @ n_primero) > 15.0):
+            # No es la cara de otro bloque (inclinada de más, pequeña, o a otra altura: la mesa).
+            break
+        R, o, ancho, largo, plano_2d = _sistema_del_plano(malla, c, n, en_plano)
+        inf.mapas.setdefault("plano_2d", plano_2d)
 
-    M = np.eye(4)
-    M[:3, :3] = R
-    M[:3, 3] = -R @ o
-    inf.matriz = M.round(6).tolist()
-    inf.tam_bloques = (round(float(ancho), 1), round(float(largo), 1))
-    n_bloques = int(np.clip(round(ancho / cfg["bloque_ancho"]), 1, 2))
-    inf.n_bloques = n_bloques
-    if abs(ancho - n_bloques * cfg["bloque_ancho"]) > 15 or abs(largo - cfg["bloque_largo"]) > 15:
-        inf.avisos.append(
-            f"La cara de los bloques mide {ancho:.0f} × {largo:.0f} mm; se esperaba "
-            f"{n_bloques * cfg['bloque_ancho']:.0f} × {cfg['bloque_largo']:.0f}. "
-            "Revisa que el escaneo incluya los bloques enteros."
+        # 3. Mapa de alturas visto desde arriba, solo dentro del rectángulo.
+        V = (V0 - o) @ R.T
+        tri = V[F]
+        dentro = (
+            libres
+            & (tri[:, :, 0].min(1) > 0.3) & (tri[:, :, 0].max(1) < ancho - 0.3)
+            & (tri[:, :, 1].min(1) > 0.3) & (tri[:, :, 1].max(1) < largo - 0.3)
+            & (tri[:, :, 2].max(1) < 3.0) & (tri[:, :, 2].min(1) > -rec["alto_z"] - 10)
         )
-    agujero = np.isnan(z)
-    prof = np.where(agujero, 0.0, np.maximum(-z, 0.0))
-    prof = np.where(agujero, prof, ndimage.median_filter(prof, size=3))
+        z = rasterizar(V, F[dentro], Rejilla.con_paso(ancho, largo, paso), rellenar=False)
+        inf.mapas.setdefault("profundidad_bruta", np.where(np.isnan(z), 0, np.maximum(-z, 0)))
+        # Estas caras ya están usadas: el siguiente bloque se busca en el resto.
+        cerca = (
+            (tri[:, :, 0].max(1) > -5) & (tri[:, :, 0].min(1) < ancho + 5)
+            & (tri[:, :, 1].max(1) > -5) & (tri[:, :, 1].min(1) < largo + 5)
+            & (tri[:, :, 2].max(1) < 5.0) & (tri[:, :, 2].min(1) > -rec["alto_z"] - 10)
+        )
+        libres &= ~cerca
 
-    inf.mapas["profundidad_bruta"] = prof.copy()
-    inf.mapas["plano_2d"] = (p2, zona_principal_del_plano(p2), origen2, u2, v2, ancho, largo)
+        res = _procesar_bloque(z, paso, cfg)
+        M = np.eye(4)
+        M[:3, :3] = R
+        M[:3, 3] = -R @ o
+        if res is None:
+            inf.avisos.append(f"Hay un bloque de {ancho:.0f} × {largo:.0f} mm sin huella de pie.")
+        else:
+            prof, zona, giro = res
+            inf.bloques.append(Bloque(M, ancho, largo, prof, zona, giro))
+        if len(inf.bloques) >= 2:
+            break
 
-    # 4. Huellas.
-    etiquetas, pies = separar_huellas(prof, paso, cfg)
-    inf.mapas["etiquetas"] = etiquetas.copy()
-    if not pies:
+    if not inf.bloques:
         raise ValueError("No encuentro ninguna huella de pie en el escaneo.")
-    if len(pies) == 1:
+    if len(inf.bloques) > 2:
+        inf.bloques = sorted(inf.bloques, key=lambda b: -b.zona.sum())[:2]
+    for b in inf.bloques:
+        if abs(b.ancho - cfg["bloque_ancho"]) > 15 or abs(b.largo - cfg["bloque_largo"]) > 15:
+            inf.avisos.append(
+                f"Un bloque mide {b.ancho:.0f} × {b.largo:.0f} mm; se esperaba "
+                f"{cfg['bloque_ancho']:.0f} × {cfg['bloque_largo']:.0f}. Revisa que el escaneo lo incluya entero."
+            )
+    if len(inf.bloques) == 1:
         inf.avisos.append("Solo se ha encontrado una huella de pie.")
-    zona_pies = etiquetas > 0
-    prof = rellenar_agujeros(prof, agujero & zona_pies)
-    if cfg["suavizado"] > 0:
-        suave = ndimage.gaussian_filter(prof, cfg["suavizado"] / paso)
-        prof = np.where(zona_pies, suave, prof)
-    prof = np.where(zona_pies, np.maximum(prof, 0.0), 0.0)
 
-    # 5. Volcar el bloque: giro de 180° alrededor del eje Y -> x pasa a (ancho - x).
-    prof, etiquetas = prof[:, ::-1], etiquetas[:, ::-1]
-
-    # 6. Dedos hacia +Y (giro de 180° alrededor de Z si hace falta).
-    if not dedos_hacia_mas_y(etiquetas, pies, prof):
-        prof, etiquetas = prof[::-1, ::-1], etiquetas[::-1, ::-1]
-        inf.giro_180 = True
-
-    if lados is None:
-        lados = {k: lado_del_pie(prof, etiquetas == k) for k in pies}
-        if len(pies) == 2 and lados[1] == lados[2]:
-            # Contradicción: se decide por posición (el de -X es el izquierdo).
-            x = {k: np.nonzero(etiquetas == k)[1].mean() for k in pies}
-            izq = min(x, key=x.get)
-            lados = {k: ("izquierdo" if k == izq else "derecho") for k in pies}
+    # 6. Izquierdo / derecho.
+    for b in inf.bloques:
+        b.confianza_lado = confianza_izquierdo(b.prof, b.zona)
+    if lados is not None:
+        for k, b in enumerate(inf.bloques):
+            b.lado = lados[k]
+    elif len(inf.bloques) == 2:
+        # Uno de cada: el que más parece izquierdo es el izquierdo.
+        a, b = inf.bloques
+        izq = a if a.confianza_lado >= b.confianza_lado else b
+        for blq in inf.bloques:
+            blq.lado = "izquierdo" if blq is izq else "derecho"
+        if np.sign(a.confianza_lado) == np.sign(b.confianza_lado):
             inf.avisos.append("No está claro qué pie es cada uno: confírmalo.")
+    else:
+        b = inf.bloques[0]
+        b.lado = "izquierdo" if b.confianza_lado > 0 else "derecho"
 
     destino = Rejilla.para_recuadro(rec["ancho_x"], rec["largo_y"], paso)
-    alt, inf.pies = compactar(prof, etiquetas, lados, destino, cfg["pie_izquierdo_en"])
+    alt, inf.pies = compactar([(recortar_pie(b.prof, b.zona), b.lado) for b in inf.bloques],
+                              destino, cfg["pie_izquierdo_en"])
     alt = cfg["base"] + alt
     if alt.max() > rec["alto_z"]:
         inf.avisos.append(

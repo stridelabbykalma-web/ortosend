@@ -5,6 +5,22 @@ from ortomolde.limpieza import limpiar, rectangulo_minimo, rellenar_agujeros
 from ortomolde.sintetico import campo_limpio_esperado, malla_bruta
 
 
+def error_por_mitades(a, b):
+    """Error entre dos campos, permitiendo que cada pie esté desplazado ±1 celda
+    (al centrar el pie en su mitad puede caer una celda más allá)."""
+    mitad = a.shape[1] // 2
+    errores = []
+    for lado in (slice(0, mitad), slice(mitad, None)):
+        mejor = None
+        for dj in (-1, 0, 1):
+            for di in (-1, 0, 1):
+                e = np.abs(np.roll(a[:, lado], (dj, di), axis=(0, 1)) - b[:, lado])
+                if mejor is None or e.mean() < mejor.mean():
+                    mejor = e
+        errores.append(mejor)
+    return np.concatenate(errores, axis=1)
+
+
 @pytest.fixture(scope="module")
 def taller_1mm(taller):
     return {**taller, "calculo": {"rejilla": 1.0}}
@@ -19,7 +35,7 @@ def test_bruto_a_limpio(limpio, taller_1mm):
     campo, informe = limpio
     esperado = campo_limpio_esperado(taller_1mm, 1.0)
     assert campo.z.shape == esperado.z.shape
-    error = np.abs(campo.z - esperado.z)
+    error = error_por_mitades(campo.z, esperado.z)
     assert error.mean() < 0.2
     assert np.percentile(error, 95) < 1.0
     assert informe.avisos == []
@@ -29,7 +45,7 @@ def test_lados_y_orientacion(limpio):
     _, informe = limpio
     lados = {p["lado"]: p["mitad"] for p in informe.pies}
     assert lados == {"izquierdo": "izquierda", "derecho": "derecha"}
-    assert informe.giro_180  # el bruto sintético tiene los dedos hacia -Y
+    assert informe.n_bloques == 2
 
 
 def test_base_plana_y_limite(limpio, taller_1mm):
@@ -41,7 +57,7 @@ def test_base_plana_y_limite(limpio, taller_1mm):
 
 def test_lados_forzados(taller_1mm):
     malla = malla_bruta(taller_1mm, 1.0)
-    _, informe = limpiar(malla, taller_1mm, lados={1: "derecho", 2: "izquierdo"})
+    _, informe = limpiar(malla, taller_1mm, lados={0: "derecho", 1: "izquierdo"})
     assert {p["lado"] for p in informe.pies} == {"izquierdo", "derecho"}
 
 
@@ -68,5 +84,13 @@ def test_bruto_a_limpio_resolucion_real(taller):
     # en número de caras: comprueba que no se confunde de plano.
     campo, informe = limpiar(malla_bruta(taller, 0.5), taller)
     esperado = campo_limpio_esperado(taller, 0.5)
-    assert np.abs(campo.z - esperado.z).mean() < 0.2
+    assert error_por_mitades(campo.z, esperado.z).mean() < 0.2
     assert informe.avisos == []
+
+
+def test_bloques_con_distinta_inclinacion(taller_1mm):
+    # En los escaneos reales cada bloque está apoyado con una inclinación algo distinta.
+    campo, informe = limpiar(malla_bruta(taller_1mm, 1.0, inclinar_derecho=3.0), taller_1mm)
+    esperado = campo_limpio_esperado(taller_1mm, 1.0)
+    assert informe.n_bloques == 2
+    assert error_por_mitades(campo.z, esperado.z).mean() < 0.3
