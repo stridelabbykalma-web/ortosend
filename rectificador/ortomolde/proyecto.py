@@ -44,7 +44,8 @@ class Proyecto:
     tipo: str = "limpio"  # "bruto" (escaneo del Revopoint) o "limpio" (recuadro ya preparado)
     informe: InformeLimpieza | None = None  # solo si tipo == "bruto"
     pies: list[Pie] = field(default_factory=list)
-    suavizado: float = 3.0  # mm (ver ortomolde/suavizado.py)
+    lijado: float = 6.0  # mm, tamaño del taco de lija (ver ortomolde/suavizado.py)
+    _cache_lijado: tuple | None = field(default=None, repr=False)
 
     @classmethod
     def abrir(cls, ruta_stl: str | Path, taller: dict | None = None, tipo: str = "auto",
@@ -70,7 +71,7 @@ class Proyecto:
             campo = malla_a_campo(malla, taller["calculo"]["rejilla"], (rec["ancho_x"], rec["largo_y"]))
             informe, fondo = None, detectar_fondo(campo.z)
         p = cls(ruta, campo, fondo, taller, clinicos, huella(ruta), tipo, informe,
-                suavizado=taller.get("suavizado", {}).get("radio", 3.0))
+                lijado=taller.get("lijado", {}).get("taco", 6.0))
         p.pies = detectar_pies(campo, fondo, taller["limpieza"]["pie_izquierdo_en"])
         return p
 
@@ -141,12 +142,21 @@ class Proyecto:
             m |= p.mascara
         return m
 
+    def molde_lijado(self) -> np.ndarray:
+        """Escaneo original lijado (se guarda en memoria: solo se recalcula si cambia algo)."""
+        m = self.mascara_pies()
+        clave = (self.lijado, id(self.original), m.tobytes().__hash__())
+        if self._cache_lijado is None or self._cache_lijado[0] != clave:
+            z = suavizar(self.original.z, self.fondo, m, self.original.rejilla.dx, self.lijado)
+            self._cache_lijado = (clave, z)
+        return self._cache_lijado[1]
+
     def calcular(self) -> Campo:
-        """Resultado = original suavizado + correcciones (de momento ninguna), dentro del bloque.
+        """Resultado = original lijado + correcciones (de momento ninguna), dentro del bloque.
 
         Siempre se parte del escaneo original: nada se acumula ni se pierde.
         """
-        z = suavizar(self.original.z, self.fondo, self.mascara_pies(), self.original.rejilla.dx, self.suavizado)
+        z = self.molde_lijado().copy()
         z = np.clip(z, 0.0, self.taller["recuadro"]["alto_z"])
         return self.original.copia(z)
 
@@ -178,7 +188,7 @@ class Proyecto:
             "rejilla": self.original.rejilla.a_dict(),
             "desplazamiento_stl": [float(v) for v in self.original.desplazamiento],
             "fondo_mm": self.fondo,
-            "suavizado_mm": self.suavizado,
+            "lijado_mm": self.lijado,
             "pies": pies,
             "taller": self.taller,
             "valores_clinicos": self.clinicos,

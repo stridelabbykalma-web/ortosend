@@ -45,7 +45,9 @@ tolerancia_plano = 0.6
 # En qué mitad del recuadro va el pie izquierdo: "izquierda" (X pequeñas) o "derecha".
 pie_izquierdo_en = "izquierda"
 
-[suavizado]
-# Quita impurezas del molde (hoyitos, bultitos, marcas) más pequeñas que unas 2 veces este
-# valor, sin cambiar la forma del pie. 0 = sin suavizar. Se puede cambiar en la ventana.
-radio = 3.0
+[lijado]
+# Lijado del molde: quita impurezas (hoyitos, bultitos, ondulaciones, marcas) como si se
+# hubiera lijado, conservando la forma del pie y su contorno. El valor es el tamaño del
+# "taco de lija" en mm: más grande = lija ondulaciones más anchas. 0 = sin lijar.
+# Se puede cambiar en la ventana.
+taco = 6.0

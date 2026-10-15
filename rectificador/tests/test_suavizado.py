@@ -36,3 +36,23 @@ def test_base_sigue_plana_y_cero_no_cambia():
     assert np.allclose(s[lejos], 3.0)
     assert s.min() >= 3.0 - 1e-9
     assert np.array_equal(suavizar(z, 3.0, mascara, 0.5, 0.0), z)
+
+
+def test_contorno_no_cambia_con_lijado_fuerte():
+    X, Y, z, mascara = _cupula()
+    s = suavizar(z, 3.0, mascara, 0.5, 8.0)
+    for nivel in (2.0, 10.0):
+        antes, despues = (z - 3.0 > nivel).sum(), (s - 3.0 > nivel).sum()
+        assert abs(despues - antes) / antes < 0.02
+
+
+def test_lijado_conserva_superficie_curva_y_quita_ondulacion():
+    from ortomolde.campo import Rejilla
+    r = Rejilla.para_recuadro(120, 120, 0.5)
+    X, Y = r.malla()
+    curva = 3.0 + 15 + 0.004 * (X - 60) ** 2 - 0.003 * (Y - 60) ** 2  # superficie curva amplia
+    onda = 0.4 * np.sin(2 * np.pi * X / 8.0)  # ondulación de 8 mm
+    mascara = np.ones_like(curva, bool)
+    s = suavizar(curva + onda, 3.0, mascara, 0.5, 6.0)
+    centro = (np.abs(X - 60) < 30) & (np.abs(Y - 60) < 30)
+    assert np.abs(s - curva)[centro].max() < 0.2  # la onda de ±0,4 mm desaparece; la curva queda

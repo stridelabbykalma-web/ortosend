@@ -142,27 +142,28 @@ class VentanaPrincipal(QMainWindow):
         grupo = QGroupBox("Molde")
         lay = QVBoxLayout(grupo)
         fila = QHBoxLayout()
-        fila.addWidget(QLabel("Suavizado (quitar impurezas):"))
-        self.caja_suavizado = QDoubleSpinBox()
-        self.caja_suavizado.setRange(0.0, 8.0)
-        self.caja_suavizado.setSingleStep(0.5)
-        self.caja_suavizado.setDecimals(1)
-        self.caja_suavizado.setSuffix(" mm")
-        self.caja_suavizado.setToolTip(
-            "Quita hoyitos, bultitos y marcas más pequeños que unas 2 veces este valor,\n"
-            "sin cambiar la forma del pie. 0 = sin suavizar.")
-        self.caja_suavizado.valueChanged.connect(self.cambiar_suavizado)
-        fila.addWidget(self.caja_suavizado)
+        fila.addWidget(QLabel("Lijado (tamaño del taco):"))
+        self.caja_lijado = QDoubleSpinBox()
+        self.caja_lijado.setRange(0.0, 12.0)
+        self.caja_lijado.setSingleStep(0.5)
+        self.caja_lijado.setDecimals(1)
+        self.caja_lijado.setSuffix(" mm")
+        self.caja_lijado.setToolTip(
+            "Lija el molde: quita hoyitos, bultitos, ondulaciones y marcas conservando\n"
+            "la forma y el contorno del pie. Más grande = lija ondulaciones más anchas.\n"
+            "0 = sin lijar.")
+        self.caja_lijado.valueChanged.connect(self.cambiar_lijado)
+        fila.addWidget(self.caja_lijado)
         lay.addLayout(fila)
-        self.ver_original = QCheckBox("Ver el escaneo sin suavizar (para comparar)")
+        self.ver_original = QCheckBox("Ver el escaneo sin lijar (para comparar)")
         self.ver_original.toggled.connect(lambda _: self._mostrar_molde(reiniciar_camara=False))
         lay.addWidget(self.ver_original)
         return grupo
 
-    def cambiar_suavizado(self, valor: float):
-        if self.proyecto is None or abs(self.proyecto.suavizado - valor) < 1e-9:
+    def cambiar_lijado(self, valor: float):
+        if self.proyecto is None or abs(self.proyecto.lijado - valor) < 1e-9:
             return
-        self.proyecto.suavizado = float(valor)
+        self.proyecto.lijado = float(valor)
         self.ver_original.setChecked(False)
         self._mostrar_molde(reiniciar_camara=False)
         self._redibujar_pies()
@@ -221,9 +222,9 @@ class VentanaPrincipal(QMainWindow):
             self._progreso.close()
         self.proyecto = proyecto
         self.activa = None
-        self.caja_suavizado.blockSignals(True)
-        self.caja_suavizado.setValue(proyecto.suavizado)
-        self.caja_suavizado.blockSignals(False)
+        self.caja_lijado.blockSignals(True)
+        self.caja_lijado.setValue(proyecto.lijado)
+        self.caja_lijado.blockSignals(False)
         self._mostrar_molde(reiniciar_camara=True)
         self._redibujar_pies()
         self._refrescar_panel()
