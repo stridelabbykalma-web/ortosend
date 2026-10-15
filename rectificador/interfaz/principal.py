@@ -30,6 +30,7 @@ AYUDA = (
     "2.º, 3.º y 4.º MTT (el recorte pasa por delante de todas las cabezas). "
     "Para corregir una, pulsa su botón y vuelve a hacer clic derecho. "
     "<b>Proponer referencias</b> las coloca todas automáticamente para empezar.<br>"
+    "<b>Para ajustar un punto: cógelo con el botón izquierdo y arrástralo</b> sobre el molde.<br>"
     "Girar: arrastrar con el botón izquierdo · Desplazar: Mayús + arrastrar · Zoom: rueda."
 )
 
@@ -144,7 +145,8 @@ class VentanaPrincipal(QMainWindow):
         self.activa: tuple[str, str] | None = None  # (pie, referencia) que se va a marcar
         self._hilo = None
 
-        self.visor = Visor(self, al_hacer_clic=self.clic_en_molde)
+        self.visor = Visor(self, al_hacer_clic=self.clic_en_molde,
+                           al_arrastrar=self.arrastrar_referencia, al_soltar=self.soltar_referencia)
         panel = QWidget()
         self.lay_panel = QVBoxLayout(panel)
         self.info = QLabel("Abre un escaneo (Archivo → Abrir escaneo…).")
@@ -299,6 +301,34 @@ class VentanaPrincipal(QMainWindow):
             _, nombre = hecho
             self.statusBar().showMessage(f"{pie.nombre}: marcada {NOMBRES[nombre]}.", 4000)
         self.activa = None
+        self._actualizar_todo()
+
+    def _mover_referencia(self, clave: str, nombre: str, x: float, y: float) -> bool:
+        """Mueve una referencia si el punto sigue dentro de su pie."""
+        pie = self.proyecto.pies[int(clave[1])]
+        if self.proyecto.pie_en(x, y) is not pie:
+            return False
+        pie.referencias.puntos[nombre] = (float(x), float(y))
+        return True
+
+    def arrastrar_referencia(self, clave: str, nombre: str, x: float, y: float):
+        """Vista previa mientras se arrastra: se redibujan punto, eje, arco y recorte (sin recalcular el molde)."""
+        if not self.proyecto or not self._mover_referencia(clave, nombre, x, y):
+            return
+        pie = self.proyecto.pies[int(clave[1])]
+        try:
+            geom = self.proyecto.geometria(pie)
+            recorte = self.proyecto.linea_recorte(pie)
+        except ValueError:
+            geom, recorte = None, None
+        self.visor.dibujar_pie(clave, pie, geom, recorte)
+
+    def soltar_referencia(self, clave: str, nombre: str, x: float, y: float):
+        if not self.proyecto:
+            return
+        self._mover_referencia(clave, nombre, x, y)
+        pie = self.proyecto.pies[int(clave[1])]
+        self.statusBar().showMessage(f"{pie.nombre}: {NOMBRES[nombre]} movida.", 4000)
         self._actualizar_todo()
 
     def proponer_referencias(self, clave: str):

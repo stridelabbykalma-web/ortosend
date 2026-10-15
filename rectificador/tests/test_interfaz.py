@@ -30,3 +30,50 @@ def test_ventana_abre_y_marca_referencias(stl_sintetico):
     assert v.proyecto.pie("derecho").referencias.puntos  # las referencias van con el pie
     app.processEvents()
     v.close()
+
+
+def _evento(iren, nombre, x, y):
+    iren.SetEventInformation(int(round(x)), int(round(y)), 0, 0, "\0", 0, None)
+    iren.InvokeEvent(nombre)
+
+
+def test_arrastrar_un_punto_con_el_raton(stl_sintetico):
+    import numpy as np
+    from PySide6.QtWidgets import QApplication
+
+    from interfaz.principal import VentanaPrincipal
+
+    app = QApplication.instance() or QApplication([])
+    v = VentanaPrincipal()
+    v.resize(1400, 900)
+    v.show()
+    v.abrir(str(stl_sintetico), esperar=True)
+    v.proponer_referencias("p0")
+    v.visor.view_xy()  # vista desde arriba: mover en pantalla = mover sobre la planta
+    v.visor.render()
+    app.processEvents()
+    iren = v.visor.iren.interactor
+    pie = v.proyecto.pies[0]
+    antes = np.array(pie.referencias.puntos["mtt2"])
+    camara = v.visor.camera_position
+
+    x, y, z = v.visor.puntos_arrastrables[("p0", "mtt2")]
+    sx, sy = v.visor.a_pantalla(x, y, z)
+    # Dónde cae en pantalla un punto 8 mm más atrás (hacia el talón).
+    dx, dy = v.visor.a_pantalla(x, y - 8.0, z)
+    _evento(iren, "LeftButtonPressEvent", sx, sy)
+    for f in np.linspace(0, 1, 5)[1:]:
+        _evento(iren, "MouseMoveEvent", sx + f * (dx - sx), sy + f * (dy - sy))
+    _evento(iren, "LeftButtonReleaseEvent", dx, dy)
+    app.processEvents()
+
+    despues = np.array(pie.referencias.puntos["mtt2"])
+    assert np.allclose(despues - antes, [0.0, -8.0], atol=1.0)
+    assert v.visor.camera_position == camara  # la cámara no ha girado
+
+    # Lejos de los puntos, arrastrar gira la cámara como siempre.
+    _evento(iren, "LeftButtonPressEvent", 30, 30)
+    _evento(iren, "MouseMoveEvent", 120, 60)
+    _evento(iren, "LeftButtonReleaseEvent", 120, 60)
+    assert v.visor.camera_position != camara
+    v.close()

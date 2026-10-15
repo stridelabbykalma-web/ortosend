@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import numpy as np
 import pyvista as pv
+import vtk
+from PySide6.QtCore import Qt
 from pyvistaqt import QtInteractor
 
 from ortomolde.campo import Campo
@@ -17,6 +19,7 @@ COLOR_METATARSAL = "#ff9f43"
 COLOR_ARCO = "#00d2d3"
 COLOR_RECORTE = "#ff3b30"
 ELEVACION = 1.0  # las líneas se dibujan un poco por encima de la superficie
+RADIO_AGARRE = 15  # píxeles: a esta distancia de un punto se puede coger con el ratón
 
 
 def superficie(campo: Campo) -> pv.StructuredGrid:
@@ -27,25 +30,49 @@ def superficie(campo: Campo) -> pv.StructuredGrid:
 
 
 class Visor(QtInteractor):
-    """Visor del molde. Llama a `al_hacer_clic(x, y, z)` con el clic derecho sobre la superficie."""
+    """Visor del molde.
 
-    def __init__(self, parent=None, al_hacer_clic=None):
+    - Clic derecho sobre la superficie -> `al_hacer_clic(x, y, z)`.
+    - Botón izquierdo sobre un punto de referencia y arrastrar -> el punto se mueve pegado al
+      molde: `al_arrastrar(clave, nombre, x, y)` mientras se mueve y `al_soltar(...)` al soltar.
+      Lejos de los puntos, el botón izquierdo gira la vista como siempre.
+    """
+
+    def __init__(self, parent=None, al_hacer_clic=None, al_arrastrar=None, al_soltar=None):
         super().__init__(parent)
         self.set_background("#2b2d31", top="#3d4148")
         self.al_hacer_clic = al_hacer_clic
+        self.al_arrastrar = al_arrastrar
+        self.al_soltar = al_soltar
         self.campo: Campo | None = None
         self._actores_pie: dict[str, list[str]] = {}
+        # (clave del pie, nombre) -> (x, y, z) de cada punto que se puede coger con el ratón.
+        self.puntos_arrastrables: dict[tuple[str, str], tuple[float, float, float]] = {}
+        self._arrastrando: tuple[str, str] | None = None
+        self._ultimo_xy: tuple[float, float] | None = None
+        self._picker = vtk.vtkCellPicker()
+        self._picker.SetTolerance(0.0005)
+        self._picker.PickFromListOn()
         self.enable_surface_point_picking(
             callback=self._clic, show_message=False, show_point=False, left_clicking=False,
             clear_on_no_selection=False, pickable_window=False,
         )
+        # Los observadores van en el propio interactor con prioridad alta: cuando cogemos un
+        # punto se corta el evento y la cámara no gira.
+        iren = self.iren.interactor
+        self._tags = {}
+        for evento, funcion in (("LeftButtonPressEvent", self._pulsar), ("MouseMoveEvent", self._mover),
+                                ("LeftButtonReleaseEvent", self._soltar)):
+            self._tags[evento] = iren.AddObserver(evento, funcion, 10.0)
 
     # ---------------------------------------------------------------- molde
 
     def mostrar_molde(self, campo: Campo, reiniciar_camara: bool = True) -> None:
         self.campo = campo
-        self.add_mesh(superficie(campo), name="molde", color="#d8c3a0",  # color espuma
-                      smooth_shading=True, pickable=True, specular=0.15, ambient=0.2, diffuse=0.85)
+        actor = self.add_mesh(superficie(campo), name="molde", color="#d8c3a0",  # color espuma
+                              smooth_shading=True, pickable=True, specular=0.15, ambient=0.2, diffuse=0.85)
+        self._picker.InitializePickList()
+        self._picker.AddPickList(actor)
         if reiniciar_camara:
             self.vista_inicial()
 
@@ -83,6 +110,8 @@ class Visor(QtInteractor):
     def borrar_pie(self, clave: str) -> None:
         for nombre in self._actores_pie.pop(clave, []):
             self.remove_actor(nombre, render=False)
+        for k in [k for k in self.puntos_arrastrables if k[0] == clave]:
+            del self.puntos_arrastrables[k]
 
     def dibujar_pie(self, clave: str, pie: Pie, geom: dict | None, recorte: list | None = None) -> None:
         """Referencias marcadas y, si están las 3, el eje, la línea metatarsal y el arco."""
@@ -98,6 +127,7 @@ class Visor(QtInteractor):
             if k in pie.referencias.puntos:
                 x, y = pie.referencias.puntos[k]
                 z = float(self._z(x, y))
+                self.puntos_arrastrables[(clave, k)] = (x, y, z + 1.5)
                 grande = k in ("mtt1", "mtt5", "talon")
                 poner(k, pv.Sphere(radius=3.0 if grande else 2.3, center=(x, y, z + 1.5)), color=COLORES[k])
                 actor = f"{clave}_{k}_texto"
@@ -127,6 +157,71 @@ class Visor(QtInteractor):
         nombres.append(actor)
         self._actores_pie[clave] = nombres
         self.render()
+
+    # ---------------------------------------------------------------- arrastrar puntos
+
+    def a_pantalla(self, x: float, y: float, z: float) -> tuple[float, float]:
+        ren = self.renderer
+        ren.SetWorldPoint(x, y, z, 1.0)
+        ren.WorldToDisplay()
+        px, py, _ = ren.GetDisplayPoint()
+        return px, py
+
+    def punto_bajo(self, px: float, py: float) -> tuple[str, str] | None:
+        """El punto de referencia más cercano a la posición de pantalla, si está a mano."""
+        mejor, dist = None, RADIO_AGARRE
+        for clave, (x, y, z) in self.puntos_arrastrables.items():
+            sx, sy = self.a_pantalla(x, y, z)
+            d = float(np.hypot(sx - px, sy - py))
+            if d <= dist:
+                mejor, dist = clave, d
+        return mejor
+
+    def superficie_en(self, px: float, py: float) -> tuple[float, float, float] | None:
+        """Punto del molde bajo la posición de pantalla."""
+        if self.campo is None or not self._picker.Pick(px, py, 0, self.renderer):
+            return None
+        return tuple(self._picker.GetPickPosition())
+
+    def _cortar(self, evento: str) -> None:
+        self.iren.interactor.GetCommand(self._tags[evento]).SetAbortFlag(1)
+
+    def _pulsar(self, iren, evento):
+        px, py = iren.GetEventPosition()
+        cogido = self.punto_bajo(px, py)
+        if cogido is None:
+            return  # sigue el giro normal de la cámara
+        self._arrastrando = cogido
+        self._ultimo_xy = None
+        self.setCursor(Qt.ClosedHandCursor)
+        self._cortar(evento)
+
+    def _mover(self, iren, evento):
+        px, py = iren.GetEventPosition()
+        if self._arrastrando is None:
+            # Solo cambia el cursor si pasa por encima de un punto.
+            if self.punto_bajo(px, py) is not None:
+                self.setCursor(Qt.OpenHandCursor)
+            else:
+                self.unsetCursor()
+            return
+        self._cortar(evento)
+        p = self.superficie_en(px, py)
+        if p is None:
+            return
+        self._ultimo_xy = (p[0], p[1])
+        if self.al_arrastrar:
+            self.al_arrastrar(self._arrastrando[0], self._arrastrando[1], p[0], p[1])
+
+    def _soltar(self, iren, evento):
+        if self._arrastrando is None:
+            return
+        self._cortar(evento)
+        clave, nombre = self._arrastrando
+        self._arrastrando = None
+        self.unsetCursor()
+        if self._ultimo_xy is not None and self.al_soltar:
+            self.al_soltar(clave, nombre, *self._ultimo_xy)
 
     # ---------------------------------------------------------------- clics
 

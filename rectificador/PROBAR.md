@@ -23,7 +23,8 @@
 2. Comprueba que cada pie tiene bien su nombre (**PIE IZQUIERDO / PIE DERECHO**).
    Si está al revés, pulsa **Intercambiar izquierdo ↔ derecho**.
 3. En cada pie pulsa **Proponer referencias**: aparecen las 5 cabezas metatarsales y el talón.
-   Si alguna no está donde la pondrías, pulsa su botón **Marcar** y haz **clic derecho** en el sitio correcto.
+   Si alguna no está donde la pondrías, **cógela con el botón izquierdo y arrástrala** al sitio correcto
+   (el cursor se convierte en una mano al pasar por encima del punto).
 4. Mira el **recorte en arco** (línea roja): por delante ya no hay molde.
    Prueba a cambiar **Adelanto** y **Curvatura**.
 5. Mira el **lijado**: cambia el tamaño del taco y marca «Ver el escaneo sin lijar» para comparar.
