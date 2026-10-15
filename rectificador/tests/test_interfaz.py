@@ -77,3 +77,22 @@ def test_arrastrar_un_punto_con_el_raton(stl_sintetico):
     _evento(iren, "LeftButtonReleaseEvent", 120, 60)
     assert v.visor.camera_position != camara
     v.close()
+
+
+def test_medir_distancia(stl_sintetico):
+    from PySide6.QtWidgets import QApplication
+
+    from interfaz.principal import VentanaPrincipal
+
+    app = QApplication.instance() or QApplication([])
+    v = VentanaPrincipal()
+    v.show()
+    v.abrir(str(stl_sintetico), esperar=True)
+    v.boton_medir.setChecked(True)
+    v.clic_en_molde(50.0, 60.0, 10.0)
+    v.clic_en_molde(50.0, 160.0, 12.0)
+    assert "100.0 mm" in v.texto_medida.text()
+    assert "Medidas (mm)" in v.paneles["p0"].medidas.text()
+    v.boton_medir.setChecked(False)
+    assert v.medida == []
+    v.close()

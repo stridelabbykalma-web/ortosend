@@ -10,7 +10,7 @@ import traceback
 from pathlib import Path
 
 from PySide6.QtCore import QObject, QThread, Qt, Signal
-from PySide6.QtGui import QAction, QKeySequence
+from PySide6.QtGui import QAction, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QApplication, QButtonGroup, QCheckBox, QDoubleSpinBox, QFileDialog, QGroupBox, QHBoxLayout,
     QLabel, QMainWindow, QMessageBox, QProgressDialog, QPushButton, QScrollArea, QSplitter,
@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from interfaz.visor import COLORES, Visor  # noqa: E402
-from ortomolde.exportar import exportar  # noqa: E402
+from ortomolde.exportar import exportar, medidas_stl  # noqa: E402
 from ortomolde.proyecto import Proyecto  # noqa: E402
 from ortomolde.referencias import NOMBRES, OPCIONALES, ORDEN  # noqa: E402
 
@@ -113,6 +113,12 @@ class PanelPie(QGroupBox):
         fila.addWidget(self.curvatura)
         lay.addLayout(fila)
 
+        self.medidas = QLabel()
+        self.medidas.setWordWrap(True)
+        self.medidas.setStyleSheet("background: #f4f1ea; padding: 4px; border-radius: 3px;")
+        self.medidas.setToolTip("Medidas reales del molde en mm, para comprobar la escala.")
+        lay.addWidget(self.medidas)
+
     def actualizar(self, pie, proyecto, activa: str | None):
         self.setTitle(f"{pie.nombre}  (mitad {'izquierda' if self.clave == 'p0' else 'derecha'})")
         for k in ORDEN:
@@ -134,6 +140,16 @@ class PanelPie(QGroupBox):
         for w in (self.recortar, self.adelanto, self.curvatura):
             w.setEnabled(listo)
         self.recortar.setToolTip("" if listo else "Marca antes las 3 referencias de este pie.")
+        m = proyecto.medidas(pie)
+        partes = [f"<b>Medidas (mm)</b>: largo {m['largo']:.0f} · ancho máx. {m['ancho_maximo']:.0f}"]
+        if "ancho_cabezas" in m:
+            partes.append(f"ancho a las cabezas {m['ancho_cabezas']:.0f} · ancho talón {m['ancho_talon']:.0f}")
+            partes.append(f"talón→1.er MTT {m['talon_mtt1']:.0f} · talón→5.º MTT {m['talon_mtt5']:.0f} · "
+                          f"1.º↔5.º MTT {m['mtt1_mtt5']:.0f}")
+        partes.append(f"altura máx. del relieve {m['altura_maxima']:.1f}")
+        self.medidas.setText("<br>".join(partes))
+        # Alto suficiente para que no se corte ninguna línea.
+        self.medidas.setMinimumHeight(self.medidas.fontMetrics().lineSpacing() * (len(partes) + 1) + 10)
 
 
 class VentanaPrincipal(QMainWindow):
@@ -145,8 +161,12 @@ class VentanaPrincipal(QMainWindow):
         self.activa: tuple[str, str] | None = None  # (pie, referencia) que se va a marcar
         self._hilo = None
 
+        self.medida: list = []  # puntos de la herramienta Medir
         self.visor = Visor(self, al_hacer_clic=self.clic_en_molde,
-                           al_arrastrar=self.arrastrar_referencia, al_soltar=self.soltar_referencia)
+                           al_arrastrar=self.arrastrar_referencia, al_soltar=self.soltar_referencia,
+                           al_pasar=self.raton_sobre_molde)
+        self.posicion = QLabel()
+        self.statusBar().addPermanentWidget(self.posicion)
         panel = QWidget()
         self.lay_panel = QVBoxLayout(panel)
         self.info = QLabel("Abre un escaneo (Archivo → Abrir escaneo…).")
@@ -202,7 +222,35 @@ class VentanaPrincipal(QMainWindow):
         self.ver_original = QCheckBox("Ver el escaneo sin lijar (para comparar)")
         self.ver_original.toggled.connect(lambda _: self._mostrar_molde(reiniciar_camara=False))
         lay.addWidget(self.ver_original)
+        self.boton_medir = QPushButton("Medir distancia (M)")
+        self.boton_medir.setCheckable(True)
+        self.boton_medir.setToolTip("Actívalo y haz dos clics derechos sobre el molde: se dibuja la distancia en mm.\n"
+                                    "Esc o volver a pulsar para quitarla.")
+        self.boton_medir.toggled.connect(self.modo_medir)
+        lay.addWidget(self.boton_medir)
+        self.texto_medida = QLabel()
+        self.texto_medida.setWordWrap(True)
+        lay.addWidget(self.texto_medida)
+        self.texto_recuadro = QLabel()
+        self.texto_recuadro.setWordWrap(True)
+        lay.addWidget(self.texto_recuadro)
+        QShortcut(QKeySequence("M"), self, activated=self.boton_medir.toggle)
+        QShortcut(QKeySequence("Esc"), self, activated=lambda: self.boton_medir.setChecked(False))
         return grupo
+
+    def modo_medir(self, activo: bool):
+        self.medida = []
+        self.visor.borrar_medida()
+        self.texto_medida.setText(
+            "Haz clic derecho en el primer punto y luego en el segundo." if activo else "")
+
+    def raton_sobre_molde(self, punto):
+        if self.proyecto is None or punto is None:
+            self.posicion.setText("")
+            return
+        x, y, z = punto
+        xt, yt, zt = self.proyecto.a_taller(x, y, z)
+        self.posicion.setText(f"X {xt:.1f}  Y {yt:.1f} mm  ·  altura {z:.1f} mm (Z taller {zt:.1f})")
 
     def cambiar_lijado(self, valor: float):
         if self.proyecto is None or abs(self.proyecto.lijado - valor) < 1e-9:
@@ -234,6 +282,11 @@ class VentanaPrincipal(QMainWindow):
             a = QAction(texto, self)
             a.triggered.connect(accion)
             ver.addAction(a)
+        reglas = QAction("Mostrar reglas en mm", self)
+        reglas.setCheckable(True)
+        reglas.setChecked(True)
+        reglas.toggled.connect(self.visor.mostrar_reglas)
+        ver.addAction(reglas)
 
     # ---------------------------------------------------------------- abrir
 
@@ -288,6 +341,18 @@ class VentanaPrincipal(QMainWindow):
 
     def clic_en_molde(self, x: float, y: float, z: float):
         if self.proyecto is None:
+            return
+        if self.boton_medir.isChecked():
+            if len(self.medida) >= 2:
+                self.medida = []
+                self.visor.borrar_medida()
+            self.medida.append((x, y, z))
+            if len(self.medida) == 2:
+                dp, d3 = self.visor.dibujar_medida(*self.medida)
+                self.texto_medida.setText(f"<b>Distancia: {dp:.1f} mm</b> en planta "
+                                          f"({d3:.1f} mm en línea recta en 3D). Otro clic empieza otra medida.")
+            else:
+                self.texto_medida.setText("Primer punto marcado. Clic derecho en el segundo.")
             return
         pie = self.proyecto.pie_en(x, y)
         if pie is None:
@@ -390,6 +455,9 @@ class VentanaPrincipal(QMainWindow):
             f"{len(p.pies)} pie(s) encontrado(s)"
         )
         self.avisos.setText("<br>".join(f"⚠ {a}" for a in p.avisos))
+        r = p.original.rejilla
+        self.texto_recuadro.setText(f"Recuadro: {r.ancho:.0f} × {r.largo:.0f} mm · bloque de "
+                                    f"{p.taller['recuadro']['alto_z']:.0f} mm de alto")
         for clave, panel in self.paneles.items():
             k = int(clave[1])
             if k < len(p.pies):
@@ -410,7 +478,17 @@ class VentanaPrincipal(QMainWindow):
             return
         ruta = Path(ruta)
         rutas = exportar(self.proyecto.calcular(), ruta.parent, ruta.stem, self.proyecto.receta(), self.proyecto.taller)
-        QMessageBox.information(self, "Exportado", "Archivos guardados:\n" + "\n".join(str(r) for r in rutas.values()))
+        a = medidas_stl(rutas["stl"])
+        f = medidas_stl(rutas["fusion"])
+        escala = self.proyecto.taller["fusion"]["escala"]
+        QMessageBox.information(
+            self, "Exportado",
+            "Archivos guardados:\n" + "\n".join(str(r) for r in rutas.values()) + "\n\n"
+            f"Medidas para comprobar la escala:\n"
+            f"  {rutas['stl'].name}: {a[0]:.1f} × {a[1]:.1f} × {a[2]:.1f} mm\n"
+            f"  {rutas['fusion'].name}: {f[0]:.2f} × {f[1]:.2f} × {f[2]:.2f} (unidades del archivo)\n"
+            f"  → En Fusion (cm) debe medir {f[0]:.2f} × {f[1]:.2f} × {f[2]:.2f} cm "
+            f"= {f[0] / escala:.0f} × {f[1] / escala:.0f} × {f[2] / escala:.1f} mm.")
 
 
 def main():

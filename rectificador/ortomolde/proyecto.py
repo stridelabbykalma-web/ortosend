@@ -156,6 +156,55 @@ class Proyecto:
 
     # ------------------------------------------------------------------ resultado
 
+    def medidas(self, pie: Pie) -> dict:
+        """Medidas del pie en mm (sobre el molde sin recortar), para comprobar la escala.
+
+        Largo = talón -> punta medido a lo largo del eje del pie (el de las referencias si están;
+        si no, la dirección más larga de la huella). Anchos medidos en perpendicular al eje.
+        """
+        r = self.original.rejilla
+        z = self.molde_lijado()
+        huella = pie.mascara & (z - self.fondo > 1.5)  # contorno de la huella (sin el margen)
+        jj, ii = np.nonzero(huella)
+        pts = np.column_stack([ii * r.dx, jj * r.dy])
+        sis = None
+        if pie.referencias.completas:
+            try:
+                sis = pie.referencias.sistema()
+            except ValueError:
+                sis = None
+        if sis is not None:
+            eje, perp, origen = sis.eje, sis.medial, sis.origen
+        else:
+            origen = pts.mean(axis=0)
+            _, _, vt = np.linalg.svd(pts - origen, full_matrices=False)
+            eje = vt[0] if vt[0][1] > 0 else -vt[0]
+            perp = np.array([-eje[1], eje[0]])
+        u = (pts - origen) @ eje
+        v = (pts - origen) @ perp
+        largo = float(u.max() - u.min())
+
+        def ancho_en(u0, banda=1.0):
+            sel = np.abs(u - u0) <= banda
+            return float(v[sel].max() - v[sel].min()) if sel.any() else 0.0
+
+        franjas = np.arange(u.min(), u.max(), 2.0)
+        anchos = [ancho_en(f) for f in franjas]
+        m = {
+            "largo": largo,
+            "ancho_maximo": float(max(anchos)) if anchos else 0.0,
+            "altura_maxima": float((z[huella] - self.fondo).max()) if huella.any() else 0.0,
+        }
+        refs = pie.referencias.puntos
+        if sis is not None:
+            m["ancho_talon"] = ancho_en(0.0)
+            m1, m5 = np.array(refs["mtt1"]), np.array(refs["mtt5"])
+            m["ancho_cabezas"] = ancho_en(float(((m1 + m5) / 2 - origen) @ eje))
+            m["talon_mtt1"] = float(np.linalg.norm(m1 - origen))
+            m["talon_mtt5"] = float(np.linalg.norm(m5 - origen))
+            m["mtt1_mtt5"] = float(np.linalg.norm(m5 - m1))
+        return m
+
     def mascara_pies(self) -> np.ndarray:
         m = np.zeros(self.original.z.shape, bool)
         for p in self.pies:

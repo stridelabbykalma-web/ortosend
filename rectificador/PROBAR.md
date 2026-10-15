@@ -28,9 +28,14 @@
 4. Mira el **recorte en arco** (línea roja): por delante ya no hay molde.
    Prueba a cambiar **Adelanto** y **Curvatura**.
 5. Mira el **lijado**: cambia el tamaño del taco y marca «Ver el escaneo sin lijar» para comparar.
-6. *Archivo → Exportar…* y guarda. Salen 3 archivos:
+6. **Comprueba la escala**: el panel de cada pie muestra sus medidas en mm (largo, anchos, distancias
+   entre referencias) y alrededor del molde hay reglas en mm. Con **Medir distancia (M)** y dos clics
+   derechos mides lo que quieras (por ejemplo, del talón a la punta) y lo comparas con una cinta
+   métrica sobre la espuma. Abajo a la derecha ves las coordenadas del punto bajo el ratón.
+7. *Archivo → Exportar…* y guarda. Salen 3 archivos:
    `NOMBRE.stl`, `NOMBRE_FUSION.stl` y `NOMBRE_receta.json`.
-7. Abre `NOMBRE_FUSION.stl` en Fusion 360 **sin cambiar unidades** y comprueba que mide lo que debe.
+8. Abre `NOMBRE_FUSION.stl` en Fusion 360 **sin cambiar unidades** y comprueba que mide lo que dice el
+   mensaje al exportar (el recuadro debe ser 28,8 × 33,0 cm = 288 × 330 mm).
 
 Ratón en el visor: girar = arrastrar con el botón izquierdo · desplazar = Mayús + arrastrar · zoom = rueda.
 

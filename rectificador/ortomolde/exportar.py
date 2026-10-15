@@ -32,6 +32,12 @@ def decimar(malla: trimesh.Trimesh, objetivo: int, maximo: int) -> trimesh.Trime
     return reducida
 
 
+def medidas_stl(ruta: str | Path) -> tuple[float, float, float]:
+    """Tamaño (ancho X, largo Y, alto Z) de un STL en sus propias unidades."""
+    m = trimesh.load(ruta, force="mesh")
+    return tuple(float(v) for v in m.bounds[1] - m.bounds[0])
+
+
 def exportar(campo: Campo, carpeta: str | Path, nombre: str, receta: dict, taller: dict) -> dict[str, Path]:
     """Escribe NOMBRE.stl, NOMBRE_FUSION.stl y NOMBRE_receta.json. Devuelve las rutas."""
     carpeta = Path(carpeta)

@@ -38,10 +38,12 @@ class Visor(QtInteractor):
       Lejos de los puntos, el botón izquierdo gira la vista como siempre.
     """
 
-    def __init__(self, parent=None, al_hacer_clic=None, al_arrastrar=None, al_soltar=None):
+    def __init__(self, parent=None, al_hacer_clic=None, al_arrastrar=None, al_soltar=None, al_pasar=None):
         super().__init__(parent)
         self.set_background("#2b2d31", top="#3d4148")
         self.al_hacer_clic = al_hacer_clic
+        self.al_pasar = al_pasar  # (x, y, z) del molde bajo el ratón, o None
+        self.reglas = True
         self.al_arrastrar = al_arrastrar
         self.al_soltar = al_soltar
         self.campo: Campo | None = None
@@ -73,8 +75,44 @@ class Visor(QtInteractor):
                               smooth_shading=True, pickable=True, specular=0.15, ambient=0.2, diffuse=0.85)
         self._picker.InitializePickList()
         self._picker.AddPickList(actor)
+        self.mostrar_reglas(self.reglas)
         if reiniciar_camara:
             self.vista_inicial()
+
+    def mostrar_reglas(self, mostrar: bool) -> None:
+        """Reglas en mm alrededor del recuadro (X, Y y altura)."""
+        self.reglas = mostrar
+        self.remove_bounds_axes()
+        if mostrar and self.campo is not None:
+            r = self.campo.rejilla
+            self.show_grid(bounds=(0, r.ancho, 0, r.largo, 0, float(max(self.campo.z.max(), 1.0))),
+                           xtitle="X (mm)", ytitle="Y (mm)", ztitle="Altura (mm)", fmt="%.0f",
+                           n_xlabels=7, n_ylabels=8, n_zlabels=4, font_size=10, color="#dddddd",
+                           location="outer", ticks="outside", minor_ticks=True)
+        self.render()
+
+    def dibujar_medida(self, a, b) -> None:
+        """Línea entre dos puntos del molde con su distancia en mm."""
+        a, b = np.asarray(a, float), np.asarray(b, float)
+        # La línea va pegada a la superficie del molde (se ve entera aunque haya relieve).
+        self.add_mesh(self._linea([a[:2], b[:2]]), name="medida_linea", color="white",
+                      line_width=4, render_lines_as_tubes=True, pickable=False, render=False)
+        self.add_mesh(pv.PolyData(np.vstack([a, b]) + [0, 0, 1.5]), name="medida_puntos", color="white",
+                      point_size=12, render_points_as_spheres=True, pickable=False, render=False)
+        d3 = float(np.linalg.norm(b - a))
+        dp = float(np.linalg.norm((b - a)[:2]))
+        medio = (a + b) / 2
+        medio[2] = float(self._z(medio[0], medio[1])) + 8
+        self.add_point_labels([medio], [f"{dp:.1f} mm"], name="medida_texto",
+                              font_size=16, text_color="black", shape_color="white", shape_opacity=0.9,
+                              show_points=False, always_visible=True, render=False)
+        self.render()
+        return dp, d3
+
+    def borrar_medida(self) -> None:
+        for n in ("medida_linea", "medida_puntos", "medida_texto"):
+            self.remove_actor(n, render=False)
+        self.render()
 
     def vista_inicial(self) -> None:
         r = self.campo.rejilla
@@ -204,6 +242,8 @@ class Visor(QtInteractor):
                 self.setCursor(Qt.OpenHandCursor)
             else:
                 self.unsetCursor()
+            if self.al_pasar:
+                self.al_pasar(self.superficie_en(px, py))
             return
         self._cortar(evento)
         p = self.superficie_en(px, py)
