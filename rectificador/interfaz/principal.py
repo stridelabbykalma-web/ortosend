@@ -291,7 +291,10 @@ class VentanaPrincipal(QMainWindow):
     # ---------------------------------------------------------------- abrir
 
     def abrir_dialogo(self):
-        ruta, _ = QFileDialog.getOpenFileName(self, "Abrir escaneo", "", "Mallas STL (*.stl)")
+        ruta, _ = QFileDialog.getOpenFileName(
+            self, "Abrir escaneo", "",
+            "Escaneos (*.stl *.ply *.obj *.revox *.zip);;Proyecto de Revo Scan (*.revox);;"
+            "Mallas (*.stl *.ply *.obj);;ZIP (*.zip);;Todos los archivos (*.*)")
         if ruta:
             self.abrir(ruta)
 

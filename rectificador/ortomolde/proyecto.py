@@ -17,6 +17,7 @@ import trimesh
 
 from . import __version__, config
 from .campo import Campo, detectar_fondo, malla_a_campo
+from .entrada import cargar_malla
 from .limpieza import InformeLimpieza, componer, limpiar
 from .pies import Pie, detectar_pies
 from . import recorte as recorte_mod
@@ -54,6 +55,8 @@ class Proyecto:
               lados: dict[int, str] | None = None, clinicos: dict | None = None) -> "Proyecto":
         """Abre un escaneo en bruto (lo limpia) o un recuadro ya limpio.
 
+        Acepta STL, PLY, OBJ, el proyecto de Revo Scan (.revox) o un ZIP con cualquiera de ellos.
+
         tipo = "auto" decide solo: si la malla es cerrada y mide lo que el recuadro, es un
         molde limpio; si no, se trata como escaneo en bruto.
         """
@@ -62,7 +65,7 @@ class Proyecto:
         from . import referencias as _ref
         _ref.EJE_SIN_2_3 = clinicos.get("referencias", {}).get("eje_sin_2_3", _ref.EJE_SIN_2_3)
         ruta = Path(ruta_stl)
-        malla = trimesh.load(ruta, force="mesh")
+        malla = cargar_malla(ruta)
         rec = taller["recuadro"]
         if tipo == "auto":
             tam = malla.bounds[1] - malla.bounds[0]

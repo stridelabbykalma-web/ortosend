@@ -18,7 +18,11 @@
 
 ## 3. Probar con un escaneo
 
-1. *Archivo → Abrir escaneo…* y elige el STL tal cual sale del Revopoint (por ejemplo `adroguer.stl`).
+1. *Archivo → Abrir escaneo…* y elige el escaneo. Vale cualquiera de estos:
+   - **el proyecto de Revo Scan directamente**: el archivo `.revox` que hay dentro de la carpeta del
+     proyecto (no hace falta exportar a STL; la carpeta debe tener su subcarpeta `meshs`);
+   - un `.stl`, `.ply` u `.obj` exportado;
+   - un ZIP con cualquiera de ellos (no hace falta descomprimirlo).
    Tarda unos 15 segundos en limpiarlo.
 2. Comprueba que cada pie tiene bien su nombre (**PIE IZQUIERDO / PIE DERECHO**).
    Si está al revés, pulsa **Intercambiar izquierdo ↔ derecho**.

@@ -33,7 +33,9 @@ También acepta un recuadro ya limpio (lo detecta solo).
 
 ## Qué recibe y qué devuelve
 
-- **Entrada**: el STL en bruto del Revopoint (los dos bloques con la huella hundida, mm), o un recuadro ya limpio.
+- **Entrada**: el escaneo en bruto del Revopoint (los dos bloques con la huella hundida, mm), o un recuadro
+  ya limpio. Formatos: el proyecto de Revo Scan (`.revox`, se abre su malla de `meshs/`), `.stl`, `.ply`,
+  `.obj`, o un `.zip` con cualquiera de ellos.
 - **Salida** (en la carpeta que elijas):
   - `NOMBRE.stl` – molde rectificado a escala real (mm), estanco, en el mismo sistema de coordenadas que la entrada.
   - `NOMBRE_FUSION.stl` – la misma malla reducida a menos de 10.000 triángulos y dividida entre 10 (Fusion en cm).

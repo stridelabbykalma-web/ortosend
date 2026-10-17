@@ -2,7 +2,8 @@
 
     python herramientas/rectificar.py ENTRADA.stl CARPETA_SALIDA NOMBRE
 
-ENTRADA puede ser el escaneo en bruto del Revopoint (se limpia solo) o un recuadro
+ENTRADA puede ser STL, PLY, OBJ, el proyecto de Revo Scan (.revox) o un ZIP con ellos.
+Puede ser el escaneo en bruto del Revopoint (se limpia solo) o un recuadro
 ya limpio. Además de los 3 archivos de siempre se guarda NOMBRE_limpio.stl (el molde
 limpio sin correcciones) para poder revisarlo.
 """
