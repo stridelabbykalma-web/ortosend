@@ -55,12 +55,15 @@ def malla_sintetica(**kw):
     return campo_a_malla(campo_sintetico(**kw))
 
 
-def campo_limpio_esperado(taller: dict, paso: float = 0.5) -> Campo:
-    """Lo que debería devolver la limpieza para el escaneo en bruto sintético."""
+def campo_limpio_esperado(taller: dict, paso: float = 0.5, un_pie: bool = False) -> Campo:
+    """Lo que debería devolver la limpieza para el escaneo en bruto sintético.
+    Con `un_pie`, solo el pie izquierdo."""
     from .limpieza import compactar, recortar_pie, separar_huellas
 
     rec, cfg = taller["recuadro"], taller["limpieza"]
     c = campo_sintetico(rec["ancho_x"], rec["largo_y"], paso, fondo=0.0)
+    if un_pie:
+        c.z[:, c.z.shape[1] // 2:] = 0.0
     etiquetas, pies = separar_huellas(c.z, paso, cfg)
     x = {k: np.nonzero(etiquetas == k)[1].mean() for k in pies}
     lados = {k: ("izquierdo" if x[k] == min(x.values()) else "derecho") for k in pies}
@@ -69,30 +72,37 @@ def campo_limpio_esperado(taller: dict, paso: float = 0.5) -> Campo:
     return Campo(c.rejilla, cfg["base"] + alt, np.zeros(3))
 
 
-def malla_bruta(taller: dict, paso: float = 0.5, semilla: int = 1, inclinar_derecho: float = 0.0):
-    """Escaneo en bruto sintético: mesa + dos bloques con la huella hundida, ruido,
-    agujeros, un resto suelto, inclinado y girado como saldría del escáner.
+def malla_bruta(taller: dict, paso: float = 0.5, semilla: int = 1, inclinar_derecho: float = 0.0,
+                modo: str = "huellas", un_pie: bool = False):
+    """Escaneo en bruto sintético, inclinado y girado como saldría del escáner, con ruido,
+    agujeros y un resto suelto.
 
+    modo "huellas": mesa + dos bloques de espuma con la huella hundida.
+    modo "moldes": mesa + un molde ya hecho: base plana con los pies en bulto.
+    `un_pie`: solo el pie izquierdo.
     `inclinar_derecho` (grados) inclina el bloque de la derecha respecto al otro, como
-    pasa en los escaneos reales."""
+    pasa en los escaneos reales (solo huellas)."""
     import trimesh
 
     rng = np.random.default_rng(semilla)
     rec = taller["recuadro"]
-    esperado = campo_limpio_esperado(taller, paso)
+    esperado = campo_limpio_esperado(taller, paso, un_pie)
     prof = esperado.z - taller["limpieza"]["base"]
-    # Deshacer el volcado (la huella está como en la espuma) y poner los dedos hacia -Y.
-    prof = prof[:, ::-1][::-1, ::-1]
+    if modo == "huellas":
+        # Deshacer el volcado (la huella está como en la espuma).
+        prof = prof[:, ::-1]
+    prof = prof[::-1, ::-1]  # dedos hacia -Y
     prof = np.roll(prof, int(12 / paso), axis=0)  # pies no centrados en el bloque
 
-    margen, hueco = 25.0, 4.0
+    margen, hueco = 25.0, (4.0 if modo == "huellas" else 0.0)
     mesa = Rejilla.con_paso(rec["ancho_x"] + hueco + 2 * margen, rec["largo_y"] + 2 * margen, paso)
     z = np.zeros((mesa.ny, mesa.nx))
     m, h = int(margen / paso), int(hueco / paso)
     mitad = prof.shape[1] // 2
     alto = rec["alto_z"]
-    z[m:m + prof.shape[0], m:m + mitad] = alto - prof[:, :mitad]
-    z[m:m + prof.shape[0], m + mitad + h:m + mitad + h + prof.shape[1] - mitad] = alto - prof[:, mitad:]
+    signo = -1.0 if modo == "huellas" else 1.0  # huella hundida o pie en bulto
+    z[m:m + prof.shape[0], m:m + mitad] = alto + signo * prof[:, :mitad]
+    z[m:m + prof.shape[0], m + mitad + h:m + mitad + h + prof.shape[1] - mitad] = alto + signo * prof[:, mitad:]
 
     X, Y = mesa.malla()
     if inclinar_derecho:
@@ -109,7 +119,7 @@ def malla_bruta(taller: dict, paso: float = 0.5, semilla: int = 1, inclinar_dere
     centros = v[caras].mean(axis=1)
     quitar = np.zeros(len(caras), bool)
     for _ in range(6):
-        k = rng.choice(np.nonzero(centros[:, 2] < alto - 8)[0])
+        k = rng.choice(np.nonzero((centros[:, 2] < alto - 8) if modo == "huellas" else (centros[:, 2] > alto + 8))[0])
         quitar |= np.linalg.norm(centros[:, :2] - centros[k, :2], axis=1) < 3.0
     malla = trimesh.Trimesh(v, caras[~quitar], process=False)
     resto = trimesh.creation.icosphere(subdivisions=2, radius=4.0)

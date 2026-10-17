@@ -18,7 +18,12 @@
 
 ## 3. Probar con un escaneo
 
-1. *Archivo → Abrir escaneo…* y elige el escaneo. Vale cualquiera de estos:
+1. Elige arriba el **tipo de escaneo**:
+   - **Huellas en espuma**: la huella del pie hundida en los bloques de espuma (lo normal).
+   - **Molde ya hecho**: el escaneo de un molde que ya existe, con el pie en bulto sobre una base.
+   En los dos puede haber 1 o 2 pies. El programa recuerda el último tipo usado; si eliges el que no
+   es, te avisa y te sugiere el otro.
+   Después, *Archivo → Abrir escaneo…* y elige el escaneo. Vale cualquiera de estos:
    - **el proyecto de Revo Scan directamente**: el archivo `.revox` que hay dentro de la carpeta del
      proyecto (no hace falta exportar a STL; la carpeta debe tener su subcarpeta `meshs`);
    - un `.stl`, `.ply` u `.obj` exportado;

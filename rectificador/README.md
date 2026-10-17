@@ -9,6 +9,13 @@ escaneo Revopoint → [ RECTIFICADOR: limpieza + correcciones ] → Fusion 360 (
 
 Es un programa independiente: no toca ni importa los otros scripts del taller, solo intercambia archivos.
 
+### Dos modos de escaneo
+
+- **Huellas en espuma** (lo normal): la huella del pie hundida en los bloques de espuma.
+- **Molde ya hecho**: el escaneo de un molde que ya existe, con el pie en bulto sobre una base plana.
+
+En los dos puede haber 1 o 2 pies. Por consola: `--modo huellas` o `--modo moldes`.
+
 ### Limpieza del escaneo (automática)
 
 1. Busca la cara superior plana de **cada bloque por separado** (cada uno puede estar apoyado con una
@@ -18,6 +25,7 @@ Es un programa independiente: no toca ni importa los otros scripts del taller, s
 3. Quita picos de ruido y rellena los agujeros del escaneo dentro de la huella.
 4. Separa las dos huellas y borra todo lo que no es pie.
 5. **Vuelca el molde** como si se diera la vuelta al bloque (giro, nunca espejo): el pie izquierdo sigue siendo izquierdo.
+   (En modo «Molde ya hecho» no hace falta volcar: el pie ya está en bulto.)
 6. Pone los dedos hacia +Y (la parte más ancha del pie, las cabezas metatarsales, queda hacia los dedos), propone cuál es el izquierdo y cuál el derecho (mirando el arco interno) y coloca cada
    pie centrado en su mitad del recuadro, sobre una base plana.
 

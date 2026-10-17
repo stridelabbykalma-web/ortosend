@@ -29,6 +29,12 @@ from scipy.sparse.linalg import spsolve
 
 from .campo import Campo, Rejilla, rasterizar
 
+# Dos modos de escaneo:
+#  - "huellas": la huella del pie hundida en el bloque de espuma (lo normal en el taller);
+#  - "moldes":  un molde ya hecho, con el pie en bulto sobre una base plana.
+MODOS = ("huellas", "moldes")
+NOMBRE_MODO = {"huellas": "Huellas en espuma", "moldes": "Molde ya hecho (pie en bulto)"}
+
 
 @dataclass
 class Bloque:
@@ -54,6 +60,7 @@ class Bloque:
 
 @dataclass
 class InformeLimpieza:
+    modo: str = "huellas"
     avisos: list[str] = field(default_factory=list)
     bloques: list[Bloque] = field(default_factory=list)
     pies: list[dict] = field(default_factory=list)  # lado, mitad, profundidad máx...
@@ -66,6 +73,7 @@ class InformeLimpieza:
 
     def a_dict(self) -> dict:
         return {
+            "modo": self.modo,
             "avisos": self.avisos,
             "bloques": [b.a_dict() for b in self.bloques],
             "pies": self.pies,
@@ -83,10 +91,13 @@ def _ajustar_plano(puntos, pesos):
 
 
 def buscar_plano_superior(malla: trimesh.Trimesh, tolerancia: float, semilla: int = 0,
-                          validas: np.ndarray | None = None):
+                          validas: np.ndarray | None = None, modo: str = "huellas"):
     """Devuelve (punto, normal hacia arriba, máscara de caras del plano).
 
     `validas` limita la búsqueda a esas caras (para buscar el segundo bloque).
+    Modo "huellas": la cara superior del bloque, sin casi nada por encima (la huella va hundida).
+    Modo "moldes": la base del molde; por encima solo está el pie en bulto (minoría del área),
+    a diferencia de la mesa, que tiene todo el molde encima.
     """
     rng = np.random.default_rng(semilla)
     C = malla.triangles_center
@@ -130,10 +141,15 @@ def buscar_plano_superior(malla: trimesh.Trimesh, tolerancia: float, semilla: in
         arriba = Am[d > 20.0].sum()
         candidatos.append((area, arriba / total, c, n))
 
-    # La cara superior: casi nada por encima. De esos, el de más área.
-    validos = [k for k in candidatos if k[1] < 0.05]
+    # Huellas: casi nada por encima. Moldes: el relieve del pie por encima, pero en minoría.
+    limite = 0.05 if modo == "huellas" else 0.30
+    validos = [k for k in candidatos if k[1] < limite]
     if not validos:
-        raise ValueError("No encuentro la cara superior plana de los bloques en el escaneo.")
+        if modo == "huellas":
+            raise ValueError("No encuentro la cara superior plana de los bloques de espuma. "
+                             "¿Es el escaneo de un molde ya hecho (pie en bulto)? Prueba el modo «Moldes».")
+        raise ValueError("No encuentro la base plana del molde. "
+                         "¿Es una huella hundida en espuma? Prueba el modo «Huellas».")
     _, _, c, n = max(validos, key=lambda k: k[0])
     # Afinar el plano ganador con sus propias caras, cada vez más estricto.
     for tol in (tolerancia, 0.6 * tolerancia, 0.6 * tolerancia):
@@ -336,30 +352,40 @@ def _sistema_del_plano(malla, c, n, en_plano):
     return np.vstack([ex, ey, ez]), o, ancho, largo, (p2, zona, origen2, u2, v2, ancho, largo)
 
 
-def _procesar_bloque(z: np.ndarray, paso: float, cfg: dict) -> tuple[np.ndarray, np.ndarray, bool] | None:
-    """Mapa de alturas visto desde arriba de UN bloque -> (pie en bulto, zona, giro_180)."""
+def _procesar_bloque(z: np.ndarray, paso: float, cfg: dict, modo: str = "huellas") -> list[tuple[np.ndarray, np.ndarray, bool]]:
+    """Mapa de alturas visto desde arriba de UN bloque -> lista de pies (pie en bulto, zona, giro_180).
+
+    Huellas: altura del pie = profundidad de la huella, y se vuelca el bloque.
+    Moldes: altura del pie = lo que sobresale de la base; no se vuelca (ya está con la planta arriba).
+    En una misma base puede haber uno o dos pies.
+    """
     agujero = np.isnan(z)
-    prof = np.where(agujero, 0.0, np.maximum(-z, 0.0))
-    prof = np.where(agujero, prof, ndimage.median_filter(prof, size=3))
-    etiquetas, pies = separar_huellas(prof, paso, cfg)
-    if not pies:
-        return None
-    zona = etiquetas == 1  # una huella por bloque: la mayor
-    prof = rellenar_agujeros(prof, agujero & zona)
-    if cfg["suavizado"] > 0:
-        prof = np.where(zona, ndimage.gaussian_filter(prof, cfg["suavizado"] / paso), prof)
-    prof = np.where(zona, np.maximum(prof, 0.0), 0.0)
-    # Volcar el bloque: giro de 180° alrededor del eje Y -> x pasa a (ancho - x).
-    prof, zona = prof[:, ::-1], zona[:, ::-1]
-    # Dedos hacia +Y (giro de 180° alrededor de Z si hace falta).
-    giro = not dedos_hacia_mas_y(zona, paso)
-    if giro:
-        prof, zona = prof[::-1, ::-1], zona[::-1, ::-1]
-    return prof, zona, giro
+    alt = np.where(agujero, 0.0, np.maximum(-z if modo == "huellas" else z, 0.0))
+    alt = np.where(agujero, alt, ndimage.median_filter(alt, size=3))
+    etiquetas, pies = separar_huellas(alt, paso, cfg)
+    salida = []
+    for k in pies:
+        zona = etiquetas == k
+        h = rellenar_agujeros(alt, agujero & zona)
+        if cfg["suavizado"] > 0:
+            h = np.where(zona, ndimage.gaussian_filter(h, cfg["suavizado"] / paso), h)
+        h = np.where(zona, np.maximum(h, 0.0), 0.0)
+        if modo == "huellas":
+            # Volcar el bloque: giro de 180° alrededor del eje Y -> x pasa a (ancho - x).
+            h, zona = h[:, ::-1], zona[:, ::-1]
+        # Dedos hacia +Y (giro de 180° alrededor de Z si hace falta).
+        giro = not dedos_hacia_mas_y(zona, paso)
+        if giro:
+            h, zona = h[::-1, ::-1], zona[::-1, ::-1]
+        salida.append((h, zona, giro))
+    return salida
 
 
-def limpiar(malla: trimesh.Trimesh, taller: dict, lados: dict[int, str] | None = None) -> tuple[Campo, InformeLimpieza]:
+def limpiar(malla: trimesh.Trimesh, taller: dict, lados: dict[int, str] | None = None,
+            modo: str = "huellas") -> tuple[Campo, InformeLimpieza]:
     """Escaneo en bruto -> campo del recuadro con los pies en bulto.
+
+    `modo`: "huellas" (huella hundida en espuma) o "moldes" (molde ya hecho, pie en bulto).
 
     Cada bloque se trata por separado (cada uno puede estar apoyado con una inclinación
     distinta). `lados` permite forzar izquierdo/derecho ({0: "izquierdo", 1: "derecho"},
@@ -368,7 +394,12 @@ def limpiar(malla: trimesh.Trimesh, taller: dict, lados: dict[int, str] | None =
     cfg = taller["limpieza"]
     rec = taller["recuadro"]
     paso = taller["calculo"]["rejilla"]
-    inf = InformeLimpieza()
+    if modo not in MODOS:
+        raise ValueError(f"Modo desconocido «{modo}». Debe ser uno de: {', '.join(MODOS)}.")
+    inf = InformeLimpieza(modo=modo)
+    alto = rec["alto_z"]
+    # Qué altura (respecto a la cara) puede tener lo que nos interesa del bloque.
+    z_min, z_max = (-alto - 10, 3.0) if modo == "huellas" else (-3.0, alto + 10)
 
     # Restos sueltos pequeños fuera.
     malla = trimesh.Trimesh(malla.vertices, malla.faces, process=True)
@@ -383,7 +414,7 @@ def limpiar(malla: trimesh.Trimesh, taller: dict, lados: dict[int, str] | None =
     for intento in range(3):
         # 1-2. Cara superior y rectángulo -> sistema del bloque (X ancho, Y largo, Z normal, 0 en la cara).
         try:
-            c, n, en_plano = buscar_plano_superior(malla, cfg["tolerancia_plano"], validas=libres)
+            c, n, en_plano = buscar_plano_superior(malla, cfg["tolerancia_plano"], validas=libres, modo=modo)
         except ValueError:
             if intento == 0:
                 raise
@@ -405,42 +436,49 @@ def limpiar(malla: trimesh.Trimesh, taller: dict, lados: dict[int, str] | None =
             libres
             & (tri[:, :, 0].min(1) > 0.3) & (tri[:, :, 0].max(1) < ancho - 0.3)
             & (tri[:, :, 1].min(1) > 0.3) & (tri[:, :, 1].max(1) < largo - 0.3)
-            & (tri[:, :, 2].max(1) < 3.0) & (tri[:, :, 2].min(1) > -rec["alto_z"] - 10)
+            & (tri[:, :, 2].max(1) < z_max) & (tri[:, :, 2].min(1) > z_min)
         )
         z = rasterizar(V, F[dentro], Rejilla.con_paso(ancho, largo, paso), rellenar=False)
-        inf.mapas.setdefault("profundidad_bruta", np.where(np.isnan(z), 0, np.maximum(-z, 0)))
+        inf.mapas.setdefault("profundidad_bruta",
+                             np.where(np.isnan(z), 0, np.maximum(-z if modo == "huellas" else z, 0)))
         # Estas caras ya están usadas: el siguiente bloque se busca en el resto.
         cerca = (
             (tri[:, :, 0].max(1) > -5) & (tri[:, :, 0].min(1) < ancho + 5)
             & (tri[:, :, 1].max(1) > -5) & (tri[:, :, 1].min(1) < largo + 5)
-            & (tri[:, :, 2].max(1) < 5.0) & (tri[:, :, 2].min(1) > -rec["alto_z"] - 10)
+            & (tri[:, :, 2].max(1) < z_max + 2) & (tri[:, :, 2].min(1) > z_min - 2)
         )
         libres &= ~cerca
 
-        res = _procesar_bloque(z, paso, cfg)
+        pies_bloque = _procesar_bloque(z, paso, cfg, modo)
         M = np.eye(4)
         M[:3, :3] = R
         M[:3, 3] = -R @ o
-        if res is None:
-            inf.avisos.append(f"Hay un bloque de {ancho:.0f} × {largo:.0f} mm sin huella de pie.")
-        else:
-            prof, zona, giro = res
+        if not pies_bloque:
+            inf.avisos.append(f"Hay un bloque de {ancho:.0f} × {largo:.0f} mm sin pie.")
+        for prof, zona, giro in pies_bloque:
             inf.bloques.append(Bloque(M, ancho, largo, prof, zona, giro))
         if len(inf.bloques) >= 2:
             break
 
     if not inf.bloques:
-        raise ValueError("No encuentro ninguna huella de pie en el escaneo.")
+        if modo == "huellas":
+            raise ValueError("No encuentro ninguna huella hundida en el escaneo. "
+                             "¿Es un molde ya hecho (pie en bulto)? Prueba el modo «Moldes».")
+        raise ValueError("No encuentro ningún pie en bulto sobre la base. "
+                         "¿Es una huella hundida en espuma? Prueba el modo «Huellas».")
     if len(inf.bloques) > 2:
         inf.bloques = sorted(inf.bloques, key=lambda b: -b.zona.sum())[:2]
     for b in inf.bloques:
+        if modo == "moldes":
+            break  # la base de un molde ya hecho puede tener cualquier tamaño
         if abs(b.ancho - cfg["bloque_ancho"]) > 15 or abs(b.largo - cfg["bloque_largo"]) > 15:
             inf.avisos.append(
                 f"Un bloque mide {b.ancho:.0f} × {b.largo:.0f} mm; se esperaba "
                 f"{cfg['bloque_ancho']:.0f} × {cfg['bloque_largo']:.0f}. Revisa que el escaneo lo incluya entero."
             )
     if len(inf.bloques) == 1:
-        inf.avisos.append("Solo se ha encontrado una huella de pie.")
+        inf.avisos.append("Solo se ha encontrado un pie." if modo == "moldes"
+                          else "Solo se ha encontrado una huella de pie.")
 
     # 6. Izquierdo / derecho.
     for b in inf.bloques:

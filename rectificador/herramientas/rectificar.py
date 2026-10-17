@@ -1,6 +1,9 @@
 """Uso por línea de comandos (sin interfaz):
 
-    python herramientas/rectificar.py ENTRADA.stl CARPETA_SALIDA NOMBRE
+    python herramientas/rectificar.py ENTRADA.stl CARPETA_SALIDA NOMBRE [--modo huellas|moldes]
+
+--modo huellas (por defecto): huella hundida en los bloques de espuma.
+--modo moldes: escaneo de un molde ya hecho (pie en bulto sobre una base).
 
 ENTRADA puede ser STL, PLY, OBJ, el proyecto de Revo Scan (.revox) o un ZIP con ellos.
 Puede ser el escaneo en bruto del Revopoint (se limpia solo) o un recuadro
@@ -18,14 +21,20 @@ from ortomolde.exportar import exportar  # noqa: E402
 from ortomolde.proyecto import Proyecto  # noqa: E402
 
 if __name__ == "__main__":
-    if len(sys.argv) != 4:
+    args = sys.argv[1:]
+    modo = "huellas"
+    if "--modo" in args:
+        i = args.index("--modo")
+        modo = args[i + 1]
+        del args[i:i + 2]
+    if len(args) != 3:
         print(__doc__)
         sys.exit(1)
-    entrada, carpeta, nombre = sys.argv[1:]
-    proyecto = Proyecto.abrir(entrada)
-    print("Tipo de entrada:", proyecto.tipo)
-    if proyecto.limpieza:
-        for pie in proyecto.limpieza["pies"]:
+    entrada, carpeta, nombre = args
+    proyecto = Proyecto.abrir(entrada, modo=modo)
+    print("Tipo de entrada:", proyecto.tipo, "· modo:", modo)
+    if proyecto.informe:
+        for pie in proyecto.informe.pies:
             print(f"  Pie {pie['lado']} en la mitad {pie['mitad']}: {pie['largo_mm']} × {pie['ancho_mm']} mm, "
                   f"huella de {pie['profundidad_max_mm']} mm")
     for aviso in proyecto.avisos:

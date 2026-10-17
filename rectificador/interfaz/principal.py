@@ -9,11 +9,12 @@ import sys
 import traceback
 from pathlib import Path
 
-from PySide6.QtCore import QObject, QThread, Qt, Signal
+import numpy as np
+from PySide6.QtCore import QObject, QSettings, QThread, Qt, Signal
 from PySide6.QtGui import QAction, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QApplication, QButtonGroup, QCheckBox, QDoubleSpinBox, QFileDialog, QGroupBox, QHBoxLayout,
-    QLabel, QMainWindow, QMessageBox, QProgressDialog, QPushButton, QScrollArea, QSplitter,
+    QLabel, QMainWindow, QMessageBox, QProgressDialog, QPushButton, QRadioButton, QScrollArea, QSplitter,
     QVBoxLayout, QWidget,
 )
 
@@ -21,6 +22,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from interfaz.visor import COLORES, Visor  # noqa: E402
 from ortomolde.exportar import exportar, medidas_stl  # noqa: E402
+from ortomolde.limpieza import NOMBRE_MODO  # noqa: E402
 from ortomolde.proyecto import Proyecto  # noqa: E402
 from ortomolde.referencias import NOMBRES, OPCIONALES, ORDEN  # noqa: E402
 
@@ -41,13 +43,14 @@ class Cargador(QObject):
     terminado = Signal(object)
     fallo = Signal(str)
 
-    def __init__(self, ruta: str):
+    def __init__(self, ruta: str, modo: str):
         super().__init__()
         self.ruta = ruta
+        self.modo = modo
 
     def trabajar(self):
         try:
-            self.terminado.emit(Proyecto.abrir(self.ruta))
+            self.terminado.emit(Proyecto.abrir(self.ruta, modo=self.modo))
         except Exception as e:  # noqa: BLE001 - se muestra al usuario
             traceback.print_exc()
             self.fallo.emit(str(e))
@@ -120,7 +123,9 @@ class PanelPie(QGroupBox):
         lay.addWidget(self.medidas)
 
     def actualizar(self, pie, proyecto, activa: str | None):
-        self.setTitle(f"{pie.nombre}  (mitad {'izquierda' if self.clave == 'p0' else 'derecha'})")
+        x_medio = np.nonzero(pie.mascara)[1].mean() * proyecto.original.rejilla.dx
+        mitad = "izquierda" if x_medio < proyecto.original.rejilla.ancho / 2 else "derecha"
+        self.setTitle(f"{pie.nombre}  (mitad {mitad})")
         for k in ORDEN:
             if k in pie.referencias.puntos:
                 x, y = pie.referencias.puntos[k]
@@ -172,6 +177,7 @@ class VentanaPrincipal(QMainWindow):
         self.info = QLabel("Abre un escaneo (Archivo → Abrir escaneo…).")
         self.info.setWordWrap(True)
         self.lay_panel.addWidget(self.info)
+        self.lay_panel.addWidget(self._grupo_modo())
         self.avisos = QLabel()
         self.avisos.setWordWrap(True)
         self.avisos.setStyleSheet("color: #c0392b;")
@@ -201,6 +207,37 @@ class VentanaPrincipal(QMainWindow):
         self.setCentralWidget(division)
         self._menus()
         self._refrescar_panel()
+
+    def _grupo_modo(self) -> QGroupBox:
+        """Qué se ha escaneado: la huella en la espuma o un molde ya hecho."""
+        grupo = QGroupBox("Tipo de escaneo")
+        lay = QHBoxLayout(grupo)
+        self.botones_modo = {}
+        for modo, texto, ayuda in (
+            ("huellas", "Huellas en espuma", "La huella del pie hundida en los bloques de espuma."),
+            ("moldes", "Molde ya hecho", "Un molde que ya existe, con el pie en bulto sobre una base."),
+        ):
+            b = QRadioButton(texto)
+            b.setToolTip(ayuda + "\nPuede haber 1 o 2 pies.")
+            b.toggled.connect(lambda marcado, m=modo: marcado and self.cambiar_modo(m))
+            lay.addWidget(b)
+            self.botones_modo[modo] = b
+        self.ajustes = QSettings("Ortosend", "Rectificador")
+        modo = self.ajustes.value("modo", "huellas")
+        self.modo = modo if modo in self.botones_modo else "huellas"
+        self.botones_modo[self.modo].blockSignals(True)
+        self.botones_modo[self.modo].setChecked(True)
+        self.botones_modo[self.modo].blockSignals(False)
+        return grupo
+
+    def cambiar_modo(self, modo: str):
+        if modo == self.modo:
+            return
+        self.modo = modo
+        self.ajustes.setValue("modo", modo)
+        if self.proyecto is not None:
+            # Volver a procesar el mismo escaneo con el otro modo.
+            self.abrir(str(self.proyecto.ruta_stl))
 
     def _grupo_molde(self) -> QGroupBox:
         grupo = QGroupBox("Molde")
@@ -301,14 +338,14 @@ class VentanaPrincipal(QMainWindow):
     def abrir(self, ruta: str, esperar: bool = False):
         """Abre el escaneo en segundo plano. Con `esperar` (pruebas) lo hace en este hilo."""
         if esperar:
-            self._cargado(Proyecto.abrir(ruta))
+            self._cargado(Proyecto.abrir(ruta, modo=self.modo))
             return
         self._progreso = QProgressDialog("Leyendo y limpiando el escaneo…", None, 0, 0, self)
         self._progreso.setWindowTitle("Abriendo")
         self._progreso.setWindowModality(Qt.WindowModal)
         self._progreso.show()
         self._hilo = QThread(self)
-        self._cargador = Cargador(ruta)
+        self._cargador = Cargador(ruta, self.modo)
         self._cargador.moveToThread(self._hilo)
         self._hilo.started.connect(self._cargador.trabajar)
         self._cargador.terminado.connect(self._cargado)
@@ -454,7 +491,7 @@ class VentanaPrincipal(QMainWindow):
             return
         self.info.setText(
             f"<b>{p.ruta_stl.name}</b><br>"
-            f"{'Escaneo en bruto (limpiado automáticamente)' if p.tipo == 'bruto' else 'Molde ya limpio'} · "
+            f"{('Escaneo en bruto · ' + NOMBRE_MODO[p.informe.modo]) if p.informe else 'Molde ya limpio'} · "
             f"{len(p.pies)} pie(s) encontrado(s)"
         )
         self.avisos.setText("<br>".join(f"⚠ {a}" for a in p.avisos))

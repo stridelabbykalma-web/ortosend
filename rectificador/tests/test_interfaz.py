@@ -96,3 +96,27 @@ def test_medir_distancia(stl_sintetico):
     v.boton_medir.setChecked(False)
     assert v.medida == []
     v.close()
+
+
+def test_selector_de_modo(tmp_path, taller):
+    from PySide6.QtCore import QSettings
+    from PySide6.QtWidgets import QApplication
+
+    from interfaz.principal import VentanaPrincipal
+    from ortomolde.sintetico import malla_bruta
+
+    QSettings("Ortosend", "Rectificador").setValue("modo", "huellas")
+    t = {**taller, "calculo": {"rejilla": 1.0}}
+    ruta = tmp_path / "molde.stl"
+    malla_bruta(t, 2.0, modo="moldes", un_pie=True).export(ruta)
+    app = QApplication.instance() or QApplication([])
+    v = VentanaPrincipal()
+    v.show()
+    v.botones_modo["moldes"].setChecked(True)
+    assert v.modo == "moldes"
+    v.abrir(str(ruta), esperar=True)
+    assert len(v.proyecto.pies) == 1
+    assert "Molde ya hecho" in v.info.text()
+    v.close()
+    assert QSettings("Ortosend", "Rectificador").value("modo") == "moldes"
+    QSettings("Ortosend", "Rectificador").setValue("modo", "huellas")

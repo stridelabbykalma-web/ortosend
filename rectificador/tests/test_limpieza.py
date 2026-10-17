@@ -94,3 +94,20 @@ def test_bloques_con_distinta_inclinacion(taller_1mm):
     esperado = campo_limpio_esperado(taller_1mm, 1.0)
     assert informe.n_bloques == 2
     assert error_por_mitades(campo.z, esperado.z).mean() < 0.3
+
+
+@pytest.mark.parametrize("modo", ["huellas", "moldes"])
+@pytest.mark.parametrize("un_pie", [False, True])
+def test_modos_con_uno_o_dos_pies(taller_1mm, modo, un_pie):
+    campo, informe = limpiar(malla_bruta(taller_1mm, 1.0, modo=modo, un_pie=un_pie), taller_1mm, modo=modo)
+    esperado = campo_limpio_esperado(taller_1mm, 1.0, un_pie=un_pie)
+    assert informe.modo == modo
+    assert len(informe.pies) == (1 if un_pie else 2)
+    assert error_por_mitades(campo.z, esperado.z).mean() < 0.25
+    if un_pie:
+        assert informe.pies[0]["lado"] == "izquierdo"
+
+
+def test_modo_equivocado_sugiere_el_otro(taller_1mm):
+    with pytest.raises(ValueError, match="Prueba el modo «Moldes»"):
+        limpiar(malla_bruta(taller_1mm, 1.0, modo="moldes"), taller_1mm, modo="huellas")

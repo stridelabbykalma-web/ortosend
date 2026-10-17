@@ -52,10 +52,12 @@ class Proyecto:
 
     @classmethod
     def abrir(cls, ruta_stl: str | Path, taller: dict | None = None, tipo: str = "auto",
-              lados: dict[int, str] | None = None, clinicos: dict | None = None) -> "Proyecto":
+              lados: dict[int, str] | None = None, clinicos: dict | None = None,
+              modo: str = "huellas") -> "Proyecto":
         """Abre un escaneo en bruto (lo limpia) o un recuadro ya limpio.
 
         Acepta STL, PLY, OBJ, el proyecto de Revo Scan (.revox) o un ZIP con cualquiera de ellos.
+        `modo`: "huellas" (huella hundida en espuma) o "moldes" (molde ya hecho, pie en bulto).
 
         tipo = "auto" decide solo: si la malla es cerrada y mide lo que el recuadro, es un
         molde limpio; si no, se trata como escaneo en bruto.
@@ -72,7 +74,7 @@ class Proyecto:
             encaja = abs(tam[0] - rec["ancho_x"]) < 2 and abs(tam[1] - rec["largo_y"]) < 2
             tipo = "limpio" if (malla.is_watertight and encaja) else "bruto"
         if tipo == "bruto":
-            campo, informe = limpiar(malla, taller, lados)
+            campo, informe = limpiar(malla, taller, lados, modo=modo)
             fondo = taller["limpieza"]["base"]
         else:
             campo = malla_a_campo(malla, taller["calculo"]["rejilla"], (rec["ancho_x"], rec["largo_y"]))
