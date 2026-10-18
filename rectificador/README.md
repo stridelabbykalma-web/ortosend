@@ -61,6 +61,7 @@ También acepta un recuadro ya limpio (lo detecta solo).
 | 4 | Piezas: relleno de arco, oliva, descarga 1.er MTT, skive medial | pendiente |
 | 5 | Edición interactiva de piezas, deshacer/rehacer | pendiente |
 | 6 | Comprobación de la fresa Ø12, corte transversal, prueba con STL real | pendiente |
+| CNC | Salida directa para la CNC (G-code), varios moldes en una plancha | ✅ hecho (velocidades provisionales: probar en la máquina) |
 
 ## Instalar en Windows (una sola vez)
 

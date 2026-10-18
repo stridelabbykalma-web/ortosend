@@ -46,6 +46,18 @@
 8. Abre `NOMBRE_FUSION.stl` en Fusion 360 **sin cambiar unidades** y comprueba que mide lo que dice el
    mensaje al exportar (el recuadro debe ser 28,8 × 33,0 cm = 288 × 330 mm).
 
+## 4. Fresar en la CNC (sin Fusion)
+
+1. Con un molde listo: *Archivo → Añadir este molde a la tirada de CNC* (Ctrl+T). Repite con más moldes
+   (también puedes añadir moldes ya exportados con «Añadir moldes exportados (STL)…» en la ventana de la tirada).
+2. En la ventana **Tirada de CNC** pon la medida de la plancha de escayola (por defecto 600 × 500 × 40 mm)
+   y pulsa **Colocar y calcular**: coloca los pies lo más juntos posible y dice el tiempo estimado.
+3. **Guardar archivo para la CNC (.nc)…**: copia el `.nc` al USB/tarjeta y lánzalo desde la pantalla de la CNC.
+   Junto al `.nc` se guardan un `.png` con la colocación y un `.txt` con la hoja de trabajo.
+4. **Origen**: X0 Y0 en la **esquina delantera izquierda** de la plancha y Z0 en su **cara de arriba**.
+5. **Primera vez: prueba con cuidado** (velocidades provisionales para escayola en `config/taller.toml`,
+   sección `[cnc]`): vigila la primera capa y ajusta avance y revoluciones si hace falta.
+
 Ratón en el visor: girar = arrastrar con el botón izquierdo · desplazar = Mayús + arrastrar · zoom = rueda.
 
 ## Si algo falla

@@ -22,6 +22,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from interfaz.visor import COLORES, Visor  # noqa: E402
 from ortomolde.exportar import exportar, medidas_stl  # noqa: E402
+from ortomolde import config  # noqa: E402
 from ortomolde.limpieza import NOMBRE_MODO  # noqa: E402
 from ortomolde.proyecto import Proyecto  # noqa: E402
 from ortomolde.referencias import NOMBRES, OPCIONALES, ORDEN  # noqa: E402
@@ -40,20 +41,21 @@ AYUDA = (
 class Cargador(QObject):
     """Abre (y limpia) el escaneo en segundo plano para que la ventana no se congele."""
 
-    terminado = Signal(object)
-    fallo = Signal(str)
+    terminado = Signal(int, object)
+    fallo = Signal(int, str)
 
-    def __init__(self, ruta: str, modo: str):
+    def __init__(self, ruta: str, modo: str, peticion: int):
         super().__init__()
         self.ruta = ruta
         self.modo = modo
+        self.peticion = peticion  # número de apertura: si llega tarde, la ventana lo ignora
 
     def trabajar(self):
         try:
-            self.terminado.emit(Proyecto.abrir(self.ruta, modo=self.modo))
+            self.terminado.emit(self.peticion, Proyecto.abrir(self.ruta, modo=self.modo))
         except Exception as e:  # noqa: BLE001 - se muestra al usuario
             traceback.print_exc()
-            self.fallo.emit(str(e))
+            self.fallo.emit(self.peticion, str(e))
 
 
 class PanelPie(QGroupBox):
@@ -163,6 +165,10 @@ class VentanaPrincipal(QMainWindow):
         self.setWindowTitle("Rectificador de moldes – Ortosend")
         self.resize(1400, 850)
         self.proyecto: Proyecto | None = None
+        self.taller = config.taller()
+        self.tirada = None  # ventana «Tirada de CNC» (se crea al abrirla)
+        self._peticion = 0  # cada apertura lleva un número; solo vale el resultado de la última
+        self._hilos: list = []
         self.activa: tuple[str, str] | None = None  # (pie, referencia) que se va a marcar
         self._hilo = None
 
@@ -307,6 +313,8 @@ class VentanaPrincipal(QMainWindow):
         for texto, atajo, accion in (
             ("Abrir escaneo…", QKeySequence.Open, self.abrir_dialogo),
             ("Exportar…", QKeySequence("Ctrl+E"), self.exportar),
+            ("Añadir este molde a la tirada de CNC", QKeySequence("Ctrl+T"), self.anadir_a_tirada),
+            ("Tirada de CNC (varios moldes en una plancha)…", QKeySequence("Ctrl+Shift+T"), self.abrir_tirada),
             ("Salir", QKeySequence.Quit, self.close),
         ):
             a = QAction(texto, self)
@@ -337,24 +345,32 @@ class VentanaPrincipal(QMainWindow):
 
     def abrir(self, ruta: str, esperar: bool = False):
         """Abre el escaneo en segundo plano. Con `esperar` (pruebas) lo hace en este hilo."""
+        self._peticion += 1
         if esperar:
-            self._cargado(Proyecto.abrir(ruta, modo=self.modo))
+            self._cargado(self._peticion, Proyecto.abrir(ruta, modo=self.modo))
             return
+        if getattr(self, "_progreso", None):
+            self._progreso.close()
         self._progreso = QProgressDialog("Leyendo y limpiando el escaneo…", None, 0, 0, self)
         self._progreso.setWindowTitle("Abriendo")
         self._progreso.setWindowModality(Qt.WindowModal)
         self._progreso.show()
-        self._hilo = QThread(self)
-        self._cargador = Cargador(ruta, self.modo)
-        self._cargador.moveToThread(self._hilo)
-        self._hilo.started.connect(self._cargador.trabajar)
-        self._cargador.terminado.connect(self._cargado)
-        self._cargador.fallo.connect(self._fallo)
-        self._cargador.terminado.connect(self._hilo.quit)
-        self._cargador.fallo.connect(self._hilo.quit)
-        self._hilo.start()
+        hilo = QThread(self)
+        cargador = Cargador(ruta, self.modo, self._peticion)
+        cargador.moveToThread(hilo)
+        hilo.started.connect(cargador.trabajar)
+        cargador.terminado.connect(self._cargado)
+        cargador.fallo.connect(self._fallo)
+        cargador.terminado.connect(hilo.quit)
+        cargador.fallo.connect(hilo.quit)
+        hilo.finished.connect(lambda h=hilo, c=cargador: self._hilos.remove((h, c)) if (h, c) in self._hilos else None)
+        self._hilos.append((hilo, cargador))
+        self._hilo = hilo
+        hilo.start()
 
-    def _cargado(self, proyecto: Proyecto):
+    def _cargado(self, peticion: int, proyecto: Proyecto):
+        if peticion != self._peticion:
+            return  # resultado de una apertura anterior que ha llegado tarde
         if getattr(self, "_progreso", None):
             self._progreso.close()
         self.proyecto = proyecto
@@ -366,7 +382,9 @@ class VentanaPrincipal(QMainWindow):
         self._redibujar_pies()
         self._refrescar_panel()
 
-    def _fallo(self, mensaje: str):
+    def _fallo(self, peticion: int, mensaje: str):
+        if peticion != self._peticion:
+            return
         self._progreso.close()
         QMessageBox.critical(self, "No se ha podido abrir", mensaje)
 
@@ -506,6 +524,30 @@ class VentanaPrincipal(QMainWindow):
                 panel.show()
             else:
                 panel.hide()
+
+    def closeEvent(self, evento):
+        # Si se está procesando un escaneo en segundo plano, esperar a que acabe antes de cerrar.
+        for hilo, _ in list(self._hilos):
+            if hilo.isRunning():
+                hilo.wait()
+        super().closeEvent(evento)
+
+    # ---------------------------------------------------------------- CNC
+
+    def abrir_tirada(self):
+        from interfaz.tirada import VentanaTirada
+        if self.tirada is None:
+            self.tirada = VentanaTirada(self)
+        self.tirada.show()
+        self.tirada.raise_()
+        return self.tirada
+
+    def anadir_a_tirada(self):
+        if not self.proyecto:
+            return
+        t = self.abrir_tirada()
+        t.anadir_abierto()
+        self.statusBar().showMessage("Molde añadido a la tirada de CNC.", 4000)
 
     # ---------------------------------------------------------------- exportar
 

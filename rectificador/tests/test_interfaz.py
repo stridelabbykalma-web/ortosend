@@ -120,3 +120,27 @@ def test_selector_de_modo(tmp_path, taller):
     v.close()
     assert QSettings("Ortosend", "Rectificador").value("modo") == "moldes"
     QSettings("Ortosend", "Rectificador").setValue("modo", "huellas")
+
+
+def test_ventana_tirada(stl_sintetico, tmp_path):
+    from PySide6.QtWidgets import QApplication
+
+    from interfaz.principal import VentanaPrincipal
+
+    app = QApplication.instance() or QApplication([])
+    v = VentanaPrincipal()
+    v.taller["calculo"]["rejilla"] = 1.0
+    v.show()
+    v.abrir(str(stl_sintetico), esperar=True)
+    v.anadir_a_tirada()
+    t = v.tirada
+    t.anadir_abierto()  # dos veces el mismo paciente: 4 pies
+    assert t.lista.count() == 4
+    t.calcular(esperar=True)
+    assert t.trabajo is not None and len(t.trabajo.piezas) == 4
+    t._silencio = True
+    t.guardar(str(tmp_path / "TIRADA.nc"))
+    assert (tmp_path / "TIRADA.nc").read_text().startswith("; Rectificador")
+    assert (tmp_path / "TIRADA.png").exists() and (tmp_path / "TIRADA.txt").exists()
+    t.close()
+    v.close()
