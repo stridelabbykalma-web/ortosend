@@ -51,3 +51,22 @@ pie_izquierdo_en = "izquierda"
 # "taco de lija" en mm: más grande = lija ondulaciones más anchas. 0 = sin lijar.
 # Se puede cambiar en la ventana.
 taco = 6.0
+
+[cnc]
+# Salida directa para la CNC (Two Trees TTC 6050, controlador GRBL, archivo .nc por USB/tarjeta).
+# Origen del trabajo: X0 Y0 en la esquina DELANTERA IZQUIERDA del bloque, Z0 en su cara de ARRIBA.
+# Todos los valores de velocidad son PROVISIONALES y prudentes para ESCAYOLA: ajustar tras la 1.ª prueba.
+material = "escayola"
+revoluciones = 10000         # rpm del cabezal (si la máquina no las controla, se ignora)
+avance_desbaste = 1200       # mm/min
+avance_acabado = 1800        # mm/min
+avance_bajada = 300          # mm/min al bajar en vertical dentro del material
+avance_rapido = 3000         # mm/min (solo para estimar el tiempo; los G0 los hace la máquina)
+bajada_por_pasada = 4.0      # mm que baja cada capa del desbaste
+paso_desbaste = 5.0          # mm entre pasadas del desbaste (menos que el radio de la bola)
+sobrante_desbaste = 0.5      # mm que deja el desbaste para el acabado
+cresta_acabado = 0.05        # mm: altura máxima de las crestas que deja el acabado (más pequeño = más liso y más lento)
+altura_seguridad = 5.0       # mm por encima del bloque para moverse en rápido
+# Disposición en el bloque (los pies lo más juntos posible):
+margen_pie = 10.0            # mm de base plana alrededor de cada pie
+margen_bloque = 5.0          # mm desde los pies (con su margen) al borde del bloque
