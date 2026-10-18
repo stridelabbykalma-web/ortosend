@@ -125,3 +125,14 @@ Los datos de la máquina (recuadro, altura del bloque, fresa, límite de Fusion)
 Internamente: origen en la esquina delantera-izquierda del recuadro, Z = 0 en el fondo.
 En taller: X0 Y0 en la esquina delantera-izquierda de la cara superior del bloque, Z0 arriba
 (Z de taller = Z interna − 38). El STL de salida se devuelve en las **mismas coordenadas que el de entrada**.
+
+## Versiones guardadas
+
+Puntos de guardado a los que se puede volver en cualquier momento. Estas ramas **no se tocan**:
+el trabajo nuevo sigue en `claude/rectificador-moldes`.
+
+| Versión | Fecha | Rama en GitHub | Qué incluye |
+|---|---|---|---|
+| Base v1 | 18/10/2026 | `claude/rectificador-base-v1` (commit `898cef4`) | Limpieza automática (modos huellas en espuma y molde ya hecho, 1 o 2 pies), lijado, referencias (5 cabezas MTT y talón) propuestas y arrastrables, eje entre 2.º y 3.º MTT, recorte en arco, medidas y reglas en mm, abrir `.revox`/`.ply`/`.obj`/`.stl`/`.zip`, exportación STL + Fusion + receta, lanzador de Windows. |
+
+Para descargar una versión guardada: en GitHub, *Code* → elegir la rama de la tabla → *Download ZIP*.
