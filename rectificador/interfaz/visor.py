@@ -39,7 +39,9 @@ class Visor(QtInteractor):
     """
 
     def __init__(self, parent=None, al_hacer_clic=None, al_arrastrar=None, al_soltar=None, al_pasar=None):
-        super().__init__(parent)
+        # Sin redibujo automático (por defecto pyvistaqt redibuja 5 veces por segundo aunque no cambie
+        # nada, y eso hace que todo el programa vaya a tirones): se redibuja solo cuando algo cambia.
+        super().__init__(parent, auto_update=False)
         self.set_background("#2b2d31", top="#3d4148")
         self.al_hacer_clic = al_hacer_clic
         self.al_pasar = al_pasar  # (x, y, z) del molde bajo el ratón, o None

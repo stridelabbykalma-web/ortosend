@@ -51,21 +51,20 @@
 1. Con un molde listo: *Archivo → Añadir este molde a la tirada de CNC* (Ctrl+T). Repite con más moldes
    (también puedes añadir moldes ya exportados con «Añadir moldes exportados (STL)…» en la ventana de la tirada).
 2. En la ventana **Tirada de CNC** pon la medida de la plancha de escayola (por defecto 600 × 500 × 40 mm).
-   **Al momento** (antes de generar nada) ves la **vista previa**: dónde queda cada molde en la plancha,
-   con su número (el orden en que se fresará), su nombre, su pie y hacia dónde van los dedos. En la lista
-   de la izquierda cada molde lleva el mismo número; si seleccionas uno, se resalta en el mapa.
-   Cada vez que añades o quitas un molde o cambias la plancha, la vista previa se actualiza sola.
-   Si un molde no cabe, sale como «NO CABE».
-   **Para colocar un molde a mano**: elígelo (clic sobre él en el mapa o en la lista) y
-   - **arrástralo** con el botón izquierdo: mientras lo mueves ves un recuadro **verde** si cabe ahí o
-     **rojo** si no (porque se sale de la plancha o la fresa tocaría a otro molde) y su posición en mm;
-   - o muévelo con los botones **← ↑ ↓ →** (5 mm) o con las **flechas del teclado** sobre el mapa
-     (con Mayúsculas, 1 mm);
-   - **Girar 90°** (o tecla **R** sobre el mapa) lo gira un cuarto de vuelta; dos veces = dedos hacia delante.
-     Si junto al borde no cabe girado, se coloca en el sitio libre más cercano.
-   Lo que pones a mano se queda donde lo dejas («puesto a mano» en la lista y en el mapa) y los demás se
-   colocan solos alrededor. **Soltar** devuelve ese molde a colocación automática y **Colocar todo
-   automático** lo hace con todos. Al moverlos puede cambiar la numeración (va de delante a detrás).
+   **Al momento** ves la plancha desde arriba con cada molde colocado: su relieve, su número (el orden en
+   que se fresará), su nombre, su pie y una flecha hacia los dedos. Alrededor de cada pie, en gris, el sitio
+   que necesita la fresa. En la lista de la izquierda cada molde lleva el mismo número.
+   **Para colocarlos a tu gusto:**
+   - **Arrastra el pie** con el botón izquierdo: se mueve con el ratón y su borde se pone **verde** si cabe
+     ahí o **rojo** si no (se sale de la plancha o la fresa tocaría a otro pie). Abajo ves su posición en mm.
+     Si lo sueltas en rojo, vuelve a su sitio.
+   - **Doble clic** sobre un pie lo **gira** un cuarto de vuelta (dos veces = dedos hacia el otro lado).
+   - **Clic derecho** sobre un pie: girar 90°, girar 180°, volver a colocación automática o quitarlo.
+   - Con un pie elegido, las **flechas del teclado** lo mueven 1 mm (con Mayúsculas, 10 mm); **R** lo gira.
+   - **Rueda del ratón** = zoom; **doble clic en vacío** = ver la plancha entera.
+   Los demás pies **no se mueven** cuando colocas uno. Los moldes nuevos que añadas van a los huecos libres.
+   **Colocar todo automático** vuelve a colocarlos todos lo más juntos posible.
+   **Ver mapa para imprimir** abre el mapa en PDF de la colocación que ves.
 3. Si la colocación te parece bien, pulsa **Calcular trayectorias**: genera el recorrido de la fresa con
    esa misma colocación y numeración y dice el tiempo de cada fase.
 4. **Guardar archivo para la CNC (.nc)…**: copia el `.nc` al USB/tarjeta y lánzalo desde la pantalla de la CNC.

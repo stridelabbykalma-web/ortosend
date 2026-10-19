@@ -125,6 +125,10 @@ def test_selector_de_modo(tmp_path, taller):
 
 
 def test_ventana_tirada(stl_sintetico, tmp_path):
+    import time
+
+    from PySide6.QtCore import QPoint, Qt
+    from PySide6.QtTest import QTest
     from PySide6.QtWidgets import QApplication
 
     from interfaz.principal import VentanaPrincipal
@@ -136,45 +140,83 @@ def test_ventana_tirada(stl_sintetico, tmp_path):
     v.abrir(str(stl_sintetico), esperar=True)
     v.anadir_a_tirada()
     t = v.tirada
+    t.resize(1200, 800)
+    app.processEvents()
     t.anadir_abierto()  # dos veces el mismo paciente: 4 pies
     assert t.lista.count() == 4
-    # Vista previa al momento, con los pies numerados antes de calcular nada.
-    assert t.previa is not None and t.trabajo is None and not t.boton_guardar.isEnabled()
+    # Colocados y numerados al momento, antes de calcular nada.
+    assert t.trabajo is None and not t.boton_guardar.isEnabled()
     numeros = sorted(int(t.lista.item(k).text().split(".")[0]) for k in range(4))
     assert numeros == [1, 2, 3, 4]
-    previa = [(f.numero, f.x, f.y) for f in t.previa.fichas]
-    t.lista.setCurrentRow(1)  # resaltar uno no rompe nada
-    # Mover a mano: elegir con un clic en el mapa, arrastrar y soltar en un sitio libre.
+    assert all(t.vista.item_de(q).isVisible() for q in t.piezas)
+
+    # Arrastrar un pie con el ratón (de verdad, sobre la vista) a la esquina de detrás a la derecha.
     p = t.piezas[1]
-    ny, nx = p.forma()
+    item = t.vista.item_de(p)
     paso = t.taller["calculo"]["rejilla"]
     m = cnc.margen_celdas(12.5, paso, t.taller["cnc"]) * paso
-    x0, y0 = p.x * paso, p.y * paso
-    t._al_pulsar(x0 + 5, y0 + 5)
+    ny, nx = p.forma()
+    vista = t.vista
+
+    def en_pantalla(x_mm, y_mm):
+        return vista.mapFromScene(x_mm, vista.largo - y_mm)
+
+    origen = en_pantalla((p.x + nx / 2) * paso, (p.y + ny / 2) * paso)
+    destino_mm = (600 - m - nx * paso / 2 - 2, 500 - m - ny * paso / 2 - 2)
+    destino = en_pantalla(*destino_mm)
+    vp = vista.viewport()
+    QTest.mousePress(vp, Qt.LeftButton, Qt.NoModifier, origen)
     assert t.elegida() is p
-    destino = (600 - nx * paso - m - 1, 500 - ny * paso - m - 1)
-    t._al_arrastrar(destino[0] + 5, destino[1] + 5)
-    t._al_soltar(destino[0] + 5, destino[1] + 5)
-    assert p.fija and abs(p.x * paso - destino[0]) <= paso and "puesto a mano" in "".join(
-        t.lista.item(k).text() for k in range(t.lista.count()))
-    # Encima de otro pie: se rechaza y no se mueve.
+    inicio = time.perf_counter()
+    pasos = 12
+    for k in range(1, pasos + 1):
+        q = origen + (destino - origen) * k / pasos
+        QTest.mouseMove(vp, QPoint(int(q.x()), int(q.y())))
+        app.processEvents()
+    por_movimiento = (time.perf_counter() - inicio) / pasos
+    assert por_movimiento < 0.1  # suave: nada pesado mientras se arrastra
+    QTest.mouseRelease(vp, Qt.LeftButton, Qt.NoModifier, destino)
+    app.processEvents()
+    assert p.fija and abs((p.x + nx / 2) * paso - destino_mm[0]) <= 3 * paso
+    assert "puesto a mano" in "".join(t.lista.item(k).text() for k in range(t.lista.count()))
+
+    # Encima de otro pie: se rechaza, vuelve a su sitio y los demás no se mueven.
     otro = next(q for q in t.piezas if q is not p)
-    antes = (p.x, p.y)
-    assert not t.mover_a(p, otro.x * paso, otro.y * paso) and (p.x, p.y) == antes
-    # Girar y flechas.
+    antes = {id(q): (q.x, q.y) for q in t.piezas}
+    assert not t.mover_a(p, otro.x * paso, otro.y * paso)
+    assert {id(q): (q.x, q.y) for q in t.piezas} == antes
+    assert item.pos() == vista.a_escena(p)
+
+    # Doble clic = girar; flechas del teclado = mover; clic derecho → automático.
     t.lista.setCurrentRow(t.piezas.index(p))
-    t.mover(-5, 0)
-    t.girar()
-    assert p.giro in (1, 0)  # gira si cabe; si no, se queda como estaba
+    giro_antes = p.giro
+    t.girar(p)
+    assert p.giro == (giro_antes + 1) % 4 and p.fija
+    vista.setFocus()
+    x_antes = p.x
+    QTest.keyClick(vp, Qt.Key_Left)
+    QTest.keyClick(vista, Qt.Key_Left)
+    app.processEvents()
+    assert p.x < x_antes
     fijo = (p.x, p.y, p.giro)
-    previa = [(f.numero, f.x, f.y) for f in t.previa.fichas]
+    colocacion = {id(q): (q.x, q.y, q.giro) for q in t.piezas}
+    numeros = dict(t.numeros)
     t.calcular(esperar=True)
     assert t.trabajo is not None and len(t.trabajo.piezas) == 4
-    assert [(f.numero, f.x, f.y) for f in t.trabajo.fichas] == previa  # misma colocación que la vista previa
+    assert {id(f.pieza): f.numero for f in t.trabajo.fichas} == numeros  # misma numeración que en pantalla
+    assert {id(q): (q.x, q.y, q.giro) for q in t.piezas} == colocacion
     assert (p.x, p.y, p.giro) == fijo
     t._silencio = True
     t.guardar(str(tmp_path / "TIRADA.nc"))
     assert (tmp_path / "TIRADA.nc").read_text().startswith("(Rectificador")
-    assert (tmp_path / "TIRADA_mapa.png").exists() and (tmp_path / "TIRADA_mapa.pdf").exists() and (tmp_path / "TIRADA.txt").exists()
+    assert (tmp_path / "TIRADA_mapa.png").exists() and (tmp_path / "TIRADA_mapa.pdf").exists()
+    assert (tmp_path / "TIRADA.txt").exists()
+    # Volver a automático: ya no hay ninguno puesto a mano.
+    t.todo_automatico()
+    assert not any(q.fija for q in t.piezas) and all(q.colocada for q in t.piezas)
+    # Quitar uno: los demás se quedan donde estaban.
+    sitio = {id(q): (q.x, q.y) for q in t.piezas[1:]}
+    t.quitar(t.piezas[0])
+    assert {id(q): (q.x, q.y) for q in t.piezas} == sitio
     t.close()
     v.close()

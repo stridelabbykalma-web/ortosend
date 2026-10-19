@@ -5,10 +5,12 @@ from __future__ import annotations
 import traceback
 from pathlib import Path
 
-from PySide6.QtCore import QObject, QPointF, QRectF, Qt, QThread, QTimer, QUrl, Signal
-from PySide6.QtGui import QColor, QDesktopServices, QPainter, QPen, QPixmap
+import tempfile
+
+from PySide6.QtCore import QObject, Qt, QThread, QTimer, QUrl, Signal
+from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
-    QDialog, QDoubleSpinBox, QFileDialog, QFormLayout, QGridLayout, QHBoxLayout, QLabel, QListWidget,
+    QDialog, QDoubleSpinBox, QFileDialog, QFormLayout, QHBoxLayout, QLabel, QListWidget,
     QMessageBox, QPushButton, QVBoxLayout,
 )
 
@@ -16,6 +18,8 @@ from ortomolde import cnc, mapa
 from ortomolde.campo import malla_a_campo
 from ortomolde.entrada import cargar_malla
 from ortomolde.pies import detectar_pies
+
+from interfaz.plancha_vista import VistaPlancha
 
 
 def piezas_de_proyecto(proyecto, nombre: str) -> list[cnc.Pieza]:
@@ -62,100 +66,6 @@ class _Calculo(QObject):
             self.fallo.emit(str(e))
 
 
-def dibujo_plancha(trabajo: cnc.TrabajoCNC, ancho_px: int = 860, titulo: str = "", fresa=None,
-                   resaltar: int | None = None) -> tuple[QPixmap, dict]:
-    """El mismo mapa que se guarda junto al .nc, para verlo en la ventana, y su geometría
-    (para saber qué punto de la plancha hay bajo el ratón)."""
-    datos, geo = mapa.png_con_ejes(trabajo, titulo, fresa, dpi=90, resaltar=resaltar)
-    pm = QPixmap()
-    pm.loadFromData(datos)
-    escala = ancho_px / pm.width()
-    return pm.scaledToWidth(ancho_px, Qt.SmoothTransformation), {**geo, "escala": escala}
-
-
-class VistaMapa(QLabel):
-    """El mapa de la plancha: con el ratón se elige un pie (clic) y se mueve (arrastrar); con las
-    flechas del teclado se mueve el elegido."""
-
-    pulsado = Signal(float, float)  # X, Y en mm
-    arrastrado = Signal(float, float)
-    soltado = Signal(float, float)
-    tecla = Signal(int, bool)  # tecla, con Mayúsculas
-
-    def __init__(self, texto: str):
-        super().__init__(texto)
-        self.geo: dict | None = None
-        self.base: QPixmap | None = None
-        self._pulsado = False
-        self.setFocusPolicy(Qt.ClickFocus)
-        self.setMouseTracking(False)
-
-    def poner(self, pm: QPixmap, geo: dict):
-        self.base, self.geo = pm, geo
-        self.setPixmap(pm)
-
-    def _origen(self) -> tuple[float, float]:
-        """Dónde empieza la imagen dentro de la etiqueta (está centrada)."""
-        return (self.width() - self.base.width()) / 2, (self.height() - self.base.height()) / 2
-
-    def mm(self, pos) -> tuple[float, float] | None:
-        if self.base is None or self.geo is None:
-            return None
-        ox, oy = self._origen()
-        e = self.geo["escala"]
-        return mapa.a_mm(self.geo, (pos.x() - ox) / e, (pos.y() - oy) / e)
-
-    def px(self, x: float, y: float) -> QPointF:
-        """mm de la plancha → punto dentro de la imagen escalada."""
-        px, py = mapa.a_px(self.geo, x, y)
-        return QPointF(px * self.geo["escala"], py * self.geo["escala"])
-
-    def mousePressEvent(self, ev):
-        p = self.mm(ev.position())
-        if ev.button() == Qt.LeftButton and p is not None:
-            self._pulsado = True
-            self.pulsado.emit(*p)
-
-    def mouseMoveEvent(self, ev):
-        p = self.mm(ev.position())
-        if self._pulsado and p is not None:
-            self.arrastrado.emit(*p)
-
-    def mouseReleaseEvent(self, ev):
-        p = self.mm(ev.position())
-        if self._pulsado and p is not None:
-            self.soltado.emit(*p)
-        self._pulsado = False
-
-    def keyPressEvent(self, ev):
-        if ev.key() in (Qt.Key_Left, Qt.Key_Right, Qt.Key_Up, Qt.Key_Down, Qt.Key_R):
-            self.tecla.emit(ev.key(), bool(ev.modifiers() & Qt.ShiftModifier))
-        else:
-            super().keyPressEvent(ev)
-
-    def dibujar_encima(self, rect_mm, margen_mm: float, bien: bool, texto: str):
-        """Mientras se arrastra: el pie (recuadro) y su sitio para la fresa, verde si cabe y rojo si no."""
-        if self.base is None:
-            return
-        pm = self.base.copy()
-        p = QPainter(pm)
-        p.setRenderHint(QPainter.Antialiasing)
-        color = QColor("#27ae60" if bien else "#e74c3c")
-        x0, y0, x1, y1 = rect_mm
-        a, b = self.px(x0, y1), self.px(x1, y0)
-        c = QColor(color)
-        c.setAlpha(60)
-        p.fillRect(QRectF(a, b), c)
-        p.setPen(QPen(color, 3))
-        p.drawRect(QRectF(a, b))
-        p.setPen(QPen(color, 1.5, Qt.DashLine))
-        p.drawRect(QRectF(self.px(x0 - margen_mm, y1 + margen_mm), self.px(x1 + margen_mm, y0 - margen_mm)))
-        p.setPen(QPen(QColor("#111111")))
-        p.drawText(QRectF(a.x(), b.y() + 4, b.x() - a.x(), 40), Qt.AlignHCenter | Qt.AlignBottom | Qt.TextWordWrap, texto)
-        p.end()
-        self.setPixmap(pm)
-
-
 def _fases(trabajo: cnc.TrabajoCNC) -> str:
     t = trabajo.tiempos
     return (f"contorno {t.get('contorno', 0):.0f} min, desbaste {t.get('desbaste', 0):.0f} min, "
@@ -163,22 +73,23 @@ def _fases(trabajo: cnc.TrabajoCNC) -> str:
 
 
 class VentanaTirada(QDialog):
-    """Lista de moldes de la tirada, plancha, colocación automática y exportación del .nc."""
+    """Lista de moldes de la tirada, plancha, colocación (automática o a mano) y exportación del .nc."""
 
     def __init__(self, principal):
         super().__init__(principal)
         self.principal = principal
         self.taller = principal.taller
         self.setWindowTitle("Tirada de CNC – varios moldes en una plancha")
-        self.resize(1100, 720)
+        self.resize(1200, 760)
         self.piezas: list[cnc.Pieza] = []
         self.trabajo: cnc.TrabajoCNC | None = None
-        self.previa: cnc.TrabajoCNC | None = None  # colocación sin trayectorias (se ve al momento)
+        self.numeros: dict[int, int] = {}  # id(pieza) → orden en que se fresa
+        self.avisos: list[str] = []
         self._hilo = None
         self._reloj = QTimer(self)  # espera a que se deje de teclear la medida de la plancha
         self._reloj.setSingleShot(True)
         self._reloj.setInterval(400)
-        self._reloj.timeout.connect(self._previsualizar)
+        self._reloj.timeout.connect(lambda: self._colocar(conservar=True))
 
         izq = QVBoxLayout()
         pl = self.taller["plancha"]
@@ -190,66 +101,54 @@ class VentanaTirada(QDialog):
             c.setDecimals(0)
             c.setSuffix(" mm")
             c.setValue(valor)
-            c.valueChanged.connect(lambda *_: (self._invalidar(previa=False), self._reloj.start()))
+            c.valueChanged.connect(lambda *_: (self._invalidar(), self._reloj.start()))
             form.addRow(f"Plancha – {texto}:", c)
             self.cajas.append(c)
         izq.addLayout(form)
         izq.addWidget(QLabel("<b>Pies de la tirada</b>"))
         self.lista = QListWidget()
-        self.lista.currentRowChanged.connect(lambda *_: self._dibujar())
+        self.lista.currentRowChanged.connect(self._al_elegir_en_lista)
         self.lista.setMinimumWidth(330)
         izq.addWidget(self.lista, 1)
-        nota = QLabel("La colocación se ve al momento en el mapa. El número de cada pie es el orden en que se "
-                      "fresa. Elige un pie (en la lista o con un clic en el mapa) para verlo resaltado y moverlo.")
-        nota.setWordWrap(True)
-        nota.setStyleSheet("color: #666; font-size: 11px;")
-        izq.addWidget(nota)
         for texto, accion in (("Añadir el molde abierto", self.anadir_abierto),
                               ("Añadir moldes exportados (STL)…", self.anadir_archivos),
-                              ("Quitar el seleccionado", self.quitar),
+                              ("Quitar el elegido", lambda: self.quitar()),
                               ("Vaciar la tirada", self.vaciar)):
             b = QPushButton(texto)
             b.clicked.connect(accion)
             izq.addWidget(b)
+        fila = QHBoxLayout()
+        b = QPushButton("Girar 90°")
+        b.setToolTip("Gira el pie elegido (también: doble clic sobre el pie, o tecla R)")
+        b.clicked.connect(lambda: self.girar())
+        fila.addWidget(b)
+        b = QPushButton("Colocar todo automático")
+        b.setToolTip("Vuelve a colocar todos los pies lo más juntos posible")
+        b.clicked.connect(self.todo_automatico)
+        fila.addWidget(b)
+        izq.addLayout(fila)
         self.boton_calcular = QPushButton("Calcular trayectorias")
         self.boton_calcular.setStyleSheet("font-weight: bold;")
-        self.boton_calcular.clicked.connect(self.calcular)
+        self.boton_calcular.clicked.connect(lambda: self.calcular())
         izq.addWidget(self.boton_calcular)
         self.boton_guardar = QPushButton("Guardar archivo para la CNC (.nc)…")
-        self.boton_guardar.clicked.connect(self.guardar)
+        self.boton_guardar.clicked.connect(lambda: self.guardar())
         self.boton_guardar.setEnabled(False)
         izq.addWidget(self.boton_guardar)
-
-        mover = QGridLayout()
-        mover.addWidget(QLabel("<b>Mover el pie elegido</b> (o arrástralo en el mapa):"), 0, 0, 1, 4)
-        for texto, fila, col, dx, dy in (("↑", 1, 1, 0, 5), ("←", 2, 0, -5, 0), ("↓", 2, 1, 0, -5), ("→", 2, 2, 5, 0)):
-            b = QPushButton(texto)
-            b.setToolTip("Mueve el pie elegido 5 mm (con las flechas del teclado sobre el mapa; Mayús = 1 mm)")
-            b.clicked.connect(lambda _=False, dx=dx, dy=dy: self.mover(dx, dy))
-            mover.addWidget(b, fila, col)
-        b = QPushButton("Girar 90°")
-        b.setToolTip("Gira el pie elegido un cuarto de vuelta sobre su centro (tecla R sobre el mapa)")
-        b.clicked.connect(self.girar)
-        mover.addWidget(b, 1, 3)
-        b = QPushButton("Soltar")
-        b.setToolTip("Este pie vuelve a colocarse solo")
-        b.clicked.connect(self.soltar)
-        mover.addWidget(b, 2, 3)
-        b = QPushButton("Colocar todo automático")
-        b.clicked.connect(self.todo_automatico)
-        mover.addWidget(b, 3, 0, 1, 4)
-        izq.addLayout(mover)
+        b = QPushButton("Ver mapa para imprimir")
+        b.clicked.connect(self.ver_mapa)
+        izq.addWidget(b)
 
         der = QVBoxLayout()
-        self.vista = VistaMapa("Añade moldes: verás aquí dónde queda cada uno en la plancha.")
-        self.vista.pulsado.connect(self._al_pulsar)
-        self.vista.arrastrado.connect(self._al_arrastrar)
-        self.vista.soltado.connect(self._al_soltar)
-        self.vista.tecla.connect(self._al_teclear)
-        self._arrastre = None  # (pieza, dx_mm, dy_mm, x_celdas, y_celdas) mientras se arrastra
-        self.vista.setAlignment(Qt.AlignCenter)
-        self.vista.setMinimumSize(660, 560)
-        self.vista.setStyleSheet("background: #2b2d31; color: #ddd;")
+        ayuda = QLabel("🖱 <b>Arrastra cada pie</b> para ponerlo donde quieras (verde = cabe, rojo = no cabe) · "
+                       "<b>doble clic</b> sobre un pie = girarlo · <b>clic derecho</b> = más opciones · "
+                       "rueda = zoom · doble clic en vacío = ver toda la plancha · flechas = mover 1 mm "
+                       "(Mayús: 10 mm)")
+        ayuda.setWordWrap(True)
+        ayuda.setStyleSheet("color: #444; padding: 2px;")
+        der.addWidget(ayuda)
+        self.vista = VistaPlancha(self)
+        self.vista.setMinimumSize(660, 520)
         der.addWidget(self.vista, 1)
         self.info = QLabel()
         self.info.setWordWrap(True)
@@ -258,83 +157,29 @@ class VentanaTirada(QDialog):
         lay = QHBoxLayout(self)
         lay.addLayout(izq, 0)
         lay.addLayout(der, 1)
+        self._poner_plancha()
 
     def closeEvent(self, evento):
         if self._hilo is not None and self._hilo.isRunning():
             self._hilo.wait()
         super().closeEvent(evento)
 
-    # ------------------------------------------------------------ lista
+    # ------------------------------------------------------------ datos básicos
 
-    def _numero(self, pieza) -> int | None:
-        hecho = self.trabajo or self.previa
-        if hecho is None:
-            return None
-        for f in hecho.fichas:
-            if f.pieza is pieza:
-                return f.numero
-        return None
-
-    def _refrescar_lista(self):
-        fila = self.lista.currentRow()
-        self.lista.blockSignals(True)
-        self.lista.clear()
-        paso = self.taller["calculo"]["rejilla"]
-        for p in self.piezas:
-            ny, nx = p.h.shape
-            n = self._numero(p)
-            delante = f"{n}.  " if n else ("NO CABE · " if self.previa is not None else "")
-            detras = "  · puesto a mano" if p.fija and p.colocada else ""
-            self.lista.addItem(f"{delante}{p.nombre}  ({nx * paso:.0f} × {ny * paso:.0f} mm){detras}")
-        self.lista.setCurrentRow(min(fila, self.lista.count() - 1))
-        self.lista.blockSignals(False)
-
-    def _invalidar(self, *_, previa: bool = True):
-        """Algo ha cambiado: lo calculado ya no vale y se vuelve a colocar (vista previa)."""
-        self.trabajo = None
-        self.boton_guardar.setEnabled(False)
-        if previa:
-            self._previsualizar()
-
-    def _previsualizar(self):
-        """Coloca los pies en la plancha y enseña el mapa sin calcular trayectorias (casi instantáneo)."""
-        self.trabajo = None
-        self.boton_guardar.setEnabled(False)
-        if not self.piezas:
-            self.previa = None
-            self._refrescar_lista()
-            self.vista.base = None
-            self.vista.setPixmap(QPixmap())
-            self.vista.setText("Añade moldes: verás aquí dónde queda cada uno en la plancha.")
-            self.info.setText("")
-            return
-        self.previa = cnc.previsualizar(self.piezas, *self.plancha(), self.taller["calculo"]["rejilla"],
-                                        self.taller["fresa"]["diametro"] / 2, self.taller["cnc"])
-        self._refrescar_lista()
-        self._dibujar()
-        texto = (f"<b>Vista previa:</b> {len(self.previa.piezas)} pie(s) colocados en la plancha. "
-                 "Si está bien, pulsa <b>Calcular trayectorias</b> para generar el archivo de la CNC "
-                 "(se respeta esta colocación y esta numeración).")
-        if self.previa.avisos:
-            texto += "<br><span style='color:#e4572e'>⚠ " + "<br>⚠ ".join(self.previa.avisos) + "</span>"
-        self.info.setText(texto)
-
-    def _dibujar(self):
-        hecho = self.trabajo or self.previa
-        if hecho is None:
-            return
-        fila = self.lista.currentRow()
-        resaltar = self._numero(self.piezas[fila]) if 0 <= fila < len(self.piezas) else None
-        self.vista.poner(*dibujo_plancha(hecho, max(self.vista.width() - 10, 600),
-                                         fresa=self.taller["fresa"]["diametro"], resaltar=resaltar))
-
-    # ------------------------------------------------------------ mover a mano
+    def plancha(self) -> tuple[float, float, float]:
+        return tuple(c.value() for c in self.cajas)
 
     def _paso(self) -> float:
         return self.taller["calculo"]["rejilla"]
 
     def _radio(self) -> float:
         return self.taller["fresa"]["diametro"] / 2
+
+    def _margen(self) -> int:
+        return cnc.margen_celdas(self._radio(), self._paso(), self.taller["cnc"])
+
+    def _numero(self, pieza) -> int | None:
+        return self.numeros.get(id(pieza))
 
     def elegida(self) -> cnc.Pieza | None:
         fila = self.lista.currentRow()
@@ -344,15 +189,124 @@ class VentanaTirada(QDialog):
         return cnc.cabe(p, self.piezas, *self.plancha()[:2], self._paso(), self.taller["cnc"], self._radio(),
                         x, y, giro)
 
+    # ------------------------------------------------------------ colocación
+
+    def _poner_plancha(self):
+        ancho, largo, _ = self.plancha()
+        self.vista.poner_plancha(ancho, largo, self._paso(), self._margen())
+
+    def _colocar(self, conservar: bool = True):
+        """Coloca los pies que no tienen sitio. Con `conservar`, los que ya están colocados no se mueven
+        (los nuevos van a los huecos); si así no caben, se recolocan los que no están puestos a mano."""
+        cnc.a_paso(self.piezas, self._paso())
+        self._poner_plancha()
+        ancho, largo, _ = self.plancha()
+        args = (ancho, largo, self._paso(), self.taller["cnc"], self._radio())
+        fijas = {id(p): p.fija for p in self.piezas}
+        avisos: list[str] = []
+        if conservar:
+            for p in self.piezas:
+                p.fija = p.fija or p.colocada
+        sobran = cnc.colocar(self.piezas, *args, avisos)
+        for p in self.piezas:
+            p.fija = fijas[id(p)] and p.colocada
+        if conservar and sobran:
+            avisos = []
+            sobran = cnc.colocar(self.piezas, *args, avisos)
+        if sobran:
+            avisos.append(f"No caben {len(sobran)} pie(s): " + ", ".join(p.nombre for p in sobran)
+                          + ". Usa una plancha más grande o hazlos en otra tirada.")
+        self.avisos = avisos
+        self._refrescar()
+
+    def _refrescar(self):
+        """Numeración, lista y mapa (sin recalcular nada pesado)."""
+        self.trabajo = None
+        self.boton_guardar.setEnabled(False)
+        puestas = [p for p in self.piezas if p.colocada]
+        self.numeros = {id(p): n for n, p in enumerate(cnc.orden_fresado(puestas, self._paso()), 1)}
+        self._refrescar_lista()
+        self.vista.poner_piezas(self.piezas, self.numeros)
+        self.vista.elegir(self.elegida())
+        self._texto_info()
+
+    def _texto_info(self, extra: str = ""):
+        if not self.piezas:
+            self.info.setText("Añade moldes: aquí verás dónde queda cada uno en la plancha.")
+            return
+        n = sum(p.colocada for p in self.piezas)
+        texto = (f"<b>{n} pie(s) en la plancha.</b> El número de cada pie es el orden en que se fresa. "
+                 "Cuando esté bien, pulsa <b>Calcular trayectorias</b>.")
+        if extra:
+            texto = extra + "<br>" + texto
+        if self.avisos:
+            texto += "<br><span style='color:#e4572e'>⚠ " + "<br>⚠ ".join(self.avisos) + "</span>"
+        self.info.setText(texto)
+
+    def _refrescar_lista(self):
+        fila = self.lista.currentRow()
+        self.lista.blockSignals(True)
+        self.lista.clear()
+        paso = self._paso()
+        for p in self.piezas:
+            ny, nx = p.h.shape
+            n = self._numero(p)
+            delante = f"{n}.  " if n else "NO CABE · "
+            detras = "  · puesto a mano" if p.fija and p.colocada else ""
+            self.lista.addItem(f"{delante}{p.nombre}  ({nx * paso:.0f} × {ny * paso:.0f} mm){detras}")
+        self.lista.setCurrentRow(min(fila, self.lista.count() - 1))
+        self.lista.blockSignals(False)
+
+    def _invalidar(self, *_):
+        """Lo calculado ya no vale."""
+        self.trabajo = None
+        self.boton_guardar.setEnabled(False)
+        self.vista.borrar_contornos()
+
+    # ------------------------------------------------------------ elegir
+
+    def _al_elegir_en_lista(self, fila: int):
+        self.vista.elegir(self.elegida())
+
+    def al_elegir_en_mapa(self, p: cnc.Pieza | None):
+        if p is None:
+            return
+        k = self.piezas.index(p)
+        if self.lista.currentRow() != k:
+            self.lista.blockSignals(True)
+            self.lista.setCurrentRow(k)
+            self.lista.blockSignals(False)
+
+    # ------------------------------------------------------------ mover a mano
+
+    def al_mover(self, p: cnc.Pieza, x: int, y: int, motivo: str | None):
+        """Mientras se arrastra: solo el texto de abajo (el color lo pone la vista)."""
+        paso = self._paso()
+        ny, nx = p.forma()
+        donde = f"X {x * paso:.0f}–{(x + nx) * paso:.0f} mm, Y {y * paso:.0f}–{(y + ny) * paso:.0f} mm"
+        if motivo is None:
+            self.info.setText(f"Moviendo <b>{p.nombre}</b>: {donde} — <span style='color:#27ae60'>cabe aquí</span>")
+        else:
+            self.info.setText(f"Moviendo <b>{p.nombre}</b>: {donde} — "
+                              f"<span style='color:#e4572e'>no cabe: {motivo}</span>")
+
+    def al_soltar(self, p: cnc.Pieza, x: int, y: int):
+        self.colocar_a_mano(p, x, y, p.giro)
+
     def colocar_a_mano(self, p: cnc.Pieza, x: int, y: int, giro: int) -> bool:
-        """Pone un pie en una posición (celdas) y giro. Si no cabe, no lo mueve y dice por qué."""
+        """Pone un pie en una posición (celdas) y giro. Si no cabe, vuelve a su sitio y se dice por qué.
+        Los demás pies no se mueven."""
         motivo = self._motivo(p, x, y, giro)
         if motivo:
-            self.info.setText(f"<span style='color:#e4572e'>⚠ No se puede poner ahí: {p.nombre} {motivo}.</span>")
-            self._dibujar()
+            item = self.vista.item_de(p)
+            if item is not None:
+                item.sincronizar()
+            self._texto_info(f"<span style='color:#e4572e'>⚠ No se puede poner ahí: {p.nombre} {motivo}. "
+                             "Ha vuelto a su sitio.</span>")
             return False
         p.x, p.y, p.giro, p.fija = x, y, giro, True
-        self._previsualizar()
+        self._invalidar()
+        self._refrescar()
         return True
 
     def mover_a(self, p: cnc.Pieza, x_mm: float, y_mm: float) -> bool:
@@ -362,18 +316,18 @@ class VentanaTirada(QDialog):
     def mover(self, dx_mm: float, dy_mm: float):
         p = self.elegida()
         if p is None or not p.colocada:
-            self.info.setText("Elige primero un pie (en la lista o con un clic en el mapa).")
+            self._texto_info("Elige primero un pie (clic sobre él o en la lista).")
             return
         self.mover_a(p, p.x * self._paso() + dx_mm, p.y * self._paso() + dy_mm)
 
-    def girar(self):
-        p = self.elegida()
+    def girar(self, p: cnc.Pieza | None = None, cuartos: int = 1):
+        p = p or self.elegida()
         if p is None or not p.colocada:
-            self.info.setText("Elige primero un pie (en la lista o con un clic en el mapa).")
+            self._texto_info("Elige primero un pie (clic sobre él o en la lista).")
             return
         ny, nx = p.forma()
         cx, cy = p.x + nx / 2, p.y + ny / 2
-        g = (p.giro + 1) % 4
+        g = (p.giro + cuartos) % 4
         ny2, nx2 = p.forma(g)
         x, y = int(round(cx - nx2 / 2)), int(round(cy - ny2 / 2))
         if self._motivo(p, x, y, g):
@@ -394,75 +348,28 @@ class VentanaTirada(QDialog):
                 return i, j
         return None
 
-    def soltar(self):
-        p = self.elegida()
+    def soltar(self, p: cnc.Pieza | None = None):
+        """El pie vuelve a colocación automática."""
+        p = p or self.elegida()
         if p is not None:
             p.fija = False
-            self._previsualizar()
+            p.x = p.y = None
+            self._invalidar()
+            self._colocar(conservar=True)
 
     def todo_automatico(self):
         for p in self.piezas:
             p.fija = False
-        self._previsualizar()
-
-    def _pie_en(self, x_mm: float, y_mm: float) -> int | None:
-        paso = self._paso()
-        for k, p in enumerate(self.piezas):
-            if p.colocada:
-                ny, nx = p.forma()
-                if p.x * paso <= x_mm <= (p.x + nx) * paso and p.y * paso <= y_mm <= (p.y + ny) * paso:
-                    return k
-        return None
-
-    def _al_pulsar(self, x, y):
-        k = self._pie_en(x, y)
-        self._arrastre = None
-        if k is None:
-            return
-        p = self.piezas[k]
-        if self.lista.currentRow() != k:
-            self.lista.setCurrentRow(k)
-        self._arrastre = (p, x - p.x * self._paso(), y - p.y * self._paso(), p.x, p.y)
-
-    def _destino(self, x, y) -> tuple[int, int]:
-        p, dx, dy, _, _ = self._arrastre
-        return int(round((x - dx) / self._paso())), int(round((y - dy) / self._paso()))
-
-    def _al_arrastrar(self, x, y):
-        if self._arrastre is None:
-            return
-        p = self._arrastre[0]
-        cx, cy = self._destino(x, y)
-        motivo = self._motivo(p, cx, cy, p.giro)
-        ny, nx = p.forma()
-        paso = self._paso()
-        r = (cx * paso, cy * paso, (cx + nx) * paso, (cy + ny) * paso)
-        margen = cnc.margen_celdas(self._radio(), paso, self.taller["cnc"]) * paso
-        self.vista.dibujar_encima(r, margen, motivo is None, f"X {r[0]:.0f}–{r[2]:.0f}  Y {r[1]:.0f}–{r[3]:.0f} mm")
-        self.info.setText(f"Moviendo {p.nombre}: X {r[0]:.0f}–{r[2]:.0f} mm, Y {r[1]:.0f}–{r[3]:.0f} mm"
-                          + ("" if motivo is None else f" — <span style='color:#e4572e'>no cabe: {motivo}</span>"))
-
-    def _al_soltar(self, x, y):
-        if self._arrastre is None:
-            return
-        p, _, _, x0, y0 = self._arrastre
-        cx, cy = self._destino(x, y)
-        self._arrastre = None
-        if (cx, cy) == (x0, y0):
-            self._dibujar()  # solo era un clic para elegirlo
-            return
-        self.colocar_a_mano(p, cx, cy, p.giro)
-
-    def _al_teclear(self, tecla, mayus):
-        d = 1.0 if mayus else 5.0
-        if tecla == Qt.Key_R:
-            self.girar()
-        else:
-            self.mover(*{Qt.Key_Left: (-d, 0), Qt.Key_Right: (d, 0), Qt.Key_Up: (0, d), Qt.Key_Down: (0, -d)}[tecla])
+        self._invalidar()
+        self._colocar(conservar=False)
 
     def anadir_piezas(self, nuevas: list[cnc.Pieza]):
+        for p in nuevas:
+            p.x = p.y = None
+            p.fija = False
         self.piezas += nuevas
         self._invalidar()
+        self._colocar(conservar=True)  # los que ya estaban no se mueven
 
     def anadir_abierto(self):
         pr = self.principal.proyecto
@@ -483,33 +390,32 @@ class VentanaTirada(QDialog):
         if errores:
             QMessageBox.warning(self, "Algunos archivos no se han podido añadir", "\n".join(errores))
 
-    def quitar(self):
-        fila = self.lista.currentRow()
-        if fila >= 0:
-            del self.piezas[fila]
+    def quitar(self, p: cnc.Pieza | None = None):
+        p = p or self.elegida()
+        if p is not None:
+            self.piezas.remove(p)
             self._invalidar()
+            self._refrescar()
 
     def vaciar(self):
         self.piezas = []
         self._invalidar()
+        self._refrescar()
 
     # ------------------------------------------------------------ cálculo
-
-    def plancha(self) -> tuple[float, float, float]:
-        return tuple(c.value() for c in self.cajas)
 
     def calcular(self, esperar: bool = False):
         if not self.piezas:
             QMessageBox.information(self, "Tirada", "Añade al menos un molde.")
             return
-        if self.previa is None or self._reloj.isActive():
+        if self._reloj.isActive():
             self._reloj.stop()
-            self._previsualizar()
-        if not self.previa.piezas:
+            self._colocar(conservar=True)
+        if not any(p.colocada for p in self.piezas):
             QMessageBox.information(self, "Tirada", "Ningún pie cabe en esta plancha.")
             return
         self.boton_calcular.setEnabled(False)
-        self.info.setText("Calculando las trayectorias (con la colocación que ves en el mapa)…")
+        self.info.setText("Calculando las trayectorias (con la colocación que ves en la plancha)…")
         calc = _Calculo(self.piezas, self.plancha(), self.taller)
         if esperar:
             try:
@@ -533,8 +439,7 @@ class VentanaTirada(QDialog):
         self.boton_calcular.setEnabled(True)
         self.trabajo = trabajo
         self.boton_guardar.setEnabled(True)
-        self._refrescar_lista()
-        self._dibujar()
+        self.vista.dibujar_contornos(trabajo.contornos)
         a, l, h = trabajo.plancha
         texto = (f"<b>{len(trabajo.piezas)} pie(s) colocados</b> en la plancha de {a:.0f} × {l:.0f} × {h:.0f} mm "
                  f"(ocupan el {100 * trabajo.aprovechamiento:.0f} %). "
@@ -584,3 +489,16 @@ class VentanaTirada(QDialog):
             QMessageBox.information(self, "Guardado", f"Archivos guardados:\n{ruta}\n{hoja}\n{png}\n{pdf}"
                                     "\n\nCopia el .nc al USB/tarjeta de la CNC.\n"
                                     "Imprime el mapa (PDF) para saber qué molde es cada uno en la plancha.")
+
+    def ver_mapa(self):
+        """Abre el mapa para imprimir (el mismo que se guarda con el .nc) de la colocación actual."""
+        hecho = self.trabajo
+        if hecho is None:
+            if not any(p.colocada for p in self.piezas):
+                return
+            hecho = cnc.previsualizar(self.piezas, *self.plancha(), self._paso(), self._radio(),
+                                      self.taller["cnc"], colocar_antes=False)
+        carpeta = Path(tempfile.mkdtemp(prefix="tirada_"))
+        _, pdf = mapa.guardar(hecho, carpeta / "TIRADA", "Tirada de CNC", self.taller["fresa"]["diametro"])
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(pdf)))
+        return pdf
