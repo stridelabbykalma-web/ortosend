@@ -4,6 +4,8 @@ import os
 
 import pytest
 
+from ortomolde import cnc
+
 pytestmark = pytest.mark.skipif(
     os.name != "nt" and not os.environ.get("DISPLAY"), reason="sin pantalla"
 )
@@ -142,9 +144,34 @@ def test_ventana_tirada(stl_sintetico, tmp_path):
     assert numeros == [1, 2, 3, 4]
     previa = [(f.numero, f.x, f.y) for f in t.previa.fichas]
     t.lista.setCurrentRow(1)  # resaltar uno no rompe nada
+    # Mover a mano: elegir con un clic en el mapa, arrastrar y soltar en un sitio libre.
+    p = t.piezas[1]
+    ny, nx = p.forma()
+    paso = t.taller["calculo"]["rejilla"]
+    m = cnc.margen_celdas(12.5, paso, t.taller["cnc"]) * paso
+    x0, y0 = p.x * paso, p.y * paso
+    t._al_pulsar(x0 + 5, y0 + 5)
+    assert t.elegida() is p
+    destino = (600 - nx * paso - m - 1, 500 - ny * paso - m - 1)
+    t._al_arrastrar(destino[0] + 5, destino[1] + 5)
+    t._al_soltar(destino[0] + 5, destino[1] + 5)
+    assert p.fija and abs(p.x * paso - destino[0]) <= paso and "puesto a mano" in "".join(
+        t.lista.item(k).text() for k in range(t.lista.count()))
+    # Encima de otro pie: se rechaza y no se mueve.
+    otro = next(q for q in t.piezas if q is not p)
+    antes = (p.x, p.y)
+    assert not t.mover_a(p, otro.x * paso, otro.y * paso) and (p.x, p.y) == antes
+    # Girar y flechas.
+    t.lista.setCurrentRow(t.piezas.index(p))
+    t.mover(-5, 0)
+    t.girar()
+    assert p.giro in (1, 0)  # gira si cabe; si no, se queda como estaba
+    fijo = (p.x, p.y, p.giro)
+    previa = [(f.numero, f.x, f.y) for f in t.previa.fichas]
     t.calcular(esperar=True)
     assert t.trabajo is not None and len(t.trabajo.piezas) == 4
     assert [(f.numero, f.x, f.y) for f in t.trabajo.fichas] == previa  # misma colocación que la vista previa
+    assert (p.x, p.y, p.giro) == fijo
     t._silencio = True
     t.guardar(str(tmp_path / "TIRADA.nc"))
     assert (tmp_path / "TIRADA.nc").read_text().startswith("(Rectificador")

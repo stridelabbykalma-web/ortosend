@@ -43,6 +43,7 @@ class Pieza:
     x: int | None = None  # posición (celdas) de la esquina delantera izquierda de `h` en la plancha
     y: int | None = None
     giro: int = 0  # cuartos de vuelta (0..3)
+    fija: bool = False  # puesta a mano: la colocación automática no la mueve
 
     @property
     def colocada(self) -> bool:
@@ -114,10 +115,40 @@ def margen_celdas(radio: float, paso: float, cfg: dict) -> int:
     return int(np.ceil(m / paso))
 
 
+def huella(p: Pieza, m: int, x: int | None = None, y: int | None = None,
+           giro: int | None = None) -> tuple[int, int, int, int]:
+    """Rectángulo (x, y, ancho, largo) en celdas de la plancha que ocupa una pieza con su margen
+    para el contorno."""
+    ny, nx = p.forma(giro)
+    x = p.x if x is None else x
+    y = p.y if y is None else y
+    return x - m, y - m, nx + 2 * m, ny + 2 * m
+
+
+def _se_pisan(a, b) -> bool:
+    return a[0] < b[0] + b[2] and b[0] < a[0] + a[2] and a[1] < b[1] + b[3] and b[1] < a[1] + a[3]
+
+
+def cabe(p: Pieza, otras: list[Pieza], ancho: float, largo: float, paso: float, cfg: dict, radio: float,
+         x: int, y: int, giro: int) -> str | None:
+    """¿Cabe la pieza en esa posición (celdas) y giro? None si cabe; si no, el motivo."""
+    borde = int(round(cfg.get("margen_bloque", 0.0) / paso))
+    m = margen_celdas(radio, paso, cfg)
+    W, L = int(round(ancho / paso)) + 1, int(round(largo / paso)) + 1
+    r = huella(p, m, x, y, giro)
+    if r[0] < borde or r[1] < borde or r[0] + r[2] > W - borde or r[1] + r[3] > L - borde:
+        return "se sale de la plancha (la fresa necesita sitio alrededor del pie)"
+    for q in otras:
+        if q is not p and q.colocada and _se_pisan(r, huella(q, m)):
+            return f"queda demasiado cerca de {q.nombre} (las fresas de los dos se tocarían)"
+    return None
+
+
 def colocar(piezas: list[Pieza], ancho: float, largo: float, paso: float, cfg: dict,
-            radio: float) -> list[Pieza]:
+            radio: float, avisos: list[str] | None = None) -> list[Pieza]:
     """Coloca las piezas en la plancha lo más juntas posible (MaxRects: mejor hueco por el lado
-    corto), girándolas 90° si cabe mejor. Devuelve las que NO caben."""
+    corto), girándolas 90° si cabe mejor. Las puestas a mano (`fija`) se dejan donde están si siguen
+    cabiendo; el resto se coloca alrededor. Devuelve las que NO caben."""
     borde = int(round(cfg.get("margen_bloque", 0.0) / paso))
     m = margen_celdas(radio, paso, cfg)
     W = int(round(ancho / paso)) + 1 - 2 * borde
@@ -125,9 +156,26 @@ def colocar(piezas: list[Pieza], ancho: float, largo: float, paso: float, cfg: d
     libres = [(0, 0, W, L)]  # (x, y, ancho, largo) en celdas
     giros = (0, 1) if cfg.get("permitir_giro", True) else (0,)
     sobran = []
+    fijas = []
     for p in piezas:
-        p.x = p.y = None
-    for p in sorted(piezas, key=lambda q: -q.h.size):
+        if not p.fija:
+            p.x = p.y = None
+    for p in piezas:
+        if not p.fija:
+            continue
+        motivo = None if p.colocada else "sin posición"
+        if motivo is None:
+            motivo = cabe(p, fijas, ancho, largo, paso, cfg, radio, p.x, p.y, p.giro)
+        if motivo:
+            p.fija = False
+            p.x = p.y = None
+            if avisos is not None:
+                avisos.append(f"{p.nombre} ya no cabe donde lo pusiste ({motivo}): se ha colocado solo.")
+            continue
+        fijas.append(p)
+        hx, hy, hw, hl = huella(p, m)
+        libres = _partir(libres, (hx - borde, hy - borde, hw, hl))
+    for p in sorted([q for q in piezas if not q.fija], key=lambda q: -q.h.size):
         mejor = None
         for g in giros:
             ny, nx = p.forma(g)
@@ -602,7 +650,8 @@ def previsualizar(piezas: list[Pieza], ancho: float, largo: float, alto: float, 
     La numeración y las posiciones son las mismas que tendrá el .nc si después se llama a
     `generar(..., colocar_antes=False)`. El contorno que se dibuja es aproximado (a un radio de la silueta)."""
     a_paso(piezas, paso)
-    sobran = (colocar(piezas, ancho, largo, paso, cfg, radio) if colocar_antes
+    avisos = []
+    sobran = (colocar(piezas, ancho, largo, paso, cfg, radio, avisos) if colocar_antes
               else [p for p in piezas if not p.colocada])
     puestas = [p for p in piezas if p.colocada]
     nx, ny = int(round(ancho / paso)) + 1, int(round(largo / paso)) + 1
@@ -611,7 +660,7 @@ def previsualizar(piezas: list[Pieza], ancho: float, largo: float, alto: float, 
     tope = cfg.get("rebaje_superior", 0.5)
     dc = radio + HOLGURA_CONTORNO
     alcance = int(np.ceil((dc + radio) / paso)) + 2
-    fichas, avisos = [], []
+    fichas = []
     for n, p in enumerate(orden_fresado(puestas, paso), 1):
         hp, sp = p.h_girada(), p.silueta_girada()
         a, b = sp.shape

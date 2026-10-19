@@ -98,7 +98,8 @@ Ratón: girar = arrastrar con el botón izquierdo · desplazar = Mayús + arrast
 
 *Archivo → Añadir este molde a la tirada de CNC* (Ctrl+T) y, en la ventana **Tirada de CNC**,
 mira la **vista previa** (aparece al momento: dónde queda cada molde, numerado en el orden en que se
-fresará) → **Calcular trayectorias** → **Guardar archivo para la CNC (.nc)**. Se copia la estrategia del ejemplo de
+fresará; cada molde se puede arrastrar, mover con flechas o girar, y lo puesto a mano se respeta) →
+**Calcular trayectorias** → **Guardar archivo para la CNC (.nc)**. Se copia la estrategia del ejemplo de
 Fusion del taller (`molde_yeso.nc`), con la fresa de **bola Ø25 mm**:
 
 - **Origen**: X0 Y0 en la esquina **delantera izquierda** de la plancha, Z0 en su **cara de arriba**.

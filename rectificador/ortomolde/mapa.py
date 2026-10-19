@@ -73,7 +73,7 @@ def figura(trabajo: TrabajoCNC, titulo: str = "", fresa: float | None = None,
         ax.text(nx_, ny, str(f.numero), ha="center", va="center", fontsize=20, fontweight="bold", color="white",
                 zorder=6, bbox=dict(boxstyle="circle,pad=0.3", fc=color, ec="white", lw=1.5))
         molde, pie = _partes(f.nombre)
-        ax.text(nx_, ny - 22, f"{molde}\n{pie.upper()}", ha="center", va="top", fontsize=8, fontweight="bold",
+        ax.text(nx_, ny - 22, f"{molde}\n{pie.upper()}" + ("\n(puesto a mano)" if f.pieza.fija else ""), ha="center", va="top", fontsize=8, fontweight="bold",
                 color="#222222", zorder=6, bbox=dict(boxstyle="round,pad=0.25", fc="white", ec=color, alpha=0.9))
 
     # Origen, frente de la máquina y rejilla en mm.
@@ -166,11 +166,41 @@ def _linea(fig, x, y, w):
 def png(trabajo: TrabajoCNC, titulo: str = "", fresa: float | None = None, dpi: int = 110,
         resaltar: int | None = None) -> bytes:
     """El mapa como imagen PNG (para verlo en la ventana)."""
+    return png_con_ejes(trabajo, titulo, fresa, dpi, resaltar)[0]
+
+
+def png_con_ejes(trabajo: TrabajoCNC, titulo: str = "", fresa: float | None = None, dpi: int = 110,
+                 resaltar: int | None = None) -> tuple[bytes, dict]:
+    """El mapa en PNG y dónde queda la plancha dentro de la imagen, para pasar de un punto de la
+    imagen a mm: {"ancho", "alto"} = tamaño de la imagen en píxeles; {"x0", "y0", "x1", "y1"} = recuadro
+    del dibujo en píxeles contando desde ARRIBA a la izquierda; {"xlim", "ylim"} = mm en sus bordes."""
     fig = figura(trabajo, titulo, fresa, resaltar)
-    FigureCanvasAgg(fig)
+    fig.set_dpi(dpi)
+    FigureCanvasAgg(fig).draw()
+    ax = fig.axes[0]
+    caja = ax.get_window_extent()
+    ancho, alto = fig.canvas.get_width_height()
+    geo = {"ancho": ancho, "alto": alto, "x0": caja.x0, "x1": caja.x1, "y0": alto - caja.y1, "y1": alto - caja.y0,
+           "xlim": ax.get_xlim(), "ylim": ax.get_ylim()}
     buf = io.BytesIO()
     fig.savefig(buf, format="png", dpi=dpi)
-    return buf.getvalue()
+    return buf.getvalue(), geo
+
+
+def a_mm(geo: dict, px: float, py: float) -> tuple[float, float]:
+    """Punto de la imagen (píxeles desde arriba a la izquierda) → X, Y en mm de la plancha."""
+    (xa, xb), (ya, yb) = geo["xlim"], geo["ylim"]
+    x = xa + (px - geo["x0"]) / (geo["x1"] - geo["x0"]) * (xb - xa)
+    y = yb - (py - geo["y0"]) / (geo["y1"] - geo["y0"]) * (yb - ya)
+    return x, y
+
+
+def a_px(geo: dict, x: float, y: float) -> tuple[float, float]:
+    """X, Y en mm de la plancha → punto de la imagen (píxeles desde arriba a la izquierda)."""
+    (xa, xb), (ya, yb) = geo["xlim"], geo["ylim"]
+    px = geo["x0"] + (x - xa) / (xb - xa) * (geo["x1"] - geo["x0"])
+    py = geo["y0"] + (yb - y) / (yb - ya) * (geo["y1"] - geo["y0"])
+    return px, py
 
 
 def guardar(trabajo: TrabajoCNC, ruta_base: str | Path, titulo: str = "", fresa: float | None = None) -> list[Path]:

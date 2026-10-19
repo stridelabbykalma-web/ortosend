@@ -209,3 +209,33 @@ def test_vista_previa_igual_que_el_nc(piezas_sinteticas, cfg):
     assert [(f.numero, f.nombre, f.x, f.y) for f in t.fichas] == antes
     from ortomolde import mapa
     assert mapa.png(previa, "PRUEBA", 25, dpi=50, resaltar=2).startswith(b"\x89PNG")
+
+
+def test_colocar_a_mano(piezas_sinteticas, cfg):
+    R, paso = 12.5, 1.0
+    piezas = piezas_sinteticas("A") + piezas_sinteticas("B")
+    cnc.colocar(piezas, 600, 500, paso, cfg, R)
+    a = piezas[0]
+    m = cnc.margen_celdas(R, paso, cfg)
+    # Fuera de la plancha y encima de otra: no cabe.
+    assert "plancha" in cnc.cabe(a, piezas, 600, 500, paso, cfg, R, 0, 0, 0)
+    b = piezas[1]
+    assert "cerca" in cnc.cabe(a, piezas, 600, 500, paso, cfg, R, b.x + 5, b.y, a.giro)
+    # Puesta a mano (girada 180°) en la esquina de detrás a la derecha: se respeta y las demás no la pisan.
+    ny, nx = a.forma(2)
+    x, y = 600 - nx - m, 500 - ny - m
+    assert cnc.cabe(a, [], 600, 500, paso, cfg, R, x, y, 2) is None
+    a.x, a.y, a.giro, a.fija = x, y, 2, True
+    avisos = []
+    sobran = cnc.colocar(piezas, 600, 500, paso, cfg, R, avisos)
+    assert not sobran and not avisos and (a.x, a.y, a.giro) == (x, y, 2)
+    for p in piezas:
+        assert p is a or cnc.cabe(p, piezas, 600, 500, paso, cfg, R, p.x, p.y, p.giro) is None
+    # El .nc respeta la posición puesta a mano.
+    t = cnc.generar(piezas, 600, 500, 40, paso, R, cfg, colocar_antes=False)
+    f = next(f for f in t.fichas if f.pieza is a)
+    assert f.x[0] == x * paso and f.y[0] == y * paso and f.dedos[1] < -0.9  # girado: dedos hacia delante
+    # Con una plancha más pequeña ya no cabe ahí: se suelta y se avisa.
+    avisos = []
+    cnc.colocar(piezas, 400, 500, paso, cfg, R, avisos)
+    assert not a.fija and avisos and "ya no cabe" in avisos[0]
