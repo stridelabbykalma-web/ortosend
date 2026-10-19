@@ -77,13 +77,15 @@ def dibujo_plancha(trabajo: cnc.TrabajoCNC, ancho_px: int = 640) -> QPixmap:
     p = QPainter(pm)
     p.drawImage(QRectF(0, 0, ancho_px, ny * escala), img)
     p.setFont(QFont("Sans", 9))
-    for n, pieza in enumerate(sorted(trabajo.piezas, key=lambda q: (q.y, q.x)), 1):
+    p.setPen(QPen(QColor("#ff9f43"), 2))
+    for c in trabajo.contornos:  # recorrido de la fresa alrededor de cada pie
+        e = escala / trabajo.paso
+        p.drawPolyline([QPointF(x * e, (ny - 1 - y / trabajo.paso) * escala) for x, y in c])
+    for pieza in trabajo.piezas:
         a, b = pieza.forma()
         r = QRectF(pieza.x * escala, (ny - pieza.y - a) * escala, b * escala, a * escala)
-        p.setPen(QPen(QColor("#ff9f43"), 2))
-        p.drawRect(r)
-        p.setPen(QColor("white"))
-        p.drawText(r.adjusted(4, 4, -4, -4), Qt.AlignTop | Qt.AlignLeft | Qt.TextWordWrap, pieza.nombre)
+        p.setPen(QColor("#ff9f43"))
+        p.drawText(r.adjusted(4, 4, -4, -4), Qt.AlignBottom | Qt.AlignHCenter | Qt.TextWordWrap, pieza.nombre)
     p.setPen(QPen(QColor("#e4572e"), 3))
     o = QPointF(0, ny * escala)
     p.drawEllipse(o, 6, 6)
@@ -91,6 +93,12 @@ def dibujo_plancha(trabajo: cnc.TrabajoCNC, ancho_px: int = 640) -> QPixmap:
     p.drawText(QPointF(8, ny * escala + 16), "Origen X0 Y0 (esquina delantera izquierda, Z0 arriba)")
     p.end()
     return pm
+
+
+def _fases(trabajo: cnc.TrabajoCNC) -> str:
+    t = trabajo.tiempos
+    return (f"contorno {t.get('contorno', 0):.0f} min, desbaste {t.get('desbaste', 0):.0f} min, "
+            f"acabado {t.get('acabado', 0):.0f} min")
 
 
 class VentanaTirada(QDialog):
@@ -244,8 +252,10 @@ class VentanaTirada(QDialog):
         a, l, h = trabajo.plancha
         texto = (f"<b>{len(trabajo.piezas)} pie(s) colocados</b> en la plancha de {a:.0f} × {l:.0f} × {h:.0f} mm "
                  f"(ocupan el {100 * trabajo.aprovechamiento:.0f} %). "
-                 f"Tiempo estimado: <b>{trabajo.tiempo_min:.0f} min</b> "
-                 f"(desbaste en capas de {self.taller['cnc']['bajada_por_pasada']:.0f} mm + acabado).")
+                 f"Tiempo estimado: <b>{trabajo.tiempo_min:.0f} min</b> ({_fases(trabajo)}).<br>"
+                 f"Fresa de bola Ø{self.taller['fresa']['diametro']:g} mm: contorno de cada pie, desbaste en capas "
+                 f"de {self.taller['cnc']['bajada_por_pasada']:g} mm y acabado cada "
+                 f"{self.taller['cnc']['paso_acabado']:g} mm.")
         if trabajo.avisos:
             texto += "<br><span style='color:#e4572e'>⚠ " + "<br>⚠ ".join(trabajo.avisos) + "</span>"
         self.info.setText(texto)
@@ -271,7 +281,9 @@ class VentanaTirada(QDialog):
             f"Plancha de {self.taller['cnc'].get('material', '')}: {a:.0f} x {l:.0f} x {h:.0f} mm",
             "Origen: X0 Y0 = esquina delantera izquierda de la plancha; Z0 = cara de arriba.",
             f"Fresa: punta de bola de {self.taller['fresa']['diametro']:.0f} mm.",
-            f"Tiempo estimado: {self.trabajo.tiempo_min:.0f} min", "", "Piezas:",
+            f"Tiempo estimado: {self.trabajo.tiempo_min:.0f} min ({_fases(self.trabajo)})",
+            "Por cada pie: 1) contorno de la silueta, 2) desbaste por capas, 3) acabado en lineas paralelas a X.",
+            "", "Piezas:",
         ]
         paso = self.trabajo.paso
         for p in sorted(self.trabajo.piezas, key=lambda q: (q.y, q.x)):

@@ -51,12 +51,18 @@
 1. Con un molde listo: *Archivo → Añadir este molde a la tirada de CNC* (Ctrl+T). Repite con más moldes
    (también puedes añadir moldes ya exportados con «Añadir moldes exportados (STL)…» en la ventana de la tirada).
 2. En la ventana **Tirada de CNC** pon la medida de la plancha de escayola (por defecto 600 × 500 × 40 mm)
-   y pulsa **Colocar y calcular**: coloca los pies lo más juntos posible y dice el tiempo estimado.
+   y pulsa **Colocar y calcular**: coloca los pies lo más juntos posible, dibuja por dónde irá la fresa
+   alrededor de cada pie (línea naranja) y dice el tiempo estimado de cada fase.
 3. **Guardar archivo para la CNC (.nc)…**: copia el `.nc` al USB/tarjeta y lánzalo desde la pantalla de la CNC.
    Junto al `.nc` se guardan un `.png` con la colocación y un `.txt` con la hoja de trabajo.
-4. **Origen**: X0 Y0 en la **esquina delantera izquierda** de la plancha y Z0 en su **cara de arriba**.
-5. **Primera vez: prueba con cuidado** (velocidades provisionales para escayola en `config/taller.toml`,
-   sección `[cnc]`): vigila la primera capa y ajusta avance y revoluciones si hace falta.
+4. **Fresa**: la de **bola de Ø25 mm** (la misma del ejemplo de Fusion).
+5. **Origen**: X0 Y0 en la **esquina delantera izquierda** de la plancha y Z0 en su **cara de arriba**
+   (igual que en Fusion). Antes de empezar la fresa sube a Z15.
+6. Lo que hace con cada pie, en este orden (como Fusion):
+   **contorno** (rodea la silueta bajando en espiral 3 mm por vuelta), **desbaste** en capas de 5 mm y
+   **acabado** en líneas paralelas a X cada 1,75 mm.
+7. **Primera vez: prueba con cuidado** con un solo pie: vigila la primera vuelta del contorno y la primera
+   capa del desbaste. Los avances son los del ejemplo de Fusion (`config/taller.toml`, sección `[cnc]`).
 
 Ratón en el visor: girar = arrastrar con el botón izquierdo · desplazar = Mayús + arrastrar · zoom = rueda.
 

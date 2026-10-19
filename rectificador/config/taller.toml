@@ -11,8 +11,9 @@ largo_y = 330.0
 alto_z = 38.0
 
 [fresa]
-# Fresa de punta de bola. Ningún hueco puede tener un radio menor que este.
-diametro = 12.0
+# Fresa de punta de bola (la del ejemplo de Fusion: T1 D=25 CR=12.5).
+# Ningún hueco puede tener un radio menor que este.
+diametro = 25.0
 
 [calculo]
 # Separación entre puntos de la rejilla de alturas. Más pequeño = más detalle y más lento.
@@ -53,25 +54,35 @@ pie_izquierdo_en = "izquierda"
 taco = 6.0
 
 [cnc]
-# Salida directa para la CNC (Two Trees TTC 6050, controlador GRBL, archivo .nc por USB/tarjeta).
-# Origen del trabajo: X0 Y0 en la esquina DELANTERA IZQUIERDA del bloque, Z0 en su cara de ARRIBA.
-# Todos los valores de velocidad son PROVISIONALES y prudentes para ESCAYOLA: ajustar tras la 1.ª prueba.
+# Salida directa para la CNC (Two Trees TTC 6050, archivo .nc por USB/tarjeta), con la misma
+# estrategia y formato que el ejemplo de Fusion del taller (molde_yeso.nc).
+# Origen del trabajo: X0 Y0 en la esquina DELANTERA IZQUIERDA de la plancha, Z0 en su cara de ARRIBA.
+# Velocidades copiadas del ejemplo de Fusion (escayola): ajustar tras la 1.ª prueba si hace falta.
 material = "escayola"
-revoluciones = 10000         # rpm del cabezal (si la máquina no las controla, se ignora)
-avance_desbaste = 1200       # mm/min
-avance_acabado = 1800        # mm/min
-avance_bajada = 300          # mm/min al bajar en vertical dentro del material
+revoluciones = 10000         # rpm del cabezal
+avance_desbaste = 2500       # mm/min cortando en el contorno y el desbaste
+avance_entrada = 1500        # mm/min al entrar en el material y al cambiar de línea
+avance_bajada = 800          # mm/min al bajar en vertical dentro del material
+avance_acabado = 3000        # mm/min en el acabado
 avance_rapido = 3000         # mm/min (solo para estimar el tiempo; los G0 los hace la máquina)
-bajada_por_pasada = 10.0     # mm que baja cada capa del desbaste (1 cm: quita lo grande rápido)
-paso_desbaste = 5.0          # mm entre pasadas del desbaste (menos que el radio de la bola)
+altura_seguridad = 15.0      # mm sobre la plancha para ir de un pie a otro (como Fusion)
+altura_paso = 2.0            # mm sobre la plancha para saltar dentro de un mismo pie
+rebaje_superior = 0.5        # mm por debajo de la cara de arriba queda lo más alto del pie
+# 1) Contorno: rodea la silueta del pie (pared vertical, sin base plana alrededor).
+contorno = true
+bajada_contorno = 3.0        # mm que baja por cada vuelta
+suelo_contorno = 7.5         # mm de escayola que quedan debajo de la ranura (Fusion: 40 - 32,5)
+suelo_minimo = 3.0           # si el pie es muy alto se deja menos suelo, pero nunca menos de esto
+# 2) Desbaste por capas dentro de la silueta.
+bajada_por_pasada = 5.0      # mm que baja cada capa
+paso_desbaste = 7.0          # mm entre líneas del desbaste (con la bola de 25 deja crestas de 0,5 mm)
 sobrante_desbaste = 0.5      # mm que deja el desbaste para el acabado
-cresta_acabado = 0.05        # mm: altura máxima de las crestas que deja el acabado (más pequeño = más liso y más lento)
-altura_seguridad = 5.0       # mm por encima del bloque para moverse en rápido
+# 3) Acabado en líneas paralelas a X.
+paso_acabado = 1.75          # mm entre líneas (con la bola de 25 deja crestas de 0,03 mm)
 # Disposición (los pies lo más juntos posible):
-margen_pie = 10.0            # mm de base plana alrededor de cada pie
-margen_bloque = 5.0          # mm desde los pies (con su margen) al borde de la plancha
-separacion = 6.0             # mm de escayola sin tocar entre pie y pie (para poder cortarlos después)
-permitir_giro = true         # girar pies 90/180/270° si así caben más
+margen_bloque = 0.0          # mm extra desde la ranura de cada pie al borde de la plancha
+separacion = 0.0             # mm extra entre las ranuras de dos pies vecinos
+permitir_giro = true         # girar pies 90° si así caben más
 
 [plancha]
 # Plancha de escayola para una tirada (varios moldes a la vez). Se puede cambiar en cada tirada.

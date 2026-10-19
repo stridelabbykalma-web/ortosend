@@ -60,8 +60,8 @@ También acepta un recuadro ya limpio (lo detecta solo).
 | 3 | Recorte en arco por delante de las cabezas metatarsales | ✅ hecho (probado con escaneo real, referencias propuestas) |
 | 4 | Piezas: relleno de arco, oliva, descarga 1.er MTT, skive medial | pendiente |
 | 5 | Edición interactiva de piezas, deshacer/rehacer | pendiente |
-| 6 | Comprobación de la fresa Ø12, corte transversal, prueba con STL real | pendiente |
-| CNC | Salida directa para la CNC (G-code), varios moldes en una plancha | ✅ hecho (velocidades provisionales: probar en la máquina) |
+| 6 | Comprobación de la fresa, corte transversal, prueba con STL real | pendiente |
+| CNC | Salida directa para la CNC (G-code), varios moldes en una plancha, estrategia y formato del ejemplo de Fusion (bola Ø25: contorno + desbaste en capas de 5 mm + acabado paralelo cada 1,75 mm) | ✅ hecho (falta la 1.ª prueba en la máquina) |
 
 ## Instalar en Windows (una sola vez)
 
@@ -93,6 +93,23 @@ También acepta un recuadro ya limpio (lo detecta solo).
 5. *Archivo → Exportar…* guarda los 3 archivos.
 
 Ratón: girar = arrastrar con el botón izquierdo · desplazar = Mayús + arrastrar · zoom = rueda.
+
+### Salida directa para la CNC (sin Fusion)
+
+*Archivo → Añadir este molde a la tirada de CNC* (Ctrl+T) y, en la ventana **Tirada de CNC**,
+**Colocar y calcular** → **Guardar archivo para la CNC (.nc)**. Se copia la estrategia del ejemplo de
+Fusion del taller (`molde_yeso.nc`), con la fresa de **bola Ø25 mm**:
+
+- **Origen**: X0 Y0 en la esquina **delantera izquierda** de la plancha, Z0 en su **cara de arriba**.
+- Varios pies en una misma plancha (por defecto 600 × 500 × 40 mm), colocados lo más juntos posible.
+- Cada pie se fresa con su parte más alta 0,5 mm por debajo de la cara de arriba, en tres fases:
+  1. **Contorno**: rodea la silueta del pie bajando en espiral 3 mm por vuelta hasta dejar 7,5 mm de
+     escayola debajo (menos, como mínimo 3 mm, si el pie es muy alto). El pie queda como una isla con
+     la pared vertical, sin base plana alrededor; el resto de la plancha no se toca.
+  2. **Desbaste** dentro de la silueta en capas de 5 mm, dejando 0,5 mm.
+  3. **Acabado** en líneas paralelas a X cada 1,75 mm (crestas de 0,03 mm).
+- Avances del ejemplo de Fusion: 2500 mm/min cortando, 1500 entrando, 800 bajando, 3000 en el acabado,
+  10 000 rpm. Todo se puede cambiar en `config/taller.toml`, sección `[cnc]`.
 
 **Sin ventana** (por consola):
 

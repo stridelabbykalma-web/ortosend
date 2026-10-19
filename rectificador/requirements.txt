@@ -1,5 +1,6 @@
 numpy>=1.26
 scipy>=1.11
+contourpy>=1.2
 trimesh>=4.0
 fast-simplification>=0.1.7
 pyvista>=0.43
