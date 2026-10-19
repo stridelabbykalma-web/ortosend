@@ -10,7 +10,7 @@ import tempfile
 from PySide6.QtCore import QObject, Qt, QThread, QTimer, QUrl, Signal
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
-    QDialog, QDoubleSpinBox, QFileDialog, QFormLayout, QHBoxLayout, QLabel, QListWidget,
+    QDialog, QDoubleSpinBox, QFileDialog, QFormLayout, QHBoxLayout, QListWidget,
     QMessageBox, QPushButton, QVBoxLayout,
 )
 
@@ -19,6 +19,8 @@ from ortomolde.campo import malla_a_campo
 from ortomolde.entrada import cargar_malla
 from ortomolde.pies import detectar_pies
 
+from interfaz import estilo
+from interfaz.estilo import C
 from interfaz.plancha_vista import VistaPlancha
 
 
@@ -92,8 +94,11 @@ class VentanaTirada(QDialog):
         self._reloj.timeout.connect(lambda: self._colocar(conservar=True))
 
         izq = QVBoxLayout()
+        izq.setSpacing(10)
         pl = self.taller["plancha"]
+        marco, lay_pl, _ = estilo.tarjeta("Plancha de escayola", "1")
         form = QFormLayout()
+        form.setHorizontalSpacing(12)
         self.cajas = []
         for texto, valor in (("Ancho (X)", pl["ancho_x"]), ("Largo (Y)", pl["largo_y"]), ("Alto (Z)", pl["alto_z"])):
             c = QDoubleSpinBox()
@@ -102,59 +107,78 @@ class VentanaTirada(QDialog):
             c.setSuffix(" mm")
             c.setValue(valor)
             c.valueChanged.connect(lambda *_: (self._invalidar(), self._reloj.start()))
-            form.addRow(f"Plancha – {texto}:", c)
+            form.addRow(estilo.etiqueta(texto, "secundario", envolver=False), c)
             self.cajas.append(c)
-        izq.addLayout(form)
-        izq.addWidget(QLabel("<b>Pies de la tirada</b>"))
+        lay_pl.addLayout(form)
+        izq.addWidget(marco)
+
+        marco, lay_pies, _ = estilo.tarjeta("Pies de la tirada", "2")
         self.lista = QListWidget()
         self.lista.currentRowChanged.connect(self._al_elegir_en_lista)
         self.lista.setMinimumWidth(330)
-        izq.addWidget(self.lista, 1)
-        for texto, accion in (("Añadir el molde abierto", self.anadir_abierto),
-                              ("Añadir moldes exportados (STL)…", self.anadir_archivos),
-                              ("Quitar el elegido", lambda: self.quitar()),
-                              ("Vaciar la tirada", self.vaciar)):
-            b = QPushButton(texto)
-            b.clicked.connect(accion)
-            izq.addWidget(b)
+        lay_pies.addWidget(self.lista, 1)
         fila = QHBoxLayout()
-        b = QPushButton("Girar 90°")
-        b.setToolTip("Gira el pie elegido (también: doble clic sobre el pie, o tecla R)")
-        b.clicked.connect(lambda: self.girar())
-        fila.addWidget(b)
-        b = QPushButton("Colocar todo automático")
-        b.setToolTip("Vuelve a colocar todos los pies lo más juntos posible")
-        b.clicked.connect(self.todo_automatico)
-        fila.addWidget(b)
-        izq.addLayout(fila)
+        for texto, accion, ic, ayuda in (
+                ("Molde abierto", self.anadir_abierto, "anadir", "Añadir el molde abierto en la ventana principal"),
+                ("Exportados…", self.anadir_archivos, "abrir", "Añadir moldes ya exportados (STL)")):
+            b = QPushButton(texto)
+            b.setIcon(estilo.icono(ic))
+            b.setToolTip(ayuda)
+            b.clicked.connect(accion)
+            fila.addWidget(b, 1)
+        lay_pies.addLayout(fila)
+        fila = QHBoxLayout()
+        for texto, accion, ic, ayuda in (
+                ("Girar", lambda: self.girar(), "girar", "Gira el pie elegido (también: doble clic sobre él, o R)"),
+                ("Auto", self.todo_automatico, "auto", "Vuelve a colocar todos los pies lo más juntos posible"),
+                ("Quitar", lambda: self.quitar(), "quitar", "Quita el pie elegido de la tirada (Supr)")):
+            b = QPushButton(texto)
+            b.setIcon(estilo.icono(ic))
+            b.setToolTip(ayuda)
+            b.clicked.connect(accion)
+            fila.addWidget(b, 1)
+        lay_pies.addLayout(fila)
+        b = QPushButton("Vaciar la tirada")
+        b.setProperty("plano", True)
+        b.clicked.connect(self.vaciar)
+        lay_pies.addWidget(b)
+        izq.addWidget(marco, 1)
+
+        marco, lay_cnc, _ = estilo.tarjeta("Archivo para la CNC", "3")
         self.boton_calcular = QPushButton("Calcular trayectorias")
-        self.boton_calcular.setStyleSheet("font-weight: bold;")
+        self.boton_calcular.setIcon(estilo.icono("calcular", "white"))
+        estilo.primario(self.boton_calcular)
         self.boton_calcular.clicked.connect(lambda: self.calcular())
-        izq.addWidget(self.boton_calcular)
-        self.boton_guardar = QPushButton("Guardar archivo para la CNC (.nc)…")
+        lay_cnc.addWidget(self.boton_calcular)
+        self.boton_guardar = QPushButton("Guardar archivo .nc…")
+        self.boton_guardar.setIcon(estilo.icono("guardar", "white"))
+        estilo.primario(self.boton_guardar)
         self.boton_guardar.clicked.connect(lambda: self.guardar())
         self.boton_guardar.setEnabled(False)
-        izq.addWidget(self.boton_guardar)
+        lay_cnc.addWidget(self.boton_guardar)
         b = QPushButton("Ver mapa para imprimir")
+        b.setIcon(estilo.icono("mapa"))
         b.clicked.connect(self.ver_mapa)
-        izq.addWidget(b)
+        lay_cnc.addWidget(b)
+        izq.addWidget(marco)
 
         der = QVBoxLayout()
-        ayuda = QLabel("🖱 <b>Arrastra cada pie</b> para ponerlo donde quieras (verde = cabe, rojo = no cabe) · "
-                       "<b>doble clic</b> sobre un pie = girarlo · <b>clic derecho</b> = más opciones · "
-                       "rueda = zoom · doble clic en vacío = ver toda la plancha · flechas = mover 1 mm "
-                       "(Mayús: 10 mm)")
-        ayuda.setWordWrap(True)
-        ayuda.setStyleSheet("color: #444; padding: 2px;")
+        der.setSpacing(8)
+        ayuda = estilo.etiqueta("<b>Arrastra cada pie</b> para colocarlo (verde = cabe · rojo = no cabe) · "
+                                "<b>doble clic</b> = girar · <b>clic derecho</b> = opciones · rueda = zoom · "
+                                "doble clic en vacío = ver toda la plancha · flechas = mover 1 mm (Mayús: 10 mm)",
+                                "nota")
         der.addWidget(ayuda)
         self.vista = VistaPlancha(self)
         self.vista.setMinimumSize(660, 520)
         der.addWidget(self.vista, 1)
-        self.info = QLabel()
-        self.info.setWordWrap(True)
+        self.info = estilo.etiqueta()
+        self.info.setObjectName("cifras")
         der.addWidget(self.info)
 
         lay = QHBoxLayout(self)
+        lay.setContentsMargins(12, 12, 12, 12)
+        lay.setSpacing(12)
         lay.addLayout(izq, 0)
         lay.addLayout(der, 1)
         self._poner_plancha()
@@ -240,7 +264,7 @@ class VentanaTirada(QDialog):
         if extra:
             texto = extra + "<br>" + texto
         if self.avisos:
-            texto += "<br><span style='color:#e4572e'>⚠ " + "<br>⚠ ".join(self.avisos) + "</span>"
+            texto += f"<br><span style='color:{C['mal']}'>⚠ " + "<br>⚠ ".join(self.avisos) + "</span>"
         self.info.setText(texto)
 
     def _refrescar_lista(self):
@@ -285,10 +309,10 @@ class VentanaTirada(QDialog):
         ny, nx = p.forma()
         donde = f"X {x * paso:.0f}–{(x + nx) * paso:.0f} mm, Y {y * paso:.0f}–{(y + ny) * paso:.0f} mm"
         if motivo is None:
-            self.info.setText(f"Moviendo <b>{p.nombre}</b>: {donde} — <span style='color:#27ae60'>cabe aquí</span>")
+            self.info.setText(f"Moviendo <b>{p.nombre}</b>: {donde} — <span style='color:{C['bien']}'>cabe aquí</span>")
         else:
             self.info.setText(f"Moviendo <b>{p.nombre}</b>: {donde} — "
-                              f"<span style='color:#e4572e'>no cabe: {motivo}</span>")
+                              f"<span style='color:{C['mal']}'>no cabe: {motivo}</span>")
 
     def al_soltar(self, p: cnc.Pieza, x: int, y: int):
         self.colocar_a_mano(p, x, y, p.giro)
@@ -301,7 +325,7 @@ class VentanaTirada(QDialog):
             item = self.vista.item_de(p)
             if item is not None:
                 item.sincronizar()
-            self._texto_info(f"<span style='color:#e4572e'>⚠ No se puede poner ahí: {p.nombre} {motivo}. "
+            self._texto_info(f"<span style='color:{C['mal']}'>⚠ No se puede poner ahí: {p.nombre} {motivo}. "
                              "Ha vuelto a su sitio.</span>")
             return False
         p.x, p.y, p.giro, p.fija = x, y, giro, True
@@ -448,7 +472,7 @@ class VentanaTirada(QDialog):
                  f"de {self.taller['cnc']['bajada_por_pasada']:g} mm y acabado cada "
                  f"{self.taller['cnc']['paso_acabado']:g} mm.")
         if trabajo.avisos:
-            texto += "<br><span style='color:#e4572e'>⚠ " + "<br>⚠ ".join(trabajo.avisos) + "</span>"
+            texto += f"<br><span style='color:{C['mal']}'>⚠ " + "<br>⚠ ".join(trabajo.avisos) + "</span>"
         self.info.setText(texto)
 
     def _fallo(self, mensaje: str):

@@ -250,7 +250,7 @@ class VistaPlancha(QGraphicsView):
         self._fondo = []
         self._contornos: list[QGraphicsPathItem] = []
         self.setRenderHints(QPainter.Antialiasing | QPainter.SmoothPixmapTransform)
-        self.setBackgroundBrush(QColor("#2b2d31"))
+        self.setBackgroundBrush(QColor("#1f2124"))
         self.setDragMode(QGraphicsView.RubberBandDrag)
         self.setTransformationAnchor(QGraphicsView.AnchorUnderMouse)
         self.setViewportUpdateMode(QGraphicsView.SmartViewportUpdate)

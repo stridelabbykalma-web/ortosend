@@ -13,13 +13,15 @@ import numpy as np
 from PySide6.QtCore import QObject, QSettings, QThread, Qt, Signal
 from PySide6.QtGui import QAction, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
-    QApplication, QButtonGroup, QCheckBox, QDoubleSpinBox, QFileDialog, QGroupBox, QHBoxLayout,
-    QLabel, QMainWindow, QMessageBox, QProgressDialog, QPushButton, QRadioButton, QScrollArea, QSplitter,
-    QVBoxLayout, QWidget,
+    QApplication, QButtonGroup, QCheckBox, QDoubleSpinBox, QFileDialog, QFrame, QHBoxLayout,
+    QLabel, QMainWindow, QMessageBox, QProgressDialog, QPushButton, QScrollArea, QSizePolicy, QSplitter,
+    QToolBar, QVBoxLayout, QWidget,
 )
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from interfaz import estilo  # noqa: E402
+from interfaz.estilo import C  # noqa: E402
 from interfaz.visor import COLORES, Visor  # noqa: E402
 from ortomolde.exportar import exportar, medidas_stl  # noqa: E402
 from ortomolde import config  # noqa: E402
@@ -28,13 +30,11 @@ from ortomolde.proyecto import Proyecto  # noqa: E402
 from ortomolde.referencias import NOMBRES, OPCIONALES, ORDEN  # noqa: E402
 
 AYUDA = (
-    "<b>Marcar referencias:</b> clic <b>derecho</b> sobre el pie.<br>"
-    "Se marcan en orden: 1.er MTT, 5.º MTT y talón (obligatorias) y luego, si quieres, "
-    "2.º, 3.º y 4.º MTT (el recorte pasa por delante de todas las cabezas). "
-    "Para corregir una, pulsa su botón y vuelve a hacer clic derecho. "
-    "<b>Proponer referencias</b> las coloca todas automáticamente para empezar.<br>"
-    "<b>Para ajustar un punto: cógelo con el botón izquierdo y arrástralo</b> sobre el molde.<br>"
-    "Girar: arrastrar con el botón izquierdo · Desplazar: Mayús + arrastrar · Zoom: rueda."
+    "<b>Proponer referencias</b> coloca las 5 cabezas metatarsales y el talón para empezar.<br>"
+    "<b>Ajustar un punto:</b> cógelo con el botón izquierdo y arrástralo sobre el molde.<br>"
+    "<b>Marcar a mano:</b> clic <b>derecho</b> sobre el pie (orden: 1.er MTT, 5.º MTT, talón y, si quieres, "
+    "2.º, 3.º y 4.º). Para corregir una, pulsa su botón «Marcar» y haz clic derecho donde va.<br>"
+    "<b>Vista 3D:</b> girar = arrastrar · desplazar = Mayús + arrastrar · zoom = rueda."
 )
 
 
@@ -58,48 +58,72 @@ class Cargador(QObject):
             self.fallo.emit(self.peticion, str(e))
 
 
-class PanelPie(QGroupBox):
-    """Estado de las referencias de un pie y botones para corregirlas."""
+class PanelPie(QFrame):
+    """Tarjeta de un pie: sus referencias, el recorte en arco y sus medidas."""
 
     def __init__(self, ventana: "VentanaPrincipal", clave: str):
         super().__init__()
         self.ventana, self.clave = ventana, clave
+        self.setObjectName("tarjeta")
         lay = QVBoxLayout(self)
+        lay.setContentsMargins(14, 12, 14, 14)
+        lay.setSpacing(6)
+        cab = QHBoxLayout()
+        self.paso = QLabel("3" if clave == "p0" else "4")
+        self.paso.setObjectName("paso")
+        self.paso.setAlignment(Qt.AlignCenter)
+        cab.addWidget(self.paso)
+        self.titulo = QLabel()
+        self.titulo.setObjectName("titulo_tarjeta")
+        cab.addWidget(self.titulo, 1)
+        lay.addLayout(cab)
+
+        fila = QHBoxLayout()
+        proponer = QPushButton("Proponer referencias")
+        proponer.setToolTip("Coloca las 5 cabezas metatarsales y el talón automáticamente.\n"
+                            "Después ajústalas arrastrándolas sobre el molde.")
+        proponer.clicked.connect(lambda: self.ventana.proponer_referencias(self.clave))
+        estilo.primario(proponer)
+        fila.addWidget(proponer, 1)
+        borrar = QPushButton("Borrar")
+        borrar.setToolTip("Quita todas las referencias de este pie.")
+        borrar.setIcon(estilo.icono("quitar"))
+        borrar.clicked.connect(lambda: self.ventana.borrar_referencias(self.clave))
+        fila.addWidget(borrar)
+        lay.addLayout(fila)
+
         self.etiquetas: dict[str, QLabel] = {}
         self.grupo = QButtonGroup(self)
         self.grupo.setExclusive(False)
         for k in ORDEN:
             fila = QHBoxLayout()
+            fila.setSpacing(8)
             punto = QLabel("●")
-            punto.setStyleSheet(f"color: {COLORES[k]}; font-size: 16px;")
+            punto.setStyleSheet(f"color: {COLORES[k]}; font-size: 14pt;")
+            punto.setFixedWidth(16)
             fila.addWidget(punto)
             self.etiquetas[k] = QLabel()
             fila.addWidget(self.etiquetas[k], 1)
             boton = QPushButton("Marcar")
             boton.setCheckable(True)
+            boton.setProperty("pequeno", True)
             boton.setToolTip(f"Pulsa y haz clic derecho sobre el pie para marcar: {NOMBRES[k]}")
             boton.clicked.connect(lambda marcado, k=k: self.ventana.elegir_referencia(self.clave, k if marcado else None))
             self.grupo.addButton(boton)
             boton.setProperty("referencia", k)
             fila.addWidget(boton)
             lay.addLayout(fila)
-        fila = QHBoxLayout()
-        proponer = QPushButton("Proponer referencias")
-        proponer.setToolTip("Coloca las 3 referencias de forma aproximada (proporciones típicas del pie).\n"
-                            "Después corrígelas con el botón Marcar y clic derecho.")
-        proponer.clicked.connect(lambda: self.ventana.proponer_referencias(self.clave))
-        fila.addWidget(proponer)
-        borrar = QPushButton("Borrar referencias")
-        borrar.clicked.connect(lambda: self.ventana.borrar_referencias(self.clave))
-        fila.addWidget(borrar)
-        lay.addLayout(fila)
 
+        separador = QFrame()
+        separador.setFrameShape(QFrame.HLine)
+        separador.setStyleSheet(f"color: {C['borde']};")
+        lay.addWidget(separador)
         # Recorte en arco
-        self.recortar = QCheckBox("Recortar en arco por delante de las cabezas metatarsales")
+        self.recortar = QCheckBox("Recortar en arco por delante de las cabezas")
         self.recortar.toggled.connect(lambda v: self.ventana.cambiar_recorte(self.clave, activo=v))
         lay.addWidget(self.recortar)
         fila = QHBoxLayout()
-        fila.addWidget(QLabel("Adelanto:"))
+        fila.addWidget(estilo.etiqueta("Adelanto", "secundario", envolver=False))
         self.adelanto = QDoubleSpinBox()
         self.adelanto.setRange(-30.0, 40.0)
         self.adelanto.setSingleStep(1.0)
@@ -107,34 +131,40 @@ class PanelPie(QGroupBox):
         self.adelanto.setSuffix(" mm")
         self.adelanto.setToolTip("Distancia del arco por delante de las cabezas (negativo = por detrás).")
         self.adelanto.valueChanged.connect(lambda v: self.ventana.cambiar_recorte(self.clave, adelanto=v))
-        fila.addWidget(self.adelanto)
-        fila.addWidget(QLabel("Curvatura:"))
+        fila.addWidget(self.adelanto, 1)
+        fila.addSpacing(8)
+        fila.addWidget(estilo.etiqueta("Curvatura", "secundario", envolver=False))
         self.curvatura = QDoubleSpinBox()
         self.curvatura.setRange(0.0, 3.0)
         self.curvatura.setSingleStep(0.1)
         self.curvatura.setDecimals(1)
         self.curvatura.setToolTip("0 = recto · 1 = parábola metatarsal · más = más curvado.")
         self.curvatura.valueChanged.connect(lambda v: self.ventana.cambiar_recorte(self.clave, curvatura=v))
-        fila.addWidget(self.curvatura)
+        fila.addWidget(self.curvatura, 1)
         lay.addLayout(fila)
 
         self.medidas = QLabel()
+        self.medidas.setObjectName("cifras")
         self.medidas.setWordWrap(True)
-        self.medidas.setStyleSheet("background: #f4f1ea; padding: 4px; border-radius: 3px;")
         self.medidas.setToolTip("Medidas reales del molde en mm, para comprobar la escala.")
         lay.addWidget(self.medidas)
+
+    def setTitle(self, texto: str):
+        self.titulo.setText(texto.upper())
 
     def actualizar(self, pie, proyecto, activa: str | None):
         x_medio = np.nonzero(pie.mascara)[1].mean() * proyecto.original.rejilla.dx
         mitad = "izquierda" if x_medio < proyecto.original.rejilla.ancho / 2 else "derecha"
-        self.setTitle(f"{pie.nombre}  (mitad {mitad})")
+        self.setTitle(f"{pie.nombre} · mitad {mitad}")
         for k in ORDEN:
             if k in pie.referencias.puntos:
                 x, y = pie.referencias.puntos[k]
                 xt, yt, zt = proyecto.a_taller(x, y, proyecto.altura_en(x, y))
-                texto = f"{NOMBRES[k]}: X {xt:.1f}  Y {yt:.1f}  Z {zt:.1f}"
+                texto = (f"{NOMBRES[k]}<br><span style='color:{C['apagado']}; font-size:8.5pt'>"
+                         f"X {xt:.1f} · Y {yt:.1f} · Z {zt:.1f}</span>")
             else:
-                texto = f"{NOMBRES[k]}: <i>{'opcional' if k in OPCIONALES else 'sin marcar'}</i>"
+                estado = "opcional" if k in OPCIONALES else "sin marcar"
+                texto = f"{NOMBRES[k]}<br><span style='color:{C['apagado']}; font-size:8.5pt'>{estado}</span>"
             self.etiquetas[k].setText(texto)
         for b in self.grupo.buttons():
             b.setChecked(b.property("referencia") == activa)
@@ -148,7 +178,8 @@ class PanelPie(QGroupBox):
             w.setEnabled(listo)
         self.recortar.setToolTip("" if listo else "Marca antes las 3 referencias de este pie.")
         m = proyecto.medidas(pie)
-        partes = [f"<b>Medidas (mm)</b>: largo {m['largo']:.0f} · ancho máx. {m['ancho_maximo']:.0f}"]
+        partes = [f"<b style='color:{C['texto']}'>Medidas (mm)</b> · largo {m['largo']:.0f} · "
+                  f"ancho máx. {m['ancho_maximo']:.0f}"]
         if "ancho_cabezas" in m:
             partes.append(f"ancho a las cabezas {m['ancho_cabezas']:.0f} · ancho talón {m['ancho_talon']:.0f}")
             partes.append(f"talón→1.er MTT {m['talon_mtt1']:.0f} · talón→5.º MTT {m['talon_mtt5']:.0f} · "
@@ -178,63 +209,100 @@ class VentanaPrincipal(QMainWindow):
                            al_pasar=self.raton_sobre_molde)
         self.posicion = QLabel()
         self.statusBar().addPermanentWidget(self.posicion)
+        self.statusBar().setSizeGripEnabled(False)
+
         panel = QWidget()
         self.lay_panel = QVBoxLayout(panel)
-        self.info = QLabel("Abre un escaneo (Archivo → Abrir escaneo…).")
-        self.info.setWordWrap(True)
-        self.lay_panel.addWidget(self.info)
-        self.lay_panel.addWidget(self._grupo_modo())
-        self.avisos = QLabel()
-        self.avisos.setWordWrap(True)
-        self.avisos.setStyleSheet("color: #c0392b;")
-        self.lay_panel.addWidget(self.avisos)
-        self.boton_lados = QPushButton("Intercambiar izquierdo ↔ derecho")
-        self.boton_lados.setToolTip("Si el programa se ha equivocado de pie, pulsa aquí.")
-        self.boton_lados.clicked.connect(self.intercambiar_lados)
-        self.lay_panel.addWidget(self.boton_lados)
+        self.lay_panel.setContentsMargins(4, 8, 10, 8)
+        self.lay_panel.setSpacing(10)
+        self.lay_panel.addWidget(self._grupo_escaneo())
         self.lay_panel.addWidget(self._grupo_molde())
         self.paneles = {c: PanelPie(self, c) for c in ("p0", "p1")}
         for p in self.paneles.values():
             self.lay_panel.addWidget(p)
-        ayuda = QLabel(AYUDA)
-        ayuda.setWordWrap(True)
-        ayuda.setStyleSheet("color: #555; font-size: 11px;")
-        self.lay_panel.addWidget(ayuda)
+        self.lay_panel.addWidget(self._grupo_ayuda())
         self.lay_panel.addStretch(1)
         desplazable = QScrollArea()
         desplazable.setWidget(panel)
         desplazable.setWidgetResizable(True)
-        desplazable.setMinimumWidth(440)
+        desplazable.setMinimumWidth(430)
+        desplazable.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
+        marco_visor = QFrame()
+        marco_visor.setObjectName("tarjeta")
+        lv = QVBoxLayout(marco_visor)
+        lv.setContentsMargins(1, 1, 1, 1)
+        lv.addWidget(self.visor)
         division = QSplitter(Qt.Horizontal)
-        division.addWidget(self.visor)
+        division.addWidget(marco_visor)
         division.addWidget(desplazable)
         division.setStretchFactor(0, 1)
-        self.setCentralWidget(division)
+        division.setSizes([1000, 440])
+        contenedor = QWidget()
+        lc = QVBoxLayout(contenedor)
+        lc.setContentsMargins(10, 10, 6, 6)
+        lc.addWidget(division)
+        self.setCentralWidget(contenedor)
+        self.setAcceptDrops(True)
         self._menus()
+        self._barra()
         self._refrescar_panel()
 
-    def _grupo_modo(self) -> QGroupBox:
-        """Qué se ha escaneado: la huella en la espuma o un molde ya hecho."""
-        grupo = QGroupBox("Tipo de escaneo")
-        lay = QHBoxLayout(grupo)
+    def _grupo_escaneo(self) -> QFrame:
+        """Paso 1: el escaneo abierto y qué se ha escaneado (huella en espuma o molde ya hecho)."""
+        marco, lay, _ = estilo.tarjeta("Escaneo", "1")
+        self.info = estilo.etiqueta("Abre un escaneo con el botón <b>Abrir</b> de arriba "
+                                    "(o arrastra aquí el archivo).")
+        lay.addWidget(self.info)
+        lay.addWidget(estilo.etiqueta("Qué se ha escaneado:", "secundario"))
+        fila = QHBoxLayout()
+        fila.setSpacing(0)
         self.botones_modo = {}
-        for modo, texto, ayuda in (
-            ("huellas", "Huellas en espuma", "La huella del pie hundida en los bloques de espuma."),
-            ("moldes", "Molde ya hecho", "Un molde que ya existe, con el pie en bulto sobre una base."),
+        grupo = QButtonGroup(self)
+        grupo.setExclusive(True)
+        for modo, texto, ayuda, lado in (
+            ("huellas", "Huellas en espuma", "La huella del pie hundida en los bloques de espuma.", "izq"),
+            ("moldes", "Molde ya hecho", "Un molde que ya existe, con el pie en bulto sobre una base.", "der"),
         ):
-            b = QRadioButton(texto)
+            b = QPushButton(texto)
+            b.setCheckable(True)
+            b.setProperty("segmento", lado)
             b.setToolTip(ayuda + "\nPuede haber 1 o 2 pies.")
             b.toggled.connect(lambda marcado, m=modo: marcado and self.cambiar_modo(m))
-            lay.addWidget(b)
+            grupo.addButton(b)
+            fila.addWidget(b, 1)
             self.botones_modo[modo] = b
+        lay.addLayout(fila)
         self.ajustes = QSettings("Ortosend", "Rectificador")
         modo = self.ajustes.value("modo", "huellas")
         self.modo = modo if modo in self.botones_modo else "huellas"
         self.botones_modo[self.modo].blockSignals(True)
         self.botones_modo[self.modo].setChecked(True)
         self.botones_modo[self.modo].blockSignals(False)
-        return grupo
+        self.avisos = estilo.etiqueta("", "aviso")
+        self.avisos.hide()
+        lay.addWidget(self.avisos)
+        self.boton_lados = QPushButton("Intercambiar izquierdo ↔ derecho")
+        self.boton_lados.setIcon(estilo.icono("lados"))
+        self.boton_lados.setToolTip("Si el programa se ha equivocado de pie, pulsa aquí.")
+        self.boton_lados.clicked.connect(self.intercambiar_lados)
+        lay.addWidget(self.boton_lados)
+        return marco
+
+    def _grupo_ayuda(self) -> QFrame:
+        """Ayuda plegable."""
+        marco, lay, _ = estilo.tarjeta("Ayuda")
+        boton = QPushButton("  Cómo marcar y ajustar las referencias")
+        boton.setIcon(estilo.icono("ayuda", C["secundario"]))
+        boton.setProperty("plano", True)
+        boton.setCheckable(True)
+        boton.setStyleSheet("text-align: left;")
+        texto = estilo.etiqueta(AYUDA, "nota")
+        texto.setVisible(False)
+        boton.toggled.connect(texto.setVisible)
+        lay.addWidget(boton)
+        lay.addWidget(texto)
+        return marco
 
     def cambiar_modo(self, modo: str):
         if modo == self.modo:
@@ -245,16 +313,17 @@ class VentanaPrincipal(QMainWindow):
             # Volver a procesar el mismo escaneo con el otro modo.
             self.abrir(str(self.proyecto.ruta_stl))
 
-    def _grupo_molde(self) -> QGroupBox:
-        grupo = QGroupBox("Molde")
-        lay = QVBoxLayout(grupo)
+    def _grupo_molde(self) -> QFrame:
+        """Paso 2: lijado, comparar con el escaneo y medir."""
+        marco, lay, _ = estilo.tarjeta("Molde", "2")
         fila = QHBoxLayout()
-        fila.addWidget(QLabel("Lijado (tamaño del taco):"))
+        fila.addWidget(estilo.etiqueta("Lijado (tamaño del taco)", envolver=False), 1)
         self.caja_lijado = QDoubleSpinBox()
         self.caja_lijado.setRange(0.0, 12.0)
         self.caja_lijado.setSingleStep(0.5)
         self.caja_lijado.setDecimals(1)
         self.caja_lijado.setSuffix(" mm")
+        self.caja_lijado.setMinimumWidth(110)
         self.caja_lijado.setToolTip(
             "Lija el molde: quita hoyitos, bultitos, ondulaciones y marcas conservando\n"
             "la forma y el contorno del pie. Más grande = lija ondulaciones más anchas.\n"
@@ -265,27 +334,28 @@ class VentanaPrincipal(QMainWindow):
         self.ver_original = QCheckBox("Ver el escaneo sin lijar (para comparar)")
         self.ver_original.toggled.connect(lambda _: self._mostrar_molde(reiniciar_camara=False))
         lay.addWidget(self.ver_original)
-        self.boton_medir = QPushButton("Medir distancia (M)")
+        self.boton_medir = QPushButton("Medir distancia")
+        self.boton_medir.setIcon(estilo.icono("medir"))
         self.boton_medir.setCheckable(True)
-        self.boton_medir.setToolTip("Actívalo y haz dos clics derechos sobre el molde: se dibuja la distancia en mm.\n"
-                                    "Esc o volver a pulsar para quitarla.")
+        self.boton_medir.setToolTip("Actívalo (tecla M) y haz dos clics derechos sobre el molde: se dibuja la "
+                                    "distancia en mm.\nEsc o volver a pulsar para quitarla.")
         self.boton_medir.toggled.connect(self.modo_medir)
         lay.addWidget(self.boton_medir)
-        self.texto_medida = QLabel()
-        self.texto_medida.setWordWrap(True)
+        self.texto_medida = estilo.etiqueta()
+        self.texto_medida.hide()
         lay.addWidget(self.texto_medida)
-        self.texto_recuadro = QLabel()
-        self.texto_recuadro.setWordWrap(True)
+        self.texto_recuadro = estilo.etiqueta("", "nota")
         lay.addWidget(self.texto_recuadro)
         QShortcut(QKeySequence("M"), self, activated=self.boton_medir.toggle)
         QShortcut(QKeySequence("Esc"), self, activated=lambda: self.boton_medir.setChecked(False))
-        return grupo
+        return marco
 
     def modo_medir(self, activo: bool):
         self.medida = []
         self.visor.borrar_medida()
         self.texto_medida.setText(
             "Haz clic derecho en el primer punto y luego en el segundo." if activo else "")
+        self.texto_medida.setVisible(activo)
 
     def raton_sobre_molde(self, punto):
         if self.proyecto is None or punto is None:
@@ -309,29 +379,76 @@ class VentanaPrincipal(QMainWindow):
         self.visor.mostrar_molde(campo, reiniciar_camara=reiniciar_camara)
 
     def _menus(self):
+        self.acciones = {}
         archivo = self.menuBar().addMenu("&Archivo")
-        for texto, atajo, accion in (
-            ("Abrir escaneo…", QKeySequence.Open, self.abrir_dialogo),
-            ("Exportar…", QKeySequence("Ctrl+E"), self.exportar),
-            ("Añadir este molde a la tirada de CNC", QKeySequence("Ctrl+T"), self.anadir_a_tirada),
-            ("Tirada de CNC (varios moldes en una plancha)…", QKeySequence("Ctrl+Shift+T"), self.abrir_tirada),
-            ("Salir", QKeySequence.Quit, self.close),
+        for clave, texto, atajo, accion, ic in (
+            ("abrir", "Abrir escaneo…", QKeySequence.Open, self.abrir_dialogo, "abrir"),
+            ("exportar", "Exportar…", QKeySequence("Ctrl+E"), self.exportar, "exportar"),
+            ("anadir", "Añadir este molde a la tirada de CNC", QKeySequence("Ctrl+T"), self.anadir_a_tirada, "anadir"),
+            ("tirada", "Tirada de CNC (varios moldes en una plancha)…", QKeySequence("Ctrl+Shift+T"),
+             self.abrir_tirada, "cnc"),
+            ("salir", "Salir", QKeySequence.Quit, self.close, None),
         ):
             a = QAction(texto, self)
             a.setShortcut(atajo)
             a.triggered.connect(accion)
+            if ic:
+                a.setIcon(estilo.icono(ic))
             archivo.addAction(a)
+            self.acciones[clave] = a
         ver = self.menuBar().addMenu("&Ver")
-        for texto, accion in (("Vista inicial", lambda: self.visor.vista_inicial()),
-                              ("Vista de planta (desde arriba)", lambda: self.visor.vista_planta())):
-            a = QAction(texto, self)
+        for clave, texto, accion, ic in (("inicial", "Vista inicial", lambda: self.visor.vista_inicial(), "vista"),
+                                         ("planta", "Vista de planta (desde arriba)", lambda: self.visor.vista_planta(),
+                                          "planta")):
+            a = QAction(estilo.icono(ic), texto, self)
             a.triggered.connect(accion)
             ver.addAction(a)
+            self.acciones[clave] = a
         reglas = QAction("Mostrar reglas en mm", self)
         reglas.setCheckable(True)
         reglas.setChecked(True)
         reglas.toggled.connect(self.visor.mostrar_reglas)
         ver.addAction(reglas)
+
+    def _barra(self):
+        """Barra de herramientas de arriba: lo que más se usa, con icono y texto."""
+        barra = QToolBar("Herramientas")
+        barra.setMovable(False)
+        barra.setIconSize(estilo.TAM_ICONO)
+        barra.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+        titulo = QLabel("  Ortosend · Rectificador")
+        titulo.setObjectName("titulo_app")
+        barra.addWidget(titulo)
+        barra.addSeparator()
+        cortos = {"abrir": "Abrir", "exportar": "Exportar", "anadir": "Añadir a la tirada", "tirada": "Tirada CNC",
+                  "inicial": "Vista inicial", "planta": "Desde arriba"}
+        for clave in ("abrir", "exportar", "anadir", "tirada", None, "inicial", "planta"):
+            if clave is None:
+                barra.addSeparator()
+                continue
+            a = self.acciones[clave]
+            a.setIconText(cortos[clave])
+            a.setToolTip(f"{a.text().rstrip('…')} ({a.shortcut().toString()})" if not a.shortcut().isEmpty()
+                         else a.text())
+            barra.addAction(a)
+        medir = QAction(estilo.icono("medir"), "Medir", self)
+        medir.setCheckable(True)
+        medir.setToolTip("Medir una distancia en mm (M)")
+        medir.toggled.connect(self.boton_medir.setChecked)
+        self.boton_medir.toggled.connect(medir.setChecked)
+        barra.addAction(medir)
+        relleno = QWidget()
+        relleno.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        barra.addWidget(relleno)
+        self.addToolBar(Qt.TopToolBarArea, barra)
+        self.barra = barra
+        self._activar_acciones()
+
+    def _activar_acciones(self):
+        hay = self.proyecto is not None
+        for clave in ("exportar", "anadir", "inicial", "planta"):
+            if clave in getattr(self, "acciones", {}):
+                self.acciones[clave].setEnabled(hay)
 
     # ---------------------------------------------------------------- abrir
 
@@ -503,16 +620,19 @@ class VentanaPrincipal(QMainWindow):
     def _refrescar_panel(self):
         p = self.proyecto
         self.boton_lados.setEnabled(p is not None and len(p.pies) > 0)
+        self._activar_acciones()
         if p is None:
             for panel in self.paneles.values():
                 panel.hide()
             return
         self.info.setText(
-            f"<b>{p.ruta_stl.name}</b><br>"
+            f"<span style='font-size:11pt; font-weight:600'>{p.ruta_stl.name}</span><br>"
+            f"<span style='color:{C['secundario']}'>"
             f"{('Escaneo en bruto · ' + NOMBRE_MODO[p.informe.modo]) if p.informe else 'Molde ya limpio'} · "
-            f"{len(p.pies)} pie(s) encontrado(s)"
+            f"{len(p.pies)} pie(s) encontrado(s)</span>"
         )
         self.avisos.setText("<br>".join(f"⚠ {a}" for a in p.avisos))
+        self.avisos.setVisible(bool(p.avisos))
         r = p.original.rejilla
         self.texto_recuadro.setText(f"Recuadro: {r.ancho:.0f} × {r.largo:.0f} mm · bloque de "
                                     f"{p.taller['recuadro']['alto_z']:.0f} mm de alto")
@@ -524,6 +644,25 @@ class VentanaPrincipal(QMainWindow):
                 panel.show()
             else:
                 panel.hide()
+
+    # Arrastrar un escaneo desde el Explorador de Windows y soltarlo sobre la ventana lo abre.
+    FORMATOS = (".stl", ".ply", ".obj", ".revox", ".zip")
+
+    def _ruta_soltada(self, evento) -> str | None:
+        for url in evento.mimeData().urls():
+            if url.isLocalFile() and url.toLocalFile().lower().endswith(self.FORMATOS):
+                return url.toLocalFile()
+        return None
+
+    def dragEnterEvent(self, evento):
+        if self._ruta_soltada(evento):
+            evento.acceptProposedAction()
+
+    def dropEvent(self, evento):
+        ruta = self._ruta_soltada(evento)
+        if ruta:
+            evento.acceptProposedAction()
+            self.abrir(ruta)
 
     def closeEvent(self, evento):
         # Si se está procesando un escaneo en segundo plano, esperar a que acabe antes de cerrar.
@@ -575,6 +714,7 @@ class VentanaPrincipal(QMainWindow):
 
 def main():
     app = QApplication(sys.argv)
+    estilo.aplicar(app)
     ventana = VentanaPrincipal()
     ventana.show()
     if len(sys.argv) > 1:
