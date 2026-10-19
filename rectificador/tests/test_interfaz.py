@@ -220,3 +220,40 @@ def test_ventana_tirada(stl_sintetico, tmp_path):
     assert {id(q): (q.x, q.y) for q in t.piezas} == sitio
     t.close()
     v.close()
+
+
+def test_deshacer_y_rehacer(stl_sintetico):
+    from PySide6.QtWidgets import QApplication
+
+    from interfaz.principal import VentanaPrincipal
+
+    app = QApplication.instance() or QApplication([])
+    v = VentanaPrincipal()
+    v.show()
+    v.abrir(str(stl_sintetico), esperar=True)
+    assert v.pila.currentIndex() == 1  # se ve el molde, no la bienvenida
+    pie = v.proyecto.pies[0]
+    assert not v.acciones["deshacer"].isEnabled()
+    v.proponer_referencias("p0")
+    propuestas = dict(pie.referencias.puntos)
+    assert propuestas and v.acciones["deshacer"].isEnabled()
+    # Mover un punto (arrastrar y soltar) y cambiar el adelanto.
+    x, y = propuestas["mtt1"]
+    v.arrastrar_referencia("p0", "mtt1", x + 3, y)
+    v.soltar_referencia("p0", "mtt1", x + 3, y)
+    v.cambiar_recorte("p0", adelanto=8.0)
+    assert pie.recorte.adelanto == 8.0 and pie.referencias.puntos["mtt1"] == (x + 3, y)
+    v.deshacer()
+    assert pie.recorte.adelanto != 8.0
+    v.deshacer()
+    assert pie.referencias.puntos["mtt1"] == (x, y)  # todo el arrastre se deshace de una vez
+    v.deshacer()
+    assert not pie.referencias.puntos
+    v.rehacer()
+    assert pie.referencias.puntos == propuestas
+    # Intercambiar lados también se deshace.
+    lados = [p.lado for p in v.proyecto.pies]
+    v.intercambiar_lados()
+    v.deshacer()
+    assert [p.lado for p in v.proyecto.pies] == lados
+    v.close()

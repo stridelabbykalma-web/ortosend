@@ -66,6 +66,8 @@ class _Calculo(QObject):
         except Exception as e:  # noqa: BLE001 - se muestra al usuario
             traceback.print_exc()
             self.fallo.emit(str(e))
+        finally:
+            QThread.currentThread().quit()  # (ver Cargador en principal.py: evita quedarse colgado al cerrar)
 
 
 def _fases(trabajo: cnc.TrabajoCNC) -> str:
@@ -182,6 +184,10 @@ class VentanaTirada(QDialog):
         lay.addLayout(izq, 0)
         lay.addLayout(der, 1)
         self._poner_plancha()
+
+    def showEvent(self, evento):
+        super().showEvent(evento)
+        estilo.barra_titulo_oscura(self)
 
     def closeEvent(self, evento):
         if self._hilo is not None and self._hilo.isRunning():
@@ -455,8 +461,6 @@ class VentanaTirada(QDialog):
         self._hilo.started.connect(calc.trabajar)
         calc.terminado.connect(self._listo)
         calc.fallo.connect(self._fallo)
-        calc.terminado.connect(self._hilo.quit)
-        calc.fallo.connect(self._hilo.quit)
         self._hilo.start()
 
     def _listo(self, trabajo: cnc.TrabajoCNC):

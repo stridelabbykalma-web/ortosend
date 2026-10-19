@@ -128,7 +128,8 @@ QScrollBar:horizontal {{ background: transparent; height: 10px; margin: 2px; }}
 QScrollBar::handle:horizontal {{ background: #3a3e45; border-radius: 4px; min-width: 30px; }}
 QScrollBar::add-line, QScrollBar::sub-line {{ width: 0; height: 0; }}
 QScrollBar::add-page, QScrollBar::sub-page {{ background: transparent; }}
-QProgressDialog {{ background: {tarjeta}; }}
+QProgressBar {{ background: {campo}; border: none; border-radius: 3px; }}
+QProgressBar::chunk {{ background: {acento}; border-radius: 3px; }}
 QMessageBox {{ background: {tarjeta}; }}
 QGraphicsView {{ border: 1px solid {borde_suave}; border-radius: 10px; }}
 """
@@ -154,6 +155,13 @@ _ICONOS = {
     "auto": '<rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/>'
             '<rect x="3" y="13" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/>',
     "quitar": '<path d="M4 7h16M10 11v6M14 11v6"/><path d="M6 7l1 13h10l1-13M9 7V4h6v3"/>',
+    "deshacer": '<path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>',
+    "rehacer": '<path d="M15 14l5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/>',
+    "reciente": '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+    "teclado": '<rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/>',
+    "info": '<circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><circle cx="12" cy="7.5" r=".6"/>',
+    "pie": '<path d="M11 4c3.5 0 5.5 3.5 5.5 8 0 3-1 4.5-1 6.5 0 2.5-1.5 4-3.8 4S8 21 8 18c0-2 1-3 1-5.5C9 8 9 4 11 4z"/>'
+           '<circle cx="18" cy="5" r="1.4"/><circle cx="19.6" cy="8.6" r="1.1"/>',
 }
 
 
@@ -223,6 +231,10 @@ def _imagenes() -> dict[str, str]:
 def aplicar(app: QApplication) -> None:
     """Tema oscuro para toda la aplicación."""
     app.setStyle(QStyleFactory.create("Fusion"))
+    try:  # Qt 6.8 o más nuevo: Windows pone oscuras las barras de título de todas las ventanas
+        app.styleHints().setColorScheme(Qt.ColorScheme.Dark)
+    except AttributeError:
+        pass
     pal = QPalette()
     for rol, color in ((QPalette.Window, C["fondo"]), (QPalette.WindowText, C["texto"]),
                        (QPalette.Base, C["campo"]), (QPalette.AlternateBase, C["tarjeta"]),
@@ -291,3 +303,66 @@ def html(texto: str, tipo: str) -> str:
 
 
 TAM_ICONO = QSize(20, 20)
+
+
+def barra_titulo_oscura(ventana: QWidget) -> None:
+    """Barra de título oscura en Windows 10/11 (si Qt no lo ha hecho ya)."""
+    if not sys.platform.startswith("win"):
+        return
+    try:
+        import ctypes
+
+        valor = ctypes.c_int(1)
+        for atributo in (20, 19):  # DWMWA_USE_IMMERSIVE_DARK_MODE (Windows 11 / 10 antiguo)
+            if ctypes.windll.dwmapi.DwmSetWindowAttribute(int(ventana.winId()), atributo, ctypes.byref(valor),
+                                                           ctypes.sizeof(valor)) == 0:
+                break
+    except Exception:  # noqa: BLE001 - es solo estética
+        pass
+
+
+class Aviso(QLabel):
+    """Aviso flotante que aparece abajo, en el centro de la ventana, y se va solo."""
+
+    def __init__(self, padre: QWidget):
+        super().__init__(padre)
+        from PySide6.QtCore import QPropertyAnimation, QTimer
+        from PySide6.QtWidgets import QGraphicsOpacityEffect
+
+        self.setObjectName("aviso_flotante")
+        self.setAlignment(Qt.AlignCenter)
+        self.setWordWrap(True)
+        self.setAttribute(Qt.WA_TransparentForMouseEvents)
+        self._opacidad = QGraphicsOpacityEffect(self)
+        self.setGraphicsEffect(self._opacidad)
+        self._anim = QPropertyAnimation(self._opacidad, b"opacity", self)
+        self._anim.setDuration(250)
+        self._anim.finished.connect(lambda: self._opacidad.opacity() < 0.05 and self.hide())
+        self._reloj = QTimer(self)
+        self._reloj.setSingleShot(True)
+        self._reloj.timeout.connect(self._desvanecer)
+        self.hide()
+
+    def mostrar(self, texto: str, tipo: str = "info", ms: int = 2600):
+        color = {"info": C["acento"], "bien": C["bien"], "aviso": C["aviso"], "mal": C["mal"]}[tipo]
+        self.setStyleSheet(f"QLabel#aviso_flotante {{ background: {C['tarjeta']}; color: {C['texto']}; "
+                           f"border: 1px solid {C['borde']}; border-left: 4px solid {color}; border-radius: 8px; "
+                           f"padding: 10px 16px; font-size: 10pt; }}")
+        self.setText(texto)
+        padre = self.parentWidget()
+        self.setMaximumWidth(min(620, padre.width() - 40))
+        self.adjustSize()
+        self.move((padre.width() - self.width()) // 2, padre.height() - self.height() - 48)
+        self.raise_()
+        self.show()
+        self._anim.stop()
+        self._anim.setStartValue(self._opacidad.opacity() if self.isVisible() else 0.0)
+        self._anim.setEndValue(1.0)
+        self._anim.start()
+        self._reloj.start(ms)
+
+    def _desvanecer(self):
+        self._anim.stop()
+        self._anim.setStartValue(1.0)
+        self._anim.setEndValue(0.0)
+        self._anim.start()

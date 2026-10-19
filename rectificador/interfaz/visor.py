@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
+
 import numpy as np
 import pyvista as pv
 import vtk
@@ -27,6 +29,18 @@ def superficie(campo: Campo) -> pv.StructuredGrid:
     malla = pv.StructuredGrid(X, Y, campo.z)
     malla.point_data["Altura (mm)"] = campo.z.ravel(order="F")
     return malla
+
+
+def normales(campo: Campo) -> np.ndarray:
+    """Normales de la superficie z(x, y) (para el sombreado suave), en el orden de los puntos de la malla.
+
+    Van hacia abajo, en el mismo sentido que el orden de los triángulos de la malla (así las ilumina VTK
+    igual que con sus propias normales)."""
+    r = campo.rejilla
+    gy, gx = np.gradient(campo.z, r.dy, r.dx)
+    n = np.dstack([gx, gy, -np.ones_like(campo.z)])
+    n /= np.linalg.norm(n, axis=2, keepdims=True)
+    return np.column_stack([n[..., k].ravel(order="F") for k in range(3)])
 
 
 class Visor(QtInteractor):
@@ -58,6 +72,11 @@ class Visor(QtInteractor):
         self._picker = vtk.vtkCellPicker()
         self._picker.SetTolerance(0.0005)
         self._picker.PickFromListOn()
+        self._malla: pv.StructuredGrid | None = None  # superficie del molde (se actualiza sin rehacerla)
+        self._limites_reglas = None
+        self._lote = 0  # >0: los render() se juntan en uno solo al final
+        self._centros: dict[tuple[str, str], tuple[float, float, float]] = {}  # dónde se creó cada bola
+        self._render_pendiente = False
         self.enable_surface_point_picking(
             callback=self._clic, show_message=False, show_point=False, left_clicking=False,
             clear_on_no_selection=False, pickable_window=False,
@@ -72,26 +91,83 @@ class Visor(QtInteractor):
 
     # ---------------------------------------------------------------- molde
 
+    # ---------------------------------------------------------------- redibujo
+
+    def render(self, *args, **kwargs):
+        if getattr(self, "_lote", 0):  # (al crear el visor aún no existe)
+            self._render_pendiente = True
+            return None
+        if getattr(self, "_rendered", False) and self.isVisible():
+            # Ya se ha dibujado alguna vez: basta con pedir a Qt que repinte (una sola vez, en el
+            # siguiente fotograma). Dibujar aquí además haría el trabajo dos veces.
+            self.update()
+            return None
+        return super().render(*args, **kwargs)
+
+    @contextmanager
+    def lote(self):
+        """Junta todos los redibujos de dentro en uno solo al final (mucho más rápido)."""
+        self._lote += 1
+        try:
+            yield
+        finally:
+            self._lote -= 1
+            if self._lote == 0 and self._render_pendiente:
+                self._render_pendiente = False
+                self.render()
+
+    # ---------------------------------------------------------------- molde
+
     def mostrar_molde(self, campo: Campo, reiniciar_camara: bool = True) -> None:
+        """Muestra el molde. Si solo han cambiado las alturas, se actualiza la superficie que ya hay
+        (sin rehacerla): así cada cambio se ve casi al momento."""
+        mismo = (self._malla is not None and self.campo is not None and not reiniciar_camara
+                 and self.campo.z.shape == campo.z.shape and self.campo.rejilla.dx == campo.rejilla.dx)
         self.campo = campo
-        actor = self.add_mesh(superficie(campo), name="molde", color="#d8c3a0",  # color espuma
-                              smooth_shading=True, pickable=True, specular=0.15, ambient=0.2, diffuse=0.85)
-        self._picker.InitializePickList()
-        self._picker.AddPickList(actor)
-        self.mostrar_reglas(self.reglas)
+        if mismo:
+            puntos = np.array(self._malla.points)
+            puntos[:, 2] = campo.z.ravel(order="F")
+            self._malla.points = puntos
+            self._malla.point_data["Normals"] = normales(campo)
+            self._malla.point_data.active_normals_name = "Normals"
+            self._malla.Modified()
+            self._localizador.ForceBuildLocator()  # las alturas han cambiado
+        else:
+            malla = superficie(campo)
+            malla.point_data["Normals"] = normales(campo)
+            malla.point_data.active_normals_name = "Normals"
+            self._malla = malla
+            actor = self.add_mesh(malla, name="molde", color="#d8c3a0",  # color espuma
+                                  pickable=True, specular=0.15, ambient=0.2, diffuse=0.85, render=False)
+            actor.GetProperty().SetInterpolationToPhong()
+            self._picker.InitializePickList()
+            self._picker.AddPickList(actor)
+            # Buscador rápido de celdas: saber qué punto del molde hay bajo el ratón sin recorrerlo entero.
+            localizador = vtk.vtkStaticCellLocator()
+            localizador.SetDataSet(malla)
+            localizador.BuildLocator()
+            self._picker.RemoveAllLocators()
+            self._picker.AddLocator(localizador)
+            self._localizador = localizador
+        limites = (campo.rejilla.ancho, campo.rejilla.largo, round(float(campo.z.max())))
+        if limites != self._limites_reglas:
+            self.mostrar_reglas(self.reglas)
         if reiniciar_camara:
             self.vista_inicial()
+        self.render()
 
     def mostrar_reglas(self, mostrar: bool) -> None:
         """Reglas en mm alrededor del recuadro (X, Y y altura)."""
         self.reglas = mostrar
         self.remove_bounds_axes()
+        self._limites_reglas = None
         if mostrar and self.campo is not None:
             r = self.campo.rejilla
             self.show_grid(bounds=(0, r.ancho, 0, r.largo, 0, float(max(self.campo.z.max(), 1.0))),
                            xtitle="X (mm)", ytitle="Y (mm)", ztitle="Altura (mm)", fmt="%.0f",
-                           n_xlabels=7, n_ylabels=8, n_zlabels=4, font_size=10, color="#dddddd",
+                           n_xlabels=7, n_ylabels=8, n_zlabels=4, font_size=10, color="#bfc3c9",
                            location="outer", ticks="outside", minor_ticks=True)
+            self._limites_reglas = (r.ancho, r.largo, round(float(self.campo.z.max())))
         self.render()
 
     def dibujar_medida(self, a, b) -> None:
@@ -156,27 +232,47 @@ class Visor(QtInteractor):
 
     def dibujar_pie(self, clave: str, pie: Pie, geom: dict | None, recorte: list | None = None) -> None:
         """Referencias marcadas y, si están las 3, el eje, la línea metatarsal y el arco."""
-        self.borrar_pie(clave)
-        nombres = []
+        with self.lote():
+            self.borrar_pie(clave)
+            nombres = []
+            for k in ORDEN:
+                if k in pie.referencias.puntos:
+                    x, y = pie.referencias.puntos[k]
+                    z = float(self._z(x, y))
+                    self.puntos_arrastrables[(clave, k)] = (x, y, z + 1.5)
+                    self._centros[(clave, k)] = (x, y, z + 1.5)
+                    grande = k in ("mtt1", "mtt5", "talon")
+                    actor = f"{clave}_{k}"
+                    self.add_mesh(pv.Sphere(radius=3.0 if grande else 2.3, center=(x, y, z + 1.5)), name=actor,
+                                  color=COLORES[k], pickable=False, render=False)
+                    nombres.append(actor)
+                    actor = f"{clave}_{k}_texto"
+                    texto = NOMBRES[k] if grande else k[-1] + ".º"
+                    self.add_point_labels([[x, y, z + 6]], [texto], name=actor, font_size=12 if grande else 10,
+                                          text_color="white", shape_color=COLORES[k], shape_opacity=0.8,
+                                          show_points=False, always_visible=True, render=False)
+                    nombres.append(actor)
+            self._poner_lineas(clave, geom, recorte, nombres)
+            # Rótulo del lado, más allá de los dedos.
+            jj, ii = np.nonzero(pie.mascara)
+            r = self.campo.rejilla
+            actor = f"{clave}_rotulo"
+            self.add_point_labels([[ii.mean() * r.dx, min(jj.max() * r.dy + 10, r.largo - 2), 2]],
+                                  [f"PIE {pie.lado.upper()}"], name=actor, font_size=18, text_color="white",
+                                  shape_color="#25272b", shape_opacity=0.8, show_points=False,
+                                  always_visible=True, render=False)
+            nombres.append(actor)
+            self._actores_pie[clave] = nombres
+            self.render()
 
+    LINEAS = ("eje", "metatarsal", "arco", "talon_medial", "talon_lateral", "recorte")
+
+    def _poner_lineas(self, clave: str, geom: dict | None, recorte: list | None, nombres: list) -> None:
         def poner(nombre, malla, **kw):
             actor = f"{clave}_{nombre}"
             self.add_mesh(malla, name=actor, pickable=False, render=False, **kw)
             nombres.append(actor)
 
-        for k in ORDEN:
-            if k in pie.referencias.puntos:
-                x, y = pie.referencias.puntos[k]
-                z = float(self._z(x, y))
-                self.puntos_arrastrables[(clave, k)] = (x, y, z + 1.5)
-                grande = k in ("mtt1", "mtt5", "talon")
-                poner(k, pv.Sphere(radius=3.0 if grande else 2.3, center=(x, y, z + 1.5)), color=COLORES[k])
-                actor = f"{clave}_{k}_texto"
-                texto = NOMBRES[k] if grande else k[-1] + ".º"
-                self.add_point_labels([[x, y, z + 6]], [texto], name=actor, font_size=12 if grande else 10,
-                                      text_color="white", shape_color=COLORES[k], shape_opacity=0.8,
-                                      show_points=False, always_visible=True, render=False)
-                nombres.append(actor)
         if geom:
             lineas = dict(line_width=4, render_lines_as_tubes=True)
             poner("eje", self._linea(geom["eje"]), color=COLOR_EJE, **lineas)
@@ -187,17 +283,31 @@ class Visor(QtInteractor):
                 poner(k, pv.Sphere(radius=1.8, center=(x, y, float(self._z(x, y)) + 1.0)), color=COLORES["talon"])
         if recorte and len(recorte) > 1:
             poner("recorte", self._linea(recorte), color=COLOR_RECORTE, line_width=5, render_lines_as_tubes=True)
-        # Rótulo del lado, más allá de los dedos.
-        jj, ii = np.nonzero(pie.mascara)
-        r = self.campo.rejilla
-        actor = f"{clave}_rotulo"
-        self.add_point_labels([[ii.mean() * r.dx, min(jj.max() * r.dy + 10, r.largo - 2), 2]],
-                              [f"PIE {pie.lado.upper()}"], name=actor, font_size=18, text_color="white",
-                              shape_color="#444444", shape_opacity=0.7, show_points=False,
-                              always_visible=True, render=False)
-        nombres.append(actor)
-        self._actores_pie[clave] = nombres
-        self.render()
+
+    def dibujar_lineas(self, clave: str, geom: dict | None, recorte: list | None) -> None:
+        """Solo el eje, la línea metatarsal, el arco y el recorte (mientras se arrastra un punto)."""
+        with self.lote():
+            nombres = self._actores_pie.setdefault(clave, [])
+            for n in self.LINEAS:
+                actor = f"{clave}_{n}"
+                self.remove_actor(actor, render=False)
+                if actor in nombres:
+                    nombres.remove(actor)
+            self._poner_lineas(clave, geom, recorte, nombres)
+            self.render()
+
+    def mover_punto(self, clave: str, nombre: str, x: float, y: float) -> None:
+        """Mueve la bola de una referencia sin rehacerla (su rótulo se oculta hasta soltarla)."""
+        centro = self._centros.get((clave, nombre))
+        bola = self.renderer.actors.get(f"{clave}_{nombre}")
+        if centro is None or bola is None:
+            return
+        z = float(self._z(x, y)) + 1.5
+        bola.SetPosition(x - centro[0], y - centro[1], z - centro[2])
+        rotulo = self.renderer.actors.get(f"{clave}_{nombre}_texto")
+        if rotulo is not None:
+            rotulo.SetVisibility(False)
+        self.puntos_arrastrables[(clave, nombre)] = (x, y, z)
 
     # ---------------------------------------------------------------- arrastrar puntos
 

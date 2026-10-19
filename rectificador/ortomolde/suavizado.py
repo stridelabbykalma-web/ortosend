@@ -34,10 +34,11 @@ def _suave(x):
     return x * x * (3 - 2 * x)
 
 
-def ajuste_cuadratico_local(z: np.ndarray, peso: np.ndarray, sigma: float) -> np.ndarray:
+def ajuste_cuadratico_local(z: np.ndarray, peso: np.ndarray, sigma: float,
+                            donde: np.ndarray | None = None) -> np.ndarray:
     """Valor en cada punto del polinomio de 2.º grado ajustado por mínimos cuadrados a su
     entorno (pesos gaussianos de anchura `sigma` celdas × `peso`). Reproduce exactamente
-    cualquier superficie de 2.º grado."""
+    cualquier superficie de 2.º grado. Con `donde`, solo se calcula en esos puntos (el resto queda igual)."""
     r = int(np.ceil(3 * sigma))
     yy, xx = np.mgrid[-r:r + 1, -r:r + 1].astype(float)
     g = np.exp(-(xx ** 2 + yy ** 2) / (2 * sigma ** 2))
@@ -60,6 +61,8 @@ def ajuste_cuadratico_local(z: np.ndarray, peso: np.ndarray, sigma: float) -> np
     rhs = np.stack([conv(peso * z, a, b) for a, b in exps], axis=-1)
     A += np.eye(6) * 1e-9 * (A[..., 0, 0][..., None, None] + 1e-12)
     valido = momentos[(0, 0)] > 1e-6 * g.sum()
+    if donde is not None:
+        valido &= donde
     out = z.copy()
     sol = np.linalg.solve(A[valido], rhs[valido][..., None])[..., 0]
     out[valido] = sol[:, 0]
@@ -67,9 +70,22 @@ def ajuste_cuadratico_local(z: np.ndarray, peso: np.ndarray, sigma: float) -> np
 
 
 def suavizar(z: np.ndarray, fondo: float, mascara: np.ndarray, paso: float, lijado: float) -> np.ndarray:
-    """Devuelve una copia lijada de z. `mascara` = zona de los pies; `lijado` en mm (0 = nada)."""
-    if lijado <= 0:
+    """Devuelve una copia lijada de z. `mascara` = zona de los pies; `lijado` en mm (0 = nada).
+
+    Solo se calcula en el recuadro que ocupan los pies (con margen): fuera no cambia nada y así va
+    bastante más rápido."""
+    if lijado <= 0 or not mascara.any():
         return z.copy()
+    margen = int(np.ceil(4 * lijado / paso)) + 12
+    jj, ii = np.nonzero(mascara)
+    j0, j1 = max(jj.min() - margen, 0), min(jj.max() + margen + 1, z.shape[0])
+    i0, i1 = max(ii.min() - margen, 0), min(ii.max() + margen + 1, z.shape[1])
+    out = z.copy()
+    out[j0:j1, i0:i1] = _suavizar(z[j0:j1, i0:i1], fondo, mascara[j0:j1, i0:i1], paso, lijado)
+    return out
+
+
+def _suavizar(z: np.ndarray, fondo: float, mascara: np.ndarray, paso: float, lijado: float) -> np.ndarray:
     h = z - fondo
     # 1. Impurezas pequeñas.
     radio = min(2.0, lijado / 2)
@@ -84,11 +100,11 @@ def suavizar(z: np.ndarray, fondo: float, mascara: np.ndarray, paso: float, lija
     pendiente = np.degrees(np.arctan(np.hypot(gx, gy)))
     planta = mascara & (pendiente < PENDIENTE_PARED[0])
     planta = ndimage.binary_opening(ndimage.binary_closing(planta, disco(3)), disco(3))
-    lijada = ajuste_cuadratico_local(h1, planta.astype(float), lijado / paso)
     # 3. La corrección del lijado se aplica entera en la planta y se desvanece poco a poco
     #    hacia las paredes (en 1,5 tacos): sin escalones ni líneas, y el contorno no cambia.
     distancia = ndimage.distance_transform_edt(planta) * paso
     w = ndimage.gaussian_filter(_suave(distancia / (1.5 * lijado)), lijado / 2 / paso)
+    lijada = ajuste_cuadratico_local(h1, planta.astype(float), lijado / paso, donde=w > 1e-4)
     h2 = h1 + w * (lijada - h1)
 
     # Solo se toca la zona de los pies (con margen para que la transición sea continua).

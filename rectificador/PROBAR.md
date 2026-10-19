@@ -85,6 +85,11 @@
 
 Ratón en el visor: girar = arrastrar con el botón izquierdo · desplazar = Mayús + arrastrar · zoom = rueda.
 
+**Trucos**: **Ctrl+Z** deshace el último cambio (puntos, recorte, lijado, intercambiar pies) y **Ctrl+Y** lo
+rehace · puedes **arrastrar el escaneo** desde una carpeta y soltarlo en la ventana · en la pantalla de inicio
+y en *Archivo → Abrir reciente* están los últimos escaneos · **F1** abre la guía rápida y *Ayuda → Atajos*
+la lista de atajos · el programa recuerda el tamaño de la ventana y la última carpeta usada.
+
 ## Si algo falla
 
 Manda una **foto o captura** de la ventana (si falla al instalar, la ventana negra enseña las

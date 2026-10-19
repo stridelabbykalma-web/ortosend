@@ -10,12 +10,14 @@ import traceback
 from pathlib import Path
 
 import numpy as np
-from PySide6.QtCore import QObject, QSettings, QThread, Qt, Signal
+import dataclasses
+
+from PySide6.QtCore import QElapsedTimer, QObject, QSettings, QThread, QTimer, Qt, Signal
 from PySide6.QtGui import QAction, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
-    QApplication, QButtonGroup, QCheckBox, QDoubleSpinBox, QFileDialog, QFrame, QHBoxLayout,
-    QLabel, QMainWindow, QMessageBox, QProgressDialog, QPushButton, QScrollArea, QSizePolicy, QSplitter,
-    QToolBar, QVBoxLayout, QWidget,
+    QApplication, QButtonGroup, QCheckBox, QDialog, QDoubleSpinBox, QFileDialog, QFrame, QHBoxLayout,
+    QLabel, QMainWindow, QMessageBox, QProgressBar, QPushButton, QScrollArea, QSizePolicy, QSplitter,
+    QStackedWidget, QToolBar, QVBoxLayout, QWidget,
 )
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -52,10 +54,16 @@ class Cargador(QObject):
 
     def trabajar(self):
         try:
-            self.terminado.emit(self.peticion, Proyecto.abrir(self.ruta, modo=self.modo))
+            proyecto = Proyecto.abrir(self.ruta, modo=self.modo)
+            proyecto.calcular()  # el lijado se calcula aquí, sin congelar la ventana
+            self.terminado.emit(self.peticion, proyecto)
         except Exception as e:  # noqa: BLE001 - se muestra al usuario
             traceback.print_exc()
             self.fallo.emit(self.peticion, str(e))
+        finally:
+            # El hilo se acaba desde aquí mismo: si la ventana está esperándolo (al cerrar el
+            # programa), no puede recibir la orden de acabar y se quedaría colgada.
+            QThread.currentThread().quit()
 
 
 class PanelPie(QFrame):
@@ -195,6 +203,7 @@ class VentanaPrincipal(QMainWindow):
         super().__init__()
         self.setWindowTitle("Rectificador de moldes – Ortosend")
         self.resize(1400, 850)
+        self.ajustes = QSettings("Ortosend", "Rectificador")
         self.proyecto: Proyecto | None = None
         self.taller = config.taller()
         self.tirada = None  # ventana «Tirada de CNC» (se crea al abrirla)
@@ -232,21 +241,210 @@ class VentanaPrincipal(QMainWindow):
         marco_visor.setObjectName("tarjeta")
         lv = QVBoxLayout(marco_visor)
         lv.setContentsMargins(1, 1, 1, 1)
-        lv.addWidget(self.visor)
+        self.pila = QStackedWidget()  # 0 = bienvenida / cargando, 1 = visor 3D
+        self.pila.addWidget(self._bienvenida())
+        self.pila.addWidget(self.visor)
+        lv.addWidget(self.pila)
         division = QSplitter(Qt.Horizontal)
         division.addWidget(marco_visor)
         division.addWidget(desplazable)
         division.setStretchFactor(0, 1)
         division.setSizes([1000, 440])
+        self.division = division
         contenedor = QWidget()
         lc = QVBoxLayout(contenedor)
         lc.setContentsMargins(10, 10, 6, 6)
         lc.addWidget(division)
         self.setCentralWidget(contenedor)
         self.setAcceptDrops(True)
+        self.aviso = estilo.Aviso(self)
+        self._deshacer: list = []  # estados anteriores (para Ctrl+Z)
+        self._rehacer: list = []
+        self._estado_arrastre = None
         self._menus()
         self._barra()
         self._refrescar_panel()
+        self._refrescar_recientes()
+        geometria = self.ajustes.value("geometria")
+        if geometria is not None:
+            self.restoreGeometry(geometria)
+        division = self.ajustes.value("division")
+        if division is not None:
+            self.division.restoreState(division)
+
+    def showEvent(self, evento):
+        super().showEvent(evento)
+        estilo.barra_titulo_oscura(self)
+
+    def notificar(self, texto: str, tipo: str = "info"):
+        """Aviso flotante que se va solo (y queda también en la barra de abajo)."""
+        self.aviso.mostrar(texto, tipo)
+        self.statusBar().showMessage(texto, 6000)
+
+    # ---------------------------------------------------------------- bienvenida
+
+    def _bienvenida(self) -> QWidget:
+        """Lo que se ve antes de abrir un escaneo (y mientras se abre)."""
+        hoja = QWidget()
+        hoja.setObjectName("bienvenida")
+        hoja.setStyleSheet(f"QWidget#bienvenida {{ background: qlineargradient(x1:0, y1:0, x2:0, y2:1, "
+                           f"stop:0 {C['visor_arriba']}, stop:1 {C['visor_abajo']}); border-radius: 9px; }}")
+        lay = QVBoxLayout(hoja)
+        lay.addStretch(1)
+        icono = QLabel()
+        icono.setPixmap(estilo.icono_app().pixmap(72, 72))
+        icono.setAlignment(Qt.AlignCenter)
+        lay.addWidget(icono)
+        self.texto_bienvenida = QLabel()
+        self.texto_bienvenida.setAlignment(Qt.AlignCenter)
+        self.texto_bienvenida.setWordWrap(True)
+        lay.addWidget(self.texto_bienvenida)
+        self.barra_carga = QProgressBar()
+        self.barra_carga.setRange(0, 0)  # sin fin: no se sabe cuánto falta
+        self.barra_carga.setFixedWidth(320)
+        self.barra_carga.setTextVisible(False)
+        self.barra_carga.setFixedHeight(6)
+        fila = QHBoxLayout()
+        fila.addStretch(1)
+        fila.addWidget(self.barra_carga)
+        fila.addStretch(1)
+        lay.addLayout(fila)
+        self.boton_abrir_grande = QPushButton("  Abrir escaneo…")
+        self.boton_abrir_grande.setIcon(estilo.icono("abrir", "white"))
+        estilo.primario(self.boton_abrir_grande)
+        self.boton_abrir_grande.setMinimumWidth(240)
+        self.boton_abrir_grande.clicked.connect(self.abrir_dialogo)
+        fila = QHBoxLayout()
+        fila.addStretch(1)
+        fila.addWidget(self.boton_abrir_grande)
+        fila.addStretch(1)
+        lay.addLayout(fila)
+        self.caja_recientes = QVBoxLayout()
+        self.caja_recientes.setSpacing(4)
+        fila = QHBoxLayout()
+        fila.addStretch(1)
+        fila.addLayout(self.caja_recientes)
+        fila.addStretch(1)
+        lay.addSpacing(10)
+        lay.addLayout(fila)
+        lay.addStretch(2)
+        self._reloj_carga = QTimer(self)
+        self._reloj_carga.setInterval(500)
+        self._reloj_carga.timeout.connect(self._texto_carga)
+        self._cronometro = QElapsedTimer()
+        self._modo_bienvenida(cargando=False)
+        return hoja
+
+    def _modo_bienvenida(self, cargando: bool, ruta: str | None = None):
+        self._cargando = cargando
+        self._ruta_cargando = ruta
+        self.barra_carga.setVisible(cargando)
+        self.boton_abrir_grande.setVisible(not cargando)
+        for i in range(self.caja_recientes.count()):
+            w = self.caja_recientes.itemAt(i).widget()
+            if w is not None:
+                w.setVisible(not cargando)
+        if cargando:
+            self._cronometro.start()
+            self._reloj_carga.start()
+            self._texto_carga()
+        else:
+            self._reloj_carga.stop()
+            self.texto_bienvenida.setText(
+                f"<p style='font-size:16pt; font-weight:600'>Rectificador de moldes</p>"
+                f"<p style='color:{C['secundario']}'>Abre un escaneo del Revopoint (.revox, .stl, .ply, .obj o .zip)"
+                f"<br>o <b>arrástralo aquí</b> desde una carpeta.</p>")
+
+    def _texto_carga(self):
+        nombre = Path(self._ruta_cargando).name if self._ruta_cargando else ""
+        seg = self._cronometro.elapsed() / 1000 if self._cronometro.isValid() else 0
+        self.texto_bienvenida.setText(
+            f"<p style='font-size:14pt; font-weight:600'>Leyendo y limpiando el escaneo…</p>"
+            f"<p style='color:{C['secundario']}'>{nombre}<br>Suele tardar unos 15 segundos · {seg:.0f} s</p>")
+
+    # ---------------------------------------------------------------- recientes
+
+    def _recientes(self) -> list[str]:
+        v = self.ajustes.value("recientes", [])
+        lista = [v] if isinstance(v, str) else list(v or [])
+        return [r for r in lista if Path(r).exists()][:8]
+
+    def _anotar_reciente(self, ruta: str):
+        lista = [r for r in self._recientes() if Path(r) != Path(ruta)]
+        self.ajustes.setValue("recientes", [str(ruta)] + lista[:7])
+        self.ajustes.setValue("carpeta", str(Path(ruta).parent))
+        self._refrescar_recientes()
+
+    def _refrescar_recientes(self):
+        recientes = self._recientes()
+        self.menu_recientes.clear()
+        for r in recientes:
+            self.menu_recientes.addAction(estilo.icono("reciente"), Path(r).name, lambda r=r: self.abrir(r))
+        self.menu_recientes.setEnabled(bool(recientes))
+        while self.caja_recientes.count():
+            w = self.caja_recientes.takeAt(0).widget()
+            if w is not None:
+                w.deleteLater()
+        if recientes:
+            t = estilo.etiqueta("RECIENTES", "titulo_tarjeta", envolver=False)
+            t.setAlignment(Qt.AlignCenter)
+            self.caja_recientes.addWidget(t)
+        for r in recientes[:5]:
+            b = QPushButton(Path(r).name)
+            b.setIcon(estilo.icono("reciente", C["secundario"]))
+            b.setProperty("plano", True)
+            b.setToolTip(r)
+            b.setMinimumWidth(240)
+            b.clicked.connect(lambda _=False, r=r: self.abrir(r))
+            self.caja_recientes.addWidget(b)
+
+    # ---------------------------------------------------------------- deshacer
+
+    def _estado(self):
+        p = self.proyecto
+        return ("estado", p.lijado, [(dict(pie.referencias.puntos), dataclasses.replace(pie.recorte))
+                                      for pie in p.pies])
+
+    def _guardar_estado(self, estado=None):
+        """Apunta cómo estaba todo antes de un cambio (para poder deshacerlo)."""
+        if self.proyecto is None:
+            return
+        self._deshacer.append(estado or self._estado())
+        del self._deshacer[:-100]
+        self._rehacer.clear()
+        self._activar_acciones()
+
+    def _poner_estado(self, estado):
+        _, lijado, pies = estado
+        p = self.proyecto
+        p.lijado = lijado
+        for pie, (puntos, recorte) in zip(p.pies, pies):
+            pie.referencias.puntos = dict(puntos)
+            pie.recorte = dataclasses.replace(recorte)
+        self.caja_lijado.blockSignals(True)
+        self.caja_lijado.setValue(lijado)
+        self.caja_lijado.blockSignals(False)
+
+    def _volver(self, desde: list, hacia: list, texto: str):
+        if self.proyecto is None or not desde:
+            return
+        paso = desde.pop()
+        if paso == "lados":
+            self.proyecto.intercambiar_lados()
+            hacia.append("lados")
+        else:
+            hacia.append(self._estado())
+            self._poner_estado(paso)
+        self.activa = None
+        self._actualizar_todo()
+        self._activar_acciones()
+        self.notificar(texto)
+
+    def deshacer(self):
+        self._volver(self._deshacer, self._rehacer, "Deshecho el último cambio.")
+
+    def rehacer(self):
+        self._volver(self._rehacer, self._deshacer, "Rehecho.")
 
     def _grupo_escaneo(self) -> QFrame:
         """Paso 1: el escaneo abierto y qué se ha escaneado (huella en espuma o molde ya hecho)."""
@@ -273,7 +471,6 @@ class VentanaPrincipal(QMainWindow):
             fila.addWidget(b, 1)
             self.botones_modo[modo] = b
         lay.addLayout(fila)
-        self.ajustes = QSettings("Ortosend", "Rectificador")
         modo = self.ajustes.value("modo", "huellas")
         self.modo = modo if modo in self.botones_modo else "huellas"
         self.botones_modo[self.modo].blockSignals(True)
@@ -368,10 +565,14 @@ class VentanaPrincipal(QMainWindow):
     def cambiar_lijado(self, valor: float):
         if self.proyecto is None or abs(self.proyecto.lijado - valor) < 1e-9:
             return
+        self._guardar_estado()
+        QApplication.setOverrideCursor(Qt.WaitCursor)
         self.proyecto.lijado = float(valor)
         self.ver_original.setChecked(False)
-        self._mostrar_molde(reiniciar_camara=False)
-        self._redibujar_pies()
+        try:
+            self._actualizar_todo()
+        finally:
+            QApplication.restoreOverrideCursor()
 
     def _mostrar_molde(self, reiniciar_camara: bool):
         p = self.proyecto
@@ -380,35 +581,127 @@ class VentanaPrincipal(QMainWindow):
 
     def _menus(self):
         self.acciones = {}
-        archivo = self.menuBar().addMenu("&Archivo")
-        for clave, texto, atajo, accion, ic in (
-            ("abrir", "Abrir escaneo…", QKeySequence.Open, self.abrir_dialogo, "abrir"),
-            ("exportar", "Exportar…", QKeySequence("Ctrl+E"), self.exportar, "exportar"),
-            ("anadir", "Añadir este molde a la tirada de CNC", QKeySequence("Ctrl+T"), self.anadir_a_tirada, "anadir"),
-            ("tirada", "Tirada de CNC (varios moldes en una plancha)…", QKeySequence("Ctrl+Shift+T"),
-             self.abrir_tirada, "cnc"),
-            ("salir", "Salir", QKeySequence.Quit, self.close, None),
-        ):
+
+        def accion(clave, texto, funcion, atajo=None, ic=None, menu=None):
             a = QAction(texto, self)
-            a.setShortcut(atajo)
-            a.triggered.connect(accion)
+            if atajo is not None:
+                a.setShortcuts(atajo if isinstance(atajo, list) else [atajo])
+            a.triggered.connect(funcion)
             if ic:
                 a.setIcon(estilo.icono(ic))
-            archivo.addAction(a)
+            if menu is not None:
+                menu.addAction(a)
             self.acciones[clave] = a
+            return a
+
+        archivo = self.menuBar().addMenu("&Archivo")
+        accion("abrir", "Abrir escaneo…", self.abrir_dialogo, QKeySequence.Open, "abrir", archivo)
+        self.menu_recientes = archivo.addMenu(estilo.icono("reciente"), "Abrir reciente")
+        archivo.addSeparator()
+        accion("exportar", "Exportar molde…", self.exportar, QKeySequence("Ctrl+E"), "exportar", archivo)
+        archivo.addSeparator()
+        accion("anadir", "Añadir este molde a la tirada de CNC", self.anadir_a_tirada, QKeySequence("Ctrl+T"),
+               "anadir", archivo)
+        accion("tirada", "Tirada de CNC (varios moldes en una plancha)…", self.abrir_tirada,
+               QKeySequence("Ctrl+Shift+T"), "cnc", archivo)
+        archivo.addSeparator()
+        accion("salir", "Salir", self.close, QKeySequence.Quit, None, archivo)
+
+        edicion = self.menuBar().addMenu("&Edición")
+        accion("deshacer", "Deshacer", self.deshacer, QKeySequence.Undo, "deshacer", edicion)
+        accion("rehacer", "Rehacer", self.rehacer, [QKeySequence("Ctrl+Y"), QKeySequence("Ctrl+Shift+Z")],
+               "rehacer", edicion)
+        edicion.addSeparator()
+        accion("lados", "Intercambiar pie izquierdo ↔ derecho", self.intercambiar_lados, None, "lados", edicion)
+        accion("medir_menu", "Medir distancia", lambda: self.boton_medir.toggle(), None, "medir", edicion)
+
         ver = self.menuBar().addMenu("&Ver")
-        for clave, texto, accion, ic in (("inicial", "Vista inicial", lambda: self.visor.vista_inicial(), "vista"),
-                                         ("planta", "Vista de planta (desde arriba)", lambda: self.visor.vista_planta(),
-                                          "planta")):
-            a = QAction(estilo.icono(ic), texto, self)
-            a.triggered.connect(accion)
-            ver.addAction(a)
-            self.acciones[clave] = a
+        accion("inicial", "Vista inicial", lambda: self.visor.vista_inicial(), QKeySequence("Ctrl+1"), "vista", ver)
+        accion("planta", "Vista de planta (desde arriba)", lambda: self.visor.vista_planta(), QKeySequence("Ctrl+2"),
+               "planta", ver)
+        ver.addSeparator()
         reglas = QAction("Mostrar reglas en mm", self)
         reglas.setCheckable(True)
         reglas.setChecked(True)
         reglas.toggled.connect(self.visor.mostrar_reglas)
         ver.addAction(reglas)
+        original = QAction("Ver el escaneo sin lijar", self)
+        original.setCheckable(True)
+        original.toggled.connect(self.ver_original.setChecked)
+        self.ver_original.toggled.connect(original.setChecked)
+        ver.addAction(original)
+
+        ayuda = self.menuBar().addMenu("A&yuda")
+        accion("guia", "Guía rápida", self.guia_rapida, QKeySequence.HelpContents, "ayuda", ayuda)
+        accion("atajos", "Atajos de teclado y ratón", self.ver_atajos, None, "teclado", ayuda)
+        ayuda.addSeparator()
+        accion("acerca", "Acerca del rectificador", self.acerca_de, None, "info", ayuda)
+
+    # ---------------------------------------------------------------- ayuda
+
+    def _dialogo_texto(self, titulo: str, html: str):
+        d = QDialog(self)
+        d.setWindowTitle(titulo)
+        d.resize(620, 560)
+        lay = QVBoxLayout(d)
+        lay.setContentsMargins(20, 18, 20, 16)
+        texto = QLabel(html)
+        texto.setWordWrap(True)
+        texto.setTextFormat(Qt.RichText)
+        texto.setAlignment(Qt.AlignTop | Qt.AlignLeft)
+        desplazable = QScrollArea()
+        desplazable.setWidget(texto)
+        desplazable.setWidgetResizable(True)
+        lay.addWidget(desplazable, 1)
+        cerrar = QPushButton("Cerrar")
+        estilo.primario(cerrar)
+        cerrar.clicked.connect(d.accept)
+        fila = QHBoxLayout()
+        fila.addStretch(1)
+        fila.addWidget(cerrar)
+        lay.addLayout(fila)
+        estilo.barra_titulo_oscura(d)
+        d.exec()
+
+    def guia_rapida(self):
+        s = C["secundario"]
+        self._dialogo_texto("Guía rápida", f"""
+<h2>Guía rápida</h2>
+<h3>1 · Abrir el escaneo</h3>
+<p>Botón <b>Abrir</b> (o arrastra el archivo a la ventana). Vale el proyecto de Revo Scan (<b>.revox</b>),
+un <b>.stl/.ply/.obj</b> o un <b>.zip</b>. Elige antes qué se ha escaneado: <b>Huellas en espuma</b> o
+<b>Molde ya hecho</b>. Comprueba que cada pie tiene bien su nombre; si no, <b>Intercambiar izquierdo ↔ derecho</b>.</p>
+<h3>2 · Molde</h3>
+<p><b>Lijado</b>: quita imperfecciones conservando la forma (más grande = lija ondulaciones más anchas).
+<b>Medir</b> (tecla M): dos clics derechos sobre el molde y te dice la distancia en mm.</p>
+<h3>3 · Referencias de cada pie</h3>
+<p><b>Proponer referencias</b> coloca las 5 cabezas metatarsales y el talón. Si alguna no está bien,
+<b>cógela con el botón izquierdo y arrástrala</b>. El molde se recorta en arco por delante de las cabezas
+(línea roja); cambia <b>Adelanto</b> y <b>Curvatura</b> si hace falta.</p>
+<h3>4 · Exportar o fresar</h3>
+<p><b>Exportar</b> guarda el molde. <b>Añadir a la tirada</b> lo manda a la ventana de la CNC, donde colocas
+varios moldes en una plancha (arrastrándolos), calculas y guardas el <b>.nc</b> con su mapa para imprimir.</p>
+<p style='color:{s}'>¿Te has equivocado? <b>Ctrl+Z</b> deshace el último cambio (y Ctrl+Y lo rehace).</p>
+""")
+
+    def ver_atajos(self):
+        filas = [("Ctrl+O", "Abrir escaneo"), ("Ctrl+E", "Exportar molde"), ("Ctrl+T", "Añadir a la tirada de CNC"),
+                 ("Ctrl+Shift+T", "Abrir la tirada de CNC"), ("Ctrl+Z / Ctrl+Y", "Deshacer / rehacer"),
+                 ("M", "Medir distancia (Esc para quitarla)"), ("Ctrl+1 / Ctrl+2", "Vista inicial / desde arriba"),
+                 ("F1", "Guía rápida"),
+                 ("Arrastrar (botón izq.)", "Girar la vista · o mover un punto si lo coges"),
+                 ("Mayús + arrastrar", "Desplazar la vista"), ("Rueda", "Zoom"),
+                 ("Clic derecho", "Marcar una referencia o un punto de medida")]
+        tabla = "".join(f"<tr><td style='padding:5px 14px 5px 0'><b>{a}</b></td><td>{b}</td></tr>" for a, b in filas)
+        self._dialogo_texto("Atajos", f"<h2>Atajos de teclado y ratón</h2><table>{tabla}</table>")
+
+    def acerca_de(self):
+        self._dialogo_texto("Acerca de", f"""
+<h2>Rectificador de moldes · Ortosend</h2>
+<p>Limpia el escaneo del Revopoint, lija el molde, marca las referencias del pie, recorta en arco por
+delante de las cabezas metatarsales y genera el archivo para la CNC.</p>
+<p style='color:{C["secundario"]}'>Datos del taller: <code>config/taller.toml</code> ·
+valores clínicos: <code>config/valores_clinicos.toml</code></p>""")
 
     def _barra(self):
         """Barra de herramientas de arriba: lo que más se usa, con icono y texto."""
@@ -422,12 +715,14 @@ class VentanaPrincipal(QMainWindow):
         barra.addSeparator()
         cortos = {"abrir": "Abrir", "exportar": "Exportar", "anadir": "Añadir a la tirada", "tirada": "Tirada CNC",
                   "inicial": "Vista inicial", "planta": "Desde arriba"}
-        for clave in ("abrir", "exportar", "anadir", "tirada", None, "inicial", "planta"):
+        cortos.update({"deshacer": "", "rehacer": ""})
+        for clave in ("abrir", "exportar", "anadir", "tirada", None, "deshacer", "rehacer", None, "inicial", "planta"):
             if clave is None:
                 barra.addSeparator()
                 continue
             a = self.acciones[clave]
-            a.setIconText(cortos[clave])
+            if cortos[clave]:
+                a.setIconText(cortos[clave])
             a.setToolTip(f"{a.text().rstrip('…')} ({a.shortcut().toString()})" if not a.shortcut().isEmpty()
                          else a.text())
             barra.addAction(a)
@@ -446,15 +741,19 @@ class VentanaPrincipal(QMainWindow):
 
     def _activar_acciones(self):
         hay = self.proyecto is not None
-        for clave in ("exportar", "anadir", "inicial", "planta"):
-            if clave in getattr(self, "acciones", {}):
-                self.acciones[clave].setEnabled(hay)
+        acciones = getattr(self, "acciones", {})
+        for clave in ("exportar", "anadir", "inicial", "planta", "lados", "medir_menu"):
+            if clave in acciones:
+                acciones[clave].setEnabled(hay)
+        if "deshacer" in acciones:
+            acciones["deshacer"].setEnabled(hay and bool(self._deshacer))
+            acciones["rehacer"].setEnabled(hay and bool(self._rehacer))
 
     # ---------------------------------------------------------------- abrir
 
     def abrir_dialogo(self):
         ruta, _ = QFileDialog.getOpenFileName(
-            self, "Abrir escaneo", "",
+            self, "Abrir escaneo", str(self.ajustes.value("carpeta", "")),
             "Escaneos (*.stl *.ply *.obj *.revox *.zip);;Proyecto de Revo Scan (*.revox);;"
             "Mallas (*.stl *.ply *.obj);;ZIP (*.zip);;Todos los archivos (*.*)")
         if ruta:
@@ -466,20 +765,14 @@ class VentanaPrincipal(QMainWindow):
         if esperar:
             self._cargado(self._peticion, Proyecto.abrir(ruta, modo=self.modo))
             return
-        if getattr(self, "_progreso", None):
-            self._progreso.close()
-        self._progreso = QProgressDialog("Leyendo y limpiando el escaneo…", None, 0, 0, self)
-        self._progreso.setWindowTitle("Abriendo")
-        self._progreso.setWindowModality(Qt.WindowModal)
-        self._progreso.show()
+        self._modo_bienvenida(cargando=True, ruta=ruta)
+        self.pila.setCurrentIndex(0)
         hilo = QThread(self)
         cargador = Cargador(ruta, self.modo, self._peticion)
         cargador.moveToThread(hilo)
         hilo.started.connect(cargador.trabajar)
         cargador.terminado.connect(self._cargado)
         cargador.fallo.connect(self._fallo)
-        cargador.terminado.connect(hilo.quit)
-        cargador.fallo.connect(hilo.quit)
         hilo.finished.connect(lambda h=hilo, c=cargador: self._hilos.remove((h, c)) if (h, c) in self._hilos else None)
         self._hilos.append((hilo, cargador))
         self._hilo = hilo
@@ -488,21 +781,27 @@ class VentanaPrincipal(QMainWindow):
     def _cargado(self, peticion: int, proyecto: Proyecto):
         if peticion != self._peticion:
             return  # resultado de una apertura anterior que ha llegado tarde
-        if getattr(self, "_progreso", None):
-            self._progreso.close()
+        self._modo_bienvenida(cargando=False)
+        self.pila.setCurrentIndex(1)
         self.proyecto = proyecto
         self.activa = None
+        self._deshacer.clear()
+        self._rehacer.clear()
+        self._anotar_reciente(str(proyecto.ruta_stl))
         self.caja_lijado.blockSignals(True)
         self.caja_lijado.setValue(proyecto.lijado)
         self.caja_lijado.blockSignals(False)
-        self._mostrar_molde(reiniciar_camara=True)
-        self._redibujar_pies()
+        with self.visor.lote():
+            self._mostrar_molde(reiniciar_camara=True)
+            self._redibujar_pies()
         self._refrescar_panel()
 
     def _fallo(self, peticion: int, mensaje: str):
         if peticion != self._peticion:
             return
-        self._progreso.close()
+        self._modo_bienvenida(cargando=False)
+        if self.proyecto is not None:
+            self.pila.setCurrentIndex(1)
         QMessageBox.critical(self, "No se ha podido abrir", mensaje)
 
     # ---------------------------------------------------------------- referencias
@@ -531,15 +830,17 @@ class VentanaPrincipal(QMainWindow):
             return
         pie = self.proyecto.pie_en(x, y)
         if pie is None:
-            self.statusBar().showMessage("Ese punto no está sobre ningún pie.", 4000)
+            self.notificar("Ese punto no está sobre ningún pie.", "aviso")
             return
         nombre = None
         if self.activa and self.activa[0] == self._clave(pie):
             nombre = self.activa[1]
+        antes = self._estado()
         hecho = self.proyecto.poner_referencia(x, y, nombre)
         if hecho:
+            self._guardar_estado(antes)
             _, nombre = hecho
-            self.statusBar().showMessage(f"{pie.nombre}: marcada {NOMBRES[nombre]}.", 4000)
+            self.notificar(f"{pie.nombre}: marcada {NOMBRES[nombre]}.", "bien")
         self.activa = None
         self._actualizar_todo()
 
@@ -553,7 +854,11 @@ class VentanaPrincipal(QMainWindow):
 
     def arrastrar_referencia(self, clave: str, nombre: str, x: float, y: float):
         """Vista previa mientras se arrastra: se redibujan punto, eje, arco y recorte (sin recalcular el molde)."""
-        if not self.proyecto or not self._mover_referencia(clave, nombre, x, y):
+        if not self.proyecto:
+            return
+        if self._estado_arrastre is None:
+            self._estado_arrastre = self._estado()  # cómo estaba antes de empezar a arrastrar
+        if not self._mover_referencia(clave, nombre, x, y):
             return
         pie = self.proyecto.pies[int(clave[1])]
         try:
@@ -561,19 +866,24 @@ class VentanaPrincipal(QMainWindow):
             recorte = self.proyecto.linea_recorte(pie)
         except ValueError:
             geom, recorte = None, None
-        self.visor.dibujar_pie(clave, pie, geom, recorte)
+        with self.visor.lote():
+            self.visor.mover_punto(clave, nombre, x, y)
+            self.visor.dibujar_lineas(clave, geom, recorte)
 
     def soltar_referencia(self, clave: str, nombre: str, x: float, y: float):
         if not self.proyecto:
             return
+        self._guardar_estado(self._estado_arrastre)
+        self._estado_arrastre = None
         self._mover_referencia(clave, nombre, x, y)
         pie = self.proyecto.pies[int(clave[1])]
-        self.statusBar().showMessage(f"{pie.nombre}: {NOMBRES[nombre]} movida.", 4000)
+        self.notificar(f"{pie.nombre}: {NOMBRES[nombre]} movida (Ctrl+Z para deshacer).")
         self._actualizar_todo()
 
     def proponer_referencias(self, clave: str):
         if not self.proyecto:
             return
+        self._guardar_estado()
         self.proyecto.proponer_referencias(self.proyecto.pies[int(clave[1])])
         self._actualizar_todo()
 
@@ -581,30 +891,32 @@ class VentanaPrincipal(QMainWindow):
         if not self.proyecto:
             return
         r = self.proyecto.pies[int(clave[1])].recorte
+        self._guardar_estado()
         for k, v in cambios.items():
             setattr(r, k, v)
         self._actualizar_todo()
 
     def _actualizar_todo(self):
-        """Recalcula el molde y redibuja todo (tras cualquier cambio)."""
-        self._mostrar_molde(reiniciar_camara=False)
-        self._redibujar_pies()
+        """Recalcula el molde y redibuja todo (tras cualquier cambio), con un solo redibujo."""
+        with self.visor.lote():
+            self._mostrar_molde(reiniciar_camara=False)
+            self._redibujar_pies()
         self._refrescar_panel()
 
     def borrar_referencias(self, clave: str):
         if not self.proyecto:
             return
         pie = self.proyecto.pies[int(clave[1])]
+        self._guardar_estado()
         pie.referencias.puntos.clear()
         self._actualizar_todo()
 
     def intercambiar_lados(self):
         if not self.proyecto:
             return
+        self._guardar_estado("lados")
         self.proyecto.intercambiar_lados()
-        self._mostrar_molde(reiniciar_camara=False)
-        self._redibujar_pies()
-        self._refrescar_panel()
+        self._actualizar_todo()
 
     def _redibujar_pies(self):
         for clave in ("p0", "p1"):
@@ -665,6 +977,8 @@ class VentanaPrincipal(QMainWindow):
             self.abrir(ruta)
 
     def closeEvent(self, evento):
+        self.ajustes.setValue("geometria", self.saveGeometry())
+        self.ajustes.setValue("division", self.division.saveState())
         # Si se está procesando un escaneo en segundo plano, esperar a que acabe antes de cerrar.
         for hilo, _ in list(self._hilos):
             if hilo.isRunning():
@@ -686,7 +1000,7 @@ class VentanaPrincipal(QMainWindow):
             return
         t = self.abrir_tirada()
         t.anadir_abierto()
-        self.statusBar().showMessage("Molde añadido a la tirada de CNC.", 4000)
+        self.notificar("Molde añadido a la tirada de CNC.", "bien")
 
     # ---------------------------------------------------------------- exportar
 
