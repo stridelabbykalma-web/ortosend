@@ -197,3 +197,15 @@ def test_mapa_de_la_tirada(tirada, tmp_path):
             assert f.dedos[1] > 0.9  # los dedos hacia +Y si no se ha girado
     png, pdf = mapa.guardar(tirada, tmp_path / "TIRADA", "TIRADA", 25)
     assert png.stat().st_size > 20000 and pdf.read_bytes().startswith(b"%PDF")
+
+
+def test_vista_previa_igual_que_el_nc(piezas_sinteticas, cfg):
+    """La vista previa coloca y numera los pies igual que quedarán en el .nc."""
+    piezas = piezas_sinteticas("A") + piezas_sinteticas("B")
+    previa = cnc.previsualizar(piezas, 600, 500, 40, 1.0, 12.5, cfg)
+    assert previa.previa and previa.gcode == "" and len(previa.fichas) == 4
+    antes = [(f.numero, f.nombre, f.x, f.y) for f in previa.fichas]
+    t = cnc.generar(piezas, 600, 500, 40, 1.0, 12.5, cfg, colocar_antes=False)
+    assert [(f.numero, f.nombre, f.x, f.y) for f in t.fichas] == antes
+    from ortomolde import mapa
+    assert mapa.png(previa, "PRUEBA", 25, dpi=50, resaltar=2).startswith(b"\x89PNG")

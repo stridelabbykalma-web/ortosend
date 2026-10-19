@@ -136,8 +136,15 @@ def test_ventana_tirada(stl_sintetico, tmp_path):
     t = v.tirada
     t.anadir_abierto()  # dos veces el mismo paciente: 4 pies
     assert t.lista.count() == 4
+    # Vista previa al momento, con los pies numerados antes de calcular nada.
+    assert t.previa is not None and t.trabajo is None and not t.boton_guardar.isEnabled()
+    numeros = sorted(int(t.lista.item(k).text().split(".")[0]) for k in range(4))
+    assert numeros == [1, 2, 3, 4]
+    previa = [(f.numero, f.x, f.y) for f in t.previa.fichas]
+    t.lista.setCurrentRow(1)  # resaltar uno no rompe nada
     t.calcular(esperar=True)
     assert t.trabajo is not None and len(t.trabajo.piezas) == 4
+    assert [(f.numero, f.x, f.y) for f in t.trabajo.fichas] == previa  # misma colocación que la vista previa
     t._silencio = True
     t.guardar(str(tmp_path / "TIRADA.nc"))
     assert (tmp_path / "TIRADA.nc").read_text().startswith("(Rectificador")

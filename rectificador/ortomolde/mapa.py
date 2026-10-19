@@ -33,8 +33,11 @@ def _partes(nombre: str) -> tuple[str, str]:
     return nombre, ""
 
 
-def figura(trabajo: TrabajoCNC, titulo: str = "", fresa: float | None = None) -> Figure:
-    """Hoja apaisada (A4) con la plancha a la izquierda y la tabla de pies a la derecha."""
+def figura(trabajo: TrabajoCNC, titulo: str = "", fresa: float | None = None,
+           resaltar: int | None = None) -> Figure:
+    """Hoja apaisada (A4) con la plancha a la izquierda y la tabla de pies a la derecha.
+
+    `resaltar`: número del pie que se marca (el seleccionado en la lista de la ventana)."""
     ancho, largo, alto = trabajo.plancha
     paso = trabajo.paso
     fig = Figure(figsize=(11.69, 8.27), dpi=110)  # A4 apaisado
@@ -51,7 +54,10 @@ def figura(trabajo: TrabajoCNC, titulo: str = "", fresa: float | None = None) ->
     for f in trabajo.fichas:
         color = COLORES[(f.numero - 1) % len(COLORES)]
         if f.contorno is not None:
-            ax.plot(f.contorno[:, 0], f.contorno[:, 1], color=NARANJA, lw=1.2, zorder=3)
+            ax.plot(f.contorno[:, 0], f.contorno[:, 1], color=NARANJA, lw=1.2, zorder=3,
+                    ls="--" if trabajo.previa else "-")
+            if f.numero == resaltar:
+                ax.plot(f.contorno[:, 0], f.contorno[:, 1], color=color, lw=5, alpha=0.6, zorder=3)
         cx, cy = (f.x[0] + f.x[1]) / 2, (f.y[0] + f.y[1]) / 2
         # Flecha talón → dedos.
         dx, dy = f.dedos
@@ -91,10 +97,13 @@ def figura(trabajo: TrabajoCNC, titulo: str = "", fresa: float | None = None) ->
 
     # Cabecera.
     tit = titulo or "Tirada de CNC"
-    fig.text(0.06, 0.955, f"MAPA DE LA PLANCHA – {tit}", fontsize=15, fontweight="bold")
+    fig.text(0.06, 0.955, ("VISTA PREVIA – " if trabajo.previa else "MAPA DE LA PLANCHA – ") + tit,
+             fontsize=15, fontweight="bold", color="#b35900" if trabajo.previa else "black")
     fresa_txt = f"fresa de bola Ø{fresa:g} mm · " if fresa else ""
+    tiempo_txt = ("todavía sin calcular las trayectorias" if trabajo.previa
+                  else f"tiempo estimado {trabajo.tiempo_min:.0f} min")
     fig.text(0.06, 0.925, f"Plancha {ancho:.0f} × {largo:.0f} × {alto:.0f} mm · {fresa_txt}"
-                          f"{len(trabajo.fichas)} pie(s) · tiempo estimado {trabajo.tiempo_min:.0f} min · "
+                          f"{len(trabajo.fichas)} pie(s) · {tiempo_txt} · "
                           f"{datetime.now():%d/%m/%Y %H:%M}", fontsize=9, color="#444444")
 
     # Tabla de la derecha.
@@ -114,7 +123,7 @@ def figura(trabajo: TrabajoCNC, titulo: str = "", fresa: float | None = None) ->
         color = COLORES[(f.numero - 1) % len(COLORES)]
         molde, pie = _partes(f.nombre)
         valores = [str(f.numero), molde[:14], pie, f"{f.x[0]:.0f}–{f.x[1]:.0f}", f"{f.y[0]:.0f}–{f.y[1]:.0f}",
-                   f"{f.alto:.0f}", f"{f.tiempo_min:.0f}"]
+                   f"{f.alto:.0f}", "–" if np.isnan(f.tiempo_min) else f"{f.tiempo_min:.0f}"]
         for k, (c, t) in enumerate(zip(cols, valores)):
             fig.text(tx + c, y, t, fontsize=8, color=color if k == 0 else "#222222",
                      fontweight="bold" if k < 2 else "normal")
@@ -126,7 +135,8 @@ def figura(trabajo: TrabajoCNC, titulo: str = "", fresa: float | None = None) ->
     y = min(y - 0.06, 0.36)
     notas = [
         ("●", ROJO, "Origen: X0 Y0 en la esquina delantera izquierda; Z0 en la cara de arriba."),
-        ("━", NARANJA, "Recorrido de la fresa alrededor de cada pie (contorno)."),
+        ("━", NARANJA, "Recorrido de la fresa alrededor de cada pie (contorno)"
+                       + (", aproximado hasta calcular." if trabajo.previa else ".")),
         ("➜", COLORES[0], "Flecha: del talón hacia los dedos."),
         ("■", "#5a5a5a", "Gris: escayola que se fresa (más oscuro = más hondo)."),
         ("□", "#333333", "Blanco: escayola que no se toca."),
@@ -153,9 +163,10 @@ def _linea(fig, x, y, w):
     return Line2D([x, x + w], [y, y], transform=fig.transFigure, color="#888888", lw=0.8)
 
 
-def png(trabajo: TrabajoCNC, titulo: str = "", fresa: float | None = None, dpi: int = 110) -> bytes:
+def png(trabajo: TrabajoCNC, titulo: str = "", fresa: float | None = None, dpi: int = 110,
+        resaltar: int | None = None) -> bytes:
     """El mapa como imagen PNG (para verlo en la ventana)."""
-    fig = figura(trabajo, titulo, fresa)
+    fig = figura(trabajo, titulo, fresa, resaltar)
     FigureCanvasAgg(fig)
     buf = io.BytesIO()
     fig.savefig(buf, format="png", dpi=dpi)

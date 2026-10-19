@@ -50,23 +50,28 @@
 
 1. Con un molde listo: *Archivo → Añadir este molde a la tirada de CNC* (Ctrl+T). Repite con más moldes
    (también puedes añadir moldes ya exportados con «Añadir moldes exportados (STL)…» en la ventana de la tirada).
-2. En la ventana **Tirada de CNC** pon la medida de la plancha de escayola (por defecto 600 × 500 × 40 mm)
-   y pulsa **Colocar y calcular**: coloca los pies lo más juntos posible, dibuja por dónde irá la fresa
-   alrededor de cada pie (línea naranja) y dice el tiempo estimado de cada fase.
-3. **Guardar archivo para la CNC (.nc)…**: copia el `.nc` al USB/tarjeta y lánzalo desde la pantalla de la CNC.
+2. En la ventana **Tirada de CNC** pon la medida de la plancha de escayola (por defecto 600 × 500 × 40 mm).
+   **Al momento** (antes de generar nada) ves la **vista previa**: dónde queda cada molde en la plancha,
+   con su número (el orden en que se fresará), su nombre, su pie y hacia dónde van los dedos. En la lista
+   de la izquierda cada molde lleva el mismo número; si seleccionas uno, se resalta en el mapa.
+   Cada vez que añades o quitas un molde o cambias la plancha, la vista previa se actualiza sola.
+   Si un molde no cabe, sale como «NO CABE».
+3. Si la colocación te parece bien, pulsa **Calcular trayectorias**: genera el recorrido de la fresa con
+   esa misma colocación y numeración y dice el tiempo de cada fase.
+4. **Guardar archivo para la CNC (.nc)…**: copia el `.nc` al USB/tarjeta y lánzalo desde la pantalla de la CNC.
    Junto al `.nc` se guardan:
    - **`NOMBRE_mapa.pdf`** (se abre solo, para imprimirlo) y `NOMBRE_mapa.png`: el **mapa de la plancha**
      visto desde arriba, con cada molde numerado en el orden en que se fresa, su nombre y pie, una flecha
      hacia los dedos, el origen y una tabla con la posición de cada uno en mm. El número es el mismo que
-     «Pieza N» dentro del `.nc`. Es el mismo mapa que se ve en la ventana al pulsar «Colocar y calcular».
+     «Pieza N» dentro del `.nc`. Es el mismo mapa que se ve en la ventana.
    - `NOMBRE.txt`: la hoja de trabajo con lo mismo en texto.
-4. **Fresa**: la de **bola de Ø25 mm** (la misma del ejemplo de Fusion).
-5. **Origen**: X0 Y0 en la **esquina delantera izquierda** de la plancha y Z0 en su **cara de arriba**
+5. **Fresa**: la de **bola de Ø25 mm** (la misma del ejemplo de Fusion).
+6. **Origen**: X0 Y0 en la **esquina delantera izquierda** de la plancha y Z0 en su **cara de arriba**
    (igual que en Fusion). Antes de empezar la fresa sube a Z15.
-6. Lo que hace con cada pie, en este orden (como Fusion):
+7. Lo que hace con cada pie, en este orden (como Fusion):
    **contorno** (rodea la silueta bajando en espiral 3 mm por vuelta), **desbaste** en capas de 5 mm y
    **acabado** en líneas paralelas a X cada 1,75 mm.
-7. **Primera vez: prueba con cuidado** con un solo pie: vigila la primera vuelta del contorno y la primera
+8. **Primera vez: prueba con cuidado** con un solo pie: vigila la primera vuelta del contorno y la primera
    capa del desbaste. Los avances son los del ejemplo de Fusion (`config/taller.toml`, sección `[cnc]`).
 
 Ratón en el visor: girar = arrastrar con el botón izquierdo · desplazar = Mayús + arrastrar · zoom = rueda.

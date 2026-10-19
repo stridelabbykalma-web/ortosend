@@ -467,6 +467,7 @@ class TrabajoCNC:
     contornos: list[np.ndarray] = field(default_factory=list)  # recorridos del contorno (mm)
     punta_pies: np.ndarray | None = None  # punta mínima para no tocar los pies (solo los pies)
     fichas: list["Ficha"] = field(default_factory=list)  # una por pie, en el orden en que se fresan
+    previa: bool = False  # True = solo la colocación (todavía sin trayectorias ni G-code)
     tiempos: dict = field(default_factory=dict)  # minutos por fase
     resumen: dict = field(default_factory=dict)
     avisos: list[str] = field(default_factory=list)
@@ -589,6 +590,54 @@ def _acabado(w: _Escritor, punta, c: _Colocada, paso, H, cfg) -> int:
     return len(filas)
 
 
+def orden_fresado(puestas: list[Pieza], paso: float) -> list[Pieza]:
+    """Orden en que se fresan: de delante a detrás (franjas de 10 cm) y de izquierda a derecha."""
+    return sorted(puestas, key=lambda p: (p.y // max(1, int(100 / paso)), p.x))
+
+
+def previsualizar(piezas: list[Pieza], ancho: float, largo: float, alto: float, paso: float, radio: float,
+                  cfg: dict, colocar_antes: bool = True) -> TrabajoCNC:
+    """Coloca las piezas y prepara el mapa SIN calcular trayectorias (es casi instantáneo).
+
+    La numeración y las posiciones son las mismas que tendrá el .nc si después se llama a
+    `generar(..., colocar_antes=False)`. El contorno que se dibuja es aproximado (a un radio de la silueta)."""
+    a_paso(piezas, paso)
+    sobran = (colocar(piezas, ancho, largo, paso, cfg, radio) if colocar_antes
+              else [p for p in piezas if not p.colocada])
+    puestas = [p for p in piezas if p.colocada]
+    nx, ny = int(round(ancho / paso)) + 1, int(round(largo / paso)) + 1
+    h = np.full((ny, nx), float(alto))
+    zona = np.zeros((ny, nx), bool)
+    tope = cfg.get("rebaje_superior", 0.5)
+    dc = radio + HOLGURA_CONTORNO
+    alcance = int(np.ceil((dc + radio) / paso)) + 2
+    fichas, avisos = [], []
+    for n, p in enumerate(orden_fresado(puestas, paso), 1):
+        hp, sp = p.h_girada(), p.silueta_girada()
+        a, b = sp.shape
+        wy0, wx0 = max(p.y - alcance, 0), max(p.x - alcance, 0)
+        wy1, wx1 = min(p.y + a + alcance, ny), min(p.x + b + alcance, nx)
+        sil = np.zeros((wy1 - wy0, wx1 - wx0), bool)
+        sil[p.y - wy0:p.y - wy0 + a, p.x - wx0:p.x - wx0 + b] = sp
+        d = ndimage.distance_transform_edt(~sil, sampling=paso)
+        suelo = suelo_de(p, alto, cfg)
+        ranura = (d < dc + radio) & ~sil
+        h[wy0:wy1, wx0:wx1][ranura] = suelo
+        zona[wy0:wy1, wx0:wx1] |= ranura | sil
+        h[p.y:p.y + a, p.x:p.x + b][sp] = alto - tope - p.alto + hp[sp]
+        fichas.append(Ficha(n, p, _recorrido(d, dc, wx0, wy0, paso), (p.x * paso, (p.x + b - 1) * paso),
+                            (p.y * paso, (p.y + a - 1) * paso), p.alto, suelo, float("nan"), _hacia_dedos(p)))
+        if p.alto > alto - tope:
+            avisos.append(f"{p.nombre} mide {p.alto:.1f} mm de alto: no cabe en una plancha de {alto:.0f} mm.")
+    if sobran:
+        avisos.append(f"No caben {len(sobran)} pieza(s): " + ", ".join(p.nombre for p in sobran)
+                      + ". Usa otra plancha o hazlas en otra tirada.")
+    return TrabajoCNC(gcode="", plancha=(ancho, largo, float(alto)), tiempo_min=float("nan"), piezas=puestas,
+                      sobran=sobran, altura=h, punta=h, zona=zona, paso=paso,
+                      contornos=[f.contorno for f in fichas if f.contorno is not None], fichas=fichas,
+                      avisos=avisos, previa=True)
+
+
 def generar(piezas: list[Pieza], ancho: float, largo: float, alto: float, paso: float,
             radio: float, cfg: dict, colocar_antes: bool = True) -> TrabajoCNC:
     """Coloca las piezas en la plancha y genera el G-code de toda la tirada."""
@@ -621,8 +670,8 @@ def generar(piezas: list[Pieza], ancho: float, largo: float, alto: float, paso: 
         "T1", f"S{cfg['revoluciones']:.0f} M3", "G4 P3", "G17 G90 G94", "G54",
         f"G0 Z{zseg:g}",
     ]
-    # Orden: de delante a detrás y de izquierda a derecha (menos recorrido en vacío).
-    orden = sorted(colocadas, key=lambda c: (c.pieza.y // max(1, int(100 / paso)), c.pieza.x))
+    numero = {id(p): n for n, p in enumerate(orden_fresado(puestas, paso))}
+    orden = sorted(colocadas, key=lambda c: numero[id(c.pieza)])
     tiempos = {"contorno": 0.0, "desbaste": 0.0, "acabado": 0.0, "movimientos": 0.0}
     capas = lineas = vueltas = 0
     fichas = []
