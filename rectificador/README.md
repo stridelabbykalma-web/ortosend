@@ -108,6 +108,9 @@ Fusion del taller (`molde_yeso.nc`), con la fresa de **bola Ø25 mm**:
      la pared vertical, sin base plana alrededor; el resto de la plancha no se toca.
   2. **Desbaste** dentro de la silueta en capas de 5 mm, dejando 0,5 mm.
   3. **Acabado** en líneas paralelas a X cada 1,75 mm (crestas de 0,03 mm).
+- Junto al `.nc` se guarda el **mapa de la plancha** (`NOMBRE_mapa.pdf` para imprimir y `.png`): cada molde
+  numerado en el orden en que se fresa (= «Pieza N» del `.nc`), nombre, pie, hacia dónde van los dedos,
+  posición en mm y origen.
 - Avances del ejemplo de Fusion: 2500 mm/min cortando, 1500 entrando, 800 bajando, 3000 en el acabado,
   10 000 rpm. Todo se puede cambiar en `config/taller.toml`, sección `[cnc]`.
 

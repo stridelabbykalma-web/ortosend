@@ -54,7 +54,12 @@
    y pulsa **Colocar y calcular**: coloca los pies lo más juntos posible, dibuja por dónde irá la fresa
    alrededor de cada pie (línea naranja) y dice el tiempo estimado de cada fase.
 3. **Guardar archivo para la CNC (.nc)…**: copia el `.nc` al USB/tarjeta y lánzalo desde la pantalla de la CNC.
-   Junto al `.nc` se guardan un `.png` con la colocación y un `.txt` con la hoja de trabajo.
+   Junto al `.nc` se guardan:
+   - **`NOMBRE_mapa.pdf`** (se abre solo, para imprimirlo) y `NOMBRE_mapa.png`: el **mapa de la plancha**
+     visto desde arriba, con cada molde numerado en el orden en que se fresa, su nombre y pie, una flecha
+     hacia los dedos, el origen y una tabla con la posición de cada uno en mm. El número es el mismo que
+     «Pieza N» dentro del `.nc`. Es el mismo mapa que se ve en la ventana al pulsar «Colocar y calcular».
+   - `NOMBRE.txt`: la hoja de trabajo con lo mismo en texto.
 4. **Fresa**: la de **bola de Ø25 mm** (la misma del ejemplo de Fusion).
 5. **Origen**: X0 Y0 en la **esquina delantera izquierda** de la plancha y Z0 en su **cara de arriba**
    (igual que en Fusion). Antes de empezar la fresa sube a Z15.

@@ -182,3 +182,18 @@ def test_piezas_de_un_molde_exportado(tmp_path, stl_sintetico, taller):
     campo_a_malla(p.calcular()).export(ruta)
     piezas = piezas_de_archivo(str(ruta), {**taller, "calculo": {"rejilla": 1.0}})
     assert len(piezas) == 2 and all(q.nombre.startswith("PACIENTE") for q in piezas)
+
+
+def test_mapa_de_la_tirada(tirada, tmp_path):
+    from ortomolde import mapa
+
+    # Una ficha por pie, numeradas en el mismo orden que «Pieza N» del .nc.
+    assert [f.numero for f in tirada.fichas] == [1, 2, 3, 4]
+    for f in tirada.fichas:
+        assert f"(Pieza {f.numero}: {cnc.texto_cnc(f.nombre)}" in tirada.gcode
+        assert 0 <= f.x[0] < f.x[1] <= 600 and 0 <= f.y[0] < f.y[1] <= 500
+        assert abs(np.hypot(*f.dedos) - 1) < 1e-6
+        if f.pieza.giro == 0:
+            assert f.dedos[1] > 0.9  # los dedos hacia +Y si no se ha girado
+    png, pdf = mapa.guardar(tirada, tmp_path / "TIRADA", "TIRADA", 25)
+    assert png.stat().st_size > 20000 and pdf.read_bytes().startswith(b"%PDF")

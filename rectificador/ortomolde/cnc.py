@@ -424,6 +424,36 @@ class _Escritor:
 
 
 @dataclass
+class Ficha:
+    """Datos de un pie de la tirada para el mapa y la hoja de trabajo (mm)."""
+    numero: int  # orden en que se fresa (= «Pieza N» en el .nc)
+    pieza: Pieza
+    contorno: np.ndarray | None
+    x: tuple[float, float]  # de dónde a dónde ocupa el pie en X
+    y: tuple[float, float]
+    alto: float
+    suelo: float
+    tiempo_min: float
+    dedos: tuple[float, float]  # dirección (X, Y) del talón a los dedos en la plancha
+
+    @property
+    def nombre(self) -> str:
+        return self.pieza.nombre
+
+
+def _hacia_dedos(p: Pieza) -> tuple[float, float]:
+    """Hacia dónde quedan los dedos en la plancha (los pies llegan con los dedos hacia +Y)."""
+    marca = np.zeros(p.h.shape)
+    marca[-1, :] = 1.0  # fila de los dedos (Y más grande)
+    m = np.rot90(marca, k=p.giro)
+    jj, ii = np.nonzero(m)
+    ny, nx = m.shape
+    v = np.array([ii.mean() - (nx - 1) / 2, jj.mean() - (ny - 1) / 2])
+    v = v / max(np.linalg.norm(v), 1e-9)
+    return float(v[0]), float(v[1])
+
+
+@dataclass
 class TrabajoCNC:
     gcode: str
     plancha: tuple[float, float, float]  # ancho X, largo Y, alto Z (mm)
@@ -436,6 +466,7 @@ class TrabajoCNC:
     paso: float
     contornos: list[np.ndarray] = field(default_factory=list)  # recorridos del contorno (mm)
     punta_pies: np.ndarray | None = None  # punta mínima para no tocar los pies (solo los pies)
+    fichas: list["Ficha"] = field(default_factory=list)  # una por pie, en el orden en que se fresan
     tiempos: dict = field(default_factory=dict)  # minutos por fase
     resumen: dict = field(default_factory=dict)
     avisos: list[str] = field(default_factory=list)
@@ -594,9 +625,11 @@ def generar(piezas: list[Pieza], ancho: float, largo: float, alto: float, paso: 
     orden = sorted(colocadas, key=lambda c: (c.pieza.y // max(1, int(100 / paso)), c.pieza.x))
     tiempos = {"contorno": 0.0, "desbaste": 0.0, "acabado": 0.0, "movimientos": 0.0}
     capas = lineas = vueltas = 0
+    fichas = []
     for n, c in enumerate(orden, 1):
         p = c.pieza
         a, b = p.forma()
+        t_pieza = w.tiempo
         w.lineas.append(comentario(f"Pieza {n}: {p.nombre} - X {p.x * paso:.0f}-{(p.x + b - 1) * paso:.0f}, "
                                    f"Y {p.y * paso:.0f}-{(p.y + a - 1) * paso:.0f}"))
         t0 = w.tiempo
@@ -615,6 +648,8 @@ def generar(piezas: list[Pieza], ancho: float, largo: float, alto: float, paso: 
         t0 = w.tiempo
         w.rapido(z=zseg)
         tiempos["movimientos"] += w.tiempo - t0
+        fichas.append(Ficha(n, p, c.contorno, (p.x * paso, (p.x + b - 1) * paso), (p.y * paso, (p.y + a - 1) * paso),
+                            p.alto, c.suelo, w.tiempo - t_pieza, _hacia_dedos(p)))
     w.rapido(z=zseg)
     w.rapido(x=0.0, y=0.0)
     w.lineas += ["M5", "M30"]
@@ -623,7 +658,7 @@ def generar(piezas: list[Pieza], ancho: float, largo: float, alto: float, paso: 
         gcode="\n".join(w.lineas) + "\n", plancha=(ancho, largo, H), tiempo_min=w.tiempo,
         piezas=puestas, sobran=sobran, altura=h, punta=punta, zona=zona, paso=paso,
         contornos=[c.contorno for c in colocadas if c.contorno is not None], tiempos=tiempos,
-        punta_pies=punta_pies,
+        punta_pies=punta_pies, fichas=fichas,
         resumen={"capas_desbaste": capas, "lineas_acabado": lineas, "vueltas_contorno": vueltas,
                  "z_minima": w.z_min},
         avisos=avisos,

@@ -5,15 +5,14 @@ from __future__ import annotations
 import traceback
 from pathlib import Path
 
-import numpy as np
-from PySide6.QtCore import QObject, QPointF, QRectF, Qt, QThread, Signal
-from PySide6.QtGui import QColor, QFont, QImage, QPainter, QPen, QPixmap
+from PySide6.QtCore import QObject, Qt, QThread, QUrl, Signal
+from PySide6.QtGui import QDesktopServices, QPixmap
 from PySide6.QtWidgets import (
     QDialog, QDoubleSpinBox, QFileDialog, QFormLayout, QHBoxLayout, QLabel, QListWidget,
     QMessageBox, QPushButton, QVBoxLayout,
 )
 
-from ortomolde import cnc
+from ortomolde import cnc, mapa
 from ortomolde.campo import malla_a_campo
 from ortomolde.entrada import cargar_malla
 from ortomolde.pies import detectar_pies
@@ -62,37 +61,11 @@ class _Calculo(QObject):
             self.fallo.emit(str(e))
 
 
-def dibujo_plancha(trabajo: cnc.TrabajoCNC, ancho_px: int = 640) -> QPixmap:
-    """Vista desde arriba de la plancha: altura en grises, piezas recuadradas y con su nombre.
-    Abajo a la izquierda, el origen (X0 Y0)."""
-    h = trabajo.altura
-    H = trabajo.plancha[2]
-    gris = np.clip(255 * (0.25 + 0.75 * h / max(H, 1)), 0, 255).astype(np.uint8)
-    gris = np.ascontiguousarray(gris[::-1])  # Y hacia arriba en pantalla
-    ny, nx = gris.shape
-    img = QImage(gris.data, nx, ny, nx, QImage.Format_Grayscale8).copy()
-    escala = ancho_px / nx
-    pm = QPixmap(ancho_px, int(ny * escala) + 22)
-    pm.fill(QColor("#2b2d31"))
-    p = QPainter(pm)
-    p.drawImage(QRectF(0, 0, ancho_px, ny * escala), img)
-    p.setFont(QFont("Sans", 9))
-    p.setPen(QPen(QColor("#ff9f43"), 2))
-    for c in trabajo.contornos:  # recorrido de la fresa alrededor de cada pie
-        e = escala / trabajo.paso
-        p.drawPolyline([QPointF(x * e, (ny - 1 - y / trabajo.paso) * escala) for x, y in c])
-    for pieza in trabajo.piezas:
-        a, b = pieza.forma()
-        r = QRectF(pieza.x * escala, (ny - pieza.y - a) * escala, b * escala, a * escala)
-        p.setPen(QColor("#ff9f43"))
-        p.drawText(r.adjusted(4, 4, -4, -4), Qt.AlignBottom | Qt.AlignHCenter | Qt.TextWordWrap, pieza.nombre)
-    p.setPen(QPen(QColor("#e4572e"), 3))
-    o = QPointF(0, ny * escala)
-    p.drawEllipse(o, 6, 6)
-    p.setPen(QColor("white"))
-    p.drawText(QPointF(8, ny * escala + 16), "Origen X0 Y0 (esquina delantera izquierda, Z0 arriba)")
-    p.end()
-    return pm
+def dibujo_plancha(trabajo: cnc.TrabajoCNC, ancho_px: int = 860, titulo: str = "", fresa=None) -> QPixmap:
+    """El mismo mapa que se guarda junto al .nc, para verlo en la ventana."""
+    pm = QPixmap()
+    pm.loadFromData(mapa.png(trabajo, titulo, fresa, dpi=90))
+    return pm.scaledToWidth(ancho_px, Qt.SmoothTransformation)
 
 
 def _fases(trabajo: cnc.TrabajoCNC) -> str:
@@ -248,7 +221,8 @@ class VentanaTirada(QDialog):
         self.boton_calcular.setEnabled(True)
         self.trabajo = trabajo
         self.boton_guardar.setEnabled(True)
-        self.vista.setPixmap(dibujo_plancha(trabajo, 660))
+        self.vista.setPixmap(dibujo_plancha(trabajo, max(self.vista.width() - 10, 600),
+                                            fresa=self.taller["fresa"]["diametro"]))
         a, l, h = trabajo.plancha
         texto = (f"<b>{len(trabajo.piezas)} pie(s) colocados</b> en la plancha de {a:.0f} × {l:.0f} × {h:.0f} mm "
                  f"(ocupan el {100 * trabajo.aprovechamiento:.0f} %). "
@@ -283,17 +257,18 @@ class VentanaTirada(QDialog):
             f"Fresa: punta de bola de {self.taller['fresa']['diametro']:.0f} mm.",
             f"Tiempo estimado: {self.trabajo.tiempo_min:.0f} min ({_fases(self.trabajo)})",
             "Por cada pie: 1) contorno de la silueta, 2) desbaste por capas, 3) acabado en lineas paralelas a X.",
-            "", "Piezas:",
+            "", "Pies, en el orden en que se fresan (el numero es el del mapa y el de «Pieza N» del .nc):",
         ]
-        paso = self.trabajo.paso
-        for p in sorted(self.trabajo.piezas, key=lambda q: (q.y, q.x)):
-            ny, nx = p.forma()
-            lineas.append(f"  - {p.nombre}: X {p.x * paso:.0f}-{(p.x + nx) * paso:.0f} mm, "
-                          f"Y {p.y * paso:.0f}-{(p.y + ny) * paso:.0f} mm" + (f", girado {90 * p.giro}°" if p.giro else ""))
+        for f in self.trabajo.fichas:
+            lineas.append(f"  {f.numero}. {f.nombre}: X {f.x[0]:.0f}-{f.x[1]:.0f} mm, Y {f.y[0]:.0f}-{f.y[1]:.0f} mm, "
+                          f"alto {f.alto:.0f} mm, {f.tiempo_min:.0f} min"
+                          + (f", girado {90 * f.pieza.giro}°" if f.pieza.giro else ""))
         for av in self.trabajo.avisos:
             lineas.append("AVISO: " + av)
         hoja.write_text("\n".join(lineas) + "\n", encoding="utf-8")
-        dibujo_plancha(self.trabajo, 900).save(str(ruta.with_suffix(".png")))
+        png, pdf = mapa.guardar(self.trabajo, ruta, ruta.stem.upper(), self.taller["fresa"]["diametro"])
         if not getattr(self, "_silencio", False):
-            QMessageBox.information(self, "Guardado", f"Archivos guardados:\n{ruta}\n{hoja}\n{ruta.with_suffix('.png')}"
-                                    "\n\nCopia el .nc al USB/tarjeta de la CNC.")
+            QDesktopServices.openUrl(QUrl.fromLocalFile(str(pdf)))  # el mapa, para verlo o imprimirlo
+            QMessageBox.information(self, "Guardado", f"Archivos guardados:\n{ruta}\n{hoja}\n{png}\n{pdf}"
+                                    "\n\nCopia el .nc al USB/tarjeta de la CNC.\n"
+                                    "Imprime el mapa (PDF) para saber qué molde es cada uno en la plancha.")
