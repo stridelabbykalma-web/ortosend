@@ -14,8 +14,13 @@ set "ENTORNO=%LOCALAPPDATA%\RectificadorOrtosend\entorno"
 set "LOG=%LOCALAPPDATA%\RectificadorOrtosend\instalacion.log"
 set "PYV=%ENTORNO%\Scripts\python.exe"
 
-rem Ya instalado: abrir directamente.
-if exist "%ENTORNO%\instalado.ok" goto lanzar
+rem Ya instalado (y con la misma lista de requisitos): abrir directamente.
+set "HUELLA="
+for /f "delims=" %%h in ('certutil -hashfile "requirements.txt" SHA256 ^| findstr /v ":"') do set "HUELLA=%%h"
+if defined HUELLA set "HUELLA=%HUELLA: =%"
+set "INSTALADA="
+if exist "%ENTORNO%\requisitos.sha" set /p INSTALADA=<"%ENTORNO%\requisitos.sha"
+if exist "%ENTORNO%\instalado.ok" if "%INSTALADA%"=="%HUELLA%" goto lanzar
 
 rem Buscar Python. Primero versiones probadas (3.13, 3.12, 3.11) con el lanzador "py";
 rem si no, cualquier Python 3 que haya.
@@ -54,10 +59,12 @@ echo [2/2] Descargando e instalando lo necesario (lo mas largo)...
 "%PYV%" -m pip install -r requirements.txt >> "%LOG%" 2>&1
 if errorlevel 1 goto error
 echo ok > "%ENTORNO%\instalado.ok"
+> "%ENTORNO%\requisitos.sha" echo %HUELLA%
 echo Listo.
 
 :lanzar
 echo Abriendo el rectificador... (no cierres esta ventana mientras lo uses)
+echo Consejo: con instalar.bat se crea un icono en el Escritorio que lo abre sin esta ventana.
 "%PYV%" -m interfaz.principal %*
 if errorlevel 1 (
     echo.

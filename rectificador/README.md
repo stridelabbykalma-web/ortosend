@@ -58,9 +58,10 @@ También acepta un recuadro ya limpio (lo detecta solo).
 | 1b | Limpieza del escaneo en bruto | ✅ hecho (probado con escaneo sintético; falta uno real) |
 | 2 | Ventana con visor 3D: pies, izquierdo/derecho, marcar 3 referencias con clic | ✅ hecho (probado con escaneo real) |
 | 3 | Recorte en arco por delante de las cabezas metatarsales | ✅ hecho (probado con escaneo real, referencias propuestas) |
-| 4 | Piezas: relleno de arco, oliva, descarga 1.er MTT, skive medial | pendiente |
-| 5 | Edición interactiva de piezas, deshacer/rehacer | pendiente |
-| 6 | Comprobación de la fresa, corte transversal, prueba con STL real | pendiente |
+| 4 | Piezas: relleno de arco (rebajar/subir), oliva, barra metatarsal, descarga 1.er MTT, skive medial | ✅ hecho (valores por defecto del podólogo; falta probarlas en un molde real) |
+| 5 | Edición interactiva de piezas (arrastrar en 3D), deshacer/rehacer, guardar trabajo (.molde) | ✅ hecho |
+| 6 | Comprobación de la fresa (dónde no llega la bola), prueba en vacío | ✅ hecho (falta la 1.ª prueba en la CNC) |
+| — | Instalador de Windows con accesos directos y aviso de versiones nuevas | ✅ hecho (falta probarlo en Windows) |
 | CNC | Salida directa para la CNC (G-code), varios moldes en una plancha, estrategia y formato del ejemplo de Fusion (bola Ø25: contorno + desbaste en capas de 5 mm + acabado paralelo cada 1,75 mm) | ✅ hecho (falta la 1.ª prueba en la máquina) |
 
 ## Instalar en Windows (una sola vez)

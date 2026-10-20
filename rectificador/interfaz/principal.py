@@ -355,8 +355,11 @@ class PanelPie(QFrame):
 
 
 class VentanaPrincipal(QMainWindow):
+    _aviso_version = Signal(str, bool)  # (versión publicada o "", en silencio)
+
     def __init__(self):
         super().__init__()
+        self._aviso_version.connect(self._resultado_version)
         self.setWindowTitle("Rectificador de moldes – Ortosend")
         self.resize(1400, 850)
         self.ajustes = QSettings("Ortosend", "Rectificador")
@@ -951,6 +954,8 @@ class VentanaPrincipal(QMainWindow):
         accion("guia", "Guía rápida", self.guia_rapida, QKeySequence.HelpContents, "ayuda", ayuda)
         accion("atajos", "Atajos de teclado y ratón", self.ver_atajos, None, "teclado", ayuda)
         ayuda.addSeparator()
+        accion("actualizar", "Buscar actualizaciones…", lambda: self.buscar_actualizaciones(), None, "reciente", ayuda)
+        ayuda.addSeparator()
         accion("acerca", "Acerca del rectificador", self.acerca_de, None, "info", ayuda)
 
     # ---------------------------------------------------------------- ayuda
@@ -1011,9 +1016,60 @@ varios moldes en una plancha (arrastrándolos), calculas y guardas el <b>.nc</b>
         tabla = "".join(f"<tr><td style='padding:5px 14px 5px 0'><b>{a}</b></td><td>{b}</td></tr>" for a, b in filas)
         self._dialogo_texto("Atajos", f"<h2>Atajos de teclado y ratón</h2><table>{tabla}</table>")
 
+    def buscar_actualizaciones(self, silencio: bool = False):
+        """Mira si hay una versión nueva publicada. Con `silencio` (al arrancar) solo avisa si la hay, una
+        vez al día como mucho, y sin parar el programa mientras pregunta."""
+        import threading
+        from datetime import date
+
+        from ortomolde import __version__
+
+        if silencio:
+            if self.ajustes.value("ultima_busqueda", "") == date.today().isoformat():
+                return
+            self.ajustes.setValue("ultima_busqueda", date.today().isoformat())
+
+        def preguntar():
+            nueva = version_publicada()
+            self._aviso_version.emit(nueva or "", silencio)
+
+        if not hasattr(self, "_aviso_version"):
+            return
+        if silencio:
+            threading.Thread(target=preguntar, daemon=True).start()
+        else:
+            QApplication.setOverrideCursor(Qt.WaitCursor)
+            try:
+                preguntar()
+            finally:
+                QApplication.restoreOverrideCursor()
+
+    def _resultado_version(self, nueva: str, silencio: bool):
+        from PySide6.QtCore import QUrl
+        from PySide6.QtGui import QDesktopServices
+
+        from ortomolde import __version__
+
+        if not nueva:
+            if not silencio:
+                QMessageBox.information(self, "Actualizaciones", "No he podido comprobarlo (¿hay internet?).")
+            return
+        if _version(nueva) <= _version(__version__):
+            if not silencio:
+                QMessageBox.information(self, "Actualizaciones", f"Tienes la última versión ({__version__}).")
+            return
+        r = QMessageBox.question(
+            self, "Hay una versión nueva",
+            f"Hay una versión nueva del rectificador: <b>{nueva}</b> (tienes la {__version__}).<br><br>"
+            "¿Descargarla ahora? Cuando termine, descomprime el ZIP, entra en la carpeta <b>rectificador</b> y "
+            "haz doble clic en <b>instalar.bat</b>. Tus trabajos guardados no se tocan.")
+        if r == QMessageBox.Yes:
+            QDesktopServices.openUrl(QUrl(URL_DESCARGA))
+
     def acerca_de(self):
         self._dialogo_texto("Acerca de", f"""
 <h2>Rectificador de moldes · Ortosend</h2>
+<p style='color:{C["secundario"]}'>Versión {__import__("ortomolde").__version__}</p>
 <p>Limpia el escaneo del Revopoint, lija el molde, marca las referencias del pie, recorta en arco por
 delante de las cabezas metatarsales y genera el archivo para la CNC.</p>
 <p style='color:{C["secundario"]}'>Datos del taller: <code>config/taller.toml</code> ·
@@ -1419,13 +1475,64 @@ valores clínicos: <code>config/valores_clinicos.toml</code></p>""")
             f"= {f[0] / escala:.0f} × {f[1] / escala:.0f} × {f[2] / escala:.1f} mm.")
 
 
+CARPETA_DATOS = Path.home() / "AppData" / "Local" / "RectificadorOrtosend"
+REPOSITORIO = "stridelabbykalma-web/ortosend"
+RAMA = "claude/rectificador-moldes"
+URL_VERSION = f"https://raw.githubusercontent.com/{REPOSITORIO}/{RAMA}/rectificador/VERSION"
+URL_DESCARGA = f"https://github.com/{REPOSITORIO}/archive/refs/heads/{RAMA}.zip"
+
+
+def _version(texto: str) -> tuple:
+    return tuple(int(p) for p in texto.strip().split(".") if p.isdigit())
+
+
+def version_publicada(espera: float = 6.0) -> str | None:
+    """La última versión publicada (o None si no hay internet)."""
+    import urllib.request
+
+    try:
+        with urllib.request.urlopen(URL_VERSION, timeout=espera) as r:
+            return r.read().decode("utf-8").strip()
+    except Exception:  # noqa: BLE001 - sin internet no pasa nada
+        return None
+
+
+def _registro_de_errores():
+    """Sin ventana negra (pythonw) no hay dónde escribir los errores: van a un archivo, y si el programa
+    falla se avisa con un mensaje."""
+    from datetime import datetime
+
+    CARPETA_DATOS.mkdir(parents=True, exist_ok=True)
+    ruta = CARPETA_DATOS / "errores.log"
+    if sys.stdout is None or sys.stderr is None:
+        archivo = open(ruta, "a", encoding="utf-8", buffering=1)  # noqa: SIM115 - abierto mientras dure
+        sys.stdout = sys.stdout or archivo
+        sys.stderr = sys.stderr or archivo
+
+    def al_fallar(tipo, valor, pila):
+        texto = "".join(traceback.format_exception(tipo, valor, pila))
+        with open(ruta, "a", encoding="utf-8") as f:
+            f.write(f"\n--- {datetime.now():%Y-%m-%d %H:%M:%S} ---\n{texto}")
+        try:
+            QMessageBox.critical(None, "Error inesperado",
+                                 f"Ha ocurrido un error:\n\n{valor}\n\nSe ha apuntado en:\n{ruta}\n"
+                                 "Si se repite, manda ese archivo.")
+        except Exception:  # noqa: BLE001
+            pass
+
+    sys.excepthook = al_fallar
+
+
 def main():
+    _registro_de_errores()
     app = QApplication(sys.argv)
+    app.setApplicationName("Rectificador Ortosend")
     estilo.aplicar(app)
     ventana = VentanaPrincipal()
     ventana.show()
     if len(sys.argv) > 1:
         ventana.abrir(sys.argv[1])
+    ventana.buscar_actualizaciones(silencio=True)
     sys.exit(app.exec())
 
 

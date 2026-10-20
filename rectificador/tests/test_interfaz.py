@@ -362,3 +362,25 @@ def test_seguridad_cnc_en_la_ventana(stl_sintetico, tmp_path):
     t.caja_margen.setValue(0)
     t.close()
     v.close()
+
+
+def test_version_y_actualizaciones(monkeypatch):
+    from pathlib import Path
+
+    from PySide6.QtWidgets import QApplication, QMessageBox
+
+    import interfaz.principal as principal
+    from ortomolde import __version__
+
+    assert (Path(principal.__file__).resolve().parent.parent / "VERSION").read_text().strip() == __version__
+    assert principal._version("0.10.0") > principal._version("0.9.3")
+    app = QApplication.instance() or QApplication([])
+    v = principal.VentanaPrincipal()
+    preguntas = []
+    monkeypatch.setattr(QMessageBox, "question", lambda *a, **k: preguntas.append(a[2]) or QMessageBox.No)
+    monkeypatch.setattr(QMessageBox, "information", lambda *a, **k: preguntas.append("info"))
+    v._resultado_version("99.0.0", True)
+    assert preguntas and "99.0.0" in preguntas[-1]
+    v._resultado_version(__version__, True)  # en silencio y sin novedades: no dice nada
+    assert len(preguntas) == 1
+    v.close()

@@ -7,14 +7,19 @@
 2. Al instalar, **marca la casilla «Add Python to PATH»** (abajo del todo en la primera pantalla).
 3. Pulsa *Install Now* y espera a que termine.
 
-## 2. Abrir el programa
+## 2. Instalar el programa
 
-1. Descomprime el ZIP del rectificador en una carpeta (por ejemplo en el Escritorio).
-2. Entra en la carpeta `rectificador` y haz **doble clic en `arrancar.bat`**.
+1. Descomprime el ZIP del rectificador en una carpeta cualquiera.
+2. Entra en la carpeta `rectificador` y haz **doble clic en `instalar.bat`**.
    - La primera vez tarda unos minutos: descarga lo que necesita (hace falta internet).
-     No cierres la ventana negra.
-   - Las siguientes veces se abre en segundos.
    - Si Windows avisa de que «protegió su PC», pulsa *Más información* → *Ejecutar de todas formas*.
+3. Al terminar aparece el icono **Rectificador Ortosend** en el **Escritorio** y en el **menú Inicio**:
+   ábrelo siempre desde ahí (se abre **sin la ventana negra**). Ya puedes borrar la carpeta descomprimida.
+   Los trabajos guardados (`.molde`) se abren con **doble clic**.
+- **Actualizar**: *Ayuda → Buscar actualizaciones* (el programa también lo mira solo una vez al día). Descarga
+  el ZIP nuevo, descomprímelo y vuelve a hacer doble clic en `instalar.bat`. Tus trabajos no se tocan.
+- **Desinstalar**: `desinstalar.bat` (no borra tus trabajos, escaneos ni archivos `.nc`).
+- `arrancar.bat` sigue funcionando como antes (con ventana negra), por si acaso.
 
 ## 3. Probar con un escaneo
 
@@ -36,14 +41,23 @@
    (el cursor se convierte en una mano al pasar por encima del punto).
 4. Mira el **recorte en arco** (línea roja): por delante ya no hay molde.
    Prueba a cambiar **Adelanto** y **Curvatura**.
-5. Mira el **lijado**: cambia el tamaño del taco y marca «Ver el escaneo sin lijar» para comparar.
-6. **Comprueba la escala**: el panel de cada pie muestra sus medidas en mm (largo, anchos, distancias
+5. **Correcciones** (en la tarjeta de cada pie, con las referencias puestas): relleno de arco (rebajar o
+   subir), oliva retrocapital, barra metatarsal, descarga del 1.er MTT y skive medial. Marca la casilla,
+   cambia la altura en mm y, con «···», el tamaño. Cada una se coloca sola según las referencias; para
+   moverla, **arrastra su cuadradito** en el 3D. Las alturas son las de la **plantilla** (el programa
+   las invierte en el molde).
+6. Mira el **lijado**: cambia el tamaño del taco y marca «Ver el escaneo sin lijar» para comparar.
+   Marca **«Ver dónde no llega la fresa»** para ver en rojo la escayola que la bola de Ø25 no podrá quitar
+   (huecos más estrechos que la fresa); abajo te dice cuánto en la planta y cuánto en el borde.
+7. **Comprueba la escala**: el panel de cada pie muestra sus medidas en mm (largo, anchos, distancias
    entre referencias) y alrededor del molde hay reglas en mm. Con **Medir distancia (M)** y dos clics
    derechos mides lo que quieras (por ejemplo, del talón a la punta) y lo comparas con una cinta
    métrica sobre la espuma. Abajo a la derecha ves las coordenadas del punto bajo el ratón.
-7. *Archivo → Exportar…* y guarda. Salen 3 archivos:
+8. **Guarda el trabajo** (Ctrl+S): rellena antes la tarjeta **Paciente** (nombre, fecha, notas). Se guarda un
+   archivo `.molde` que se vuelve a abrir al momento, tal cual lo dejaste.
+9. *Archivo → Exportar…* y guarda. Salen 3 archivos:
    `NOMBRE.stl`, `NOMBRE_FUSION.stl` y `NOMBRE_receta.json`.
-8. Abre `NOMBRE_FUSION.stl` en Fusion 360 **sin cambiar unidades** y comprueba que mide lo que dice el
+10. Abre `NOMBRE_FUSION.stl` en Fusion 360 **sin cambiar unidades** y comprueba que mide lo que dice el
    mensaje al exportar (el recuadro debe ser 28,8 × 33,0 cm = 288 × 330 mm).
 
 ## 4. Fresar en la CNC (sin Fusion)
@@ -68,6 +82,10 @@
 3. Si la colocación te parece bien, pulsa **Calcular trayectorias**: genera el recorrido de la fresa con
    esa misma colocación y numeración y dice el tiempo de cada fase.
 4. **Guardar archivo para la CNC (.nc)…**: copia el `.nc` al USB/tarjeta y lánzalo desde la pantalla de la CNC.
+   Se guarda también **`NOMBRE_PRUEBA_EN_VACIO.nc`**: el mismo programa por encima de la plancha (nunca baja
+   de 5 mm sobre ella) y con el cabezal apagado. **Lánzalo primero** con una plancha nueva para comprobar
+   el origen y los recorridos sin cortar nada.
+   Si sujetas la plancha con topes o mordazas, pon el **Margen bordes** en la tarjeta de la plancha.
    Junto al `.nc` se guardan:
    - **`NOMBRE_mapa.pdf`** (se abre solo, para imprimirlo) y `NOMBRE_mapa.png`: el **mapa de la plancha**
      visto desde arriba, con cada molde numerado en el orden en que se fresa, su nombre y pie, una flecha
