@@ -1,5 +1,9 @@
 # Novedades del Rectificador de moldes
 
+## 0.4.2
+- Los escaneos se exportan a tu carpeta **OneDrive › Escaneos** (si no hay OneDrive, a Documentos ›
+  Escaneos Rectificador). Se puede cambiar en *Archivo → Carpeta de escaneos…*.
+
 ## 0.4.1
 - **Botón «Escanear»**: abre Revo Scan. Escanea, exporta el STL (o PLY) en la carpeta
   *Documentos › Escaneos Rectificador* (la ruta se copia sola: pégala con Ctrl+V al guardar) y el

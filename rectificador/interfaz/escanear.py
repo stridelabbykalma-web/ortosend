@@ -2,7 +2,8 @@
 
 Revo Scan no se puede manejar desde otro programa (no tiene órdenes ni API), así que se hace así:
 1. se abre Revo Scan (se busca en Archivos de programa; si no aparece, se pregunta dónde está una vez);
-2. se escanea y se exporta el STL (o PLY/OBJ) a la carpeta de escaneos;
+2. se escanea y se exporta el STL (o PLY/OBJ) a la carpeta de escaneos (OneDrive\\Escaneos si hay OneDrive;
+   se puede cambiar en Archivo → Carpeta de escaneos);
 3. el Rectificador ve el archivo nuevo, espera a que termine de escribirse y propone abrirlo.
 """
 
@@ -17,8 +18,26 @@ from PySide6.QtCore import QFileSystemWatcher, QObject, QTimer, Signal
 FORMATOS = (".stl", ".ply", ".obj")
 
 
+def onedrive() -> Path | None:
+    """La carpeta de OneDrive de este usuario (Windows la indica en la variable OneDrive)."""
+    for v in ("OneDrive", "OneDriveConsumer", "OneDriveCommercial"):
+        if os.environ.get(v) and Path(os.environ[v]).is_dir():
+            return Path(os.environ[v])
+    return None
+
+
 def carpeta_por_defecto() -> Path:
-    """Documentos\\Escaneos Rectificador (en Windows la carpeta se llama «Documents» aunque se vea «Documentos»)."""
+    """OneDrive\\Escaneos (la que ya exista, sin importar mayúsculas). Sin OneDrive:
+    Documentos\\Escaneos Rectificador (en Windows la carpeta se llama «Documents» aunque se vea «Documentos»)."""
+    nube = onedrive()
+    if nube is not None:
+        try:
+            for p in nube.iterdir():
+                if p.is_dir() and p.name.lower() == "escaneos":
+                    return p
+        except OSError:
+            pass
+        return nube / "Escaneos"
     documentos = Path.home() / "Documents"
     return (documentos if documentos.exists() else Path.home()) / "Escaneos Rectificador"
 
@@ -30,11 +49,13 @@ def buscar_revo_scan(raices: list[Path] | None = None) -> Path | None:
                   if os.environ.get(v)]
         if os.environ.get("LOCALAPPDATA"):
             raices.append(Path(os.environ["LOCALAPPDATA"]) / "Programs")
+        if onedrive() is not None:  # también si está copiado en OneDrive (p. ej. en Escaneos)
+            raices += [onedrive(), carpeta_por_defecto()]
     candidatos = []
     for raiz in raices:
         if not raiz.is_dir():
             continue
-        for patron in ("Revo*/Revo*Scan*.exe", "Revo*/*/Revo*Scan*.exe", "Revopoint*/*/Revo*Scan*.exe"):
+        for patron in ("Revo*Scan*.exe", "*/Revo*Scan*.exe", "*/*/Revo*Scan*.exe"):
             try:
                 candidatos += [p for p in raiz.glob(patron) if p.is_file()]
             except OSError:

@@ -447,3 +447,25 @@ def test_escanear_con_revo_scan(tmp_path, monkeypatch):
     v.ajustes.remove("revo_scan")
     v.ajustes.remove("vigilar_escaneos")
     v.close()
+
+
+def test_carpeta_de_escaneos_en_onedrive(tmp_path, monkeypatch):
+    from interfaz import escanear as escaneo
+
+    for v in ("OneDrive", "OneDriveConsumer", "OneDriveCommercial"):
+        monkeypatch.delenv(v, raising=False)
+    monkeypatch.setattr(escaneo.Path, "home", staticmethod(lambda: tmp_path / "casa"))
+    assert escaneo.carpeta_por_defecto() == tmp_path / "casa" / "Escaneos Rectificador"
+    nube = tmp_path / "OneDrive"
+    nube.mkdir()
+    monkeypatch.setenv("OneDrive", str(nube))
+    assert escaneo.carpeta_por_defecto() == nube / "Escaneos"  # aunque aún no exista
+    (nube / "escaneos").mkdir()
+    assert escaneo.carpeta_por_defecto() == nube / "escaneos"  # la que ya hay, con su nombre
+    # Revo Scan también se encuentra si está dentro de OneDrive\Escaneos.
+    exe = nube / "escaneos" / "Revo Scan 5" / "Revo Scan 5.exe"
+    exe.parent.mkdir()
+    exe.write_bytes(b"")
+    for v in ("ProgramFiles", "ProgramFiles(x86)", "ProgramW6432", "LOCALAPPDATA"):
+        monkeypatch.delenv(v, raising=False)
+    assert escaneo.buscar_revo_scan() == exe

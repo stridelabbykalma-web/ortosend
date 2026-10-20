@@ -1010,6 +1010,7 @@ class VentanaPrincipal(QMainWindow):
         archivo = self.menuBar().addMenu("&Archivo")
         accion("abrir", "Abrir escaneo…", self.abrir_dialogo, QKeySequence.Open, "abrir", archivo)
         accion("escanear", "Escanear con Revo Scan…", self.escanear, None, "escanear", archivo)
+        accion("carpeta_escaneos", "Carpeta de escaneos…", self.elegir_carpeta_escaneos, None, None, archivo)
         self.menu_recientes = archivo.addMenu(estilo.icono("reciente"), "Abrir reciente")
         archivo.addSeparator()
         accion("guardar", "Guardar trabajo", self.guardar, QKeySequence.Save, "guardar", archivo)
@@ -1375,6 +1376,8 @@ valores clínicos: <code>config/valores_clinicos.toml</code></p>""")
         carpeta = self.carpeta_escaneos()
         if self.vigilante is not None and self.vigilante.carpeta == carpeta:
             return
+        if self.vigilante is not None:
+            self.vigilante.deleteLater()  # se ha cambiado de carpeta
         try:
             self.vigilante = escaneo.Vigilante(carpeta, self)
         except OSError:
@@ -1382,6 +1385,14 @@ valores clínicos: <code>config/valores_clinicos.toml</code></p>""")
             return
         self.vigilante.nuevo.connect(self._escaneo_nuevo)
         self.ajustes.setValue("vigilar_escaneos", True)
+
+    def elegir_carpeta_escaneos(self):
+        carpeta = QFileDialog.getExistingDirectory(self, "Carpeta donde se exportan los escaneos de Revo Scan",
+                                                   str(self.carpeta_escaneos()))
+        if carpeta:
+            self.ajustes.setValue("carpeta_escaneos", carpeta)
+            self.vigilar_escaneos()
+            self.notificar(f"Los escaneos que se exporten en {carpeta} se abrirán aquí solos.", "bien")
 
     def escanear(self):
         """Abre Revo Scan y explica dónde exportar: el escaneo exportado se abre aquí solo."""
@@ -1409,7 +1420,8 @@ valores clínicos: <code>config/valores_clinicos.toml</code></p>""")
             self, "Escanear",
             "Se está abriendo Revo Scan. Escanea el molde y, al terminar, <b>exporta el STL</b> (o PLY) en esta "
             f"carpeta:<br><br><b>{html.escape(str(carpeta))}</b><br><br>(La ruta ya está copiada: en la ventana de "
-            "guardar de Revo Scan pégala con Ctrl+V.) En cuanto termine de guardarse, el escaneo se abre aquí.")
+            "guardar de Revo Scan pégala con Ctrl+V.) En cuanto termine de guardarse, el escaneo se abre aquí."
+            "<br><br>Para usar otra carpeta: <i>Archivo → Carpeta de escaneos…</i>")
 
     def _escaneo_nuevo(self, ruta: str):
         self.raise_()
