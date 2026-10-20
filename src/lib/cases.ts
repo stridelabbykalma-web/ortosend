@@ -34,8 +34,38 @@ export async function notifyEmail(toEmail: string, template: string, payload: Re
       template,
       payload: { ...payload, asunto: subject } as object,
       sentAt: sent ? new Date() : null,
+      attempts: 1,
     },
   });
+}
+
+// Reintenta desde el cron los emails que no salieron (proveedor caído, sin
+// configurar en su momento…). Tras MAX_EMAIL_ATTEMPTS intentos se marcan como
+// fallidos y dejan de reintentarse.
+const MAX_EMAIL_ATTEMPTS = 5;
+
+export async function reintentarEmailsPendientes() {
+  const pendientes = await prisma.notification.findMany({
+    where: { channel: "email", sentAt: null, failedAt: null, bouncedAt: null },
+    orderBy: { createdAt: "asc" },
+    take: 50,
+  });
+  let enviados = 0;
+  for (const n of pendientes) {
+    if (!n.toEmail) continue;
+    const p = (n.payload ?? {}) as Record<string, unknown>;
+    const { subject, text } = renderEmail(n.template, p);
+    const sent = await deliverEmail(n.toEmail, subject, text);
+    const attempts = n.attempts + 1;
+    await prisma.notification.update({
+      where: { id: n.id },
+      data: sent
+        ? { sentAt: new Date(), attempts }
+        : { attempts, ...(attempts >= MAX_EMAIL_ATTEMPTS ? { failedAt: new Date() } : {}) },
+    });
+    if (sent) enviados++;
+  }
+  return enviados;
 }
 
 // Avisos que además van siempre por email (cambios de titularidad de la cuenta).

@@ -657,6 +657,9 @@ model Notification {
   // revision_anual | mayoria_edad | mayoria_edad_titular | cuenta_traspasada …
   payload   Json
   sentAt    DateTime?
+  attempts  Int       @default(0) // reintentos de entrega hechos por el cron
+  failedAt  DateTime? // agotados los reintentos
+  bouncedAt DateTime? // el proveedor devolvió el email (dirección inexistente, buzón lleno…)
   createdAt DateTime  @default(now())
 }
 

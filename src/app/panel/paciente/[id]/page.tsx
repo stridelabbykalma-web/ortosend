@@ -52,6 +52,13 @@ export default async function PacientePage({
     !vigente.completedAt &&
     vigente.expiresAt > new Date();
   const qr = puedeEmpezar ? await QRCode.toDataURL(enlaceAlta(), { margin: 1, width: 220 }) : null;
+  // Último email del alta a esta dirección: para avisar si rebotó.
+  const emailAlta = dest.email
+    ? await prisma.notification.findFirst({
+        where: { channel: "email", toEmail: dest.email, template: "alta_documentos" },
+        orderBy: { createdAt: "desc" },
+      })
+    : null;
 
   return (
     <div className="wrap" style={{ maxWidth: 820 }}>
@@ -101,6 +108,18 @@ export default async function PacientePage({
         {vigente?.emailSentAt && (
           <div className="tiny" style={{ marginTop: 4 }}>
             Enlace de aceptación enviado también por email el {fmtdt(vigente.emailSentAt)} (por si el móvil no tiene WhatsApp).
+          </div>
+        )}
+        {emailAlta?.bouncedAt && (
+          <div className="note r" style={{ marginTop: 8 }}>
+            El email a {dest.email} <b>rebotó</b> (dirección inexistente o buzón lleno). Revisa la dirección con el
+            paciente y reenvía el email.
+          </div>
+        )}
+        {emailAlta && !emailAlta.sentAt && !emailAlta.bouncedAt && (
+          <div className="note a" style={{ marginTop: 8 }}>
+            El email está encolado pero aún no ha salido (falta configurar el proveedor de email o falló el envío; se
+            reintenta a diario).
           </div>
         )}
         <table style={{ marginTop: 8 }}>

@@ -5,7 +5,7 @@
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { requireRole } from "@/lib/auth";
-import { notifyOwner, pushEvent, titularDe, avisarPaciente } from "@/lib/cases";
+import { notifyOwner, pushEvent, titularDe, avisarPaciente, reintentarEmailsPendientes } from "@/lib/cases";
 import { PAY_LINK_DAYS, PAY_REMINDERS_DAYS, SOFT_EXPIRY_MONTHS } from "@/lib/states";
 import { nacimientoLimiteMayoria } from "@/lib/edad";
 import { enviarAvisoMayoria } from "@/lib/mayoria";
@@ -96,7 +96,7 @@ export async function runJobsAction() {
   redirect(
     "/panel?ok=" +
       encodeURIComponent(
-        `Mantenimiento: ${res.expired} enlaces caducados, ${res.reminders} recordatorios de pago, ${res.citas} recordatorios de cita, ${res.mayoria} avisos de mayoría de edad, ${res.invitaciones} recordatorios de alta por WhatsApp, ${res.caducadas} altas caducadas`
+        `Mantenimiento: ${res.expired} enlaces caducados, ${res.reminders} recordatorios de pago, ${res.citas} recordatorios de cita, ${res.mayoria} avisos de mayoría de edad, ${res.invitaciones} recordatorios de alta por WhatsApp, ${res.caducadas} altas caducadas, ${res.emailsReintentados} emails reintentados`
       )
   );
 }
@@ -182,7 +182,9 @@ export async function runJobs() {
   const invitaciones = await enviarRecordatorios(now);
   await reintentarConfirmaciones();
   await limpiarRateLimit();
-  return { expired: expiredCases.length, reminders, citas, mayoria, invitaciones, caducadas };
+  // Emails que no salieron en su momento (proveedor sin configurar o caído).
+  const emailsReintentados = await reintentarEmailsPendientes();
+  return { expired: expiredCases.length, reminders, citas, mayoria, invitaciones, caducadas, emailsReintentados };
 }
 
 // --- Altas de profesionales solicitadas por las clínicas ---
