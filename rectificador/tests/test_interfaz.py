@@ -510,6 +510,7 @@ def test_buscar_actualizaciones_a_mano_no_se_queda_pensando(monkeypatch):
 
     app = QApplication.instance() or QApplication([])
     v = VentanaPrincipal()
+    monkeypatch.setattr(actualizar, "base_publicada", lambda *a, **k: actualizar.URL_BRUTO)
     monkeypatch.setattr(actualizar, "version_publicada", lambda *a, **k: "99.0.0")
     monkeypatch.setattr(actualizar, "novedades_publicadas", lambda *a, **k: "## 99.0.0\n- algo")
     vistos = []

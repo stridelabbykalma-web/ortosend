@@ -1155,8 +1155,9 @@ varios moldes en una plancha (arrastrándolos), calculas y guardas el <b>.nc</b>
         import threading
 
         def preguntar():
-            nueva = actualizar.version_publicada() or ""
-            notas = actualizar.novedades_publicadas() if nueva else ""
+            base = actualizar.base_publicada()
+            nueva = actualizar.version_publicada(base=base) or ""
+            notas = actualizar.novedades_publicadas(base=base) if nueva else ""
             self._aviso_version.emit(nueva, notas, silencio)  # la respuesta llega a la ventana (hilo principal)
 
         # Siempre en segundo plano: la ventana no se queda «pensando» mientras se mira en internet.

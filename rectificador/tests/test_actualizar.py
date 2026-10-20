@@ -110,6 +110,7 @@ def _servidor(monkeypatch, archivos, manifiesto, estropear=None):
             return b"otra cosa"
         return archivos[ruta]
     monkeypatch.setattr(A, "_bajar", bajar)
+    monkeypatch.setattr(A, "base_publicada", lambda *a, **k: A.URL_BRUTO)
 
 
 def test_descarga_archivo_a_archivo(tmp_path, monkeypatch):
@@ -141,6 +142,7 @@ def test_si_todo_falla_el_error_se_entiende(tmp_path, monkeypatch):
         raise urllib.error.URLError("timed out")
     monkeypatch.setattr(A, "_bajar", sin_red)
     monkeypatch.setattr(A, "descargar", sin_red)
+    monkeypatch.setattr(A, "base_publicada", lambda *a, **k: A.URL_BRUTO)
     with pytest.raises(A.ErrorActualizacion) as e:
         A.obtener(tmp_path, "1.2.3")
     texto = A.explicar(e.value)
@@ -166,3 +168,17 @@ def test_manifiesto_al_dia():
     import manifiesto
 
     assert (carpeta / A.MANIFIESTO).read_text(encoding="utf-8") == manifiesto.texto()
+
+
+def test_se_baja_del_ultimo_commit(monkeypatch):
+    sha = "a" * 40
+    pedidas = []
+
+    def leer(url, espera, cabeceras=None):
+        pedidas.append((url, cabeceras))
+        return sha if url == A.URL_COMMIT else None
+    monkeypatch.setattr(A, "_leer", leer)
+    assert A.base_publicada() == f"https://raw.githubusercontent.com/{A.REPOSITORIO}/{sha}/rectificador"
+    assert pedidas[0][1] == {"Accept": "application/vnd.github.sha"}
+    monkeypatch.setattr(A, "_leer", lambda *a, **k: None)  # sin respuesta: por el nombre de la rama
+    assert A.base_publicada() == A.URL_BRUTO

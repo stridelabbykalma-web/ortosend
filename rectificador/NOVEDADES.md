@@ -1,5 +1,9 @@
 # Novedades del Rectificador de moldes
 
+## 0.4.5
+- Las actualizaciones se descargan de la versión exacta recién publicada: llegan al momento y sin
+  mezclar archivos de dos versiones.
+
 ## 0.4.4
 - *Ayuda → Buscar actualizaciones* ya no se queda «pensando» (el cursor de espera no se quitaba).
 - Siempre ve la última versión publicada al momento (antes podía tardar unos minutos en enterarse).

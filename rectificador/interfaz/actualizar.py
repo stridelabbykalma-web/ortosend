@@ -35,6 +35,7 @@ URL_NOVEDADES = f"{URL_BRUTO}/NOVEDADES.md"
 URL_MANIFIESTO = f"{URL_BRUTO}/MANIFIESTO.txt"
 MANIFIESTO = "MANIFIESTO.txt"
 URL_DESCARGA = f"https://codeload.github.com/{REPOSITORIO}/zip/refs/heads/{RAMA}"
+URL_COMMIT = f"https://api.github.com/repos/{REPOSITORIO}/commits/{RAMA}"
 NECESARIOS = ("interfaz/principal.py", "ortomolde/__init__.py", "requirements.txt", "VERSION", "config/taller.toml")
 
 
@@ -49,29 +50,40 @@ def version(texto: str) -> tuple:
 def _sin_cache(url: str) -> str:
     """raw.githubusercontent.com guarda cada archivo 5 minutos: con una marca distinta en cada petición se
     lee siempre lo último publicado."""
-    if not url.startswith(URL_BRUTO):
+    if not url.startswith(URL_BRUTO) or "?" in url:
         return url
     import time
 
     return f"{url}?v={time.time_ns()}"
 
 
-def _leer(url: str, espera: float) -> str | None:
+def _leer(url: str, espera: float, cabeceras: dict | None = None) -> str | None:
     try:
-        with urllib.request.urlopen(_sin_cache(url), timeout=espera) as r:
+        peticion = urllib.request.Request(_sin_cache(url), headers=cabeceras or {})
+        with urllib.request.urlopen(peticion, timeout=espera) as r:
             return r.read().decode("utf-8")
     except Exception:  # noqa: BLE001 - sin internet no pasa nada
         return None
 
 
-def version_publicada(espera: float = 6.0) -> str | None:
+def base_publicada(espera: float = 6.0) -> str:
+    """Dirección de los archivos de la última versión. GitHub tarda unos minutos en servir lo nuevo si se pide
+    por el nombre de la rama, así que se pregunta primero por su último «commit» (el código exacto) y se baja
+    todo de ahí: llega al momento y todos los archivos son de la misma versión."""
+    sha = (_leer(URL_COMMIT, espera, {"Accept": "application/vnd.github.sha"}) or "").strip()
+    if re.fullmatch(r"[0-9a-f]{40}", sha):
+        return f"https://raw.githubusercontent.com/{REPOSITORIO}/{sha}/rectificador"
+    return URL_BRUTO
+
+
+def version_publicada(espera: float = 6.0, base: str | None = None) -> str | None:
     """La última versión publicada (o None si no hay internet)."""
-    texto = _leer(URL_VERSION, espera)
+    texto = _leer(f"{base or base_publicada(espera)}/VERSION", espera)
     return texto.strip() if texto else None
 
 
-def novedades_publicadas(espera: float = 6.0) -> str:
-    return _leer(URL_NOVEDADES, espera) or ""
+def novedades_publicadas(espera: float = 6.0, base: str | None = None) -> str:
+    return _leer(f"{base or base_publicada(espera)}/NOVEDADES.md", espera) or ""
 
 
 def novedades(texto: str, desde: str) -> str:
@@ -161,11 +173,12 @@ def descargar_archivos(nueva: Path, version_esperada: str, progreso=None) -> Pat
     if nueva.exists():
         shutil.rmtree(nueva)
     try:
-        filas = leer_manifiesto(_bajar(URL_MANIFIESTO).decode("utf-8"))
+        base = base_publicada()
+        filas = leer_manifiesto(_bajar(f"{base}/{MANIFIESTO}").decode("utf-8"))
         total = sum(t for _, t, _ in filas)
         bajado = 0
         for huella_, tam, ruta in filas:
-            datos = _bajar(f"{URL_BRUTO}/{urllib.parse.quote(ruta)}")
+            datos = _bajar(f"{base}/{urllib.parse.quote(ruta)}")
             if hashlib.sha256(datos).hexdigest() != huella_:
                 raise ErrorActualizacion(f"{ruta} ha llegado distinto de lo publicado (prueba dentro de unos minutos).")
             if ruta.lower().endswith(".bat"):
