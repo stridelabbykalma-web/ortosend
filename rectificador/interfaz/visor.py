@@ -118,13 +118,22 @@ class Visor(QtInteractor):
 
     # ---------------------------------------------------------------- molde
 
-    def mostrar_molde(self, campo: Campo, reiniciar_camara: bool = True, colores: np.ndarray | None = None) -> None:
+    # Cómo se pinta el molde según lo que se quiera ver: (nombre del dato, colores, límites).
+    PINTURAS = {
+        # mm de escayola que la fresa no puede quitar: color espuma (0) a rojo (2 mm o más).
+        "no_llega": ("No llega (mm)", ["#d8c3a0", "#ffa94d", "#e03131"], (0, 2)),
+        # mm que cambian las correcciones: azul = se quita escayola (bulto en la plantilla),
+        # rojo = se añade (hueco en la plantilla); espuma = sin cambio.
+        "correcciones": ("Corrección (mm)", ["#1c7ed6", "#74c0fc", "#d8c3a0", "#ff8787", "#e03131"], (-4, 4)),
+    }
+
+    def mostrar_molde(self, campo: Campo, reiniciar_camara: bool = True, colores: np.ndarray | None = None,
+                      pintura: str = "no_llega") -> None:
         """Muestra el molde. Si solo han cambiado las alturas, se actualiza la superficie que ya hay
         (sin rehacerla): así cada cambio se ve casi al momento.
 
-        `colores`: mm de escayola que la fresa no puede quitar en cada punto; se pinta de color espuma
-        (0) a rojo (2 mm o más)."""
-        coloreado = colores is not None
+        `colores`: un valor por punto que se pinta según `pintura` (ver PINTURAS)."""
+        coloreado = pintura if colores is not None else False
         mismo = (self._malla is not None and self.campo is not None and not reiniciar_camara
                  and self.campo.z.shape == campo.z.shape and self.campo.rejilla.dx == campo.rejilla.dx
                  and coloreado == getattr(self, "_coloreado", False))
@@ -137,7 +146,7 @@ class Visor(QtInteractor):
             self._malla.point_data["Normals"] = normales(campo)
             self._malla.point_data.active_normals_name = "Normals"
             if coloreado:
-                self._malla.point_data["No llega (mm)"] = colores.ravel(order="F")
+                self._malla.point_data[self.PINTURAS[pintura][0]] = colores.ravel(order="F")
             self._malla.Modified()
             self._localizador.ForceBuildLocator()  # las alturas han cambiado
         else:
@@ -148,9 +157,10 @@ class Visor(QtInteractor):
             if coloreado:
                 from matplotlib.colors import LinearSegmentedColormap
 
-                malla.point_data["No llega (mm)"] = colores.ravel(order="F")
-                mapa = LinearSegmentedColormap.from_list("no_llega", ["#d8c3a0", "#ffa94d", "#e03131"])
-                actor = self.add_mesh(malla, name="molde", scalars="No llega (mm)", cmap=mapa, clim=(0, 2),
+                dato, tonos, limites = self.PINTURAS[pintura]
+                malla.point_data[dato] = colores.ravel(order="F")
+                mapa = LinearSegmentedColormap.from_list(pintura, tonos)
+                actor = self.add_mesh(malla, name="molde", scalars=dato, cmap=mapa, clim=limites,
                                       show_scalar_bar=False, pickable=True, specular=0.15, ambient=0.2,
                                       diffuse=0.85, render=False)
             else:
@@ -248,7 +258,7 @@ class Visor(QtInteractor):
             del self.puntos_arrastrables[k]
 
     def dibujar_pie(self, clave: str, pie: Pie, geom: dict | None, recorte: list | None = None,
-                    piezas: list | None = None) -> None:
+                    piezas: list | None = None, nombres_visibles: bool = True) -> None:
         """Referencias marcadas y, si están las 3, el eje, la línea metatarsal y el arco. `piezas`: lista de
         (tipo, color, contorno, centro) de las correcciones activas: su contorno y una bola para moverlas."""
         with self.lote():
@@ -281,6 +291,8 @@ class Visor(QtInteractor):
                     self.add_mesh(pv.Sphere(radius=3.0 if grande else 2.3, center=(x, y, z + 1.5)), name=actor,
                                   color=COLORES[k], pickable=False, render=False)
                     nombres.append(actor)
+                    if not nombres_visibles:
+                        continue
                     actor = f"{clave}_{k}_texto"
                     texto = NOMBRES[k] if grande else k[-1] + ".º"
                     self.add_point_labels([[x, y, z + 6]], [texto], name=actor, font_size=12 if grande else 10,
@@ -289,6 +301,10 @@ class Visor(QtInteractor):
                     nombres.append(actor)
             self._poner_lineas(clave, geom, recorte, nombres)
             # Rótulo del lado, más allá de los dedos.
+            if not nombres_visibles:
+                self._actores_pie[clave] = nombres
+                self.render()
+                return
             jj, ii = np.nonzero(pie.mascara)
             r = self.campo.rejilla
             actor = f"{clave}_rotulo"

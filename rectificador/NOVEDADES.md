@@ -1,5 +1,12 @@
 # Novedades del Rectificador de moldes
 
+## 0.4.3
+- **Las correcciones se ven en color** sobre el molde: azul donde se quita escayola (bulto en la plantilla)
+  y rojo donde se añade (hueco en la plantilla); más intenso = más mm. Se quita en *Ver → Correcciones en
+  color* o con la casilla del apartado Molde.
+- **Los nombres de las referencias ya no tapan el molde**: solo salen mientras se marcan. Para verlos
+  siempre: *Ver → Nombres de las referencias* (tecla N).
+
 ## 0.4.2
 - Los escaneos se exportan a tu carpeta **OneDrive › Escaneos** (si no hay OneDrive, a Documentos ›
   Escaneos Rectificador). Se puede cambiar en *Archivo → Carpeta de escaneos…*.

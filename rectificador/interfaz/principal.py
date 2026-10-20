@@ -929,6 +929,18 @@ class VentanaPrincipal(QMainWindow):
         self.texto_fresa = estilo.etiqueta("", "nota")
         self.texto_fresa.hide()
         lay.addWidget(self.texto_fresa)
+        self.ver_cambios = QCheckBox("Ver las correcciones en color")
+        self.ver_cambios.setChecked(self.ajustes.value("ver_cambios", True) in (True, "true"))
+        self.ver_cambios.setToolTip("Pinta el molde según lo que cambian las correcciones.")
+        self.ver_cambios.toggled.connect(lambda v: (self.ajustes.setValue("ver_cambios", v),
+                                                    self._mostrar_molde(reiniciar_camara=False) if self.proyecto
+                                                    else None))
+        lay.addWidget(self.ver_cambios)
+        self.leyenda_cambios = estilo.etiqueta(
+            "<span style='color:#4dabf7'>■</span> se quita escayola (bulto en la plantilla) · "
+            "<span style='color:#ff6b6b'>■</span> se añade (hueco en la plantilla). Más intenso = más mm.", "nota")
+        self.leyenda_cambios.hide()
+        lay.addWidget(self.leyenda_cambios)
         self.boton_medir = QPushButton("Medir distancia")
         self.boton_medir.setIcon(estilo.icono("medir"))
         self.boton_medir.setCheckable(True)
@@ -990,7 +1002,13 @@ class VentanaPrincipal(QMainWindow):
                       if r["borde_max"] >= 0.3 else "En el borde, nada importante.")
             self.texto_fresa.setText(texto)
         self.texto_fresa.setVisible(colores is not None)
-        self.visor.mostrar_molde(campo, reiniciar_camara=reiniciar_camara, colores=colores)
+        pintura = "no_llega"
+        cambio = getattr(p, "cambio_correcciones", None)
+        if (colores is None and self.ver_cambios.isChecked() and not self.ver_original.isChecked()
+                and cambio is not None and np.abs(cambio).max() > 0.05):
+            colores, pintura = cambio, "correcciones"
+        self.leyenda_cambios.setVisible(pintura == "correcciones")
+        self.visor.mostrar_molde(campo, reiniciar_camara=reiniciar_camara, colores=colores, pintura=pintura)
 
     def _menus(self):
         self.acciones = {}
@@ -1049,6 +1067,20 @@ class VentanaPrincipal(QMainWindow):
         original.toggled.connect(self.ver_original.setChecked)
         self.ver_original.toggled.connect(original.setChecked)
         ver.addAction(original)
+        self.accion_nombres = QAction("Nombres de las referencias", self)
+        self.accion_nombres.setCheckable(True)
+        self.accion_nombres.setShortcut(QKeySequence("N"))
+        self.accion_nombres.setToolTip("Si no, los nombres solo salen mientras se marcan las referencias")
+        self.accion_nombres.setChecked(self.ajustes.value("ver_nombres", False) in (True, "true"))
+        self.accion_nombres.toggled.connect(lambda v: (self.ajustes.setValue("ver_nombres", v),
+                                                       self._redibujar_pies() if self.proyecto else None))
+        ver.addAction(self.accion_nombres)
+        cambios = QAction("Correcciones en color", self)
+        cambios.setCheckable(True)
+        cambios.setChecked(self.ver_cambios.isChecked())
+        cambios.toggled.connect(self.ver_cambios.setChecked)
+        self.ver_cambios.toggled.connect(cambios.setChecked)
+        ver.addAction(cambios)
 
         ayuda = self.menuBar().addMenu("A&yuda")
         accion("guia", "Guía rápida", self.guia_rapida, QKeySequence.HelpContents, "ayuda", ayuda)
@@ -1641,8 +1673,11 @@ valores clínicos: <code>config/valores_clinicos.toml</code></p>""")
                 self.statusBar().showMessage(str(e), 6000)
             if geom and pie.piezas.get("arco") is not None and pie.piezas["arco"].activa:
                 geom = {**geom, "zona_arco": None}  # ya se ve el contorno del relleno de arco
+            # Los nombres solo hacen falta mientras se marcan las referencias (o si se piden en Ver).
+            nombres = (self.accion_nombres.isChecked() or not pie.referencias.completas
+                       or (self.activa is not None and self.activa[0] == self._clave(pie)))
             self.visor.dibujar_pie(self._clave(pie), pie, geom, self.proyecto.linea_recorte(pie),
-                                   self._piezas_a_dibujar(pie))
+                                   self._piezas_a_dibujar(pie), nombres_visibles=nombres)
 
     def _piezas_a_dibujar(self, pie) -> list:
         """(tipo, color, contorno, centro) de las correcciones activas de un pie."""

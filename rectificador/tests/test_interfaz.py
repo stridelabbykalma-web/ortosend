@@ -469,3 +469,33 @@ def test_carpeta_de_escaneos_en_onedrive(tmp_path, monkeypatch):
     for v in ("ProgramFiles", "ProgramFiles(x86)", "ProgramW6432", "LOCALAPPDATA"):
         monkeypatch.delenv(v, raising=False)
     assert escaneo.buscar_revo_scan() == exe
+
+
+def test_nombres_y_correcciones_en_color(stl_sintetico):
+    """Con las referencias puestas los nombres no tapan el molde; las correcciones se pintan de color."""
+    from PySide6.QtWidgets import QApplication
+
+    from interfaz.principal import VentanaPrincipal
+
+    app = QApplication.instance() or QApplication([])
+    v = VentanaPrincipal()
+    v.show()
+    v.accion_nombres.setChecked(False)
+    v.abrir(str(stl_sintetico), esperar=True)
+    v.proponer_referencias("p0")
+    textos = [n for n in v.visor._actores_pie["p0"] if n.endswith("_texto") or n.endswith("_rotulo")]
+    assert textos == []  # pie con referencias: sin nombres
+    assert any(n.endswith("_rotulo") for n in v.visor._actores_pie["p1"])  # al otro aún le faltan
+    v.accion_nombres.setChecked(True)
+    assert any(n.endswith("_texto") for n in v.visor._actores_pie["p0"])
+    v.accion_nombres.setChecked(False)
+    # Correcciones en color.
+    v.ver_cambios.setChecked(True)
+    assert not v.leyenda_cambios.isVisibleTo(v)
+    v.cambiar_pieza("p0", "oliva", activa=True)
+    assert v.leyenda_cambios.isVisibleTo(v) and "Corrección (mm)" in v.visor._malla.point_data
+    assert v.visor._malla.point_data["Corrección (mm)"].min() < -3
+    v.ver_cambios.setChecked(False)
+    assert not v.leyenda_cambios.isVisibleTo(v)
+    v.ver_cambios.setChecked(True)  # se deja como estaba
+    v.close()

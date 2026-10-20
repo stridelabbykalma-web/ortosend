@@ -245,6 +245,7 @@ class Proyecto:
         Siempre se parte del escaneo original: nada se acumula ni se pierde.
         """
         z = self.molde_lijado().copy()
+        sin_piezas = z.copy()
         r = self.original.rejilla
         X, Y = r.malla()
         borde = self.clinicos.get("general", {}).get("suavizado_borde", 8.0)
@@ -252,9 +253,13 @@ class Proyecto:
             if pie.piezas:
                 z = piezas_mod.aplicar(z, self.fondo, pie.referencias, pie.piezas, pie.mascara, X, Y, r.dx, r.dy,
                                        self.clinicos["referencias"], borde, pie.recorte)
+        cambio = z - sin_piezas
         for pie in self.pies:
             z = recorte_mod.aplicar(z, self.fondo, pie.referencias, pie.recorte, pie.mascara, X, Y,
                                     self.original.rejilla.dx)
+        # Lo que cambian las correcciones en cada punto (mm, + escayola añadida, − quitada), para pintarlo.
+        # Por delante del recorte ya no hay molde: ahí no se pinta.
+        self.cambio_correcciones = np.where(z - self.fondo > 0.2, cambio, 0.0)
         # Si no cabe en el alto del bloque, se baja entero: lo que sobra se quita por abajo, nunca de la planta.
         alto = self.taller["recuadro"]["alto_z"]
         self.bajada = float(max(z.max() - alto, 0.0))
