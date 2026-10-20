@@ -46,7 +46,7 @@
 4. Mira el **recorte en arco** (línea roja): por delante ya no hay molde.
    Prueba a cambiar **Adelanto** y **Curvatura**.
 5. **Correcciones** (en la tarjeta de cada pie, con las referencias puestas): relleno de arco (rebajar o
-   subir), oliva retrocapital, barra metatarsal, descarga del 1.er MTT y skive medial. Marca la casilla,
+   subir), oliva retrocapital, barra metatarsal (bajo las 5 cabezas, curvada como el recorte), descarga del 1.er MTT y skive medial. Marca la casilla,
    cambia la altura en mm y, con «···», el tamaño. Cada una se coloca sola según las referencias; para
    moverla, **arrastra su cuadradito** en el 3D. Las alturas son las de la **plantilla** (el programa
    las invierte en el molde). El tamaño **se adapta a la medida del pie** (más pequeñas en pies pequeños);

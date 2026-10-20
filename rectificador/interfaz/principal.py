@@ -191,8 +191,7 @@ class PanelPie(QFrame):
     AJUSTES = {
         "arco": (("largo", "Largo", 20, 140), ("ancho", "Ancho", 10, 70)),
         "oliva": (("largo", "Largo", 10, 50), ("ancho", "Ancho", 8, 40), ("retraso", "Detrás de las cabezas", -10, 40)),
-        "barra": (("largo", "Ancho (a lo largo del pie)", 8, 50), ("ancho", "Sobresale a los lados", 0, 25),
-                  ("retraso", "Detrás de las cabezas", -10, 40)),
+        "barra": (("largo", "Ancho (a lo largo del pie)", 8, 50), ("retraso", "Detrás de las cabezas", -10, 40)),
         "descarga_1mtt": (("largo", "Diámetro", 8, 45),),
         "skive": (("largo", "Largo desde atrás", 15, 90),),
     }
@@ -201,8 +200,8 @@ class PanelPie(QFrame):
                 "menos arco, relleno clásico); «Subir» la quita (más arco).",
         "oliva": "Oliva retrocapital: bulto en la plantilla (hueco en el molde) entre 2.º y 3.er MTT, por detrás "
                  "de las cabezas.",
-        "barra": "Barra metatarsal: bulto transversal en la plantilla (hueco en el molde) bajo 2.º-4.º MTT, por "
-                 "detrás de las cabezas.",
+        "barra": "Barra metatarsal: bulto transversal en la plantilla (hueco en el molde) bajo todas las cabezas "
+                 "(1.ª a 5.ª), de borde a borde del pie, curvada como el recorte y por detrás de las cabezas.",
         "descarga_1mtt": "Descarga bajo la cabeza del 1.er MTT: hueco en la plantilla (escayola añadida al molde).",
         "skive": "Skive medial: cuña en varo bajo el talón. Se quita escayola del talón medial del molde; "
                  "la profundidad es la del borde medial (en el centro del talón, 0).",
@@ -1419,7 +1418,7 @@ valores clínicos: <code>config/valores_clinicos.toml</code></p>""")
                 pie = self.proyecto.pies[int(clave[1])]
                 r = self.proyecto.original.rejilla
                 contorno = piezas_mod.contorno(pie.piezas[tipo], pie.referencias, pie.mascara, r.dx, r.dy,
-                                               self.proyecto.clinicos["referencias"])
+                                               self.proyecto.clinicos["referencias"], recorte=pie.recorte)
                 with self.visor.lote():
                     self.visor.mover_punto(clave, nombre, x, y)
                     self.visor.dibujar_contorno_pieza(clave, tipo, piezas_mod.COLORES[tipo], contorno)
@@ -1528,8 +1527,9 @@ valores clínicos: <code>config/valores_clinicos.toml</code></p>""")
         for tipo, pieza in pie.piezas.items():
             if pieza.activa and pie.referencias.completas:
                 out.append((tipo, piezas_mod.COLORES[tipo],
-                            piezas_mod.contorno(pieza, pie.referencias, pie.mascara, r.dx, r.dy, cfg),
-                            piezas_mod.centro(pieza, pie.referencias, pie.mascara, r.dx, r.dy, cfg)))
+                            piezas_mod.contorno(pieza, pie.referencias, pie.mascara, r.dx, r.dy, cfg,
+                                                recorte=pie.recorte),
+                            piezas_mod.centro(pieza, pie.referencias, pie.mascara, r.dx, r.dy, cfg, pie.recorte)))
         return out
 
     def _mover_pieza(self, clave: str, tipo: str, x: float, y: float) -> bool:
@@ -1539,7 +1539,8 @@ valores clínicos: <code>config/valores_clinicos.toml</code></p>""")
             return False
         pieza = pie.piezas[tipo]
         r = self.proyecto.original.rejilla
-        ahora = piezas_mod.centro(pieza, pie.referencias, pie.mascara, r.dx, r.dy, self.proyecto.clinicos["referencias"])
+        ahora = piezas_mod.centro(pieza, pie.referencias, pie.mascara, r.dx, r.dy, self.proyecto.clinicos["referencias"],
+                                  pie.recorte)
         if ahora is None:
             return False
         sis = pie.referencias.sistema()

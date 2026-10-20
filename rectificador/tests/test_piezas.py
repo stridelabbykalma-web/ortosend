@@ -150,3 +150,37 @@ def test_trabajos_antiguos_no_cambian():
     viejo = {"tipo": "oliva", "activa": True, "altura": 5.0, "largo": 25.0, "ancho": 20.0}
     assert P.Pieza.de_dict(viejo).adaptar is False
     assert P.Pieza("oliva").adaptar is True
+
+
+def test_barra_bajo_todas_las_cabezas_y_curvada_como_el_recorte(proyecto):
+    from ortomolde import recorte as R
+
+    p = proyecto
+    pie = p.pies[0]
+    refs = pie.referencias
+    r = p.original.rejilla
+    X, Y = r.malla()
+    tt, ss = R.coordenadas_arco(refs, X, Y)
+    d, barra = _efecto(p, pie, "barra")
+    perfil = R._perfil(refs, pie.recorte)
+    lejos_del_borde = ndimage_distancia(pie.mascara) > 10
+    # De la 1.ª a la 5.ª cabeza (y más allá), con la misma altura, y siguiendo la curva del recorte.
+    for t0 in (0.0, 0.2, 0.5, 0.8, 1.0):
+        sel = (np.abs(tt - t0) < 0.02) & lejos_del_borde
+        k = np.argmin(d[sel])
+        assert -d[sel][k] == pytest.approx(barra.altura, abs=0.15), t0
+        assert ss[sel][k] == pytest.approx(float(perfil(t0)) - barra.retraso, abs=1.0), t0
+    # Con el recorte recto, la barra también es recta (y con más curvatura, más curvada).
+    curv = pie.recorte.curvatura
+    try:
+        pie.recorte.curvatura = 2.0
+        d2, _ = _efecto(p, pie, "barra")
+        assert not np.allclose(d, d2)
+    finally:
+        pie.recorte.curvatura = curv
+
+
+def ndimage_distancia(mascara):
+    from scipy import ndimage
+
+    return ndimage.distance_transform_edt(mascara)

@@ -251,7 +251,7 @@ class Proyecto:
         for pie in self.pies:
             if pie.piezas:
                 z = piezas_mod.aplicar(z, self.fondo, pie.referencias, pie.piezas, pie.mascara, X, Y, r.dx, r.dy,
-                                       self.clinicos["referencias"], borde)
+                                       self.clinicos["referencias"], borde, pie.recorte)
         for pie in self.pies:
             z = recorte_mod.aplicar(z, self.fondo, pie.referencias, pie.recorte, pie.mascara, X, Y,
                                     self.original.rejilla.dx)

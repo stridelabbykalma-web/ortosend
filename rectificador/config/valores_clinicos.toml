@@ -41,13 +41,12 @@ ancho = 20.0
 retraso = 8.0
 
 [barra_metatarsal]
-# Barra metatarsal (bulto transversal en la plantilla = hueco en el molde) bajo las cabezas 2.ª a 4.ª,
-# por detrás de ellas.
+# Barra metatarsal (bulto transversal en la plantilla = hueco en el molde) bajo todas las cabezas
+# (1.ª a 5.ª), de borde a borde del pie, curvada como el recorte (parábola metatarsal) y por detrás.
+# Misma altura de lado a lado.
 altura = 5.0
 # Ancho de la barra medido a lo largo del pie.
 ancho = 20.0
-# Cuánto sobresale a cada lado de la 2.ª y la 4.ª cabeza.
-margen_lateral = 6.0
 # Distancia del centro de la barra por detrás de las cabezas.
 retraso = 8.0
 

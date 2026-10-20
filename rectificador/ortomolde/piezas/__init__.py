@@ -6,7 +6,7 @@ Las alturas se dan pensando en la PLANTILLA, como se prescriben, y aquí se pasa
 |----------------------|------------------------------|------------------------------------|
 | Relleno de arco      | rebaja el arco (o lo sube)   | se añade escayola (o se quita)     |
 | Oliva retrocapital   | bulto                        | hueco                              |
-| Barra metatarsal     | bulto transversal            | hueco                              |
+| Barra metatarsal     | bulto transversal (1.ª a 5.ª)| hueco, curvado como el recorte     |
 | Descarga 1.er MTT    | hueco bajo la cabeza         | se añade escayola                  |
 | Skive medial         | cuña en varo bajo el talón   | se quita escayola del talón medial |
 
@@ -27,6 +27,8 @@ from dataclasses import asdict, dataclass, replace
 import numpy as np
 from scipy import ndimage
 
+from .. import recorte as recorte_mod
+from ..recorte import Recorte
 from ..referencias import Referencias, _borde
 
 TIPOS = ("arco", "oliva", "barra", "descarga_1mtt", "skive")
@@ -99,8 +101,7 @@ def por_defecto(clinicos: dict) -> dict[str, Pieza]:
                       sentido=a.get("sentido", "rebajar")),
         "oliva": Pieza("oliva", altura=o.get("altura", 5.0), largo=o.get("largo", 25.0), ancho=o.get("ancho", 20.0),
                        retraso=o.get("retraso", 8.0)),
-        "barra": Pieza("barra", altura=b.get("altura", 5.0), largo=b.get("ancho", 20.0),
-                       ancho=b.get("margen_lateral", 6.0), retraso=b.get("retraso", 8.0)),
+        "barra": Pieza("barra", altura=b.get("altura", 5.0), largo=b.get("ancho", 20.0), retraso=b.get("retraso", 8.0)),
         "descarga_1mtt": Pieza("descarga_1mtt", altura=d.get("profundidad", 2.0), largo=d.get("diametro", 20.0),
                                ancho=d.get("diametro", 20.0)),
         "skive": Pieza("skive", altura=s.get("altura", 4.0), largo=s.get("largo", 45.0)),
@@ -127,19 +128,10 @@ def _rampa(t: np.ndarray) -> np.ndarray:
     return t * t * (3 - 2 * t)
 
 
-def _cabeza_local(sis, refs: Referencias, k: str, m1, m5, fraccion: float):
-    """(u, v) de una cabeza; si no está marcada, sobre la línea 1.ª-5.ª a la fracción típica."""
-    p = refs.puntos.get(k)
-    if p is None:
-        p = (m1 + fraccion * (m5 - m1))
-    u, v = sis.a_local(p[0], p[1])
-    return float(u), float(v)
-
-
 def centro(pieza: Pieza, refs: Referencias, mascara: np.ndarray, dx: float, dy: float,
-           cfg_ref: dict) -> tuple[float, float] | None:
+           cfg_ref: dict, recorte: Recorte | None = None) -> tuple[float, float] | None:
     """Dónde va el centro de la pieza, en (x, y) del molde (para dibujarla y cogerla con el ratón)."""
-    g = _geometria_local(pieza, refs, mascara, dx, dy, cfg_ref)
+    g = _geometria_local(pieza, refs, mascara, dx, dy, cfg_ref, recorte)
     if g is None:
         return None
     sis, cu, cv = g["sis"], g["cu"], g["cv"]
@@ -147,7 +139,8 @@ def centro(pieza: Pieza, refs: Referencias, mascara: np.ndarray, dx: float, dy: 
     return float(x), float(y)
 
 
-def _geometria_local(pieza: Pieza, refs: Referencias, mascara, dx, dy, cfg_ref) -> dict | None:
+def _geometria_local(pieza: Pieza, refs: Referencias, mascara, dx, dy, cfg_ref,
+                     recorte: Recorte | None = None) -> dict | None:
     if not refs.completas:
         return None
     try:
@@ -166,11 +159,12 @@ def _geometria_local(pieza: Pieza, refs: Referencias, mascara, dx, dy, cfg_ref) 
     elif pieza.tipo == "oliva":
         out.update(cu=sis.largo - pieza.retraso, cv=0.0)
     elif pieza.tipo == "barra":
-        cabezas = [_cabeza_local(sis, refs, k, m1, m5, f) for k, f in (("mtt2", 0.25), ("mtt3", 0.5), ("mtt4", 0.75))]
-        us = [c[0] for c in cabezas]
-        vs = [c[1] for c in cabezas]
-        out.update(cu=float(np.mean(us)) - pieza.retraso, cv=float(np.mean([max(vs), min(vs)])),
-                   medio_ancho=(max(vs) - min(vs)) / 2 + ancho)
+        # Banda de borde a borde del pie, paralela al arco de las cabezas (la misma curva que el recorte),
+        # `retraso` mm por detrás. El cuadradito va en medio (t = 0,5).
+        perfil = recorte_mod._perfil(refs, recorte or Recorte())
+        medio = m1 + 0.5 * (m5 - m1) + sis.eje * (float(perfil(0.5)) - pieza.retraso)
+        cu, cv = sis.a_local(medio[0], medio[1])
+        out.update(cu=float(cu), cv=float(cv), perfil=perfil)
     elif pieza.tipo == "descarga_1mtt":
         u, v = sis.a_local(m1[0], m1[1])
         out.update(cu=float(u), cv=float(v))
@@ -184,12 +178,13 @@ def _geometria_local(pieza: Pieza, refs: Referencias, mascara, dx, dy, cfg_ref) 
 
 
 def cambio_altura(pieza: Pieza, refs: Referencias, mascara: np.ndarray, X: np.ndarray, Y: np.ndarray,
-                  dx: float, dy: float, cfg_ref: dict, suavizado_borde: float = 8.0) -> np.ndarray | None:
+                  dx: float, dy: float, cfg_ref: dict, suavizado_borde: float = 8.0,
+                  recorte: Recorte | None = None) -> np.ndarray | None:
     """Cuánto sube (+) o baja (−) el MOLDE en cada punto por esta pieza (mm). None si no se puede
     colocar todavía (faltan referencias)."""
     if not pieza.activa or pieza.altura == 0:
         return None
-    g = _geometria_local(pieza, refs, mascara, dx, dy, cfg_ref)
+    g = _geometria_local(pieza, refs, mascara, dx, dy, cfg_ref, recorte)
     if g is None:
         return None
     sis = g["sis"]
@@ -212,10 +207,10 @@ def cambio_altura(pieza: Pieza, refs: Referencias, mascara: np.ndarray, X: np.nd
         forma = _campana(t)
         signo = -1.0
     elif pieza.tipo == "barra":
-        pu = _campana(np.abs(u - cu) / (largo / 2))
-        borde = max(suavizado_borde, 1.0)
-        pv = 1.0 - _rampa((np.abs(v - cv) - (g["medio_ancho"] - borde)) / borde)
-        forma = pu * pv
+        # Misma altura de lado a lado; a lo largo del pie, campana centrada en la curva del arco − retraso.
+        xs, ys = sis.a_global(u, v)  # ya movida a mano
+        tt, ss = recorte_mod.coordenadas_arco(refs, xs, ys)
+        forma = _campana(np.abs(ss - (g["perfil"](tt) - pieza.retraso)) / (largo / 2))
         signo = -1.0
     elif pieza.tipo == "descarga_1mtt":
         forma = _campana(np.hypot(u - cu, v - cv) / (largo / 2))
@@ -230,22 +225,23 @@ def cambio_altura(pieza: Pieza, refs: Referencias, mascara: np.ndarray, X: np.nd
     dz = np.zeros(mascara.shape)
     # Bordes suaves en el contorno del pie: se desvanece en los 2 últimos mm hacia dentro (fuera no hay nada).
     #    (El skive no: es un corte en plano que llega hasta el borde medial; fuera del pie ya está la base.)
+    #    (La barra llega de borde a borde: se desvanece en `suavizado_borde` mm para no dejar escalón.)
     if pieza.tipo == "skive":
         dentro = mascara[j0:j1, i0:i1].astype(float)
     else:
         distancia = ndimage.distance_transform_edt(np.pad(mascara[j0:j1, i0:i1], 1), sampling=dx)[1:-1, 1:-1]
-        dentro = _rampa(distancia / 2.0)
+        dentro = _rampa(distancia / (max(suavizado_borde, 2.0) if pieza.tipo == "barra" else 2.0))
     dz[j0:j1, i0:i1] = signo * h * forma * dentro
     return dz
 
 
 def aplicar(z: np.ndarray, fondo: float, refs: Referencias, piezas: dict[str, Pieza], mascara: np.ndarray,
             X: np.ndarray, Y: np.ndarray, dx: float, dy: float, cfg_ref: dict,
-            suavizado_borde: float = 8.0) -> np.ndarray:
+            suavizado_borde: float = 8.0, recorte: Recorte | None = None) -> np.ndarray:
     """El molde con todas las piezas activas de un pie (nunca por debajo de la base)."""
     total = None
     for p in piezas.values():
-        dz = cambio_altura(p, refs, mascara, X, Y, dx, dy, cfg_ref, suavizado_borde)
+        dz = cambio_altura(p, refs, mascara, X, Y, dx, dy, cfg_ref, suavizado_borde, recorte)
         if dz is not None:
             total = dz if total is None else total + dz
     if total is None:
@@ -253,9 +249,10 @@ def aplicar(z: np.ndarray, fondo: float, refs: Referencias, piezas: dict[str, Pi
     return np.maximum(z + total, fondo)
 
 
-def contorno(pieza: Pieza, refs: Referencias, mascara, dx, dy, cfg_ref, n: int = 48) -> list | None:
+def contorno(pieza: Pieza, refs: Referencias, mascara, dx, dy, cfg_ref, n: int = 48,
+             recorte: Recorte | None = None) -> list | None:
     """Contorno aproximado de la pieza en (x, y) del molde, para dibujarlo."""
-    g = _geometria_local(pieza, refs, mascara, dx, dy, cfg_ref)
+    g = _geometria_local(pieza, refs, mascara, dx, dy, cfg_ref, recorte)
     if g is None:
         return None
     sis, cu, cv = g["sis"], g["cu"] + pieza.du, g["cv"] + pieza.dv
@@ -267,9 +264,25 @@ def contorno(pieza: Pieza, refs: Referencias, mascara, dx, dy, cfg_ref, n: int =
     elif pieza.tipo == "arco":
         uu, vv = cu + largo / 2 * np.cos(t), cv + (ancho / 2) * np.sin(t)
     elif pieza.tipo == "barra":
-        a, b = largo / 2, g["medio_ancho"]
-        uu = np.array([cu - a, cu + a, cu + a, cu - a, cu - a])
-        vv = np.array([cv - b, cv - b, cv + b, cv + b, cv - b])
+        # Las dos orillas de la banda (solo lo que cae dentro del pie), cerradas.
+        m1, m5 = np.array(refs.puntos["mtt1"], float), np.array(refs.puntos["mtt5"], float)
+        tt = np.linspace(-0.8, 1.8, 3 * n)
+        orillas = []
+        for lado in (1, -1):
+            s = g["perfil"](tt) - pieza.retraso + lado * largo / 2
+            px = m1[0] + tt * (m5[0] - m1[0]) + sis.eje[0] * s
+            py = m1[1] + tt * (m5[1] - m1[1]) + sis.eje[1] * s
+            u_, v_ = sis.a_local(px, py)
+            orillas.append((u_ + pieza.du, v_ + pieza.dv))
+        uu = np.concatenate([orillas[0][0], orillas[1][0][::-1]])
+        vv = np.concatenate([orillas[0][1], orillas[1][1][::-1]])
+        x, y = sis.a_global(uu, vv)
+        ny, nx = mascara.shape
+        i = np.clip(np.round(x / dx).astype(int), 0, nx - 1)
+        j = np.clip(np.round(y / dy).astype(int), 0, ny - 1)
+        dentro = mascara[j, i] & (x >= 0) & (y >= 0)
+        pts = [(float(a), float(b)) for a, b in zip(x[dentro], y[dentro])]
+        return pts + pts[:1] if len(pts) > 2 else None
     else:  # skive
         u0, u1 = -g["atras"] + pieza.du, -g["atras"] + largo + pieza.du
         uu = np.array([u0, u1, u1, u0, u0])

@@ -1,5 +1,11 @@
 # Novedades del Rectificador de moldes
 
+## 0.3.4
+- **Barra metatarsal nueva**: ahora va bajo **todas las cabezas** (de la 1.ª a la 5.ª), de borde a borde
+  del pie, **curvada con la misma forma que el recorte** y por detrás de las cabezas. La altura es la misma
+  de lado a lado. Si cambias la curvatura del recorte, la barra la sigue.
+- Los trabajos guardados que tenían barra se abren con la barra nueva.
+
 ## 0.3.3
 - La actualización automática es más segura: descarga los archivos uno a uno (comprobando cada uno) y,
   si no puede, prueba otra vía. Si aun así falla, dice el motivo con palabras claras.
