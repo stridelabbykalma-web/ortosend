@@ -7,7 +7,7 @@ export const EMPRESA = {
   domicilio: "[DOMICILIO SOCIAL PENDIENTE]",
   registro: "[DATOS DE INSCRIPCIÓN EN EL REGISTRO MERCANTIL PENDIENTES]",
   email: "hola@ortosend.com",
-  web: "https://ortosend-five.vercel.app",
+  web: "https://ortosend.es",
   // WhatsApp de la empresa (ManyChat), en formato internacional sin «+».
   whatsapp: process.env.WHATSAPP_EMPRESA || "34644954520",
 };
