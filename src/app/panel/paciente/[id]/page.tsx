@@ -10,7 +10,7 @@ import { ESTADO_PACIENTE } from "@/lib/consent/estados";
 import { fmtd, fmtdt } from "@/lib/format";
 import { enlaceAlta } from "@/lib/legal";
 import QRCode from "qrcode";
-import { enviarAccesoAction, guardarDniAction, reenviarAction, revocarEnNombreAction } from "@/app/panel/alta-actions";
+import { abrirAceptacionAquiAction, enviarAccesoAction, guardarDniAction, reenviarAction, reenviarEmailAction, revocarEnNombreAction } from "@/app/panel/alta-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -82,6 +82,10 @@ export default async function PacientePage({
               <div className="tiny" style={{ wordBreak: "break-all" }}>
                 O que abra este enlace: <a href={enlaceAlta()}>{enlaceAlta()}</a>
               </div>
+              <div className="tiny" style={{ marginTop: 6 }}>
+                ¿El móvil no tiene WhatsApp? {dest.email ? "Le hemos enviado el mismo enlace de aceptación por email," : "Sin email de contacto,"}{" "}
+                y también puede aceptar los documentos aquí mismo, en este dispositivo.
+              </div>
             </div>
           </div>
           <div className="sp" />
@@ -89,11 +93,16 @@ export default async function PacientePage({
       )}
 
       <div className="card">
-        <b>WhatsApp</b>
+        <b>Envío de los documentos</b>
         <div className="muted">
           Destinatario: {dest.nombre} · {dest.telefono}
           {dest.email ? ` · ${dest.email}` : ""}
         </div>
+        {vigente?.emailSentAt && (
+          <div className="tiny" style={{ marginTop: 4 }}>
+            Enlace de aceptación enviado también por email el {fmtdt(vigente.emailSentAt)} (por si el móvil no tiene WhatsApp).
+          </div>
+        )}
         <table style={{ marginTop: 8 }}>
           <thead>
             <tr>
@@ -124,13 +133,33 @@ export default async function PacientePage({
           </tbody>
         </table>
         {esClinica && REENVIABLE.includes(p.status) && (
-          <form action={reenviarAction} style={{ marginTop: 10 }}>
-            <input type="hidden" name="patientId" value={p.id} />
-            <button type="submit" className="pri">
-              {p.status === "REVOCADO" ? "Enviar una nueva invitación para volver a aceptar" : "Reenviar WhatsApp"}
-            </button>
-            <div className="tiny">El mensaje anterior deja de valer y empieza un nuevo plazo de 72 h.</div>
-          </form>
+          <div className="row" style={{ marginTop: 10, gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+            <form action={reenviarAction}>
+              <input type="hidden" name="patientId" value={p.id} />
+              <button type="submit" className="pri">
+                {p.status === "REVOCADO" ? "Enviar una nueva invitación para volver a aceptar" : "Reenviar invitación"}
+              </button>
+            </form>
+            {dest.email && puedeEmpezar && (
+              <form action={reenviarEmailAction}>
+                <input type="hidden" name="patientId" value={p.id} />
+                <button type="submit">Reenviar solo el email</button>
+              </form>
+            )}
+            {puedeEmpezar && (
+              <form action={abrirAceptacionAquiAction}>
+                <input type="hidden" name="patientId" value={p.id} />
+                <button type="submit">Aceptar en este dispositivo</button>
+              </form>
+            )}
+          </div>
+        )}
+        {esClinica && REENVIABLE.includes(p.status) && (
+          <div className="tiny" style={{ marginTop: 6 }}>
+            Al reenviar, el mensaje anterior deja de valer y empieza un nuevo plazo de 72 h. «Aceptar en este
+            dispositivo» abre los documentos aquí para que {p.isMinor ? "el tutor" : "el paciente"} los lea y acepte
+            delante de ti (útil si su móvil no tiene WhatsApp ni email).
+          </div>
         )}
       </div>
       <div className="sp" />
@@ -140,7 +169,7 @@ export default async function PacientePage({
         {!fichaAbierta ? (
           <div className="note a" style={{ marginTop: 8 }}>
             Bloqueada: se abrirá en cuanto {p.isMinor ? "el tutor acepte" : "el paciente acepte"} los cuatro documentos
-            obligatorios por WhatsApp.
+            obligatorios (por WhatsApp o por el enlace web del email).
           </div>
         ) : (
           <>

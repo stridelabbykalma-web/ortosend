@@ -103,6 +103,15 @@ export function renderEmail(template: string, p: Payload): { subject: string; te
           p.validez
         )}):\n\n${link(p)}\n\nSi caduca, tu clínica puede reenviártelo.${firma}`,
       };
+    case "alta_documentos":
+      return {
+        subject: `Acepta los documentos de tu alta en ${EMPRESA.nombreComercial}`,
+        text: `Hola ${str(p.nombre)},\n\nTu clínica ha iniciado ${
+          str(p.paciente) ? `el alta de ${str(p.paciente)} (menor a tu cargo)` : "tu alta"
+        } en ${EMPRESA.nombreComercial}. Para empezar el estudio solo falta leer y aceptar los documentos legales.\n\nSi usas WhatsApp, te hemos escrito por ahí. Si no, puedes aceptarlos desde este enlace (válido ${str(
+          p.validez
+        )}):\n\n${link(p)}\n\nSi el enlace caduca, tu clínica puede reenviártelo.${firma}`,
+      };
     case "acceso_listo":
       return {
         subject: `Tu perfil en ${EMPRESA.nombreComercial} está listo`,

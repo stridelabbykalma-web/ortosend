@@ -322,9 +322,12 @@ model ConsentInvitation {
   patientId            String
   patient              Patient      @relation(fields: [patientId], references: [id])
   refHash              String       @unique
+  webTokenHash         String?      @unique // enlace web de aceptación (respaldo si el móvil no tiene WhatsApp)
   channel              String       @default("whatsapp")
   recipient            String // paciente | tutor
   toPhone              String
+  toEmail              String? // respaldo por email del mismo destinatario
+  emailSentAt          DateTime? // enlace de aceptación enviado por email
   legalTextIds         Json // { PRIVACIDAD: id, ... } versiones fijadas al enviar
   manychatSubscriberId String?
   manychatResponse     Json?

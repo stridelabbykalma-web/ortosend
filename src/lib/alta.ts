@@ -16,6 +16,7 @@ import { CAMPOS, ETIQUETAS, FLUJOS, aE164, manychat } from "./manychat";
 import { ORDEN, OBLIGATORIOS, SLUG, ETIQUETA, esObligatorio } from "./consent/tipos";
 import { registrar, textosVigentes } from "./consent/registro";
 import { INVITACION_HORAS, hashSecreto, horasDesdeAhora, nuevoSecreto } from "./consent/tokens";
+import { notifyEmail } from "./cases";
 
 type Tx = Prisma.TransactionClient;
 type Profesional = Pick<User, "id" | "name" | "clinicId">;
@@ -135,12 +136,15 @@ async function invitacionActivaDelTelefono(toPhone: string, salvoPaciente?: stri
 
 export type ResultadoEnvio = { ok: true; invitation: ConsentInvitation } | { ok: false; error: string; invitation: ConsentInvitation };
 
-// Crea una invitación nueva (invalida las anteriores) y lanza el WhatsApp.
+// Crea una invitación nueva (invalida las anteriores), lanza el WhatsApp y, si el
+// destinatario tiene email, envía también el enlace web de aceptación: así el alta
+// no se queda atascada cuando el móvil no tiene WhatsApp.
 export async function enviarInvitacion(patientId: string, actorUserId: string): Promise<ResultadoEnvio> {
   const patient = await prisma.patient.findUniqueOrThrow({ where: { id: patientId } });
   const dest = destinatario(patient);
   const textos = await textosVigentes(prisma);
   const ref = nuevoSecreto();
+  const webToken = nuevoSecreto();
   const invitation = await prisma.$transaction(async (tx) => {
     await tx.consentInvitation.updateMany({
       where: { patientId, invalidatedAt: null, completedAt: null },
@@ -150,14 +154,19 @@ export async function enviarInvitacion(patientId: string, actorUserId: string): 
       data: {
         patientId,
         refHash: hashSecreto(ref),
+        webTokenHash: hashSecreto(webToken),
         recipient: dest.recipient,
         toPhone: dest.telefono,
+        toEmail: dest.email ?? null,
         legalTextIds: Object.fromEntries(ORDEN.map((t) => [t, textos[t].id])),
         expiresAt: horasDesdeAhora(INVITACION_HORAS),
         createdById: actorUserId,
       },
     });
   });
+
+  // Respaldo por email (independiente de que el WhatsApp salga o no).
+  const emailEnviado = await enviarEmailAlta(invitation.id, webToken, patient, dest);
 
   try {
     const mc = manychat();
@@ -186,9 +195,61 @@ export async function enviarInvitacion(patientId: string, actorUserId: string): 
       where: { id: invitation.id },
       data: { sendStatus: "ERROR", sendError: msg, manychatResponse: { error: msg } },
     });
-    await prisma.patient.update({ where: { id: patientId }, data: { status: "ERROR_ENVIO" } });
+    // Con el email fuera, el alta sigue viva aunque WhatsApp falle.
+    await prisma.patient.update({
+      where: { id: patientId },
+      data: { status: emailEnviado ? siguienteEstadoTrasEnvio(patient.status) : "ERROR_ENVIO" },
+    });
     return { ok: false, error: msg, invitation: ko };
   }
+}
+
+// Envía (o reenvía) por email el enlace web para aceptar los documentos.
+async function enviarEmailAlta(
+  invitationId: string,
+  webToken: string,
+  patient: Pick<Patient, "name" | "isMinor">,
+  dest: ReturnType<typeof destinatario>
+): Promise<boolean> {
+  if (!dest.email) return false;
+  await notifyEmail(dest.email, "alta_documentos", {
+    nombre: dest.nombre,
+    paciente: patient.isMinor ? patient.name : undefined,
+    enlace: `/alta/${webToken}`,
+    validez: `${INVITACION_HORAS} horas`,
+  });
+  await prisma.consentInvitation.update({ where: { id: invitationId }, data: { emailSentAt: new Date() } });
+  return true;
+}
+
+// Genera un enlace web nuevo para la invitación vigente (el anterior deja de
+// valer) y lo devuelve: para reenviarlo por email o abrirlo en un dispositivo
+// de la clínica delante del paciente.
+export async function nuevoEnlaceWeb(patientId: string): Promise<{ ok: true; token: string } | { ok: false; error: string }> {
+  const inv = await prisma.consentInvitation.findFirst({
+    where: { patientId, invalidatedAt: null, completedAt: null, expiresAt: { gt: new Date() } },
+    orderBy: { createdAt: "desc" },
+  });
+  if (!inv) return { ok: false, error: "No hay ninguna invitación vigente: reenvía primero la invitación." };
+  const token = nuevoSecreto();
+  await prisma.consentInvitation.update({ where: { id: inv.id }, data: { webTokenHash: hashSecreto(token) } });
+  return { ok: true, token };
+}
+
+// Reenvía por email el enlace de aceptación (con token nuevo) de la invitación vigente.
+export async function reenviarEmailAlta(patientId: string, actor: Pick<User, "id">): Promise<{ ok: boolean; error?: string }> {
+  const patient = await prisma.patient.findUniqueOrThrow({ where: { id: patientId } });
+  const dest = destinatario(patient);
+  if (!dest.email) return { ok: false, error: "Este alta no tiene email de contacto. Añádelo dando de alta de nuevo o usa WhatsApp." };
+  const r = await nuevoEnlaceWeb(patientId);
+  if (!r.ok) return r;
+  const inv = await prisma.consentInvitation.findFirstOrThrow({
+    where: { patientId, invalidatedAt: null, completedAt: null },
+    orderBy: { createdAt: "desc" },
+  });
+  await enviarEmailAlta(inv.id, r.token, patient, dest);
+  await auditar(actor.id, "patient.reenvio_email", patientId);
+  return { ok: true };
 }
 
 // Un reenvío a un paciente REVOCADO lo devuelve a PENDIENTE (vuelve a aceptar
@@ -365,7 +426,7 @@ async function procesarConRef(e: EntradaWebhook): Promise<SalidaWebhook> {
       // con Ortosend por ese canal. Se refleja en el histórico que usa notifyOwner.
       const consents = { ...((patient.consents as object) ?? {}), whatsapp: { aceptado: true, fecha: new Date().toISOString(), via: "alta_whatsapp" } };
       await tx.patient.update({ where: { id: patient.id }, data: { status: "ACEPTADO", consents } });
-      await abrirFicha(tx, patient);
+      await abrirFichaTrasAceptar(tx, patient, "whatsapp");
       efecto.aceptado = true;
     } else if (tipo === "MARKETING") {
       efecto.marketing = action === "ACEPTADO";
@@ -380,15 +441,17 @@ async function procesarConRef(e: EntradaWebhook): Promise<SalidaWebhook> {
   return res;
 }
 
-// La ficha clínica (caso + captura) nace al aceptar los cuatro obligatorios.
-// Si vuelve tras una revocación y ya tiene un caso abierto, se reutiliza.
-async function abrirFicha(tx: Tx, patient: Patient) {
+// La ficha clínica (caso + captura) nace al aceptar los cuatro obligatorios
+// (por WhatsApp o por el enlace web). Si vuelve tras una revocación y ya tiene
+// un caso abierto, se reutiliza.
+export async function abrirFichaTrasAceptar(tx: Tx, patient: Patient, via: "whatsapp" | "web" = "whatsapp") {
+  const canal = via === "web" ? "por la web" : "por WhatsApp";
   if (!patient.clinicId) return;
   const abierto = await tx.case.findFirst({
     where: { patientId: patient.id, state: { notIn: ["CERRADO", "NO_PRESCRITO", "NO_CONVERTIDO", "ENTREGADO"] } },
   });
   if (abierto) {
-    await tx.caseEvent.create({ data: { caseId: abierto.id, text: "Consentimientos aceptados de nuevo por WhatsApp", actor: "sistema" } });
+    await tx.caseEvent.create({ data: { caseId: abierto.id, text: `Consentimientos aceptados de nuevo ${canal}`, actor: "sistema" } });
     return;
   }
   const kase = await tx.case.create({
@@ -398,7 +461,7 @@ async function abrirFicha(tx: Tx, patient: Patient) {
   await tx.caseEvent.create({
     data: {
       caseId: kase.id,
-      text: `Consentimientos aceptados por WhatsApp${patient.isMinor ? ` por su tutor (${patient.tutorName})` : ""}: ficha abierta`,
+      text: `Consentimientos aceptados ${canal}${patient.isMinor ? ` por su tutor (${patient.tutorName})` : ""}: ficha abierta`,
       actor: "sistema",
     },
   });

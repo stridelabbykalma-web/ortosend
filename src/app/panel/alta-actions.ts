@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import type { ConsentType, User } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { requireRole } from "@/lib/auth";
-import { auditar, crearPreAlta, leerPreAlta, puedeVerFicha, reenviar, revocar, tratamientoPermitido } from "@/lib/alta";
+import { auditar, crearPreAlta, leerPreAlta, nuevoEnlaceWeb, puedeVerFicha, reenviar, reenviarEmailAlta, revocar, tratamientoPermitido } from "@/lib/alta";
 import { enviarAcceso } from "@/lib/acceso";
 import { isValidDni, normalizeDni } from "@/lib/contacto";
 import { ORDEN, esObligatorio } from "@/lib/consent/tipos";
@@ -48,7 +48,29 @@ export async function reenviarAction(formData: FormData) {
   const r = await reenviar(p.id, u);
   const back = `/panel/paciente/${p.id}`;
   if (!r.ok) volver(back, "error", r.error);
-  volver(back, "ok", "WhatsApp reenviado. El mensaje anterior deja de valer.");
+  volver(back, "ok", "Invitación reenviada por WhatsApp y, si tiene email, también por email. El mensaje anterior deja de valer.");
+}
+
+// Reenvía solo el enlace web de aceptación por email (p. ej. si el móvil no tiene WhatsApp).
+export async function reenviarEmailAction(formData: FormData) {
+  const u = await staff();
+  const p = await pacienteDeMiClinica(u, String(formData.get("patientId")));
+  const back = `/panel/paciente/${p.id}`;
+  const r = await reenviarEmailAlta(p.id, u);
+  if (!r.ok) volver(back, "error", r.error ?? "No se pudo reenviar");
+  volver(back, "ok", "Enlace de aceptación reenviado por email (el enlace anterior deja de valer).");
+}
+
+// Abre la aceptación web en este mismo dispositivo (tablet de la clínica),
+// para que el paciente la complete delante del profesional.
+export async function abrirAceptacionAquiAction(formData: FormData) {
+  const u = await staff();
+  const p = await pacienteDeMiClinica(u, String(formData.get("patientId")));
+  const back = `/panel/paciente/${p.id}`;
+  const r = await nuevoEnlaceWeb(p.id);
+  if (!r.ok) volver(back, "error", r.error);
+  await auditar(u.id, "patient.alta_web_abierta", p.id);
+  redirect(`/alta/${r.token}`);
 }
 
 // Datos que el profesional completa tras la aceptación (el DNI identifica la cuenta).
