@@ -349,6 +349,92 @@ def superficie_punta(h: np.ndarray, radio: float, paso: float, relleno: float = 
     return (centro - radio)[r:-r, r:-r]
 
 
+def superficie_fresada(h: np.ndarray, radio: float, paso: float, relleno: float = 0.0) -> np.ndarray:
+    """Lo que deja de verdad la fresa de bola si la punta pasa por `superficie_punta`: en los huecos más
+    estrechos que la bola queda escayola sin quitar. Siempre >= h."""
+    punta = superficie_punta(h, radio, paso, relleno)
+    r = int(np.ceil(radio / paso))
+    b = bola(radio, paso)
+    # Fondo de la bola respecto a su punta: R - sqrt(R² - d²) (fuera del disco no cuenta).
+    estructura = np.where(np.isfinite(b), b - radio, -1e6)
+    pp = np.pad(punta, r, mode="edge")
+    return ndimage.grey_erosion(pp, structure=estructura, mode="nearest")[r:-r, r:-r]
+
+
+def donde_no_llega(h: np.ndarray, radio: float, paso: float, zona: np.ndarray | None = None,
+                   paso_calculo: float = 1.0) -> np.ndarray:
+    """Cuánta escayola (mm) queda sin quitar en cada punto porque la bola no cabe (huecos estrechos,
+    esquinas). Se calcula con una rejilla de `paso_calculo` mm (es un aviso, no hace falta más detalle)
+    y solo en el recuadro de `zona` (con margen)."""
+    out = np.zeros(h.shape)
+    if zona is not None and not zona.any():
+        return out
+    margen = int(np.ceil(2 * radio / paso)) + 2
+    if zona is not None:
+        jj, ii = np.nonzero(zona)
+        j0, j1 = max(jj.min() - margen, 0), min(jj.max() + margen + 1, h.shape[0])
+        i0, i1 = max(ii.min() - margen, 0), min(ii.max() + margen + 1, h.shape[1])
+    else:
+        j0, j1, i0, i1 = 0, h.shape[0], 0, h.shape[1]
+    sub = h[j0:j1, i0:i1]
+    k = max(1, int(round(paso_calculo / paso)))
+    if k > 1:
+        reducido = ndimage.maximum_filter(sub, size=k)[::k, ::k]  # conservador: lo más alto de cada celda
+        fresado = superficie_fresada(reducido, radio, paso * k, float(sub.min()))
+        resto = np.clip(fresado - reducido, 0, None)
+        resto = ndimage.zoom(resto, (sub.shape[0] / resto.shape[0], sub.shape[1] / resto.shape[1]), order=1)
+        resto = resto[:sub.shape[0], :sub.shape[1]]
+    else:
+        resto = np.clip(superficie_fresada(sub, radio, paso, float(sub.min())) - sub, 0, None)
+    out[j0:j0 + resto.shape[0], i0:i0 + resto.shape[1]] = resto
+    if zona is not None:
+        out[~zona] = 0.0
+    return out
+
+
+def no_llega_en_molde(z: np.ndarray, fondo: float, mascaras: list[np.ndarray], radio: float, paso: float,
+                      borde_mm: float = 8.0) -> tuple[np.ndarray, dict]:
+    """Escayola que la bola no podrá quitar en el molde, como se fresa de verdad (cada pie es una isla
+    rodeada por el contorno, así que la fresa también entra por los lados).
+
+    Devuelve el mapa (mm) y un resumen: máximo y superficie en la PLANTA (lo importante) y en el BORDE
+    del pie (los `borde_mm` últimos mm, donde la planta se junta con la base)."""
+    sil = np.zeros(z.shape, bool)
+    for m in mascaras:
+        sil |= silueta_de(np.where(m, np.clip(z - fondo, 0, None), 0.0), paso)
+    if not sil.any():
+        return np.zeros(z.shape), {"planta_max": 0.0, "borde_max": 0.0, "planta_mm2": 0.0}
+    h = np.where(sil, z, fondo - 2 * radio)  # alrededor del pie: la ranura del contorno
+    d = donde_no_llega(h, radio, paso, sil)
+    interior = ndimage.distance_transform_edt(sil, sampling=paso) > borde_mm
+    planta, borde = d[interior], d[sil & ~interior]
+    return d, {"planta_max": float(planta.max()) if planta.size else 0.0,
+               "borde_max": float(borde.max()) if borde.size else 0.0,
+               "planta_mm2": float((planta > 0.3).sum() * paso * paso)}
+
+
+def en_vacio(gcode: str, por_encima: float = 5.0) -> str:
+    """El mismo programa entero, pero subido lo justo para que la fresa nunca baje de `por_encima` mm
+    sobre la plancha, y con el cabezal apagado: para comprobar el origen y los recorridos sin cortar."""
+    import re
+
+    numero = re.compile(r"Z(-?\d+\.?\d*)")
+    zs = [float(m.group(1)) for linea in gcode.splitlines() if linea.startswith(("G0 ", "G1 "))
+          for m in numero.finditer(linea)]
+    sube = max(0.0, por_encima - min(zs, default=0.0))
+    lineas = [comentario(f"PRUEBA EN VACIO: todo {sube:.1f} mm mas alto (nunca baja de {por_encima:g} mm sobre la "
+                         f"plancha), cabezal apagado. NO CORTA."),
+              comentario("Si todo va bien, despues lanza el archivo normal.")]
+    for linea in gcode.splitlines():
+        if re.match(r"^S\d+ M3$", linea) or linea.startswith("G4 "):
+            lineas.append(comentario(f"{linea} quitado en la prueba en vacio"))
+            continue
+        if linea.startswith(("G0 ", "G1 ")):
+            linea = numero.sub(lambda m: f"Z{float(m.group(1)) + sube:.3f}", linea)
+        lineas.append(linea)
+    return "\n".join(lineas) + "\n"
+
+
 # ---------------------------------------------------------------------------
 # G-code
 # ---------------------------------------------------------------------------
@@ -761,6 +847,11 @@ def generar(piezas: list[Pieza], ancho: float, largo: float, alto: float, paso: 
                  "z_minima": w.z_min},
         avisos=avisos,
     )
+    for f in fichas:  # ¿queda escayola en la planta que la bola no puede quitar?
+        _, r = no_llega_en_molde(f.pieza.h_girada(), 0.0, [f.pieza.silueta_girada()], radio, paso)
+        if r["planta_max"] >= 0.5:
+            trabajo.avisos.append(f"{f.nombre}: en la planta quedan hasta {r['planta_max']:.1f} mm que la bola de "
+                                  f"Ø{2 * radio:g} no puede quitar (huecos más estrechos que la fresa).")
     if sobran:
         trabajo.avisos.append(f"No caben {len(sobran)} pieza(s): " + ", ".join(p.nombre for p in sobran)
                               + ". Usa otra plancha o hazlas en otra tirada.")

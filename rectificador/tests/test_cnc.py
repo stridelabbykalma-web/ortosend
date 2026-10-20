@@ -24,7 +24,7 @@ def piezas_sinteticas(stl_sintetico, taller):
 def _movimientos(gcode):
     pos = {"X": 0.0, "Y": 0.0, "Z": 15.0}
     for linea in gcode.splitlines():
-        if linea.startswith(("G0", "G1")):
+        if linea.startswith(("G0 ", "G1 ")):
             for eje, v in re.findall(r"([XYZ])(-?\d+\.?\d*)", linea):
                 pos[eje] = float(v)
             yield linea[:2], dict(pos)
@@ -172,7 +172,7 @@ def test_capas_y_lineas_como_se_ha_pedido(tirada, cfg):
 def test_plancha_pequena_avisa_lo_que_no_cabe(piezas_sinteticas, cfg):
     t = cnc.generar(piezas_sinteticas("A"), 200, 300, 40, 1.0, 12.5, cfg)
     assert len(t.piezas) == 1 and len(t.sobran) == 1
-    assert "No caben 1" in t.avisos[0]
+    assert any("No caben 1" in a for a in t.avisos)
 
 
 def test_piezas_de_un_molde_exportado(tmp_path, stl_sintetico, taller):
@@ -239,3 +239,30 @@ def test_colocar_a_mano(piezas_sinteticas, cfg):
     avisos = []
     cnc.colocar(piezas, 400, 500, paso, cfg, R, avisos)
     assert not a.fija and avisos and "ya no cabe" in avisos[0]
+
+
+def test_prueba_en_vacio(tirada):
+    vacio = cnc.en_vacio(tirada.gcode, 5.0)
+    normal = [p for _, p in _movimientos(tirada.gcode)][1:]
+    alto = [p for _, p in _movimientos(vacio)][1:]
+    assert len(normal) == len(alto)
+    sube = alto[0]["Z"] - normal[0]["Z"]
+    assert sube > 30  # el programa baja más de 30 mm dentro de la plancha
+    for a, b in zip(normal, alto):
+        assert b["X"] == a["X"] and b["Y"] == a["Y"] and b["Z"] == pytest.approx(a["Z"] + sube, abs=1e-3)
+    assert min(p["Z"] for p in alto) == pytest.approx(5.0, abs=1e-3)  # nunca toca la plancha
+    assert "M3" not in [l for l in vacio.splitlines() if not l.startswith("(")]  # cabezal apagado
+    vacio.encode("ascii")
+
+
+def test_donde_no_llega_la_fresa():
+    y, x = np.mgrid[0:200, 0:200] * 0.5
+    h = np.full(x.shape, 10.0)
+    estrecho = (np.abs(x - 30) < 5) & (np.abs(y - 50) < 20)
+    h[estrecho] = 5.0  # hueco de 10 mm de ancho: la bola de 25 no entra hasta el fondo
+    h += 8 * np.exp(-((x - 70) ** 2 + (y - 50) ** 2) / 400)  # cúpula suave: llega a todo
+    d = cnc.donde_no_llega(h, 12.5, 0.5)
+    assert d[estrecho].max() > 3
+    assert d[np.hypot(x - 70, y - 50) < 15].max() < 0.05
+    # La superficie fresada nunca queda por debajo del molde.
+    assert (cnc.superficie_fresada(h, 12.5, 0.5) >= h - 1e-9).all()

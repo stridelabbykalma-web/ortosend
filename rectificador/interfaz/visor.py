@@ -118,11 +118,17 @@ class Visor(QtInteractor):
 
     # ---------------------------------------------------------------- molde
 
-    def mostrar_molde(self, campo: Campo, reiniciar_camara: bool = True) -> None:
+    def mostrar_molde(self, campo: Campo, reiniciar_camara: bool = True, colores: np.ndarray | None = None) -> None:
         """Muestra el molde. Si solo han cambiado las alturas, se actualiza la superficie que ya hay
-        (sin rehacerla): así cada cambio se ve casi al momento."""
+        (sin rehacerla): así cada cambio se ve casi al momento.
+
+        `colores`: mm de escayola que la fresa no puede quitar en cada punto; se pinta de color espuma
+        (0) a rojo (2 mm o más)."""
+        coloreado = colores is not None
         mismo = (self._malla is not None and self.campo is not None and not reiniciar_camara
-                 and self.campo.z.shape == campo.z.shape and self.campo.rejilla.dx == campo.rejilla.dx)
+                 and self.campo.z.shape == campo.z.shape and self.campo.rejilla.dx == campo.rejilla.dx
+                 and coloreado == getattr(self, "_coloreado", False))
+        self._coloreado = coloreado
         self.campo = campo
         if mismo:
             puntos = np.array(self._malla.points)
@@ -130,6 +136,8 @@ class Visor(QtInteractor):
             self._malla.points = puntos
             self._malla.point_data["Normals"] = normales(campo)
             self._malla.point_data.active_normals_name = "Normals"
+            if coloreado:
+                self._malla.point_data["No llega (mm)"] = colores.ravel(order="F")
             self._malla.Modified()
             self._localizador.ForceBuildLocator()  # las alturas han cambiado
         else:
@@ -137,8 +145,17 @@ class Visor(QtInteractor):
             malla.point_data["Normals"] = normales(campo)
             malla.point_data.active_normals_name = "Normals"
             self._malla = malla
-            actor = self.add_mesh(malla, name="molde", color="#d8c3a0",  # color espuma
-                                  pickable=True, specular=0.15, ambient=0.2, diffuse=0.85, render=False)
+            if coloreado:
+                from matplotlib.colors import LinearSegmentedColormap
+
+                malla.point_data["No llega (mm)"] = colores.ravel(order="F")
+                mapa = LinearSegmentedColormap.from_list("no_llega", ["#d8c3a0", "#ffa94d", "#e03131"])
+                actor = self.add_mesh(malla, name="molde", scalars="No llega (mm)", cmap=mapa, clim=(0, 2),
+                                      show_scalar_bar=False, pickable=True, specular=0.15, ambient=0.2,
+                                      diffuse=0.85, render=False)
+            else:
+                actor = self.add_mesh(malla, name="molde", color="#d8c3a0",  # color espuma
+                                      pickable=True, specular=0.15, ambient=0.2, diffuse=0.85, render=False)
             actor.GetProperty().SetInterpolationToPhong()
             self._picker.InitializePickList()
             self._picker.AddPickList(actor)

@@ -820,6 +820,14 @@ class VentanaPrincipal(QMainWindow):
         self.ver_original = QCheckBox("Ver el escaneo sin lijar (para comparar)")
         self.ver_original.toggled.connect(lambda _: self._mostrar_molde(reiniciar_camara=False))
         lay.addWidget(self.ver_original)
+        self.ver_fresa = QCheckBox(f"Ver dónde no llega la fresa (bola Ø{self.taller['fresa']['diametro']:g})")
+        self.ver_fresa.setToolTip("Pinta en rojo la escayola que la fresa de bola no podrá quitar\n"
+                                  "(huecos más estrechos que la bola). Espuma = 0 · rojo = 2 mm o más.")
+        self.ver_fresa.toggled.connect(lambda _: self._actualizar_todo() if self.proyecto else None)
+        lay.addWidget(self.ver_fresa)
+        self.texto_fresa = estilo.etiqueta("", "nota")
+        self.texto_fresa.hide()
+        lay.addWidget(self.texto_fresa)
         self.boton_medir = QPushButton("Medir distancia")
         self.boton_medir.setIcon(estilo.icono("medir"))
         self.boton_medir.setCheckable(True)
@@ -866,7 +874,22 @@ class VentanaPrincipal(QMainWindow):
     def _mostrar_molde(self, reiniciar_camara: bool):
         p = self.proyecto
         campo = p.original if self.ver_original.isChecked() else p.calcular()
-        self.visor.mostrar_molde(campo, reiniciar_camara=reiniciar_camara)
+        colores = None
+        if self.ver_fresa.isChecked():
+            from ortomolde import cnc
+
+            colores, r = cnc.no_llega_en_molde(campo.z, p.fondo, [q.mascara for q in p.pies],
+                                               self.taller["fresa"]["diametro"] / 2, campo.rejilla.dx)
+            if r["planta_max"] < 0.3:
+                texto = "En la planta la fresa llega a todo. "
+            else:
+                texto = (f"<b>En la planta quedan hasta {r['planta_max']:.1f} mm</b> sin quitar "
+                         f"({r['planta_mm2'] / 100:.1f} cm²). ")
+            texto += (f"En el borde del pie, hasta {r['borde_max']:.1f} mm (donde la planta se junta con la base)."
+                      if r["borde_max"] >= 0.3 else "En el borde, nada importante.")
+            self.texto_fresa.setText(texto)
+        self.texto_fresa.setVisible(colores is not None)
+        self.visor.mostrar_molde(campo, reiniciar_camara=reiniciar_camara, colores=colores)
 
     def _menus(self):
         self.acciones = {}

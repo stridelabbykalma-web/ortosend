@@ -111,6 +111,16 @@ class VentanaTirada(QDialog):
             c.valueChanged.connect(lambda *_: (self._invalidar(), self._reloj.start()))
             form.addRow(estilo.etiqueta(texto, "secundario", envolver=False), c)
             self.cajas.append(c)
+        self.caja_margen = QDoubleSpinBox()
+        self.caja_margen.setRange(0, 60)
+        self.caja_margen.setDecimals(0)
+        self.caja_margen.setSuffix(" mm")
+        self.caja_margen.setValue(self.taller["cnc"].get("margen_bloque", 0.0))
+        self.caja_margen.setToolTip("Distancia mínima de la fresa al borde de la plancha.\n"
+                                    "Ponla si sujetas la plancha con topes o mordazas en los bordes\n"
+                                    "(con 0, la bola puede asomar hasta 12 mm por fuera del borde).")
+        self.caja_margen.valueChanged.connect(self._cambiar_margen)
+        form.addRow(estilo.etiqueta("Margen bordes", "secundario", envolver=False), self.caja_margen)
         lay_pl.addLayout(form)
         izq.addWidget(marco)
 
@@ -501,12 +511,15 @@ class VentanaTirada(QDialog):
                 return
         ruta = Path(ruta)
         ruta.write_text(self.trabajo.gcode, encoding="ascii", errors="replace")
+        vacio = ruta.with_name(ruta.stem + "_PRUEBA_EN_VACIO.nc")
+        vacio.write_text(cnc.en_vacio(self.trabajo.gcode, 5.0), encoding="ascii", errors="replace")
         hoja = ruta.with_suffix(".txt")
         a, l, h = self.trabajo.plancha
         lineas = [
             "TIRADA DE CNC - Rectificador de moldes Ortosend", "",
             f"Plancha de {self.taller['cnc'].get('material', '')}: {a:.0f} x {l:.0f} x {h:.0f} mm",
             "Origen: X0 Y0 = esquina delantera izquierda de la plancha; Z0 = cara de arriba.",
+            f"Prueba sin cortar: {ruta.stem}_PRUEBA_EN_VACIO.nc (todo por encima de la plancha, cabezal apagado).",
             f"Fresa: punta de bola de {self.taller['fresa']['diametro']:.0f} mm.",
             f"Tiempo estimado: {self.trabajo.tiempo_min:.0f} min ({_fases(self.trabajo)})",
             "Por cada pie: 1) contorno de la silueta, 2) desbaste por capas, 3) acabado en lineas paralelas a X.",
@@ -522,9 +535,17 @@ class VentanaTirada(QDialog):
         png, pdf = mapa.guardar(self.trabajo, ruta, ruta.stem.upper(), self.taller["fresa"]["diametro"])
         if not getattr(self, "_silencio", False):
             QDesktopServices.openUrl(QUrl.fromLocalFile(str(pdf)))  # el mapa, para verlo o imprimirlo
-            QMessageBox.information(self, "Guardado", f"Archivos guardados:\n{ruta}\n{hoja}\n{png}\n{pdf}"
-                                    "\n\nCopia el .nc al USB/tarjeta de la CNC.\n"
+            QMessageBox.information(self, "Guardado", f"Archivos guardados:\n{ruta}\n{vacio}\n{hoja}\n{png}\n{pdf}"
+                                    "\n\nCopia los .nc al USB/tarjeta de la CNC.\n"
+                                    f"Primera vez con una plancha nueva: lanza antes {vacio.name}: hace todo el "
+                                    "recorrido por encima de la plancha (nunca baja de 5 mm sobre ella) y sin cortar, "
+                                    "para comprobar el origen.\n"
                                     "Imprime el mapa (PDF) para saber qué molde es cada uno en la plancha.")
+
+    def _cambiar_margen(self, valor: float):
+        self.taller["cnc"]["margen_bloque"] = float(valor)
+        self._invalidar()
+        self._reloj.start()
 
     def ver_mapa(self):
         """Abre el mapa para imprimir (el mismo que se guarda con el .nc) de la colocación actual."""

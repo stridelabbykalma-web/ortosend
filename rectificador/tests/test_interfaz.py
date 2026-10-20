@@ -327,3 +327,38 @@ def test_guardar_y_reabrir_trabajo(stl_sintetico, tmp_path):
     assert (v.proyecto.calcular().z == z).all()
     assert str(tmp_path / "ana.molde") in v._recientes()
     v.close()
+
+
+def test_seguridad_cnc_en_la_ventana(stl_sintetico, tmp_path):
+    from PySide6.QtWidgets import QApplication
+
+    from interfaz.principal import VentanaPrincipal
+
+    app = QApplication.instance() or QApplication([])
+    v = VentanaPrincipal()
+    v.taller["calculo"]["rejilla"] = 1.0
+    v.show()
+    v.abrir(str(stl_sintetico), esperar=True)
+    # Ver dónde no llega la fresa: colorea el molde y explica dónde.
+    v.ver_fresa.setChecked(True)
+    assert v.texto_fresa.isVisible() and "planta" in v.texto_fresa.text()
+    assert "No llega (mm)" in v.visor._malla.point_data
+    v.ver_fresa.setChecked(False)
+    assert "No llega (mm)" not in v.visor._malla.point_data
+    # Margen en los bordes de la plancha: ningún pie (con su sitio para la fresa) más cerca del borde.
+    v.anadir_a_tirada()
+    t = v.tirada
+    t.caja_margen.setValue(30)
+    t._reloj.stop()
+    t._colocar(conservar=False)
+    m = cnc.margen_celdas(12.5, 1.0, t.taller["cnc"])
+    for p in t.piezas:
+        x, y, w, l = cnc.huella(p, m)
+        assert x >= 30 and y >= 30 and x + w <= 601 - 30 and y + l <= 501 - 30
+    t.calcular(esperar=True)
+    t._silencio = True
+    t.guardar(str(tmp_path / "T.nc"))
+    assert (tmp_path / "T_PRUEBA_EN_VACIO.nc").exists()
+    t.caja_margen.setValue(0)
+    t.close()
+    v.close()
