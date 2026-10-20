@@ -176,7 +176,11 @@ function slideDone(s: Slide, q: Questionnaire | null, e: Exam | null, has: (k: s
   if (s.t === "q") {
     if (!q) return false;
     if (q.done) return true;
-    const key = { motivo: "motivo", zonas: "zonas", actividad: "horasPie", calzado: "desgaste", antecedentes: "tratamientosPrevios" }[
+    // La última pantalla del bloque solo cuenta al pulsar «Continuar» (pone
+    // done:true), igual que la checklist del envío; los datos antiguos sin la
+    // bandera done cuentan como completos (mismo criterio que checklistOf).
+    if (s.section === "antecedentes") return q.done !== false && "tratamientosPrevios" in q;
+    const key = { motivo: "motivo", zonas: "zonas", actividad: "horasPie", calzado: "desgaste" }[
       s.section
     ] as keyof Questionnaire;
     return key !== undefined && key in q;
@@ -189,7 +193,9 @@ function slideDone(s: Slide, q: Questionnaire | null, e: Exam | null, has: (k: s
     // activa tiene ya algún test que la cubra.
     if (s.section === "comp_sel") return ramasSinCubrir(q, e).length === 0;
     if (s.section === "comp_res") return complementariosCompletos(e);
-    const key = { movilidad: "tipoPie", dismetria: "dismetria", marcha: "marchaPatron" }[
+    // Ídem: la pantalla de la marcha cierra el bloque de exploración con «Continuar».
+    if (s.section === "marcha") return e.done !== false && "marchaPatron" in e;
+    const key = { movilidad: "tipoPie", dismetria: "dismetria" }[
       s.section
     ] as keyof Exam | undefined;
     return key !== undefined && key in e;
