@@ -280,7 +280,7 @@ class PanelPie(QFrame):
         f.addWidget(volver)
         widgets["volver"] = volver
         ld.addLayout(f)
-        ld.addWidget(estilo.etiqueta("Para moverla, arrastra su bola en el 3D.", "nota"))
+        ld.addWidget(estilo.etiqueta("Para moverla, arrastra su cuadradito en el 3D.", "nota"))
         detalle.setVisible(False)
         mas.toggled.connect(detalle.setVisible)
         lay.addWidget(detalle)
@@ -1308,7 +1308,7 @@ valores clínicos: <code>config/valores_clinicos.toml</code></p>""")
             setattr(pieza, k, v)
         self._actualizar_todo()
         if cambios.get("activa"):
-            self.notificar(f"{pieza.nombre} puesta. Arrastra su bola en el 3D para moverla.", "bien")
+            self.notificar(f"{pieza.nombre} puesta. Arrastra su cuadradito en el 3D para moverla.", "bien")
 
     def _actualizar_todo(self):
         """Recalcula el molde y redibuja todo (tras cualquier cambio), con un solo redibujo."""
