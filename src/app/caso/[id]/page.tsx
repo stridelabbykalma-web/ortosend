@@ -167,6 +167,14 @@ export default async function CasoPage({
               <b>Pauta de uso:</b> {k.prescription.usageGuidelines}
             </p>
             <p className="tiny">Firmado: {fmtd(k.prescription.signedAt)} · {k.prescription.prescriberName}</p>
+            {k.prescription.pdfSha256 && (
+              <p>
+                <a className="btn" href={`/api/rx-pdf/${k.id}?t=${encodeURIComponent(doc!)}`} target="_blank" rel="noreferrer">
+                  Descargar PDF firmado
+                </a>{" "}
+                <span className="tiny">Huella SHA-256: {k.prescription.pdfSha256.slice(0, 24)}… (prueba de integridad)</span>
+              </p>
+            )}
           </div>
         )}
         {!k.prescription && (

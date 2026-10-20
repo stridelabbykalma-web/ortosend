@@ -6,6 +6,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { getSessionUser } from "@/lib/auth";
 import { Flash } from "@/components/ui";
+import { FechaNacimiento } from "@/components/fecha-nacimiento";
 import { Calendario } from "@/components/reserva/calendario";
 import { reservaAction, reservaClienteAction } from "@/app/publico-actions";
 import { reprogramarCitaAction } from "@/app/panel/cliente-actions";
@@ -144,7 +145,7 @@ export default async function ReservaPage({
               </div>
               <div>
                 <label>Fecha de nacimiento</label>
-                <input name="newBirth" type="date" />
+                <FechaNacimiento name="newBirth" />
               </div>
             </div>
             <label className="chk">
@@ -198,7 +199,7 @@ export default async function ReservaPage({
           <div className="grid g2">
             <div>
               <label>Fecha de nacimiento</label>
-              <input name="birth" type="date" />
+              <FechaNacimiento name="birth" />
             </div>
             <div>
               <label>Motivo (opcional)</label>

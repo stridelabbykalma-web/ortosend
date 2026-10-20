@@ -10,6 +10,8 @@ import { audit, pushEvent, releaseStale, avisarPaciente } from "@/lib/cases";
 import { PAY_LINK_DAYS } from "@/lib/states";
 import { PRICE_CENTS } from "@/lib/format";
 import { CENTRAL_WHERE, REVISION_PREFIJO, esCentral } from "@/lib/rx-route";
+import { generarPdfPrescripcion } from "@/lib/rx-pdf";
+import { nombreCompleto } from "@/lib/nombre";
 
 function fail(path: string, msg: string): never {
   redirect(`${path}${path.includes("?") ? "&" : "?"}error=` + encodeURIComponent(msg));
@@ -87,6 +89,24 @@ export async function signRxAction(formData: FormData) {
   if (!fabricationOrder)
     fail(back, "La pauta de fabricación es obligatoria: es la orden de trabajo del taller");
   const expires = new Date(Date.now() + PAY_LINK_DAYS * 24 * 3600 * 1000);
+  // PDF de la prescripción: se genera al firmar y queda inmutable con su huella.
+  const firmadoEl = new Date();
+  const { bytes: pdfBytes, sha256: pdfSha256 } = await generarPdfPrescripcion({
+    numeroCaso: kase.number,
+    paciente: nombreCompleto(kase.patient),
+    nacimiento: kase.patient.birthDate ? kase.patient.birthDate.toLocaleDateString("es-ES") : null,
+    dni: kase.patient.dni,
+    clinica: kase.clinic.name,
+    prescriptor: u.name,
+    colegiado: profile.collegiateNum,
+    valoracion: assessment,
+    diagnostico: diagnosis,
+    pautaFabricacion: fabricationOrder,
+    pieIzquierdo: orderLeft,
+    pieDerecho: orderRight,
+    pautaUso: usageGuidelines,
+    firmadoEl,
+  });
   await prisma.$transaction([
     prisma.prescription.create({
       data: {
@@ -100,7 +120,10 @@ export async function signRxAction(formData: FormData) {
         orderLeft,
         orderRight,
         usageGuidelines,
-        pdfUrl: `prescripciones/${kase.number}.pdf`, // PDF firmado e inmutable (generación real pendiente)
+        pdfUrl: `/api/rx-pdf/${caseId}`,
+        pdfBytes,
+        pdfSha256,
+        signedAt: firmadoEl,
       },
     }),
     prisma.payment.create({ data: { caseId, amountCents: PRICE_CENTS } }),
@@ -110,7 +133,8 @@ export async function signRxAction(formData: FormData) {
     }),
   ]);
   await pushEvent(caseId, `Prescripción firmada por ${u.name} (col. ${profile.collegiateNum})`, u.name);
-  await audit(u.id, "prescription.sign", `case:${kase.number}`, kase.patientId);
+  // La huella del PDF queda en el registro append-only: prueba de integridad.
+  await audit(u.id, "prescription.sign", `case:${kase.number}`, kase.patientId, { pdfSha256 });
   const nota = "Tu prescripción está lista. Entra en tu panel para verla y completar el pago (199,99 €, enlace válido 30 días).";
   await avisarPaciente(kase.patientId, "rx_lista_pago", { caseId, nota, enlace: "/panel" });
   redirect("/panel?ok=" + encodeURIComponent(`Caso #${kase.number} prescrito y enviado a pago`));

@@ -35,7 +35,13 @@ export function nacimientoLimiteMayoria(at: Date = new Date()): Date {
 
 export function parseBirth(raw: string | null | undefined): Date | null {
   if (!raw) return null;
-  const d = new Date(raw);
+  const t = raw.trim();
+  // dd/mm/aaaa (como se escribe a mano; también con guiones o puntos) o ISO.
+  const m = t.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);
+  const d = m ? new Date(Date.UTC(+m[3], +m[2] - 1, +m[1])) : new Date(t);
   if (isNaN(+d) || d > new Date()) return null;
+  // Rechaza fechas que el calendario corrige en silencio (31/02 → 3 de marzo).
+  if (m && (d.getUTCMonth() !== +m[2] - 1 || d.getUTCDate() !== +m[1])) return null;
+  if (d.getUTCFullYear() < 1900) return null;
   return d;
 }

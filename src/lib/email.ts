@@ -103,6 +103,15 @@ export function renderEmail(template: string, p: Payload): { subject: string; te
           p.validez
         )}):\n\n${link(p)}\n\nSi caduca, tu clínica puede reenviártelo.${firma}`,
       };
+    case "rx_lista_pago":
+      return {
+        subject: `Tu prescripción está lista — ya puedes completar el pago`,
+        text: `Hola ${str(p.nombre)},\n\nUn profesional colegiado ha firmado ${
+          str(p.paciente) ? `la prescripción de ${str(p.paciente)}` : "tu prescripción"
+        } de plantillas a medida.\n\n${
+          str(p.nota) || "Entra en tu panel para verla y completar el pago. En cuanto esté pagado, el taller empieza a fabricar."
+        }\n\n${link(p)}${firma}`,
+      };
     case "alta_documentos":
       return {
         subject: `Acepta los documentos de tu alta en ${EMPRESA.nombreComercial}`,

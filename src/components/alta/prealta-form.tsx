@@ -1,5 +1,7 @@
 "use client";
 
+import { FechaNacimiento } from "@/components/fecha-nacimiento";
+
 // Formulario de pre-alta del profesional. Si la fecha de nacimiento indica un
 // menor de 16 años, pide los datos del tutor (los mensajes irán a él).
 import { useState } from "react";
@@ -7,7 +9,9 @@ import { useState } from "react";
 const EDAD_MAYORIA_SALUD = 16;
 
 function edad(fecha: string) {
-  const b = new Date(fecha);
+  const dmy = fecha.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (!dmy && fecha.includes("/")) return null; // a medio teclear
+  const b = dmy ? new Date(+dmy[3], +dmy[2] - 1, +dmy[1]) : new Date(fecha);
   if (isNaN(+b)) return null;
   const now = new Date();
   let e = now.getFullYear() - b.getFullYear();
@@ -35,7 +39,7 @@ export function PreAltaForm({ action, declaracion }: { action: (f: FormData) => 
       <div className="grid g2">
         <div>
           <label htmlFor="pa-nacimiento">Fecha de nacimiento</label>
-          <input id="pa-nacimiento" name="fechaNacimiento" type="date" required value={nacimiento} onChange={(ev) => setNacimiento(ev.target.value)} />
+          <FechaNacimiento id="pa-nacimiento" name="fechaNacimiento" required value={nacimiento} onChange={setNacimiento} />
         </div>
         <div>
           <label htmlFor="pa-telefono">Móvil del paciente{menor ? " (opcional)" : ""}</label>

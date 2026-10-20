@@ -575,7 +575,9 @@ model Prescription {
   orderRight       String? // trabajo específico del pie derecho (etiqueta D)
   usageGuidelines  String // pauta de uso para el paciente
   contactNotes     String? // notas de llamadas al paciente
-  pdfUrl           String? // PDF firmado, inmutable, retención 5 años
+  pdfUrl           String? // ruta de descarga del PDF (/api/rx-pdf/[caseId])
+  pdfBytes         Bytes? // PDF generado al firmar, inmutable, retención 5 años
+  pdfSha256        String? // huella del PDF: prueba de integridad (también en AuditLog)
   signedAt         DateTime @default(now())
 }
 

@@ -61,7 +61,7 @@ export async function PanelClinica({
     body = (
       <>
         <details className="card" open={!inicial.length}>
-          <summary style={{ cursor: "pointer", fontWeight: 600 }}>+ Dar de alta a un paciente</summary>
+          <summary style={{ cursor: "pointer", fontWeight: 600 }}>Dar de alta a un paciente</summary>
           <div className="tiny" style={{ margin: "6px 0 10px" }}>
             El paciente (o su tutor, si es menor de 16 años) recibe un WhatsApp de Ortosend y acepta uno a uno
             los documentos legales. Cuando acepta los obligatorios se abre su ficha clínica y lo verás aquí

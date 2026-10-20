@@ -94,8 +94,8 @@ export async function avisarPaciente(patientId: string, template: string, payloa
   await notifyOwner(t, p.consents, template, { ...(paciente ? { paciente } : {}), ...payload });
 }
 
-export async function audit(userId: string, action: string, target: string, patientId?: string | null) {
-  await prisma.auditLog.create({ data: { userId, action, target, patientId: patientId ?? null } });
+export async function audit(userId: string, action: string, target: string, patientId?: string | null, detail?: Record<string, unknown>) {
+  await prisma.auditLog.create({ data: { userId, action, target, patientId: patientId ?? null, detail: (detail ?? undefined) as object | undefined } });
 }
 
 // Persona de contacto de un paciente: el titular de la cuenta o, si el paciente

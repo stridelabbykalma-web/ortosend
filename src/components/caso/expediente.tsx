@@ -120,6 +120,15 @@ export function Expediente({ kase }: { kase: CaseFull }) {
           <div className="note g">
             <b>Prescripción firmada</b> por {kase.prescription.prescriberName} ·{" "}
             {kase.prescription.diagnosis} · Pauta: {kase.prescription.fabricationOrder}
+            {kase.prescription.pdfSha256 && (
+              <>
+                {" · "}
+                <a href={`/api/rx-pdf/${kase.id}`} target="_blank" rel="noreferrer">
+                  PDF firmado
+                </a>{" "}
+                <span className="tiny">(huella {kase.prescription.pdfSha256.slice(0, 16)}…)</span>
+              </>
+            )}
           </div>
         </>
       )}
