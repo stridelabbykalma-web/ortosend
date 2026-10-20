@@ -403,3 +403,47 @@ def test_version_y_actualizaciones(monkeypatch):
     assert len(dialogos) == 1
     v.ajustes.remove("actualizacion_pospuesta")
     v.close()
+
+
+def test_escanear_con_revo_scan(tmp_path, monkeypatch):
+    """«Escanear» abre Revo Scan y, al exportar a la carpeta de escaneos, propone abrir el archivo."""
+    from PySide6.QtWidgets import QApplication, QMessageBox
+    from PySide6.QtTest import QTest
+
+    from interfaz import escanear as escaneo
+    from interfaz.principal import VentanaPrincipal
+
+    # Busca Revo Scan en las carpetas de programas.
+    exe = tmp_path / "Programas" / "Revo Scan 5" / "Revo Scan 5.exe"
+    exe.parent.mkdir(parents=True)
+    exe.write_bytes(b"")
+    assert escaneo.buscar_revo_scan([tmp_path / "Programas"]) == exe
+    assert escaneo.buscar_revo_scan([tmp_path / "nada"]) is None
+
+    app = QApplication.instance() or QApplication([])
+    v = VentanaPrincipal()
+    carpeta = tmp_path / "Escaneos"
+    v.ajustes.setValue("carpeta_escaneos", str(carpeta))
+    v.ajustes.setValue("revo_scan", str(exe))
+    lanzados, abiertos = [], []
+    monkeypatch.setattr(escaneo, "abrir_revo_scan", lambda e: lanzados.append(e))
+    monkeypatch.setattr(QMessageBox, "information", staticmethod(lambda *a, **k: None))
+    monkeypatch.setattr(QMessageBox, "question", staticmethod(lambda *a, **k: QMessageBox.Yes))
+    monkeypatch.setattr(v, "abrir", lambda ruta, **k: abiertos.append(ruta))
+    (carpeta).mkdir()
+    (carpeta / "viejo.stl").write_text("ya estaba")
+    v.vigilante = None
+    v.escanear()
+    assert lanzados == [exe] and QApplication.clipboard().text() == str(carpeta)
+    v.vigilante._reloj.setInterval(50)
+    (carpeta / "nuevo.stl").write_text("solid x\nendsolid x\n")
+    (carpeta / "nota.txt").write_text("no es un escaneo")
+    for _ in range(60):
+        QTest.qWait(50)
+        if abiertos:
+            break
+    assert abiertos == [str(carpeta / "nuevo.stl")]  # solo el nuevo, y una vez
+    v.ajustes.remove("carpeta_escaneos")
+    v.ajustes.remove("revo_scan")
+    v.ajustes.remove("vigilar_escaneos")
+    v.close()

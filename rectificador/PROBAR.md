@@ -38,6 +38,9 @@
    - un `.stl`, `.ply` u `.obj` exportado;
    - un ZIP con cualquiera de ellos (no hace falta descomprimirlo).
    Tarda unos 15 segundos en limpiarlo.
+   **Escanear directamente**: botón **Escanear** (arriba o en la pantalla de inicio). Se abre Revo Scan;
+   escanea y exporta el STL en *Documentos › Escaneos Rectificador* (la ruta ya está copiada: Ctrl+V en la
+   ventana de guardar). En cuanto se guarda, el Rectificador pregunta si abrirlo.
 2. Comprueba que cada pie tiene bien su nombre (**PIE IZQUIERDO / PIE DERECHO**).
    Si está al revés, pulsa **Intercambiar izquierdo ↔ derecho**.
 3. En cada pie pulsa **Proponer referencias**: aparecen las 5 cabezas metatarsales y el talón.

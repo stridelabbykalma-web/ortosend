@@ -1,5 +1,11 @@
 # Novedades del Rectificador de moldes
 
+## 0.4.1
+- **Botón «Escanear»**: abre Revo Scan. Escanea, exporta el STL (o PLY) en la carpeta
+  *Documentos › Escaneos Rectificador* (la ruta se copia sola: pégala con Ctrl+V al guardar) y el
+  Rectificador lo abre solo en cuanto termina de guardarse. La primera vez, si no encuentra Revo Scan, te
+  pregunta dónde está.
+
 ## 0.4.0
 - **Skive como Kirby, en varo o valgo**: se corta en un plano inclinado 15° (ajustable) en la cazoleta del
   talón. La profundidad (2, 4 o 6 mm) es la de la línea a 1/3 del ancho del talón: con 2 mm solo toca ese

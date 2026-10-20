@@ -6,6 +6,7 @@ Arrancar (desde la carpeta rectificador):  python -m interfaz.principal [ESCANEO
 from __future__ import annotations
 
 import html
+import os
 import sys
 import traceback
 from pathlib import Path
@@ -23,7 +24,7 @@ from PySide6.QtWidgets import (
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from interfaz import actualizar, estilo  # noqa: E402
+from interfaz import actualizar, escanear as escaneo, estilo  # noqa: E402
 from interfaz.estilo import C  # noqa: E402
 from interfaz.visor import COLORES, Visor  # noqa: E402
 from ortomolde.exportar import exportar, medidas_stl  # noqa: E402
@@ -462,6 +463,7 @@ class VentanaPrincipal(QMainWindow):
         self._hilos: list = []
         self.activa: tuple[str, str] | None = None  # (pie, referencia) que se va a marcar
         self._hilo = None
+        self.vigilante: escaneo.Vigilante | None = None  # carpeta de escaneos (botón «Escanear»)
 
         self.medida: list = []  # puntos de la herramienta Medir
         self.visor = Visor(self, al_hacer_clic=self.clic_en_molde,
@@ -566,9 +568,14 @@ class VentanaPrincipal(QMainWindow):
         estilo.primario(self.boton_abrir_grande)
         self.boton_abrir_grande.setMinimumWidth(240)
         self.boton_abrir_grande.clicked.connect(self.abrir_dialogo)
+        self.boton_escanear_grande = QPushButton("  Escanear…")
+        self.boton_escanear_grande.setIcon(estilo.icono("escanear"))
+        self.boton_escanear_grande.setToolTip("Abre Revo Scan; al exportar el escaneo, se abre aquí solo")
+        self.boton_escanear_grande.clicked.connect(self.escanear)
         fila = QHBoxLayout()
         fila.addStretch(1)
         fila.addWidget(self.boton_abrir_grande)
+        fila.addWidget(self.boton_escanear_grande)
         fila.addStretch(1)
         lay.addLayout(fila)
         self.caja_recientes = QVBoxLayout()
@@ -592,6 +599,7 @@ class VentanaPrincipal(QMainWindow):
         self._ruta_cargando = ruta
         self.barra_carga.setVisible(cargando)
         self.boton_abrir_grande.setVisible(not cargando)
+        self.boton_escanear_grande.setVisible(not cargando)
         for i in range(self.caja_recientes.count()):
             w = self.caja_recientes.itemAt(i).widget()
             if w is not None:
@@ -1001,6 +1009,7 @@ class VentanaPrincipal(QMainWindow):
 
         archivo = self.menuBar().addMenu("&Archivo")
         accion("abrir", "Abrir escaneo…", self.abrir_dialogo, QKeySequence.Open, "abrir", archivo)
+        accion("escanear", "Escanear con Revo Scan…", self.escanear, None, "escanear", archivo)
         self.menu_recientes = archivo.addMenu(estilo.icono("reciente"), "Abrir reciente")
         archivo.addSeparator()
         accion("guardar", "Guardar trabajo", self.guardar, QKeySequence.Save, "guardar", archivo)
@@ -1308,11 +1317,11 @@ valores clínicos: <code>config/valores_clinicos.toml</code></p>""")
         titulo.setObjectName("titulo_app")
         barra.addWidget(titulo)
         barra.addSeparator()
-        cortos = {"abrir": "Abrir", "guardar": "Guardar", "exportar": "Exportar", "anadir": "Añadir a la tirada",
+        cortos = {"abrir": "Abrir", "escanear": "Escanear", "guardar": "Guardar", "exportar": "Exportar", "anadir": "Añadir a la tirada",
                   "tirada": "Tirada CNC",
                   "inicial": "Vista inicial", "planta": "Desde arriba"}
         cortos.update({"deshacer": "", "rehacer": ""})
-        for clave in ("abrir", "guardar", "exportar", "anadir", "tirada", None, "deshacer", "rehacer", None, "inicial",
+        for clave in ("abrir", "escanear", "guardar", "exportar", "anadir", "tirada", None, "deshacer", "rehacer", None, "inicial",
                       "planta"):
             if clave is None:
                 barra.addSeparator()
@@ -1354,6 +1363,60 @@ valores clínicos: <code>config/valores_clinicos.toml</code></p>""")
             "Escaneos y trabajos (*.stl *.ply *.obj *.revox *.zip *.molde);;Trabajos guardados (*.molde);;"
             "Proyecto de Revo Scan (*.revox);;Mallas (*.stl *.ply *.obj);;ZIP (*.zip);;Todos los archivos (*.*)")
         if ruta:
+            self.abrir(ruta)
+
+    # ---------------------------------------------------------------- escanear con Revo Scan
+
+    def carpeta_escaneos(self) -> Path:
+        return Path(self.ajustes.value("carpeta_escaneos", "") or escaneo.carpeta_por_defecto())
+
+    def vigilar_escaneos(self):
+        """Empieza a mirar la carpeta de escaneos (desde que se usa «Escanear» por primera vez)."""
+        carpeta = self.carpeta_escaneos()
+        if self.vigilante is not None and self.vigilante.carpeta == carpeta:
+            return
+        try:
+            self.vigilante = escaneo.Vigilante(carpeta, self)
+        except OSError:
+            self.vigilante = None
+            return
+        self.vigilante.nuevo.connect(self._escaneo_nuevo)
+        self.ajustes.setValue("vigilar_escaneos", True)
+
+    def escanear(self):
+        """Abre Revo Scan y explica dónde exportar: el escaneo exportado se abre aquí solo."""
+        self.vigilar_escaneos()
+        carpeta = self.carpeta_escaneos()
+        exe = Path(self.ajustes.value("revo_scan", "") or "")
+        if not exe.is_file():
+            exe = escaneo.buscar_revo_scan()
+        if exe is None or not exe.is_file():
+            elegido, _ = QFileDialog.getOpenFileName(
+                self, "¿Dónde está Revo Scan? (el programa del escáner, Revo Scan.exe)",
+                os.environ.get("ProgramFiles", ""), "Programas (*.exe)")
+            if not elegido:
+                return
+            exe = Path(elegido)
+        try:
+            escaneo.abrir_revo_scan(exe)
+        except OSError as e:
+            self.ajustes.remove("revo_scan")
+            QMessageBox.warning(self, "No se ha podido abrir Revo Scan", f"{exe}\n\n{e}")
+            return
+        self.ajustes.setValue("revo_scan", str(exe))
+        QApplication.clipboard().setText(str(carpeta))
+        QMessageBox.information(
+            self, "Escanear",
+            "Se está abriendo Revo Scan. Escanea el molde y, al terminar, <b>exporta el STL</b> (o PLY) en esta "
+            f"carpeta:<br><br><b>{html.escape(str(carpeta))}</b><br><br>(La ruta ya está copiada: en la ventana de "
+            "guardar de Revo Scan pégala con Ctrl+V.) En cuanto termine de guardarse, el escaneo se abre aquí.")
+
+    def _escaneo_nuevo(self, ruta: str):
+        self.raise_()
+        self.activateWindow()
+        r = QMessageBox.question(self, "Escaneo nuevo", f"Ha llegado un escaneo nuevo:\n{Path(ruta).name}\n\n¿Abrirlo?",
+                                 QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
+        if r == QMessageBox.Yes:
             self.abrir(ruta)
 
     def abrir(self, ruta: str, esperar: bool = False, preguntar: bool = True):
@@ -1756,6 +1819,8 @@ def main():
             ventana, "Actualización", "No se ha podido terminar la actualización y se ha dejado la versión que "
             f"tenías, que funciona igual que antes.\n\nEl detalle está en:\n{CARPETA_DATOS / 'instalacion.log'}"))
     ventana.buscar_actualizaciones(silencio=True)
+    if ventana.ajustes.value("vigilar_escaneos", False) in (True, "true"):
+        ventana.vigilar_escaneos()
     sys.exit(app.exec())
 
 
