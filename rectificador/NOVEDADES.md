@@ -1,5 +1,17 @@
 # Novedades del Rectificador de moldes
 
+## 0.5.0
+- **Nuevo apartado «Confección»** (botón *Confección* arriba): los pedidos del taller de la web de
+  Ortosend, **ordenados por cuál debe salir antes** (primero los que hay que rehacer y los fuera de plazo),
+  con su semáforo de plazo, lote y clínica. Se entra una vez con el **usuario de taller** de la web.
+- **Hoja de confección** de cada par: pauta del prescriptor por pie (I/D), proceso (termoformado al vacío o
+  capas pegadas y prensadas), capas de material, minutos de CNC y de confección, notas. Se guarda en la
+  web y se **imprime**.
+- **Coste del par** al momento: material + fresado + mano de obra. Los **materiales** (precio de la
+  plancha y pares que salen) y los **costes** del taller se editan desde aquí.
+- **Molde fresado → confección** y **Confección terminada → calidad** cambian el estado en la web.
+- Necesita la actualización de la web (si aún no está publicada, el programa lo avisa).
+
 ## 0.4.6
 - El molde se corta **15 mm por delante de las cabezas metatarsales** (antes 3 mm), siguiendo su curva.
   Se puede cambiar en cada pie con «Adelanto». Los trabajos guardados se abren con el corte que tenían.

@@ -70,6 +70,7 @@ QPushButton[pequeno="true"] {{ padding: 3px 10px; font-size: 9pt; }}
 /* Botón segmentado (dos opciones juntas) */
 QPushButton[segmento="izq"] {{ border-top-right-radius: 0; border-bottom-right-radius: 0; }}
 QPushButton[segmento="der"] {{ border-top-left-radius: 0; border-bottom-left-radius: 0; margin-left: -1px; }}
+QPushButton[segmento="medio"] {{ border-radius: 0; margin-left: -1px; }}
 
 /* Barra de herramientas */
 QToolBar {{ background: {tarjeta}; border: none; border-bottom: 1px solid {borde_suave}; padding: 6px 10px;
@@ -136,6 +137,7 @@ QGraphicsView {{ border: 1px solid {borde_suave}; border-radius: 10px; }}
 
 # Iconos de trazo fino (24 × 24), dibujados para este programa.
 _ICONOS = {
+    "confeccion": '<path d="M4 17c3-1 5-4 6-8 1-3 3-5 6-5 2 0 4 2 4 4 0 5-6 12-14 12H4z"/><path d="M8 20l2-5"/>',
     "escanear": '<path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3"/>'
                 '<path d="M4 12h16"/>',
     "abrir": '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',

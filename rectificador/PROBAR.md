@@ -117,6 +117,22 @@ rehace · puedes **arrastrar el escaneo** desde una carpeta y soltarlo en la ven
 y en *Archivo → Abrir reciente* están los últimos escaneos · **F1** abre la guía rápida y *Ayuda → Atajos*
 la lista de atajos · el programa recuerda el tamaño de la ventana y la última carpeta usada.
 
+## 5. Confección (pedidos de la web)
+
+1. Pulsa **Confección** (arriba) y **Entrar** con tu usuario de **taller** de la web de Ortosend (el mismo
+   de /equipo). Solo la primera vez: el programa se queda conectado (botón «Desconectar»).
+2. A la izquierda salen los **pedidos del taller en el orden en que deben salir** (rojo = fuera de plazo,
+   ámbar = justo, verde = en plazo; «⚠ REHACER» primero). Filtra «Por fresar» o «En confección».
+3. Elige un pedido: arriba ves la **pauta de cada pie** (I/D). Elige el **proceso** (termoformado o capas),
+   añade las **capas de material** (y si son del par o de un pie), los **minutos** de CNC y de confección y
+   las notas. Abajo sale el **coste del par** al momento. **Guardar hoja** la guarda en la web;
+   **Imprimir hoja…** la imprime (o la guarda en PDF con «Microsoft Print to PDF»).
+4. **Molde fresado → a confección** (pide el lote de la tirada) y **Confección terminada → a calidad**
+   (pide el material y su lote) cambian el pedido en la web. Calidad, envío y entrega se hacen en la web.
+5. **Materiales…**: tu lista de materiales con el precio de la plancha y cuántos pares salen de ella
+   (vienen unos de ejemplo: pon los tuyos). **Costes…**: precio de la hora de taller, de la CNC por
+   minuto y de la escayola de los moldes.
+
 ## Si algo falla
 
 Manda una **foto o captura** de la ventana (si falla al instalar, la ventana negra enseña las

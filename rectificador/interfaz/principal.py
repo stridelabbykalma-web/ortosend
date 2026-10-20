@@ -1041,6 +1041,8 @@ class VentanaPrincipal(QMainWindow):
                "anadir", archivo)
         accion("tirada", "Tirada de CNC (varios moldes en una plancha)…", self.abrir_tirada,
                QKeySequence("Ctrl+Shift+T"), "cnc", archivo)
+        accion("confeccion", "Confección (pedidos del taller)…", self.abrir_confeccion,
+               QKeySequence("Ctrl+Shift+C"), "confeccion", archivo)
         archivo.addSeparator()
         accion("salir", "Salir", self.close, QKeySequence.Quit, None, archivo)
 
@@ -1352,10 +1354,10 @@ valores clínicos: <code>config/valores_clinicos.toml</code></p>""")
         barra.addWidget(titulo)
         barra.addSeparator()
         cortos = {"abrir": "Abrir", "escanear": "Escanear", "guardar": "Guardar", "exportar": "Exportar", "anadir": "Añadir a la tirada",
-                  "tirada": "Tirada CNC",
+                  "tirada": "Tirada CNC", "confeccion": "Confección",
                   "inicial": "Vista inicial", "planta": "Desde arriba"}
         cortos.update({"deshacer": "", "rehacer": ""})
-        for clave in ("abrir", "escanear", "guardar", "exportar", "anadir", "tirada", None, "deshacer", "rehacer", None, "inicial",
+        for clave in ("abrir", "escanear", "guardar", "exportar", "anadir", "tirada", "confeccion", None, "deshacer", "rehacer", None, "inicial",
                       "planta"):
             if clave is None:
                 barra.addSeparator()
@@ -1779,6 +1781,14 @@ valores clínicos: <code>config/valores_clinicos.toml</code></p>""")
         self.tirada.show()
         self.tirada.raise_()
         return self.tirada
+
+    def abrir_confeccion(self):
+        from interfaz.confeccion import VentanaConfeccion
+        if getattr(self, "confeccion", None) is None:
+            self.confeccion = VentanaConfeccion(self)
+        self.confeccion.show()
+        self.confeccion.raise_()
+        return self.confeccion
 
     def anadir_a_tirada(self):
         if not self.proyecto:

@@ -63,6 +63,7 @@ También acepta un recuadro ya limpio (lo detecta solo).
 | 6 | Comprobación de la fresa (dónde no llega la bola), prueba en vacío | ✅ hecho (falta la 1.ª prueba en la CNC) |
 | — | Instalador de Windows con accesos directos y aviso de versiones nuevas | ✅ hecho (falta probarlo en Windows) |
 | — | Actualización automática con un clic (con vuelta atrás si falla) | ✅ hecho (falta probarlo en Windows) |
+| — | Confección: pedidos de la web en orden de salida, hoja de confección, coste del par y cambios de estado | ✅ hecho (necesita publicar la actualización de la web) |
 | CNC | Salida directa para la CNC (G-code), varios moldes en una plancha, estrategia y formato del ejemplo de Fusion (bola Ø25: contorno + desbaste en capas de 5 mm + acabado paralelo cada 1,75 mm) | ✅ hecho (falta la 1.ª prueba en la máquina) |
 
 ## Instalar en Windows (una sola vez)

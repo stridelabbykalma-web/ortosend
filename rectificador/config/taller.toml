@@ -91,3 +91,7 @@ permitir_giro = true         # girar pies 90° si así caben más
 ancho_x = 600.0
 largo_y = 500.0
 alto_z = 40.0
+
+[web]
+# Web de Ortosend: de ahí salen los pedidos del taller (apartado «Confección»).
+url = "https://ortosend-five.vercel.app"
