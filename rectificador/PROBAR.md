@@ -16,8 +16,12 @@
 3. Al terminar aparece el icono **Rectificador Ortosend** en el **Escritorio** y en el **menú Inicio**:
    ábrelo siempre desde ahí (se abre **sin la ventana negra**). Ya puedes borrar la carpeta descomprimida.
    Los trabajos guardados (`.molde`) se abren con **doble clic**.
-- **Actualizar**: *Ayuda → Buscar actualizaciones* (el programa también lo mira solo una vez al día). Descarga
-  el ZIP nuevo, descomprímelo y vuelve a hacer doble clic en `instalar.bat`. Tus trabajos no se tocan.
+- **Actualizar**: es automático. Al abrir el programa, si hay una versión nueva sale el aviso
+  **«Hay una versión nueva»** con lo que cambia. Pulsa **Actualizar ahora**: se descarga, el programa se cierra
+  y se vuelve a abrir ya actualizado (unos segundos; si cambia algo de Python, un par de minutos).
+  Si algo fallara, se queda la versión de antes y te avisa. **Más tarde** = no vuelve a preguntar hasta mañana.
+  También en *Ayuda → Buscar actualizaciones…* y *Ayuda → Novedades*. Tus trabajos no se tocan.
+  (Solo funciona si lo instalaste con `instalar.bat`; si no, te ofrece descargar el ZIP.)
 - **Desinstalar**: `desinstalar.bat` (no borra tus trabajos, escaneos ni archivos `.nc`).
 - `arrancar.bat` sigue funcionando como antes (con ventana negra), por si acaso.
 

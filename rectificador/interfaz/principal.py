@@ -22,7 +22,7 @@ from PySide6.QtWidgets import (
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from interfaz import estilo  # noqa: E402
+from interfaz import actualizar, estilo  # noqa: E402
 from interfaz.estilo import C  # noqa: E402
 from interfaz.visor import COLORES, Visor  # noqa: E402
 from ortomolde.exportar import exportar, medidas_stl  # noqa: E402
@@ -355,7 +355,7 @@ class PanelPie(QFrame):
 
 
 class VentanaPrincipal(QMainWindow):
-    _aviso_version = Signal(str, bool)  # (versión publicada o "", en silencio)
+    _aviso_version = Signal(str, str, bool)  # (versión publicada o "", novedades, en silencio)
 
     def __init__(self):
         super().__init__()
@@ -954,6 +954,7 @@ class VentanaPrincipal(QMainWindow):
         accion("guia", "Guía rápida", self.guia_rapida, QKeySequence.HelpContents, "ayuda", ayuda)
         accion("atajos", "Atajos de teclado y ratón", self.ver_atajos, None, "teclado", ayuda)
         ayuda.addSeparator()
+        accion("novedades", "Novedades", self.ver_novedades, None, "info", ayuda)
         accion("actualizar", "Buscar actualizaciones…", lambda: self.buscar_actualizaciones(), None, "reciente", ayuda)
         ayuda.addSeparator()
         accion("acerca", "Acerca del rectificador", self.acerca_de, None, "info", ayuda)
@@ -1017,24 +1018,15 @@ varios moldes en una plancha (arrastrándolos), calculas y guardas el <b>.nc</b>
         self._dialogo_texto("Atajos", f"<h2>Atajos de teclado y ratón</h2><table>{tabla}</table>")
 
     def buscar_actualizaciones(self, silencio: bool = False):
-        """Mira si hay una versión nueva publicada. Con `silencio` (al arrancar) solo avisa si la hay, una
-        vez al día como mucho, y sin parar el programa mientras pregunta."""
+        """Mira si hay una versión nueva publicada. Con `silencio` (al abrir el programa) va en segundo plano
+        y solo dice algo si la hay (y no se ha dejado para «más tarde» hoy)."""
         import threading
-        from datetime import date
-
-        from ortomolde import __version__
-
-        if silencio:
-            if self.ajustes.value("ultima_busqueda", "") == date.today().isoformat():
-                return
-            self.ajustes.setValue("ultima_busqueda", date.today().isoformat())
 
         def preguntar():
-            nueva = version_publicada()
-            self._aviso_version.emit(nueva or "", silencio)
+            nueva = actualizar.version_publicada() or ""
+            notas = actualizar.novedades_publicadas() if nueva else ""
+            self._aviso_version.emit(nueva, notas, silencio)
 
-        if not hasattr(self, "_aviso_version"):
-            return
         if silencio:
             threading.Thread(target=preguntar, daemon=True).start()
         else:
@@ -1044,9 +1036,8 @@ varios moldes en una plancha (arrastrándolos), calculas y guardas el <b>.nc</b>
             finally:
                 QApplication.restoreOverrideCursor()
 
-    def _resultado_version(self, nueva: str, silencio: bool):
-        from PySide6.QtCore import QUrl
-        from PySide6.QtGui import QDesktopServices
+    def _resultado_version(self, nueva: str, notas: str, silencio: bool):
+        from datetime import date
 
         from ortomolde import __version__
 
@@ -1054,17 +1045,161 @@ varios moldes en una plancha (arrastrándolos), calculas y guardas el <b>.nc</b>
             if not silencio:
                 QMessageBox.information(self, "Actualizaciones", "No he podido comprobarlo (¿hay internet?).")
             return
-        if _version(nueva) <= _version(__version__):
+        if actualizar.version(nueva) <= actualizar.version(__version__):
             if not silencio:
                 QMessageBox.information(self, "Actualizaciones", f"Tienes la última versión ({__version__}).")
             return
-        r = QMessageBox.question(
-            self, "Hay una versión nueva",
-            f"Hay una versión nueva del rectificador: <b>{nueva}</b> (tienes la {__version__}).<br><br>"
-            "¿Descargarla ahora? Cuando termine, descomprime el ZIP, entra en la carpeta <b>rectificador</b> y "
-            "haz doble clic en <b>instalar.bat</b>. Tus trabajos guardados no se tocan.")
-        if r == QMessageBox.Yes:
-            QDesktopServices.openUrl(QUrl(URL_DESCARGA))
+        if silencio and self.ajustes.value("actualizacion_pospuesta", "") == f"{date.today().isoformat()}:{nueva}":
+            return
+        self._dialogo_actualizar(nueva, actualizar.novedades(notas, __version__))
+
+    def _dialogo_actualizar(self, nueva: str, notas: str):
+        """«Hay una versión nueva»: novedades y, con un clic, descargar, instalar y reiniciar."""
+        from datetime import date
+
+        from PySide6.QtCore import QUrl
+        from PySide6.QtGui import QDesktopServices
+
+        from ortomolde import __version__
+
+        base = actualizar.base_instalada()
+        d = QDialog(self)
+        d.setWindowTitle("Hay una versión nueva")
+        d.resize(560, 480)
+        lay = QVBoxLayout(d)
+        lay.setContentsMargins(20, 18, 20, 16)
+        lay.addWidget(estilo.etiqueta(f"<span style='font-size:14pt; font-weight:600'>Versión {nueva}</span>"
+                                      f"<br><span style='color:{C['secundario']}'>Tienes la {__version__}. "
+                                      "Tus trabajos guardados no se tocan.</span>"))
+        texto = QLabel(notas or "Mejoras y correcciones.")
+        texto.setTextFormat(Qt.MarkdownText)
+        texto.setWordWrap(True)
+        texto.setAlignment(Qt.AlignTop | Qt.AlignLeft)
+        desplazable = QScrollArea()
+        desplazable.setWidget(texto)
+        desplazable.setWidgetResizable(True)
+        lay.addWidget(desplazable, 1)
+        barra = QProgressBar()
+        barra.setTextVisible(False)
+        barra.setFixedHeight(6)
+        barra.hide()
+        lay.addWidget(barra)
+        estado = estilo.etiqueta("", "nota")
+        lay.addWidget(estado)
+        fila = QHBoxLayout()
+        fila.addStretch(1)
+        luego = QPushButton("Más tarde")
+        fila.addWidget(luego)
+        ahora = QPushButton("Actualizar ahora" if base else "Descargar…")
+        ahora.setIcon(estilo.icono("exportar", "white"))
+        estilo.primario(ahora)
+        fila.addWidget(ahora)
+        lay.addLayout(fila)
+
+        def mas_tarde():
+            self.ajustes.setValue("actualizacion_pospuesta", f"{date.today().isoformat()}:{nueva}")
+            d.reject()
+
+        luego.clicked.connect(mas_tarde)
+
+        if base is None:
+            # No está instalado con instalar.bat: descarga manual, como antes.
+            estado.setText("Al terminar la descarga: descomprime el ZIP, entra en la carpeta «rectificador» y haz "
+                           "doble clic en «instalar.bat». Desde entonces se actualizará solo.")
+
+            def descargar_zip():
+                QDesktopServices.openUrl(QUrl(actualizar.URL_DESCARGA))
+                d.accept()
+
+            ahora.clicked.connect(descargar_zip)
+            estilo.barra_titulo_oscura(d)
+            d.exec()
+            return
+
+        puente = _Puente()
+
+        def empezar():
+            if not self._puede_descartar():
+                return
+            ahora.setEnabled(False)
+            luego.setEnabled(False)
+            barra.show()
+            barra.setRange(0, 0)
+            estado.setText("Descargando la versión nueva…")
+            import threading
+
+            def trabajo():
+                try:
+                    zipf = actualizar.descargar(base / "actualizacion" / "descarga.zip",
+                                                lambda b, t: puente.progreso.emit(b, t))
+                    puente.estado.emit("Comprobando la descarga…")
+                    actualizar.preparar(zipf, base / "actualizacion" / "nueva", nueva)
+                    puente.terminado.emit("")
+                except Exception as e:  # noqa: BLE001 - se le dice al usuario
+                    traceback.print_exc()
+                    puente.terminado.emit(str(e) or e.__class__.__name__)
+
+            threading.Thread(target=trabajo, daemon=True).start()
+
+        def progreso(bajado, total):
+            if total:
+                barra.setRange(0, total)
+                barra.setValue(bajado)
+            estado.setText(f"Descargando la versión nueva… {bajado / 1e6:.1f} MB")
+
+        def terminado(error: str):
+            if error:
+                barra.hide()
+                ahora.setEnabled(True)
+                luego.setEnabled(True)
+                estado.setText(f"<span style='color:{C['mal']}'>No se ha podido actualizar: {error}. "
+                               "Sigue funcionando la versión que tienes.</span>")
+                return
+            estado.setText("Listo. El programa se cierra y se vuelve a abrir solo con la versión nueva…")
+            QApplication.processEvents()
+            try:
+                actualizar.lanzar_cambio(base, nueva)
+            except Exception as e:  # noqa: BLE001
+                terminado(str(e))
+                return
+            self.cambios_sin_guardar = False  # ya se ha preguntado
+            d.accept()
+            QTimer.singleShot(300, QApplication.quit)
+
+        puente.progreso.connect(progreso)
+        puente.estado.connect(estado.setText)
+        puente.terminado.connect(terminado)
+        ahora.clicked.connect(empezar)
+        self._puente_actualizacion = puente  # que no se borre mientras dura
+        estilo.barra_titulo_oscura(d)
+        d.exec()
+
+    def ver_novedades(self):
+        """Lo que ha cambiado en cada versión (NOVEDADES.md)."""
+        ruta = Path(__file__).resolve().parent.parent / "NOVEDADES.md"
+        texto = ruta.read_text(encoding="utf-8") if ruta.exists() else "Sin novedades."
+        d = QDialog(self)
+        d.setWindowTitle("Novedades")
+        d.resize(620, 560)
+        lay = QVBoxLayout(d)
+        lay.setContentsMargins(20, 18, 20, 16)
+        etiqueta = QLabel(texto)
+        etiqueta.setTextFormat(Qt.MarkdownText)
+        etiqueta.setWordWrap(True)
+        etiqueta.setAlignment(Qt.AlignTop | Qt.AlignLeft)
+        desplazable = QScrollArea()
+        desplazable.setWidget(etiqueta)
+        desplazable.setWidgetResizable(True)
+        lay.addWidget(desplazable, 1)
+        cerrar = QPushButton("Cerrar")
+        estilo.primario(cerrar)
+        cerrar.clicked.connect(d.accept)
+        fila = QHBoxLayout()
+        fila.addStretch(1)
+        fila.addWidget(cerrar)
+        lay.addLayout(fila)
+        estilo.barra_titulo_oscura(d)
+        d.exec()
 
     def acerca_de(self):
         self._dialogo_texto("Acerca de", f"""
@@ -1476,25 +1611,13 @@ valores clínicos: <code>config/valores_clinicos.toml</code></p>""")
 
 
 CARPETA_DATOS = Path.home() / "AppData" / "Local" / "RectificadorOrtosend"
-REPOSITORIO = "stridelabbykalma-web/ortosend"
-RAMA = "claude/rectificador-moldes"
-URL_VERSION = f"https://raw.githubusercontent.com/{REPOSITORIO}/{RAMA}/rectificador/VERSION"
-URL_DESCARGA = f"https://github.com/{REPOSITORIO}/archive/refs/heads/{RAMA}.zip"
 
 
-def _version(texto: str) -> tuple:
-    return tuple(int(p) for p in texto.strip().split(".") if p.isdigit())
-
-
-def version_publicada(espera: float = 6.0) -> str | None:
-    """La última versión publicada (o None si no hay internet)."""
-    import urllib.request
-
-    try:
-        with urllib.request.urlopen(URL_VERSION, timeout=espera) as r:
-            return r.read().decode("utf-8").strip()
-    except Exception:  # noqa: BLE001 - sin internet no pasa nada
-        return None
+class _Puente(QObject):
+    """Para que el trabajo en segundo plano de la actualización hable con la ventana."""
+    progreso = Signal(int, int)
+    estado = Signal(str)
+    terminado = Signal(str)
 
 
 def _registro_de_errores():
@@ -1530,8 +1653,18 @@ def main():
     estilo.aplicar(app)
     ventana = VentanaPrincipal()
     ventana.show()
-    if len(sys.argv) > 1:
-        ventana.abrir(sys.argv[1])
+    banderas = {a for a in sys.argv[1:] if a.startswith("--")}
+    archivos = [a for a in sys.argv[1:] if not a.startswith("--")]
+    if archivos:
+        ventana.abrir(archivos[0])
+    if "--actualizado" in banderas:
+        from ortomolde import __version__
+        QTimer.singleShot(800, lambda: ventana.notificar(f"Actualizado a la versión {__version__}. "
+                                                         "Las novedades están en Ayuda → Novedades.", "bien"))
+    elif "--fallo-actualizacion" in banderas:
+        QTimer.singleShot(800, lambda: QMessageBox.warning(
+            ventana, "Actualización", "No se ha podido terminar la actualización y se ha dejado la versión que "
+            f"tenías, que funciona igual que antes.\n\nEl detalle está en:\n{CARPETA_DATOS / 'instalacion.log'}"))
     ventana.buscar_actualizaciones(silencio=True)
     sys.exit(app.exec())
 

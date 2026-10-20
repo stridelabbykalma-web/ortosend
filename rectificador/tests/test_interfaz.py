@@ -365,6 +365,7 @@ def test_seguridad_cnc_en_la_ventana(stl_sintetico, tmp_path):
 
 
 def test_version_y_actualizaciones(monkeypatch):
+    from datetime import date
     from pathlib import Path
 
     from PySide6.QtWidgets import QApplication, QMessageBox
@@ -372,15 +373,24 @@ def test_version_y_actualizaciones(monkeypatch):
     import interfaz.principal as principal
     from ortomolde import __version__
 
-    assert (Path(principal.__file__).resolve().parent.parent / "VERSION").read_text().strip() == __version__
-    assert principal._version("0.10.0") > principal._version("0.9.3")
+    raiz = Path(principal.__file__).resolve().parent.parent
+    assert (raiz / "VERSION").read_text().strip() == __version__
+    assert f"## {__version__}" in (raiz / "NOVEDADES.md").read_text(encoding="utf-8")  # cada versión, sus novedades
     app = QApplication.instance() or QApplication([])
     v = principal.VentanaPrincipal()
-    preguntas = []
-    monkeypatch.setattr(QMessageBox, "question", lambda *a, **k: preguntas.append(a[2]) or QMessageBox.No)
-    monkeypatch.setattr(QMessageBox, "information", lambda *a, **k: preguntas.append("info"))
-    v._resultado_version("99.0.0", True)
-    assert preguntas and "99.0.0" in preguntas[-1]
-    v._resultado_version(__version__, True)  # en silencio y sin novedades: no dice nada
-    assert len(preguntas) == 1
+    dialogos, mensajes = [], []
+    monkeypatch.setattr(v, "_dialogo_actualizar", lambda nueva, notas: dialogos.append((nueva, notas)))
+    monkeypatch.setattr(QMessageBox, "information", lambda *a, **k: mensajes.append(a[2]))
+    notas = "## 99.0.0\n- Algo nuevo\n\n## 0.0.1\n- Viejo\n"
+    v._resultado_version("99.0.0", notas, True)
+    assert dialogos == [("99.0.0", "## 99.0.0\n- Algo nuevo")]
+    v._resultado_version(__version__, "", True)  # al abrir y sin novedades: no dice nada
+    assert len(dialogos) == 1 and not mensajes
+    v._resultado_version(__version__, "", False)  # buscando a mano: dice que está al día
+    assert mensajes and __version__ in mensajes[-1]
+    # «Más tarde» hoy: al abrir no vuelve a preguntar por esa versión.
+    v.ajustes.setValue("actualizacion_pospuesta", f"{date.today().isoformat()}:99.0.0")
+    v._resultado_version("99.0.0", notas, True)
+    assert len(dialogos) == 1
+    v.ajustes.remove("actualizacion_pospuesta")
     v.close()
