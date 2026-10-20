@@ -55,11 +55,70 @@ retraso = 8.0
 profundidad = 2.0
 diametro = 20.0
 
-[skive_medial]
-# Skive medial (cuña en varo bajo el talón): se quita escayola del talón medial del molde.
-# Profundidad en el borde medial (en mm); en el centro del talón es 0.
+[descarga_5mtt]
+# Hueco en la plantilla bajo la cabeza del 5.º MTT (se añade escayola al molde).
+profundidad = 2.0
+diametro = 20.0
+
+[descarga_sesamoideos]
+# Hueco bajo los sesamoideos (bajo la 1.ª cabeza, un poco por detrás).
+profundidad = 2.0
+largo = 22.0
+ancho = 16.0
+
+[descarga_espolon]
+# Hueco bajo el tubérculo medial del calcáneo (espolón).
+profundidad = 3.0
+diametro = 25.0
+
+[soporte_navicular]
+# Bulto bajo el escafoides (se quita escayola del molde).
+altura = 3.0
+largo = 30.0
+ancho = 22.0
+
+[soporte_cuboides]
+# Bulto bajo el cuboides, columna lateral (se quita escayola del molde).
+altura = 3.0
+largo = 30.0
+ancho = 22.0
+
+[canal_fascia]
+# Surco en la plantilla para la fascia plantar, del tubérculo medial del calcáneo hasta ~10 mm por
+# detrás de la 1.ª cabeza (se añade una tira de escayola al molde).
+profundidad = 4.0
+ancho = 15.0
+
+[skive]
+# Skive de Kirby: corte en plano inclinado `angulo` grados en el plano frontal. La profundidad (2, 4 o 6 mm)
+# se mide a 1/3 del ancho del talón desde el borde medial (varo) o lateral (valgo). Con 2 mm solo toca el
+# lado del corte; con 6 mm cruza toda la cazoleta. Va desde atrás hasta el borde anterior de la cazoleta.
 altura = 4.0
+sentido = "varo"
+angulo = 15.0
+largo = 55.0
+
+[cuna_posterior]
+# Cuña intrínseca de retropié (grados): varo = supinadora, valgo = pronadora. Zona del talón.
+grados = 4.0
+sentido = "varo"
+largo = 60.0
+
+[cuna_anterior]
+# Cuña intrínseca de antepié (grados), desde `largo` mm por detrás de las cabezas hacia delante.
+grados = 4.0
+sentido = "varo"
 largo = 45.0
+
+[alza_talon]
+# Alza de talón: igual bajo el talón y rampa suave hasta `largo` mm desde atrás.
+altura = 5.0
+largo = 120.0
+
+[expansion_talon]
+# Expansión de talón: el talón se ensancha este porcentaje (se añade escayola en la periferia).
+porcentaje = 10.0
+largo = 60.0
 
 [referencias]
 # Tamaño de las correcciones según el pie: los largos y anchos de arriba son para un pie medio, que mide

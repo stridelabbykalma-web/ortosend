@@ -28,13 +28,22 @@ def _efecto(p, pie, tipo, **cambios):
         pieza.activa = False
 
 
-@pytest.mark.parametrize("tipo, signo", [("arco", 1), ("oliva", -1), ("barra", -1), ("descarga_1mtt", 1),
-                                          ("skive", -1)])
+SIGNOS = {"arco": 1, "oliva": -1, "barra": -1, "descarga_1mtt": 1, "descarga_5mtt": 1, "descarga_sesamoideos": 1,
+          "espolon": 1, "canal_fascia": 1, "navicular": -1, "cuboides": -1, "cuna_ant": -1, "cuna_post": -1,
+          "skive": -1, "alza": -1, "expansion_talon": 1}
+
+
+def test_estan_todas():
+    assert set(SIGNOS) == set(P.TIPOS) == set(P.NOMBRES) == set(P.COLORES)
+
+
+@pytest.mark.parametrize("tipo, signo", SIGNOS.items())
 def test_cada_pieza_con_su_signo_y_solo_en_su_pie(proyecto, tipo, signo):
     p = proyecto
     for k, pie in enumerate(p.pies):
         d, pieza = _efecto(p, pie, tipo)
-        assert (d * signo).max() > 0.5 * pieza.altura  # llega casi a la altura pedida
+        minimo = 0.3 if tipo == "expansion_talon" else 0.5 * pieza.altura  # (la expansión va en %)
+        assert (d * signo).max() > minimo, tipo  # llega casi a la altura pedida
         assert (d * signo).min() > -1e-6  # y nunca al revés
         otro = p.pies[1 - k].mascara
         assert np.abs(d[otro & ~pie.mascara]).max() < 1e-9  # el otro pie no se toca
@@ -47,10 +56,12 @@ def test_bordes_suaves(proyecto):
     pendiente_base = np.hypot(*np.gradient(base, 1.0)).max()
     for tipo in P.TIPOS:
         d, pieza = _efecto(p, p.pies[0], tipo)
-        if tipo == "skive":
-            # Corte en plano que baja hasta la base por la pared del talón: el molde no queda más
+        if tipo in P._CORTES:
+            # Cortes que llegan a la pared del pie (skive, cuñas, alza, expansión): el molde no queda más
             # empinado que antes.
-            assert np.hypot(*np.gradient(base + d, 1.0)).max() <= pendiente_base + 0.2
+            # (La expansión empuja la pared hacia fuera dentro del margen de la huella: algo más vertical.)
+            margen = 2.0 if tipo == "expansion_talon" else 0.2
+            assert np.hypot(*np.gradient(np.maximum(base + d, p.fondo), 1.0)).max() <= pendiente_base + margen, tipo
             continue
         gy, gx = np.gradient(d, 1.0)
         # Sin escalones: la pendiente del cambio es moderada (mm por mm). Lo más empinado es la rampa de
@@ -184,3 +195,63 @@ def ndimage_distancia(mascara):
     from scipy import ndimage
 
     return ndimage.distance_transform_edt(mascara)
+
+
+@pytest.mark.parametrize("sentido", ["varo", "valgo"])
+def test_skive_como_kirby(proyecto, sentido):
+    """Plano a 15°: `altura` mm de hondo en la línea a 1/3 del ancho del talón, más hondo hacia el lado del
+    skive y nada más allá de donde el plano sale de la superficie; solo en la cazoleta del talón."""
+    p = proyecto
+    pie = p.pies[0]
+    r = p.original.rejilla
+    X, Y = r.malla()
+    sk = pie.piezas["skive"]
+    d, _ = _efecto(p, pie, "skive", sentido=sentido, altura=4.0)
+    sk.sentido = "varo"
+    g = P._geometria_local(sk.copia() if sentido == "varo" else P.Pieza("skive", sentido="valgo", largo=sk.largo),
+                           pie.referencias, pie.mascara, r.dx, r.dy, p.clinicos["referencias"])
+    sis = g["sis"]
+    u, v = sis.a_local(X, Y)
+    lado = -1 if sentido == "valgo" else 1
+    cerca = pie.mascara & (np.abs(u - (-g["atras"] + 15)) < 1.0)  # una franja del talón
+    en_ref = cerca & (np.abs(v - g["vref"]) < 1.0)
+    assert -d[en_ref].mean() == pytest.approx(4.0, abs=1.0)  # 4 mm en la línea W/3
+    # El corte es un plano a 15° que baja hacia el lado del skive (4 mm más allá, ~1 mm más bajo).
+    base = _molde_sin_piezas(p)
+    hecho = base + d
+    mas_alla = cerca & (np.abs(v - (g["vref"] + lado * 4)) < 1.0)
+    assert hecho[mas_alla].mean() < hecho[en_ref].mean() - 0.5
+    sale = 4.0 / np.tan(np.radians(15))  # el plano sale de la superficie a ~15 mm
+    otro_lado = cerca & (lado * (v - g["vref"]) < -(sale + 4))
+    assert np.abs(d[otro_lado]).max() < 0.5  # (esquina redondeada)
+    # Solo hasta el borde anterior de la cazoleta (largo desde atrás).
+    delante = pie.mascara & (u > -g["atras"] + g["largo"] + 1)
+    assert np.abs(d[delante]).max() < 1e-6
+
+
+def test_cunas_varo_y_valgo(proyecto):
+    p = proyecto
+    pie = p.pies[0]
+    r = p.original.rejilla
+    X, Y = r.malla()
+    sis = pie.referencias.sistema()
+    u, v = sis.a_local(X, Y)
+    for tipo, zona in (("cuna_post", pie.mascara & (np.abs(u) < 5)), ("cuna_ant", pie.mascara & (np.abs(u - sis.largo) < 5))):
+        d_varo, _ = _efecto(p, pie, tipo, sentido="varo", altura=5.0)
+        d_valgo, _ = _efecto(p, pie, tipo, sentido="valgo", altura=5.0)
+        medial, lateral = zona & (v > 10), zona & (v < -10)
+        # Varo: se quita escayola del lado interno (la plantilla sube por dentro); valgo, al revés.
+        assert d_varo[medial].mean() < d_varo[lateral].mean() - 1, tipo
+        assert d_valgo[lateral].mean() < d_valgo[medial].mean() - 1, tipo
+    pie.piezas["cuna_post"].sentido = pie.piezas["cuna_ant"].sentido = "varo"
+
+
+def _molde_sin_piezas(p):
+    activas = {(k, t) for k, pie in enumerate(p.pies) for t, q in pie.piezas.items() if q.activa}
+    for pie in p.pies:
+        for q in pie.piezas.values():
+            q.activa = False
+    z = p.calcular().z.copy()
+    for k, t in activas:
+        p.pies[k].piezas[t].activa = True
+    return z

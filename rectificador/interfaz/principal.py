@@ -17,8 +17,8 @@ from PySide6.QtCore import QElapsedTimer, QObject, QSettings, QThread, QTimer, Q
 from PySide6.QtGui import QAction, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QApplication, QButtonGroup, QCheckBox, QDialog, QDoubleSpinBox, QFileDialog, QFrame, QHBoxLayout,
-    QLabel, QMainWindow, QMessageBox, QProgressBar, QPushButton, QScrollArea, QSizePolicy, QSplitter,
-    QStackedWidget, QToolBar, QVBoxLayout, QWidget,
+    QLabel, QMainWindow, QMenu, QMessageBox, QProgressBar, QPushButton, QScrollArea, QSizePolicy, QSplitter,
+    QStackedWidget, QToolBar, QToolButton, QVBoxLayout, QWidget,
 )
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -180,6 +180,23 @@ class PanelPie(QFrame):
         self.filas_piezas: dict[str, dict] = {}
         for tipo in piezas_mod.TIPOS:
             lay.addWidget(self._fila_pieza(tipo))
+        # Solo se ven las correcciones puestas; las demás se añaden desde este menú.
+        self.boton_anadir = QToolButton()
+        self.boton_anadir.setText("＋ Añadir corrección")
+        self.boton_anadir.setPopupMode(QToolButton.InstantPopup)
+        self.boton_anadir.setToolButtonStyle(Qt.ToolButtonTextOnly)
+        self.menu_anadir = QMenu(self.boton_anadir)
+        self.acciones_anadir = {}
+        for zona, tipos in piezas_mod.ZONAS.items():
+            self.menu_anadir.addSection(zona)
+            for tipo in tipos:
+                a = self.menu_anadir.addAction(piezas_mod.NOMBRES[tipo])
+                a.setToolTip(self.AYUDAS[tipo])
+                a.triggered.connect(lambda _=False, t=tipo: self.ventana.cambiar_pieza(self.clave, t, activa=True))
+                self.acciones_anadir[tipo] = a
+        self.menu_anadir.setToolTipsVisible(True)
+        self.boton_anadir.setMenu(self.menu_anadir)
+        lay.addWidget(self.boton_anadir)
 
         self.medidas = QLabel()
         self.medidas.setObjectName("cifras")
@@ -187,13 +204,23 @@ class PanelPie(QFrame):
         self.medidas.setToolTip("Medidas reales del molde en mm, para comprobar la escala.")
         lay.addWidget(self.medidas)
 
-    # Qué se puede ajustar de cada pieza: (atributo, texto, mínimo, máximo).
+    # Qué se puede ajustar de cada pieza: (atributo, texto, mínimo, máximo[, unidad]).
     AJUSTES = {
         "arco": (("largo", "Largo", 20, 140), ("ancho", "Ancho", 10, 70)),
         "oliva": (("largo", "Largo", 10, 50), ("ancho", "Ancho", 8, 40), ("retraso", "Detrás de las cabezas", -10, 40)),
         "barra": (("largo", "Ancho (a lo largo del pie)", 8, 50), ("retraso", "Detrás de las cabezas", -10, 40)),
         "descarga_1mtt": (("largo", "Diámetro", 8, 45),),
-        "skive": (("largo", "Largo desde atrás", 15, 90),),
+        "descarga_5mtt": (("largo", "Diámetro", 8, 45),),
+        "descarga_sesamoideos": (("largo", "Largo", 8, 45), ("ancho", "Ancho", 8, 40)),
+        "espolon": (("largo", "Diámetro", 10, 50),),
+        "navicular": (("largo", "Largo", 10, 60), ("ancho", "Ancho", 8, 40)),
+        "cuboides": (("largo", "Largo", 10, 60), ("ancho", "Ancho", 8, 40)),
+        "canal_fascia": (("ancho", "Ancho", 6, 30),),
+        "cuna_ant": (("largo", "Desde detrás de las cabezas", 10, 90),),
+        "skive": (("largo", "Largo desde atrás", 25, 100), ("angulo", "Inclinación del corte", 5, 45, "°")),
+        "cuna_post": (("largo", "Largo desde atrás", 25, 120),),
+        "alza": (("largo", "Largo desde atrás (con la rampa)", 40, 220),),
+        "expansion_talon": (("largo", "Largo desde atrás", 25, 100),),
     }
     AYUDAS = {
         "arco": "Relleno del arco interno. «Rebajar» añade escayola al arco del molde (la plantilla queda con "
@@ -203,8 +230,23 @@ class PanelPie(QFrame):
         "barra": "Barra metatarsal: bulto transversal en la plantilla (hueco en el molde) bajo todas las cabezas "
                  "(1.ª a 5.ª), de borde a borde del pie, curvada como el recorte y por detrás de las cabezas.",
         "descarga_1mtt": "Descarga bajo la cabeza del 1.er MTT: hueco en la plantilla (escayola añadida al molde).",
-        "skive": "Skive medial: cuña en varo bajo el talón. Se quita escayola del talón medial del molde; "
-                 "la profundidad es la del borde medial (en el centro del talón, 0).",
+        "descarga_5mtt": "Descarga bajo la cabeza del 5.º MTT: hueco en la plantilla (escayola añadida al molde).",
+        "descarga_sesamoideos": "Descarga de sesamoideos, bajo la 1.ª cabeza un poco por detrás: hueco en la "
+                                "plantilla (escayola añadida al molde).",
+        "espolon": "Descarga del espolón (tubérculo medial del calcáneo): hueco en la plantilla.",
+        "navicular": "Soporte bajo el escafoides: bulto en la plantilla (hueco en el molde).",
+        "cuboides": "Soporte bajo el cuboides (columna lateral): bulto en la plantilla (hueco en el molde).",
+        "canal_fascia": "Canal para la fascia plantar, del talón a ~10 mm por detrás de la 1.ª cabeza: surco en la "
+                        "plantilla (tira de escayola añadida al molde).",
+        "cuna_ant": "Cuña intrínseca de antepié en grados: varo sube el lado interno de la plantilla, valgo el "
+                    "externo (se quita escayola de ese lado del molde).",
+        "skive": "Skive de Kirby: corte en plano inclinado (15°) en la cazoleta del talón. La profundidad "
+                 "(2, 4 o 6 mm) es la de la línea a 1/3 del ancho del talón: con 2 mm solo toca ese lado, con "
+                 "6 mm cruza toda la cazoleta. Varo = medial; valgo = lateral.",
+        "cuna_post": "Cuña intrínseca de retropié en grados: supinadora (varo) o pronadora (valgo).",
+        "alza": "Alza de talón: igual bajo el talón y rampa suave hacia delante (se quita escayola del molde).",
+        "expansion_talon": "Expansión de talón: el talón se ensancha este % para que quepa al apoyar "
+                           "(se añade escayola en la periferia del molde).",
     }
 
     def _fila_pieza(self, tipo: str) -> QWidget:
@@ -222,13 +264,16 @@ class PanelPie(QFrame):
         activa.toggled.connect(lambda v, t=tipo: self.ventana.cambiar_pieza(self.clave, t, activa=v))
         fila.addWidget(activa, 1)
         altura = QDoubleSpinBox()
-        altura.setRange(0.0, 15.0)
-        altura.setSingleStep(0.5)
-        altura.setDecimals(1)
-        altura.setSuffix(" mm")
-        altura.setToolTip("Profundidad en el borde medial" if tipo == "skive" else
-                          "Profundidad del hueco en la plantilla" if tipo == "descarga_1mtt" else
-                          "Altura en la plantilla")
+        unidad, minimo, maximo, paso = piezas_mod.UNIDAD_ALTURA.get(tipo, ("mm", 0.0, 15.0, 0.5))
+        altura.setRange(minimo, maximo)
+        altura.setSingleStep(paso)
+        altura.setDecimals(1 if unidad == "mm" else 0)
+        altura.setSuffix(f" {unidad}")
+        altura.setToolTip("Profundidad a 1/3 del ancho del talón" if tipo == "skive" else
+                          "Grados de la cuña" if unidad == "°" else
+                          "Cuánto se ensancha el talón" if unidad == "%" else
+                          "Profundidad del hueco en la plantilla" if tipo.startswith("descarga") or tipo in (
+                              "espolon", "canal_fascia") else "Altura en la plantilla")
         altura.valueChanged.connect(lambda v, t=tipo: self.ventana.cambiar_pieza(self.clave, t, altura=v))
         fila.addWidget(altura)
         mas = QPushButton("···")
@@ -242,20 +287,22 @@ class PanelPie(QFrame):
         ld = QVBoxLayout(detalle)
         ld.setContentsMargins(24, 0, 0, 4)
         ld.setSpacing(4)
-        widgets = {"activa": activa, "altura": altura, "detalle": detalle, "mas": mas, "ajustes": {}}
-        if tipo == "arco":
+        widgets = {"activa": activa, "altura": altura, "detalle": detalle, "mas": mas, "ajustes": {},
+                   "caja": caja, "sentidos": []}
+        if tipo in piezas_mod.SENTIDOS:
             f = QHBoxLayout()
             f.setSpacing(0)
             grupo = QButtonGroup(caja)
-            for sentido, texto, lado in (("rebajar", "Rebajar arco", "izq"), ("subir", "Subir arco", "der")):
+            for (sentido, texto), lado in zip(piezas_mod.SENTIDOS[tipo], ("izq", "der")):
                 b = QPushButton(texto)
                 b.setCheckable(True)
                 b.setProperty("segmento", lado)
                 b.setProperty("pequeno", True)
-                b.toggled.connect(lambda v, s=sentido: v and self.ventana.cambiar_pieza(self.clave, "arco", sentido=s))
+                b.toggled.connect(lambda v, s=sentido, t=tipo: v and self.ventana.cambiar_pieza(self.clave, t, sentido=s))
                 grupo.addButton(b)
                 f.addWidget(b, 1)
                 widgets[f"sentido_{sentido}"] = b
+                widgets["sentidos"].append((sentido, b))
             f.setContentsMargins(24, 0, 0, 0)
             lay.addLayout(f)
         adaptar = QCheckBox("Adaptar a la medida del pie")
@@ -265,13 +312,13 @@ class PanelPie(QFrame):
         widgets["adaptar"] = adaptar
         widgets["escala"] = estilo.etiqueta("", "nota")
         ld.addWidget(widgets["escala"])
-        for atributo, texto, minimo, maximo in self.AJUSTES[tipo]:
+        for atributo, texto, minimo, maximo, *unidad in self.AJUSTES[tipo]:
             f = QHBoxLayout()
             f.addWidget(estilo.etiqueta(texto, "secundario", envolver=False), 1)
             c = QDoubleSpinBox()
             c.setRange(minimo, maximo)
             c.setDecimals(0)
-            c.setSuffix(" mm")
+            c.setSuffix(f" {unidad[0] if unidad else 'mm'}")
             c.valueChanged.connect(lambda v, t=tipo, a=atributo: self._cambiar_medida(t, a, v))
             f.addWidget(c)
             ld.addLayout(f)
@@ -329,7 +376,7 @@ class PanelPie(QFrame):
             if pieza is None:
                 continue
             controles = [w["activa"], w["altura"], w["adaptar"], *w["ajustes"].values()]
-            controles += [w[k] for k in ("sentido_rebajar", "sentido_subir") if k in w]
+            controles += [b for _, b in w["sentidos"]]
             for c in controles:
                 c.blockSignals(True)
             w["activa"].setChecked(pieza.activa)
@@ -340,9 +387,8 @@ class PanelPie(QFrame):
                 c.setValue(medidas.get(atributo, getattr(pieza, atributo)))
             w["escala"].setText(f"Este pie es un {f * 100:.0f} % de un pie medio: medidas para este pie."
                                 if pieza.adaptar else "Medidas fijas en mm.")
-            if "sentido_rebajar" in w:
-                w["sentido_rebajar"].setChecked(pieza.sentido == "rebajar")
-                w["sentido_subir"].setChecked(pieza.sentido == "subir")
+            for sentido, b in w["sentidos"]:
+                b.setChecked(pieza.sentido == sentido)
             for c in controles:
                 c.blockSignals(False)
             for c in controles + [w["mas"]]:
@@ -351,6 +397,10 @@ class PanelPie(QFrame):
             movida = abs(pieza.du) > 0.05 or abs(pieza.dv) > 0.05
             w["movida"].setText(f"{pieza.du:+.0f} mm a lo largo · {pieza.dv:+.0f} mm de lado" if movida else "no")
             w["volver"].setEnabled(listo and movida)
+            w["caja"].setVisible(pieza.activa)  # solo se ven las puestas
+            self.acciones_anadir[tipo].setVisible(not pieza.activa)
+        self.boton_anadir.setEnabled(listo and any(a.isVisible() for a in self.acciones_anadir.values()))
+        self.boton_anadir.setToolTip("Pon una corrección más" if listo else "Marca antes las 3 referencias de este pie.")
 
     def setTitle(self, texto: str):
         self.titulo.setText(texto.upper())

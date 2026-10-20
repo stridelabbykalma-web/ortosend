@@ -1,5 +1,15 @@
 # Novedades del Rectificador de moldes
 
+## 0.4.0
+- **Skive como Kirby, en varo o valgo**: se corta en un plano inclinado 15° (ajustable) en la cazoleta del
+  talón. La profundidad (2, 4 o 6 mm) es la de la línea a 1/3 del ancho del talón: con 2 mm solo toca ese
+  lado; con 6 mm cruza toda la cazoleta. Llega desde atrás hasta el final de la cazoleta.
+- **Correcciones nuevas**: cuña anterior y cuña posterior (en grados, varo o valgo), alza de talón,
+  expansión de talón (%), canal de fascia plantar, soporte navicular, soporte cuboides y descargas del
+  5.º MTT, de sesamoideos y del espolón.
+- En cada pie solo se ven las correcciones puestas; las demás se añaden con **«＋ Añadir corrección»**
+  (ordenadas por antepié, mediopié y retropié).
+
 ## 0.3.4
 - **Barra metatarsal nueva**: ahora va bajo **todas las cabezas** (de la 1.ª a la 5.ª), de borde a borde
   del pie, **curvada con la misma forma que el recorte** y por detrás de las cabezas. La altura es la misma
