@@ -18,6 +18,7 @@ class Pie:
     mascara: np.ndarray  # (ny, nx) True dentro del pie
     referencias: Referencias = field(default_factory=Referencias)
     recorte: Recorte = field(default_factory=Recorte)
+    piezas: dict = field(default_factory=dict)  # tipo -> ortomolde.piezas.Pieza (correcciones clínicas)
 
     @property
     def nombre(self) -> str:

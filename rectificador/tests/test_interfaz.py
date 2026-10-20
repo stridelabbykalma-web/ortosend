@@ -257,3 +257,47 @@ def test_deshacer_y_rehacer(stl_sintetico):
     v.deshacer()
     assert [p.lado for p in v.proyecto.pies] == lados
     v.close()
+
+
+def test_correcciones_desde_la_ventana(stl_sintetico):
+    import numpy as np
+    from PySide6.QtWidgets import QApplication
+
+    from interfaz.principal import VentanaPrincipal
+
+    app = QApplication.instance() or QApplication([])
+    v = VentanaPrincipal()
+    v.show()
+    v.abrir(str(stl_sintetico), esperar=True)
+    panel = v.paneles["p0"]
+    fila = panel.filas_piezas["oliva"]
+    assert not fila["activa"].isEnabled()  # sin referencias no se pueden poner
+    v.proponer_referencias("p0")
+    assert fila["activa"].isEnabled()
+    pie = v.proyecto.pies[0]
+    antes = v.proyecto.calcular().z.copy()
+    fila["activa"].setChecked(True)  # como si se marcara la casilla
+    assert pie.piezas["oliva"].activa
+    hueco = antes - v.proyecto.calcular().z
+    assert hueco.max() > 3  # oliva = hueco en el molde
+    # Su bola se puede arrastrar en el 3D.
+    clave = ("p0", "pieza:oliva")
+    assert clave in v.visor.puntos_arrastrables
+    x, y, _ = v.visor.puntos_arrastrables[clave]
+    v.arrastrar_referencia("p0", "pieza:oliva", x, y - 6)
+    v.soltar_referencia("p0", "pieza:oliva", x, y - 6)
+    assert abs(np.hypot(pie.piezas["oliva"].du, pie.piezas["oliva"].dv) - 6) < 0.5
+    # La altura con la casilla de números; y todo se deshace.
+    fila["altura"].setValue(3.0)
+    assert pie.piezas["oliva"].altura == 3.0
+    v.deshacer()
+    assert pie.piezas["oliva"].altura == 5.0
+    v.deshacer()
+    assert pie.piezas["oliva"].du == 0 and pie.piezas["oliva"].dv == 0
+    v.deshacer()
+    assert not pie.piezas["oliva"].activa and np.allclose(v.proyecto.calcular().z, antes)
+    # El arco con «Subir».
+    panel.filas_piezas["arco"]["activa"].setChecked(True)
+    panel.filas_piezas["arco"]["sentido_subir"].setChecked(True)
+    assert pie.piezas["arco"].sentido == "subir"
+    v.close()

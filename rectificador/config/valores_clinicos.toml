@@ -22,27 +22,43 @@ flecha = 10.0
 posicion_vertice = 0.35
 
 [relleno_arco]
-# Cuánto se rebaja el arco de la plantilla (se añade material al molde).
-altura = 4.0
+# Relleno del arco interno. Altura en la PLANTILLA:
+#   sentido = "rebajar" (clásico): se añade escayola al arco del molde y la plantilla queda con menos arco.
+#   sentido = "subir": se quita escayola del molde y la plantilla queda con más arco.
+# Se cambia en cada paciente.
+altura = 3.0
+sentido = "rebajar"
 largo = 70.0
 ancho = 35.0
 
 [oliva]
-# Elemento retrocapital: centrado entre 2.º y 3.er MTT, por detrás de la línea metatarsal.
+# Oliva retrocapital (bulto en la plantilla = hueco en el molde): centrada entre 2.º y 3.er MTT,
+# por detrás de la línea metatarsal.
 altura = 5.0
 largo = 25.0
 ancho = 20.0
-# Distancia del centro de la oliva por detrás de la línea metatarsal.
+# Distancia del centro de la oliva por detrás de las cabezas.
+retraso = 8.0
+
+[barra_metatarsal]
+# Barra metatarsal (bulto transversal en la plantilla = hueco en el molde) bajo las cabezas 2.ª a 4.ª,
+# por detrás de ellas.
+altura = 5.0
+# Ancho de la barra medido a lo largo del pie.
+ancho = 20.0
+# Cuánto sobresale a cada lado de la 2.ª y la 4.ª cabeza.
+margen_lateral = 6.0
+# Distancia del centro de la barra por detrás de las cabezas.
 retraso = 8.0
 
 [descarga_1mtt]
-# Hueco en la plantilla bajo la cabeza del 1.er MTT (se añade material al molde).
-profundidad = 3.0
+# Hueco en la plantilla bajo la cabeza del 1.er MTT (se añade escayola al molde).
+profundidad = 2.0
 diametro = 20.0
 
 [skive_medial]
-# Cuña bajo el talón medial (se quita material del molde).
-# Se puede indicar en mm (altura en el borde medial) o en grados; el programa convierte.
+# Skive medial (cuña en varo bajo el talón): se quita escayola del talón medial del molde.
+# Profundidad en el borde medial (en mm); en el centro del talón es 0.
 altura = 4.0
 largo = 45.0
 

@@ -230,11 +230,29 @@ class Visor(QtInteractor):
         for k in [k for k in self.puntos_arrastrables if k[0] == clave]:
             del self.puntos_arrastrables[k]
 
-    def dibujar_pie(self, clave: str, pie: Pie, geom: dict | None, recorte: list | None = None) -> None:
-        """Referencias marcadas y, si están las 3, el eje, la línea metatarsal y el arco."""
+    def dibujar_pie(self, clave: str, pie: Pie, geom: dict | None, recorte: list | None = None,
+                    piezas: list | None = None) -> None:
+        """Referencias marcadas y, si están las 3, el eje, la línea metatarsal y el arco. `piezas`: lista de
+        (tipo, color, contorno, centro) de las correcciones activas: su contorno y una bola para moverlas."""
         with self.lote():
             self.borrar_pie(clave)
             nombres = []
+            for tipo, color, contorno, centro in piezas or []:
+                if contorno:
+                    actor = f"{clave}_pieza_{tipo}_contorno"
+                    self.add_mesh(self._linea(contorno, cerrada=True), name=actor, color=color, line_width=3,
+                                  pickable=False, render=False)
+                    nombres.append(actor)
+                if centro:
+                    x, y = centro
+                    z = float(self._z(x, y)) + 2.0
+                    k = f"pieza:{tipo}"
+                    self.puntos_arrastrables[(clave, k)] = (x, y, z)
+                    self._centros[(clave, k)] = (x, y, z)
+                    actor = f"{clave}_{k}"
+                    self.add_mesh(pv.Cube(center=(x, y, z), x_length=4.5, y_length=4.5, z_length=4.5), name=actor,
+                                  color=color, pickable=False, render=False)
+                    nombres.append(actor)
             for k in ORDEN:
                 if k in pie.referencias.puntos:
                     x, y = pie.referencias.puntos[k]
@@ -277,12 +295,25 @@ class Visor(QtInteractor):
             lineas = dict(line_width=4, render_lines_as_tubes=True)
             poner("eje", self._linea(geom["eje"]), color=COLOR_EJE, **lineas)
             poner("metatarsal", self._linea(geom["linea_metatarsal"]), color=COLOR_METATARSAL, **lineas)
-            poner("arco", self._linea(geom["zona_arco"], cerrada=True), color=COLOR_ARCO, **lineas)
+            if geom.get("zona_arco"):
+                poner("arco", self._linea(geom["zona_arco"], cerrada=True), color=COLOR_ARCO, **lineas)
             for k in ("talon_medial", "talon_lateral"):
                 x, y = geom[k]
                 poner(k, pv.Sphere(radius=1.8, center=(x, y, float(self._z(x, y)) + 1.0)), color=COLORES["talon"])
         if recorte and len(recorte) > 1:
             poner("recorte", self._linea(recorte), color=COLOR_RECORTE, line_width=5, render_lines_as_tubes=True)
+
+    def dibujar_contorno_pieza(self, clave: str, tipo: str, color: str, contorno: list | None) -> None:
+        """Solo el contorno de una pieza (mientras se arrastra)."""
+        actor = f"{clave}_pieza_{tipo}_contorno"
+        self.remove_actor(actor, render=False)
+        if contorno:
+            self.add_mesh(self._linea(contorno, cerrada=True), name=actor, color=color, line_width=3,
+                          pickable=False, render=False)
+            nombres = self._actores_pie.setdefault(clave, [])
+            if actor not in nombres:
+                nombres.append(actor)
+        self.render()
 
     def dibujar_lineas(self, clave: str, geom: dict | None, recorte: list | None) -> None:
         """Solo el eje, la línea metatarsal, el arco y el recorte (mientras se arrastra un punto)."""
@@ -297,12 +328,12 @@ class Visor(QtInteractor):
             self.render()
 
     def mover_punto(self, clave: str, nombre: str, x: float, y: float) -> None:
-        """Mueve la bola de una referencia sin rehacerla (su rótulo se oculta hasta soltarla)."""
+        """Mueve la bola de una referencia (o de una pieza) sin rehacerla (su rótulo se oculta hasta soltarla)."""
         centro = self._centros.get((clave, nombre))
         bola = self.renderer.actors.get(f"{clave}_{nombre}")
         if centro is None or bola is None:
             return
-        z = float(self._z(x, y)) + 1.5
+        z = float(self._z(x, y)) + (2.0 if nombre.startswith("pieza:") else 1.5)
         bola.SetPosition(x - centro[0], y - centro[1], z - centro[2])
         rotulo = self.renderer.actors.get(f"{clave}_{nombre}_texto")
         if rotulo is not None:

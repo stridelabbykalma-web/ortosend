@@ -29,6 +29,7 @@ from ortomolde.exportar import exportar, medidas_stl  # noqa: E402
 from ortomolde import config  # noqa: E402
 from ortomolde.limpieza import NOMBRE_MODO  # noqa: E402
 from ortomolde.proyecto import Proyecto  # noqa: E402
+from ortomolde import piezas as piezas_mod  # noqa: E402
 from ortomolde.referencias import NOMBRES, OPCIONALES, ORDEN  # noqa: E402
 
 AYUDA = (
@@ -151,11 +152,146 @@ class PanelPie(QFrame):
         fila.addWidget(self.curvatura, 1)
         lay.addLayout(fila)
 
+        separador = QFrame()
+        separador.setFrameShape(QFrame.HLine)
+        separador.setStyleSheet(f"color: {C['borde']};")
+        lay.addWidget(separador)
+        lay.addWidget(estilo.etiqueta("CORRECCIONES", "titulo_tarjeta", envolver=False))
+        self.filas_piezas: dict[str, dict] = {}
+        for tipo in piezas_mod.TIPOS:
+            lay.addWidget(self._fila_pieza(tipo))
+
         self.medidas = QLabel()
         self.medidas.setObjectName("cifras")
         self.medidas.setWordWrap(True)
         self.medidas.setToolTip("Medidas reales del molde en mm, para comprobar la escala.")
         lay.addWidget(self.medidas)
+
+    # Qué se puede ajustar de cada pieza: (atributo, texto, mínimo, máximo).
+    AJUSTES = {
+        "arco": (("largo", "Largo", 20, 140), ("ancho", "Ancho", 10, 70)),
+        "oliva": (("largo", "Largo", 10, 50), ("ancho", "Ancho", 8, 40), ("retraso", "Detrás de las cabezas", -10, 40)),
+        "barra": (("largo", "Ancho (a lo largo del pie)", 8, 50), ("ancho", "Sobresale a los lados", 0, 25),
+                  ("retraso", "Detrás de las cabezas", -10, 40)),
+        "descarga_1mtt": (("largo", "Diámetro", 8, 45),),
+        "skive": (("largo", "Largo desde atrás", 15, 90),),
+    }
+    AYUDAS = {
+        "arco": "Relleno del arco interno. «Rebajar» añade escayola al arco del molde (la plantilla queda con "
+                "menos arco, relleno clásico); «Subir» la quita (más arco).",
+        "oliva": "Oliva retrocapital: bulto en la plantilla (hueco en el molde) entre 2.º y 3.er MTT, por detrás "
+                 "de las cabezas.",
+        "barra": "Barra metatarsal: bulto transversal en la plantilla (hueco en el molde) bajo 2.º-4.º MTT, por "
+                 "detrás de las cabezas.",
+        "descarga_1mtt": "Descarga bajo la cabeza del 1.er MTT: hueco en la plantilla (escayola añadida al molde).",
+        "skive": "Skive medial: cuña en varo bajo el talón. Se quita escayola del talón medial del molde; "
+                 "la profundidad es la del borde medial (en el centro del talón, 0).",
+    }
+
+    def _fila_pieza(self, tipo: str) -> QWidget:
+        caja = QWidget()
+        lay = QVBoxLayout(caja)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(4)
+        fila = QHBoxLayout()
+        punto = QLabel("●")
+        punto.setStyleSheet(f"color: {piezas_mod.COLORES[tipo]}; font-size: 12pt;")
+        punto.setFixedWidth(16)
+        fila.addWidget(punto)
+        activa = QCheckBox(piezas_mod.NOMBRES[tipo])
+        activa.setToolTip(self.AYUDAS[tipo])
+        activa.toggled.connect(lambda v, t=tipo: self.ventana.cambiar_pieza(self.clave, t, activa=v))
+        fila.addWidget(activa, 1)
+        altura = QDoubleSpinBox()
+        altura.setRange(0.0, 15.0)
+        altura.setSingleStep(0.5)
+        altura.setDecimals(1)
+        altura.setSuffix(" mm")
+        altura.setToolTip("Profundidad en el borde medial" if tipo == "skive" else
+                          "Profundidad del hueco en la plantilla" if tipo == "descarga_1mtt" else
+                          "Altura en la plantilla")
+        altura.valueChanged.connect(lambda v, t=tipo: self.ventana.cambiar_pieza(self.clave, t, altura=v))
+        fila.addWidget(altura)
+        mas = QPushButton("···")
+        mas.setProperty("pequeno", True)
+        mas.setCheckable(True)
+        mas.setToolTip("Tamaño y posición")
+        mas.setFixedWidth(40)
+        fila.addWidget(mas)
+        lay.addLayout(fila)
+        detalle = QWidget()
+        ld = QVBoxLayout(detalle)
+        ld.setContentsMargins(24, 0, 0, 4)
+        ld.setSpacing(4)
+        widgets = {"activa": activa, "altura": altura, "detalle": detalle, "mas": mas, "ajustes": {}}
+        if tipo == "arco":
+            f = QHBoxLayout()
+            f.setSpacing(0)
+            grupo = QButtonGroup(caja)
+            for sentido, texto, lado in (("rebajar", "Rebajar arco", "izq"), ("subir", "Subir arco", "der")):
+                b = QPushButton(texto)
+                b.setCheckable(True)
+                b.setProperty("segmento", lado)
+                b.setProperty("pequeno", True)
+                b.toggled.connect(lambda v, s=sentido: v and self.ventana.cambiar_pieza(self.clave, "arco", sentido=s))
+                grupo.addButton(b)
+                f.addWidget(b, 1)
+                widgets[f"sentido_{sentido}"] = b
+            f.setContentsMargins(24, 0, 0, 0)
+            lay.addLayout(f)
+        for atributo, texto, minimo, maximo in self.AJUSTES[tipo]:
+            f = QHBoxLayout()
+            f.addWidget(estilo.etiqueta(texto, "secundario", envolver=False), 1)
+            c = QDoubleSpinBox()
+            c.setRange(minimo, maximo)
+            c.setDecimals(0)
+            c.setSuffix(" mm")
+            c.valueChanged.connect(lambda v, t=tipo, a=atributo: self.ventana.cambiar_pieza(self.clave, t, **{a: v}))
+            f.addWidget(c)
+            ld.addLayout(f)
+            widgets["ajustes"][atributo] = c
+        f = QHBoxLayout()
+        f.addWidget(estilo.etiqueta("Movida a mano", "secundario", envolver=False), 1)
+        widgets["movida"] = estilo.etiqueta("", "secundario", envolver=False)
+        f.addWidget(widgets["movida"])
+        volver = QPushButton("A su sitio")
+        volver.setProperty("pequeno", True)
+        volver.setToolTip("Vuelve a colocarla donde la pone el programa")
+        volver.clicked.connect(lambda _=False, t=tipo: self.ventana.cambiar_pieza(self.clave, t, du=0.0, dv=0.0))
+        f.addWidget(volver)
+        widgets["volver"] = volver
+        ld.addLayout(f)
+        ld.addWidget(estilo.etiqueta("Para moverla, arrastra su bola en el 3D.", "nota"))
+        detalle.setVisible(False)
+        mas.toggled.connect(detalle.setVisible)
+        lay.addWidget(detalle)
+        self.filas_piezas[tipo] = widgets
+        return caja
+
+    def _actualizar_piezas(self, pie, listo: bool):
+        for tipo, w in self.filas_piezas.items():
+            pieza = pie.piezas.get(tipo)
+            if pieza is None:
+                continue
+            controles = [w["activa"], w["altura"], *w["ajustes"].values()]
+            controles += [w[k] for k in ("sentido_rebajar", "sentido_subir") if k in w]
+            for c in controles:
+                c.blockSignals(True)
+            w["activa"].setChecked(pieza.activa)
+            w["altura"].setValue(pieza.altura)
+            for atributo, c in w["ajustes"].items():
+                c.setValue(getattr(pieza, atributo))
+            if "sentido_rebajar" in w:
+                w["sentido_rebajar"].setChecked(pieza.sentido == "rebajar")
+                w["sentido_subir"].setChecked(pieza.sentido == "subir")
+            for c in controles:
+                c.blockSignals(False)
+            for c in controles + [w["mas"]]:
+                c.setEnabled(listo)
+            w["activa"].setToolTip(self.AYUDAS[tipo] if listo else "Marca antes las 3 referencias de este pie.")
+            movida = abs(pieza.du) > 0.05 or abs(pieza.dv) > 0.05
+            w["movida"].setText(f"{pieza.du:+.0f} mm a lo largo · {pieza.dv:+.0f} mm de lado" if movida else "no")
+            w["volver"].setEnabled(listo and movida)
 
     def setTitle(self, texto: str):
         self.titulo.setText(texto.upper())
@@ -185,6 +321,7 @@ class PanelPie(QFrame):
         for w in (self.recortar, self.adelanto, self.curvatura):
             w.setEnabled(listo)
         self.recortar.setToolTip("" if listo else "Marca antes las 3 referencias de este pie.")
+        self._actualizar_piezas(pie, listo)
         m = proyecto.medidas(pie)
         partes = [f"<b style='color:{C['texto']}'>Medidas (mm)</b> · largo {m['largo']:.0f} · "
                   f"ancho máx. {m['ancho_maximo']:.0f}"]
@@ -402,13 +539,24 @@ class VentanaPrincipal(QMainWindow):
 
     def _estado(self):
         p = self.proyecto
-        return ("estado", p.lijado, [(dict(pie.referencias.puntos), dataclasses.replace(pie.recorte))
-                                      for pie in p.pies])
+        return ("estado", p.lijado, [(dict(pie.referencias.puntos), dataclasses.replace(pie.recorte),
+                                       piezas_mod.copiar(pie.piezas)) for pie in p.pies])
 
-    def _guardar_estado(self, estado=None):
-        """Apunta cómo estaba todo antes de un cambio (para poder deshacerlo)."""
+    def _guardar_estado(self, estado=None, agrupar: str | None = None):
+        """Apunta cómo estaba todo antes de un cambio (para poder deshacerlo).
+
+        `agrupar`: cambios seguidos del mismo control (p. ej. pulsar varias veces la flecha de una
+        casilla de números) cuentan como uno solo para deshacer."""
         if self.proyecto is None:
             return
+        import time
+
+        ahora = time.monotonic()
+        if agrupar is not None and agrupar == getattr(self, "_ultimo_grupo", None) and ahora - self._t_grupo < 2.0:
+            self._t_grupo = ahora
+            return
+        self._ultimo_grupo, self._t_grupo = agrupar, ahora
+        self.cambios_sin_guardar = True
         self._deshacer.append(estado or self._estado())
         del self._deshacer[:-100]
         self._rehacer.clear()
@@ -418,9 +566,10 @@ class VentanaPrincipal(QMainWindow):
         _, lijado, pies = estado
         p = self.proyecto
         p.lijado = lijado
-        for pie, (puntos, recorte) in zip(p.pies, pies):
+        for pie, (puntos, recorte, piezas) in zip(p.pies, pies):
             pie.referencias.puntos = dict(puntos)
             pie.recorte = dataclasses.replace(recorte)
+            pie.piezas = piezas_mod.copiar(piezas)
         self.caja_lijado.blockSignals(True)
         self.caja_lijado.setValue(lijado)
         self.caja_lijado.blockSignals(False)
@@ -858,6 +1007,17 @@ valores clínicos: <code>config/valores_clinicos.toml</code></p>""")
             return
         if self._estado_arrastre is None:
             self._estado_arrastre = self._estado()  # cómo estaba antes de empezar a arrastrar
+        if nombre.startswith("pieza:"):
+            tipo = nombre.split(":", 1)[1]
+            if self._mover_pieza(clave, tipo, x, y):
+                pie = self.proyecto.pies[int(clave[1])]
+                r = self.proyecto.original.rejilla
+                contorno = piezas_mod.contorno(pie.piezas[tipo], pie.referencias, pie.mascara, r.dx, r.dy,
+                                               self.proyecto.clinicos["referencias"])
+                with self.visor.lote():
+                    self.visor.mover_punto(clave, nombre, x, y)
+                    self.visor.dibujar_contorno_pieza(clave, tipo, piezas_mod.COLORES[tipo], contorno)
+            return
         if not self._mover_referencia(clave, nombre, x, y):
             return
         pie = self.proyecto.pies[int(clave[1])]
@@ -866,6 +1026,8 @@ valores clínicos: <code>config/valores_clinicos.toml</code></p>""")
             recorte = self.proyecto.linea_recorte(pie)
         except ValueError:
             geom, recorte = None, None
+        if geom and pie.piezas.get("arco") is not None and pie.piezas["arco"].activa:
+            geom = {**geom, "zona_arco": None}
         with self.visor.lote():
             self.visor.mover_punto(clave, nombre, x, y)
             self.visor.dibujar_lineas(clave, geom, recorte)
@@ -875,8 +1037,14 @@ valores clínicos: <code>config/valores_clinicos.toml</code></p>""")
             return
         self._guardar_estado(self._estado_arrastre)
         self._estado_arrastre = None
-        self._mover_referencia(clave, nombre, x, y)
         pie = self.proyecto.pies[int(clave[1])]
+        if nombre.startswith("pieza:"):
+            tipo = nombre.split(":", 1)[1]
+            self._mover_pieza(clave, tipo, x, y)
+            self._actualizar_todo()
+            self.notificar(f"{pie.nombre}: {piezas_mod.NOMBRES[tipo]} movida (Ctrl+Z para deshacer).")
+            return
+        self._mover_referencia(clave, nombre, x, y)
         self.notificar(f"{pie.nombre}: {NOMBRES[nombre]} movida (Ctrl+Z para deshacer).")
         self._actualizar_todo()
 
@@ -891,10 +1059,24 @@ valores clínicos: <code>config/valores_clinicos.toml</code></p>""")
         if not self.proyecto:
             return
         r = self.proyecto.pies[int(clave[1])].recorte
-        self._guardar_estado()
+        self._guardar_estado(agrupar=f"recorte:{clave}:{','.join(cambios)}")
         for k, v in cambios.items():
             setattr(r, k, v)
         self._actualizar_todo()
+
+    def cambiar_pieza(self, clave: str, tipo: str, **cambios):
+        """Activa, desactiva o ajusta una corrección (relleno de arco, oliva...) de un pie."""
+        if not self.proyecto:
+            return
+        pieza = self.proyecto.pies[int(clave[1])].piezas[tipo]
+        if all(getattr(pieza, k) == v for k, v in cambios.items()):
+            return
+        self._guardar_estado(agrupar=f"pieza:{clave}:{tipo}:{','.join(cambios)}")
+        for k, v in cambios.items():
+            setattr(pieza, k, v)
+        self._actualizar_todo()
+        if cambios.get("activa"):
+            self.notificar(f"{pieza.nombre} puesta. Arrastra su bola en el 3D para moverla.", "bien")
 
     def _actualizar_todo(self):
         """Recalcula el molde y redibuja todo (tras cualquier cambio), con un solo redibujo."""
@@ -927,7 +1109,39 @@ valores clínicos: <code>config/valores_clinicos.toml</code></p>""")
             except ValueError as e:
                 geom = None
                 self.statusBar().showMessage(str(e), 6000)
-            self.visor.dibujar_pie(self._clave(pie), pie, geom, self.proyecto.linea_recorte(pie))
+            if geom and pie.piezas.get("arco") is not None and pie.piezas["arco"].activa:
+                geom = {**geom, "zona_arco": None}  # ya se ve el contorno del relleno de arco
+            self.visor.dibujar_pie(self._clave(pie), pie, geom, self.proyecto.linea_recorte(pie),
+                                   self._piezas_a_dibujar(pie))
+
+    def _piezas_a_dibujar(self, pie) -> list:
+        """(tipo, color, contorno, centro) de las correcciones activas de un pie."""
+        r = self.proyecto.original.rejilla
+        cfg = self.proyecto.clinicos["referencias"]
+        out = []
+        for tipo, pieza in pie.piezas.items():
+            if pieza.activa and pie.referencias.completas:
+                out.append((tipo, piezas_mod.COLORES[tipo],
+                            piezas_mod.contorno(pieza, pie.referencias, pie.mascara, r.dx, r.dy, cfg),
+                            piezas_mod.centro(pieza, pie.referencias, pie.mascara, r.dx, r.dy, cfg)))
+        return out
+
+    def _mover_pieza(self, clave: str, tipo: str, x: float, y: float) -> bool:
+        """Lleva el centro de una pieza a (x, y) (cambia su desplazamiento a mano)."""
+        pie = self.proyecto.pies[int(clave[1])]
+        if self.proyecto.pie_en(x, y) is not pie:
+            return False
+        pieza = pie.piezas[tipo]
+        r = self.proyecto.original.rejilla
+        ahora = piezas_mod.centro(pieza, pie.referencias, pie.mascara, r.dx, r.dy, self.proyecto.clinicos["referencias"])
+        if ahora is None:
+            return False
+        sis = pie.referencias.sistema()
+        u0, v0 = sis.a_local(*ahora)
+        u1, v1 = sis.a_local(x, y)
+        pieza.du += float(u1 - u0)
+        pieza.dv += float(v1 - v0)
+        return True
 
     def _refrescar_panel(self):
         p = self.proyecto

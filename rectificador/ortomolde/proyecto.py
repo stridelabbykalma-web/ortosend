@@ -20,6 +20,7 @@ from .campo import Campo, detectar_fondo, malla_a_campo
 from .entrada import cargar_malla
 from .limpieza import InformeLimpieza, componer, limpiar
 from .pies import Pie, detectar_pies
+from . import piezas as piezas_mod
 from . import recorte as recorte_mod
 from .recorte import Recorte
 from .referencias import Referencias, geometria, proponer
@@ -84,13 +85,19 @@ class Proyecto:
         p.pies = detectar_pies(campo, fondo, taller["limpieza"]["pie_izquierdo_en"])
         for pie in p.pies:
             pie.recorte = Recorte.por_defecto(clinicos)
+            pie.piezas = piezas_mod.por_defecto(clinicos)
         return p
 
     # ------------------------------------------------------------------ estado
 
     @property
     def avisos(self) -> list[str]:
-        return list(self.informe.avisos) if self.informe else []
+        avisos = list(self.informe.avisos) if self.informe else []
+        if getattr(self, "exceso_tope", 0.0) > 0.1:
+            avisos.append(f"Alguna corrección no cabe entera: el molde llega al tope de "
+                          f"{self.taller['recuadro']['alto_z']:.0f} mm de alto y se recortan "
+                          f"{self.exceso_tope:.1f} mm por arriba (límite en config/taller.toml, [recuadro] alto_z).")
+        return avisos
 
     def pie(self, lado: str) -> Pie | None:
         return next((p for p in self.pies if p.lado == lado), None)
@@ -122,6 +129,7 @@ class Proyecto:
             dx, dy = _esquina(p.mascara, self.original) - esquina_vieja
             p.referencias = Referencias({k: (x + dx, y + dy) for k, (x, y) in viejo.referencias.puntos.items()})
             p.recorte = viejo.recorte
+            p.piezas = viejo.piezas
 
     def poner_referencia(self, x: float, y: float, nombre: str | None = None) -> tuple[Pie, str] | None:
         """Marca una referencia en el pie que hay bajo (x, y).
@@ -231,11 +239,19 @@ class Proyecto:
         Siempre se parte del escaneo original: nada se acumula ni se pierde.
         """
         z = self.molde_lijado().copy()
-        X, Y = self.original.rejilla.malla()
+        r = self.original.rejilla
+        X, Y = r.malla()
+        borde = self.clinicos.get("general", {}).get("suavizado_borde", 8.0)
+        for pie in self.pies:
+            if pie.piezas:
+                z = piezas_mod.aplicar(z, self.fondo, pie.referencias, pie.piezas, pie.mascara, X, Y, r.dx, r.dy,
+                                       self.clinicos["referencias"], borde)
         for pie in self.pies:
             z = recorte_mod.aplicar(z, self.fondo, pie.referencias, pie.recorte, pie.mascara, X, Y,
                                     self.original.rejilla.dx)
-        z = np.clip(z, 0.0, self.taller["recuadro"]["alto_z"])
+        alto = self.taller["recuadro"]["alto_z"]
+        self.exceso_tope = float(max((z - alto).max(), 0.0))  # lo que se ha cortado por arriba (mm)
+        z = np.clip(z, 0.0, alto)
         return self.original.copia(z)
 
     def altura_en(self, x: float, y: float) -> float:
@@ -251,7 +267,8 @@ class Proyecto:
     def receta(self) -> dict:
         pies = []
         for p in self.pies:
-            d = {"lado": p.lado, "referencias": p.referencias.a_dict(), "recorte_arco": p.recorte.a_dict()}
+            d = {"lado": p.lado, "referencias": p.referencias.a_dict(), "recorte_arco": p.recorte.a_dict(),
+                 "piezas": {k: v.a_dict() for k, v in p.piezas.items()}}
             d["referencias_taller"] = {
                 k: [round(c, 3) for c in self.a_taller(x, y, self.altura_en(x, y))]
                 for k, (x, y) in p.referencias.puntos.items()
