@@ -83,3 +83,86 @@ def test_script_de_cambio(reinstalar):
 
 def test_no_instalado_fuera_de_windows():
     assert A.base_instalada() is None
+
+
+def _publicado(version="1.2.3"):
+    """Archivos «publicados» (como los sirve raw.githubusercontent.com) y su manifiesto."""
+    import hashlib
+
+    archivos = {
+        "VERSION": f"{version}\n".encode(),
+        "requirements.txt": b"numpy\n",
+        "interfaz/principal.py": b"# programa",
+        "ortomolde/__init__.py": b"__version__ = '1.2.3'",
+        "config/taller.toml": b"",
+        "instalar.bat": b"@echo off\necho hola\n",
+    }
+    manifiesto = "".join(f"{hashlib.sha256(d).hexdigest()} {len(d)} {r}\n" for r, d in archivos.items())
+    return archivos, manifiesto
+
+
+def _servidor(monkeypatch, archivos, manifiesto, estropear=None):
+    def bajar(url, *a, **k):
+        if url == A.URL_MANIFIESTO:
+            return manifiesto.encode()
+        ruta = url[len(A.URL_BRUTO) + 1:]
+        if ruta == estropear:
+            return b"otra cosa"
+        return archivos[ruta]
+    monkeypatch.setattr(A, "_bajar", bajar)
+
+
+def test_descarga_archivo_a_archivo(tmp_path, monkeypatch):
+    archivos, manifiesto = _publicado()
+    _servidor(monkeypatch, archivos, manifiesto)
+    avances = []
+    nueva = A.descargar_archivos(tmp_path / "nueva", "1.2.3", lambda b, t: avances.append((b, t)))
+    assert (nueva / "interfaz" / "principal.py").read_bytes() == b"# programa"
+    assert (nueva / "instalar.bat").read_bytes() == b"@echo off\r\necho hola\r\n"  # los .bat, como en Windows
+    assert avances[-1][0] == avances[-1][1]
+
+
+def test_archivo_distinto_no_se_instala_y_se_prueba_el_zip(tmp_path, monkeypatch):
+    archivos, manifiesto = _publicado()
+    _servidor(monkeypatch, archivos, manifiesto, estropear="interfaz/principal.py")
+    with pytest.raises(A.ErrorActualizacion, match="distinto"):
+        A.descargar_archivos(tmp_path / "nueva", "1.2.3")
+    assert not (tmp_path / "nueva").exists()
+    # Con `obtener` se pasa al ZIP.
+    monkeypatch.setattr(A, "descargar", lambda destino, progreso=None: _zip_de_github(destino))
+    nueva = A.obtener(tmp_path, "1.2.3")
+    assert nueva == tmp_path / "actualizacion" / "nueva" and (nueva / "VERSION").exists()
+
+
+def test_si_todo_falla_el_error_se_entiende(tmp_path, monkeypatch):
+    import urllib.error
+
+    def sin_red(*a, **k):
+        raise urllib.error.URLError("timed out")
+    monkeypatch.setattr(A, "_bajar", sin_red)
+    monkeypatch.setattr(A, "descargar", sin_red)
+    with pytest.raises(A.ErrorActualizacion) as e:
+        A.obtener(tmp_path, "1.2.3")
+    texto = A.explicar(e.value)
+    assert "no se ha podido conectar (timed out)" in texto and "<" not in texto
+
+
+def test_manifiesto_rechaza_rutas_raras():
+    for mala in ("../fuera.py", "/etc/x", "C:/x"):
+        with pytest.raises(A.ErrorActualizacion):
+            A.leer_manifiesto(f"{'0' * 64} 1 {mala}\n")
+
+
+def test_manifiesto_al_dia():
+    """MANIFIESTO.txt tiene que coincidir con los archivos: si falla, `python herramientas/manifiesto.py`."""
+    import shutil
+    import sys
+    from pathlib import Path
+
+    if not shutil.which("git"):
+        pytest.skip("sin git")
+    carpeta = Path(A.__file__).resolve().parents[1]
+    sys.path.insert(0, str(carpeta / "herramientas"))
+    import manifiesto
+
+    assert (carpeta / A.MANIFIESTO).read_text(encoding="utf-8") == manifiesto.texto()

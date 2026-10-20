@@ -1,5 +1,9 @@
 # Novedades del Rectificador de moldes
 
+## 0.3.3
+- La actualización automática es más segura: descarga los archivos uno a uno (comprobando cada uno) y,
+  si no puede, prueba otra vía. Si aun así falla, dice el motivo con palabras claras.
+
 ## 0.3.2
 - **Las correcciones se adaptan a la medida del pie**: el largo y el ancho del relleno de arco, la oliva,
   la barra, la descarga y el skive se escalan según lo que mide el pie del talón a las cabezas (los valores

@@ -5,6 +5,7 @@ Arrancar (desde la carpeta rectificador):  python -m interfaz.principal [ESCANEO
 
 from __future__ import annotations
 
+import html
 import sys
 import traceback
 from pathlib import Path
@@ -1170,14 +1171,11 @@ varios moldes en una plancha (arrastrándolos), calculas y guardas el <b>.nc</b>
 
             def trabajo():
                 try:
-                    zipf = actualizar.descargar(base / "actualizacion" / "descarga.zip",
-                                                lambda b, t: puente.progreso.emit(b, t))
-                    puente.estado.emit("Comprobando la descarga…")
-                    actualizar.preparar(zipf, base / "actualizacion" / "nueva", nueva)
+                    actualizar.obtener(base, nueva, lambda b, t: puente.progreso.emit(b, t))
                     puente.terminado.emit("")
                 except Exception as e:  # noqa: BLE001 - se le dice al usuario
                     traceback.print_exc()
-                    puente.terminado.emit(str(e) or e.__class__.__name__)
+                    puente.terminado.emit(actualizar.explicar(e))
 
             threading.Thread(target=trabajo, daemon=True).start()
 
@@ -1192,15 +1190,16 @@ varios moldes en una plancha (arrastrándolos), calculas y guardas el <b>.nc</b>
                 barra.hide()
                 ahora.setEnabled(True)
                 luego.setEnabled(True)
-                estado.setText(f"<span style='color:{C['mal']}'>No se ha podido actualizar: {error}. "
-                               "Sigue funcionando la versión que tienes.</span>")
+                estado.setText(f"<span style='color:{C['mal']}'>No se ha podido actualizar: {html.escape(error)}. "
+                               "Sigue funcionando la versión que tienes. Puedes volver a probar.</span>")
                 return
             estado.setText("Listo. El programa se cierra y se vuelve a abrir solo con la versión nueva…")
             QApplication.processEvents()
             try:
                 actualizar.lanzar_cambio(base, nueva)
             except Exception as e:  # noqa: BLE001
-                terminado(str(e))
+                traceback.print_exc()
+                terminado(actualizar.explicar(e))
                 return
             self.cambios_sin_guardar = False  # ya se ha preguntado
             d.accept()
