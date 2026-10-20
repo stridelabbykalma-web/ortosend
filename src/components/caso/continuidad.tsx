@@ -54,10 +54,24 @@ export function ContinuidadEstudio({ caseId, paso }: { caseId: string; paso: num
 
   if (!otro || oculto) return null;
   const mismaPantalla = otro.paso === paso;
+  // Flotante y por encima de todo (la cámara del estudio es un overlay con
+  // z-index 200 que taparía un aviso normal).
   return (
     <div
       className="note a"
-      style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginBottom: 12 }}
+      style={{
+        position: "fixed",
+        left: "50%",
+        transform: "translateX(-50%)",
+        bottom: 14,
+        zIndex: 300,
+        maxWidth: "min(620px, calc(100vw - 24px))",
+        boxShadow: "0 6px 24px rgba(0,0,0,.25)",
+        display: "flex",
+        gap: 10,
+        alignItems: "center",
+        flexWrap: "wrap",
+      }}
     >
       <span>
         📱 Este estudio se está usando en <b>otro dispositivo</b>
