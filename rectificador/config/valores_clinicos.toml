@@ -11,8 +11,8 @@
 suavizado_borde = 8.0
 
 [recorte_arco]
-# El molde termina en un arco este número de mm por delante de las cabezas metatarsales.
-adelanto = 3.0
+# El molde termina en un arco este número de mm por delante de las cabezas metatarsales (siguiendo su curva).
+adelanto = 15.0
 # 1.0 = sigue la parábola metatarsal tal cual; 0 = recta; >1 = más curvada.
 curvatura = 1.0
 # Parábola metatarsal: cuánto sobresale (mm) el punto más adelantado (2.º-3.er MTT) por

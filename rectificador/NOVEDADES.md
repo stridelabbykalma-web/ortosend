@@ -1,5 +1,9 @@
 # Novedades del Rectificador de moldes
 
+## 0.4.6
+- El molde se corta **15 mm por delante de las cabezas metatarsales** (antes 3 mm), siguiendo su curva.
+  Se puede cambiar en cada pie con «Adelanto». Los trabajos guardados se abren con el corte que tenían.
+
 ## 0.4.5
 - Las actualizaciones se descargan de la versión exacta recién publicada: llegan al momento y sin
   mezclar archivos de dos versiones.

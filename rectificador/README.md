@@ -88,7 +88,7 @@ También acepta un recuadro ya limpio (lo detecta solo).
    Opcionalmente, las cabezas del 2.º, 3.º y 4.º MTT: si están, el recorte pasa por delante de las 5.
    **Proponer referencias** las coloca todas para empezar: las cabezas donde el pie se hundió más en la
    espuma en el antepié (respeta la fórmula metatarsal del paciente) y el talón por proporciones típicas.
-4. **Recorte en arco**: con las referencias puestas, el molde termina en un arco (línea roja) 3 mm por
+4. **Recorte en arco**: con las referencias puestas, el molde termina en un arco (línea roja) 15 mm por
    delante de las cabezas metatarsales (de todas las marcadas) siguiendo la parábola metatarsal; por
    delante se vacía hasta la base.
    Se puede adelantar/atrasar y cambiar la curvatura en el panel de cada pie.

@@ -25,7 +25,7 @@ from .referencias import Referencias
 @dataclass
 class Recorte:
     activo: bool = True
-    adelanto: float = 3.0  # mm por delante de las cabezas (negativo = por detrás)
+    adelanto: float = 15.0  # mm por delante de las cabezas (negativo = por detrás)
     curvatura: float = 1.0  # 0 = recto, 1 = parábola metatarsal, >1 más curvado
     flecha: float = 10.0  # mm, con curvatura 1
     posicion_vertice: float = 0.35
