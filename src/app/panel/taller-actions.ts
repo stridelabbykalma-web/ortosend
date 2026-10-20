@@ -9,6 +9,7 @@ import { prisma } from "@/lib/db";
 import { requireRole } from "@/lib/auth";
 import { pushEvent, releaseStale, avisarPaciente } from "@/lib/cases";
 import { QC_CHECKS, TALLER_STATES } from "@/lib/taller";
+import { ErrorTaller, marcarConfeccion, marcarMecanizado } from "@/lib/taller-ops";
 import type { CaseState } from "@prisma/client";
 
 function fail(path: string, msg: string): never {
@@ -126,15 +127,15 @@ export async function designDoneAction(formData: FormData) {
 
 // Molde mecanizado → confección a mano (registra lote CNC).
 export async function phaseDoneAction(formData: FormData) {
-  const { u, kase } = await tallerCase(String(formData.get("caseId")));
-  const back = `/caso/${kase.id}`;
-  if (kase.state !== "FABRICACION" || kase.fabPhase !== "MECANIZADO") fail(back, "El caso no está en mecanizado");
-  const lot = String(formData.get("lot") ?? "").trim();
-  await prisma.case.update({
-    where: { id: kase.id },
-    data: { fabPhase: "CONFECCION", lot: lot || kase.lot },
-  });
-  await pushEvent(kase.id, `Molde mecanizado (${lot || kase.lot || "—"}) — pasa a confección a mano`, u.name);
+  const u = await requireRole("TALLER", "ADMIN");
+  const caseId = String(formData.get("caseId"));
+  const back = `/caso/${caseId}`;
+  try {
+    await marcarMecanizado(caseId, u, String(formData.get("lot") ?? ""));
+  } catch (e) {
+    if (e instanceof ErrorTaller && e.status !== 404) fail(back, e.message);
+    throw e;
+  }
   redirect(back);
 }
 
@@ -168,17 +169,16 @@ export async function lotDoneAction(formData: FormData) {
 
 // Confección terminada (trazabilidad del material) → control de calidad.
 export async function confectionDoneAction(formData: FormData) {
-  const { u, kase } = await tallerCase(String(formData.get("caseId")));
-  const back = `/caso/${kase.id}`;
-  if (kase.state !== "FABRICACION" || kase.fabPhase !== "CONFECCION") fail(back, "El caso no está en confección");
-  const material = String(formData.get("material") ?? "").trim();
-  if (!material) fail(back, "Registra el material/lote para trazabilidad");
-  await prisma.case.update({
-    where: { id: kase.id },
-    data: { state: "CALIDAD", material, openBy: null, openAt: null },
-  });
-  await pushEvent(kase.id, `Confección terminada (material ${material}) — a control de calidad`, u.name);
-  redirect("/panel?ok=" + encodeURIComponent(`Caso #${kase.number} → calidad`));
+  const u = await requireRole("TALLER", "ADMIN");
+  const caseId = String(formData.get("caseId"));
+  let numero: number;
+  try {
+    numero = (await marcarConfeccion(caseId, u, String(formData.get("material") ?? ""))).number;
+  } catch (e) {
+    if (e instanceof ErrorTaller && e.status !== 404) fail(`/caso/${caseId}`, e.message);
+    throw e;
+  }
+  redirect("/panel?ok=" + encodeURIComponent(`Caso #${numero} → calidad`));
 }
 
 // Calidad superada → envío. Guardas: los cuatro puntos verificados y foto del par adjunta.

@@ -155,6 +155,29 @@ export async function verifyResetToken(token: string): Promise<User | null> {
   }
 }
 
+// Sesión del Rectificador (programa del taller en el PC del taller): token de 30 días que
+// el programa manda en la cabecera Authorization. Lleva la huella de la contraseña: si se
+// cambia la contraseña (o se desactiva el usuario) deja de valer al momento.
+export const APP_DAYS = 30;
+export async function createAppToken(user: Pick<User, "id" | "passwordHash">) {
+  return new SignJWT({ uid: user.id, fp: fingerprint(user.passwordHash), kind: "app" })
+    .setProtectedHeader({ alg: "HS256" })
+    .setIssuedAt()
+    .setExpirationTime(`${APP_DAYS}d`)
+    .sign(secret());
+}
+export async function verifyAppToken(token: string): Promise<User | null> {
+  try {
+    const { payload } = await jwtVerify(token, secret());
+    if (payload.kind !== "app") return null;
+    const user = await prisma.user.findUnique({ where: { id: payload.uid as string } });
+    if (!user || !user.active || fingerprint(user.passwordHash) !== payload.fp) return null;
+    return user;
+  } catch {
+    return null;
+  }
+}
+
 // Paso intermedio de /acceso: DNI y móvil ya escritos, a la espera del código
 // de WhatsApp. Se guardan en una cookie firmada (no en la URL) durante 15 min.
 const ACCESO_COOKIE = "ortosend_acceso";

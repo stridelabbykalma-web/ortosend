@@ -466,13 +466,13 @@ enum Delivery {
 }
 
 model Case {
-  id               String        @id @default(cuid())
-  number           Int           @unique @default(autoincrement())
+  id               String          @id @default(cuid())
+  number           Int             @unique @default(autoincrement())
   patientId        String
-  patient          Patient       @relation(fields: [patientId], references: [id])
+  patient          Patient         @relation(fields: [patientId], references: [id])
   clinicId         String
-  clinic           Clinic        @relation(fields: [clinicId], references: [id])
-  state            CaseState     @default(CITA_RESERVADA)
+  clinic           Clinic          @relation(fields: [clinicId], references: [id])
+  state            CaseState       @default(CITA_RESERVADA)
   flow             String // "A" (web) | "B" (clínica)
   appointmentAt    DateTime? // próxima cita vigente (desnormalizado de Appointment)
   reason           String? // motivo indicado por el cliente al reservar (Flujo A)
@@ -503,7 +503,8 @@ model Case {
   events           CaseEvent[]
   studySessions    StudySession[]
   annualReviewAt   DateTime? // revisión anual programada al cerrar
-  createdAt        DateTime      @default(now())
+  hoja             HojaConfeccion?
+  createdAt        DateTime        @default(now())
 }
 
 // Actividad del asistente de captura por dispositivo: permite continuar el
@@ -717,4 +718,64 @@ model ProfessionalApplication {
   resolutionNote String?
   resolvedAt     DateTime?
   createdAt      DateTime  @default(now())
+}
+
+// ---------- Confección (taller) ----------
+// Catálogo de materiales del taller, editable desde el Rectificador (programa del taller).
+enum TipoMaterial {
+  BASE
+  REFUERZO
+  FORRO
+  ADHESIVO
+  OTRO
+}
+
+model Material {
+  id              String       @id @default(cuid())
+  nombre          String
+  tipo            TipoMaterial @default(BASE)
+  grosorMm        Float?
+  dureza          String? // p. ej. "45 Shore A"
+  planchaAnchoMm  Int?
+  planchaLargoMm  Int?
+  precioCents     Int          @default(0) // precio de una plancha (o envase)
+  paresPorPlancha Float        @default(1) // rendimiento: cuántos pares salen de una plancha
+  activo          Boolean      @default(true)
+  orden           Int          @default(0)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+}
+
+enum ProcesoConfeccion {
+  TERMOFORMADO // plancha calentada y conformada al vacío sobre el molde
+  CAPAS // capas pegadas y prensadas sobre el molde
+}
+
+// Hoja de confección del par: proceso, capas, tiempos y coste (calculado al guardar).
+model HojaConfeccion {
+  id                 String            @id @default(cuid())
+  caseId             String            @unique
+  case               Case              @relation(fields: [caseId], references: [id])
+  proceso            ProcesoConfeccion @default(TERMOFORMADO)
+  capas              Json              @default("[]") // [{ materialId, pies: "par"|"I"|"D", notas }]
+  notas              String?
+  minutosCnc         Int               @default(0)
+  minutosConfeccion  Int               @default(0)
+  costeMaterialCents Int               @default(0)
+  costeFresadoCents  Int               @default(0)
+  costeManoObraCents Int               @default(0)
+  costeTotalCents    Int               @default(0)
+  actualizadoPor     String?
+  updatedAt          DateTime          @updatedAt
+}
+
+// Ajustes de coste del taller (una sola fila, id "taller").
+model AjustesTaller {
+  id                  String   @id @default("taller")
+  precioHoraCents     Int      @default(2000) // mano de obra
+  costeCncMinutoCents Int      @default(20) // máquina CNC por minuto
+  costeMoldeCents     Int      @default(300) // escayola de los dos moldes
+  minutosCnc          Int      @default(30) // por defecto en una hoja nueva
+  minutosConfeccion   Int      @default(45)
+  updatedAt           DateTime @updatedAt
 }
