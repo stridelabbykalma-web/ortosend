@@ -104,3 +104,17 @@ def test_sin_referencias_no_hace_nada(stl_sintetico, taller):
     for q in p.pies[0].piezas.values():
         q.activa = True
     assert np.array_equal(p.calcular().z, base)
+
+
+def test_si_no_cabe_se_quita_por_abajo(stl_sintetico, taller):
+    """Un molde más alto que el bloque baja entero: lo que sobra sale de la base, no de la planta."""
+    p = Proyecto.abrir(stl_sintetico, {**taller, "calculo": {"rejilla": 1.0}})
+    z0 = p.calcular().z
+    assert p.bajada == 0 and p.fondo_molde == p.fondo
+    alto = float(z0.max()) - 1.5
+    p.taller = {**p.taller, "recuadro": {**p.taller["recuadro"], "alto_z": alto}}
+    z = p.calcular().z
+    assert p.bajada == pytest.approx(1.5) and z.max() == pytest.approx(alto)
+    assert p.fondo_molde == pytest.approx(p.fondo - 1.5)
+    assert np.allclose(z - p.fondo_molde, z0 - p.fondo)  # el relieve no cambia
+    assert any("por abajo" in a for a in p.avisos)

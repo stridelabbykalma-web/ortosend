@@ -44,6 +44,7 @@ class Pieza:
     y: int | None = None
     giro: int = 0  # cuartos de vuelta (0..3)
     fija: bool = False  # puesta a mano: la colocación automática no la mueve
+    h_entero: np.ndarray | None = field(default=None, repr=False)  # `h` antes de quitarle nada por abajo
 
     @property
     def colocada(self) -> bool:
@@ -98,11 +99,32 @@ def a_paso(piezas: list[Pieza], paso: float) -> None:
     """Pasa todas las piezas a la misma separación de puntos (por si vienen de moldes distintos)."""
     for p in piezas:
         if abs(p.paso - paso) > 1e-9:
+            if p.h_entero is not None:
+                p.h, p.h_entero = p.h_entero, None
             f = p.paso / paso
             p.h = ndimage.zoom(p.h, f, order=1)
             p.silueta = ndimage.zoom(p.silueta.astype(float), f, order=1) > 0.5
             p.h = np.where(p.silueta, p.h, 0.0)
             p.paso = paso
+
+
+def ajustar_alto(piezas: list[Pieza], alto: float, cfg: dict) -> list[str]:
+    """Si un pie es más alto de lo que cabe en la plancha, se le quita lo que sobra POR ABAJO: lo más alto
+    (la planta) queda igual y el borde más bajo se junta con el suelo de la ranura."""
+    maximo = alto - cfg.get("rebaje_superior", 0.5) - cfg.get("suelo_minimo", 3.0) - 0.5
+    avisos = []
+    for p in piezas:
+        if p.h_entero is None:
+            p.h_entero = p.h
+        sobra = float(p.h_entero.max()) - maximo
+        if sobra > 1e-6:
+            p.h = np.where(p.silueta, np.maximum(p.h_entero - sobra, 0.0), 0.0)
+            if sobra > 0.05:
+                avisos.append(f"{p.nombre} mide {p.h_entero.max():.1f} mm de alto: en una plancha de {alto:.0f} mm "
+                              f"se le quitan {sobra:.1f} mm por abajo (la planta queda igual).")
+        else:
+            p.h = p.h_entero
+    return avisos
 
 
 def margen_celdas(radio: float, paso: float, cfg: dict) -> int:
@@ -736,7 +758,7 @@ def previsualizar(piezas: list[Pieza], ancho: float, largo: float, alto: float, 
     La numeración y las posiciones son las mismas que tendrá el .nc si después se llama a
     `generar(..., colocar_antes=False)`. El contorno que se dibuja es aproximado (a un radio de la silueta)."""
     a_paso(piezas, paso)
-    avisos = []
+    avisos = ajustar_alto(piezas, alto, cfg)
     sobran = (colocar(piezas, ancho, largo, paso, cfg, radio, avisos) if colocar_antes
               else [p for p in piezas if not p.colocada])
     puestas = [p for p in piezas if p.colocada]
@@ -762,8 +784,6 @@ def previsualizar(piezas: list[Pieza], ancho: float, largo: float, alto: float, 
         h[p.y:p.y + a, p.x:p.x + b][sp] = alto - tope - p.alto + hp[sp]
         fichas.append(Ficha(n, p, _recorrido(d, dc, wx0, wy0, paso), (p.x * paso, (p.x + b - 1) * paso),
                             (p.y * paso, (p.y + a - 1) * paso), p.alto, suelo, float("nan"), _hacia_dedos(p)))
-        if p.alto > alto - tope:
-            avisos.append(f"{p.nombre} mide {p.alto:.1f} mm de alto: no cabe en una plancha de {alto:.0f} mm.")
     if sobran:
         avisos.append(f"No caben {len(sobran)} pieza(s): " + ", ".join(p.nombre for p in sobran)
                       + ". Usa otra plancha o hazlas en otra tirada.")
@@ -777,20 +797,13 @@ def generar(piezas: list[Pieza], ancho: float, largo: float, alto: float, paso: 
             radio: float, cfg: dict, colocar_antes: bool = True) -> TrabajoCNC:
     """Coloca las piezas en la plancha y genera el G-code de toda la tirada."""
     a_paso(piezas, paso)
+    avisos = ajustar_alto(piezas, alto, cfg)
     sobran = (colocar(piezas, ancho, largo, paso, cfg, radio) if colocar_antes
               else [p for p in piezas if not p.colocada])
     puestas = [p for p in piezas if p.colocada]
     if not puestas:
         raise ValueError("Ninguna pieza cabe en la plancha.")
     H = float(alto)
-    tope = cfg.get("rebaje_superior", 0.5)
-    avisos = []
-    for p in puestas:
-        if p.alto > H - tope:
-            raise ValueError(f"{p.nombre} mide {p.alto:.1f} mm de alto: no cabe en una plancha de {H:.0f} mm.")
-        if p.alto > H - tope - suelo_de(p, H, cfg) - 0.5 + 1e-6:
-            avisos.append(f"{p.nombre} mide {p.alto:.1f} mm de alto: con una plancha de {H:.0f} mm lo más bajo "
-                          f"del borde del pie queda por debajo del contorno.")
     h, zona, colocadas, punta_pies = componer(puestas, ancho, largo, H, paso, radio, cfg)
     punta = superficie_punta(h, radio, paso, 0.0)
     zseg = cfg["altura_seguridad"]

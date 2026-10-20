@@ -27,7 +27,7 @@ from interfaz.plancha_vista import VistaPlancha
 def piezas_de_proyecto(proyecto, nombre: str) -> list[cnc.Pieza]:
     """Las piezas (un pie cada una) del molde abierto, tal como se exportaría."""
     c = proyecto.calcular()
-    return cnc.piezas_de_molde(c.z, proyecto.fondo, [p.mascara for p in proyecto.pies],
+    return cnc.piezas_de_molde(c.z, proyecto.fondo_molde, [p.mascara for p in proyecto.pies],
                                [f"{nombre} · pie {p.lado}" for p in proyecto.pies],
                                c.rejilla.dx, proyecto.taller["cnc"])
 

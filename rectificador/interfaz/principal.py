@@ -881,7 +881,7 @@ class VentanaPrincipal(QMainWindow):
         if self.ver_fresa.isChecked():
             from ortomolde import cnc
 
-            colores, r = cnc.no_llega_en_molde(campo.z, p.fondo, [q.mascara for q in p.pies],
+            colores, r = cnc.no_llega_en_molde(campo.z, p.fondo_molde, [q.mascara for q in p.pies],
                                                self.taller["fresa"]["diametro"] / 2, campo.rejilla.dx)
             if r["planta_max"] < 0.3:
                 texto = "En la planta la fresa llega a todo. "

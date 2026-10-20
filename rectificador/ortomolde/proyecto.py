@@ -50,7 +50,13 @@ class Proyecto:
     pies: list[Pie] = field(default_factory=list)
     lijado: float = 6.0  # mm, tamaño del taco de lija (ver ortomolde/suavizado.py)
     paciente: dict = field(default_factory=dict)  # nombre, fecha, notas
+    bajada: float = 0.0  # mm quitados por abajo en el último cálculo para que quepa en el bloque
     _cache_lijado: tuple | None = field(default=None, repr=False)
+
+    @property
+    def fondo_molde(self) -> float:
+        """La base del molde calculado (más baja si se ha tenido que bajar para que quepa)."""
+        return max(self.fondo - self.bajada, 0.0)
 
     @classmethod
     def abrir(cls, ruta_stl: str | Path, taller: dict | None = None, tipo: str = "auto",
@@ -94,10 +100,9 @@ class Proyecto:
     @property
     def avisos(self) -> list[str]:
         avisos = list(self.informe.avisos) if self.informe else []
-        if getattr(self, "exceso_tope", 0.0) > 0.1:
-            avisos.append(f"Alguna corrección no cabe entera: el molde llega al tope de "
-                          f"{self.taller['recuadro']['alto_z']:.0f} mm de alto y se recortan "
-                          f"{self.exceso_tope:.1f} mm por arriba (límite en config/taller.toml, [recuadro] alto_z).")
+        if self.bajada > 0.1:
+            avisos.append(f"El molde pasa de {self.taller['recuadro']['alto_z']:.0f} mm de alto: se le quitan "
+                          f"{self.bajada:.1f} mm por abajo (la planta queda igual).")
         return avisos
 
     def pie(self, lado: str) -> Pie | None:
@@ -250,9 +255,10 @@ class Proyecto:
         for pie in self.pies:
             z = recorte_mod.aplicar(z, self.fondo, pie.referencias, pie.recorte, pie.mascara, X, Y,
                                     self.original.rejilla.dx)
+        # Si no cabe en el alto del bloque, se baja entero: lo que sobra se quita por abajo, nunca de la planta.
         alto = self.taller["recuadro"]["alto_z"]
-        self.exceso_tope = float(max((z - alto).max(), 0.0))  # lo que se ha cortado por arriba (mm)
-        z = np.clip(z, 0.0, alto)
+        self.bajada = float(max(z.max() - alto, 0.0))
+        z = np.clip(z - self.bajada, 0.0, alto)
         return self.original.copia(z)
 
     def altura_en(self, x: float, y: float) -> float:

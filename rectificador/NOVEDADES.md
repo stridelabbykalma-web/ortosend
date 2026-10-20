@@ -1,5 +1,11 @@
 # Novedades del Rectificador de moldes
 
+## 0.3.1
+- El molde puede medir hasta **40 mm** de alto (antes 38).
+- Si con las correcciones pasa de 40 mm, lo que sobra se quita **por abajo** (de la base), nunca de la planta:
+  las correcciones salen enteras. Lo mismo en la CNC si un pie no cabe en la plancha. El programa avisa
+  de cuántos mm se quitan.
+
 ## 0.3.0
 - **Se actualiza solo**: al abrir el programa, si hay una versión nueva, te pregunta. Con «Actualizar ahora»
   la descarga, la instala y se vuelve a abrir. Si algo fallara, sigue la versión que tenías.

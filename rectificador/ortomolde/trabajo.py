@@ -18,7 +18,7 @@ from pathlib import Path
 
 import numpy as np
 
-from . import __version__
+from . import __version__, config
 from . import piezas as piezas_mod
 from .campo import Campo, Rejilla
 from .limpieza import Bloque, InformeLimpieza
@@ -118,7 +118,11 @@ def abrir(ruta: str | Path) -> Proyecto:
                    for k, b in enumerate(i["bloques"])]
         informe = InformeLimpieza(modo=i["modo"], avisos=list(i["avisos"]), bloques=bloques, pies=i["pies"])
     esc = datos["escaneo"]
-    taller, clinicos = datos["taller"], datos["valores_clinicos"]
+    clinicos = datos["valores_clinicos"]
+    # Los datos del taller (bloque, fresa, CNC) son los de ahora; solo se conserva lo que depende del escaneo.
+    taller = config.taller()
+    for k in ("calculo", "limpieza"):
+        taller[k] = datos["taller"].get(k, taller[k])
     p = Proyecto(Path(esc["ruta"]), campo, float(datos["fondo"]), taller, clinicos, esc.get("sha256", ""),
                  esc.get("tipo", "limpio"), informe, lijado=float(datos["lijado"]))
     p.paciente = dict(datos.get("paciente") or paciente_vacio())

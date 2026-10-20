@@ -7,8 +7,9 @@
 # PENDIENTE: confirmar con un STL real cuál de los dos ejes mide 330.
 ancho_x = 288.0
 largo_y = 330.0
-# Altura disponible del bloque de espuma: nada puede quedar por encima.
-alto_z = 38.0
+# Alto máximo del molde (lo que mide la plancha de escayola). Si el molde con las correcciones
+# pasa de aquí, se le quita lo que sobra POR ABAJO (la base); la planta del pie no se toca.
+alto_z = 40.0
 
 [fresa]
 # Fresa de punta de bola (la del ejemplo de Fusion: T1 D=25 CR=12.5).

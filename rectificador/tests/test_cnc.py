@@ -17,7 +17,7 @@ def cfg(taller):
 def piezas_sinteticas(stl_sintetico, taller):
     p = Proyecto.abrir(stl_sintetico, {**taller, "calculo": {"rejilla": 1.0}})
     c = p.calcular()
-    return lambda nombre: cnc.piezas_de_molde(c.z, p.fondo, [q.mascara for q in p.pies],
+    return lambda nombre: cnc.piezas_de_molde(c.z, p.fondo_molde, [q.mascara for q in p.pies],
                                               [f"{nombre} {q.lado}" for q in p.pies], 1.0, taller["cnc"])
 
 
@@ -266,3 +266,21 @@ def test_donde_no_llega_la_fresa():
     assert d[np.hypot(x - 70, y - 50) < 15].max() < 0.05
     # La superficie fresada nunca queda por debajo del molde.
     assert (cnc.superficie_fresada(h, 12.5, 0.5) >= h - 1e-9).all()
+
+
+def test_pie_muy_alto_se_recorta_por_abajo(cfg):
+    """Si un pie no cabe en la plancha se le quita lo que sobra por abajo: la planta queda igual."""
+    yy, xx = np.mgrid[0:80, 0:40]
+    sil = (np.hypot((xx - 20) / 18, (yy - 40) / 38) < 1)
+    h = np.where(sil, 10 + 30 * (1 - np.hypot((xx - 20) / 18, (yy - 40) / 38)), 0.0)  # hasta 40 mm
+    p = cnc.Pieza("alto", h.copy(), sil, 1.0)
+    avisos = cnc.ajustar_alto([p], 40.0, cfg)
+    maximo = 40 - cfg["rebaje_superior"] - cfg["suelo_minimo"] - 0.5
+    assert avisos and "por abajo" in avisos[0]
+    assert p.alto == pytest.approx(maximo)
+    sobra = h.max() - maximo
+    assert np.allclose(p.h[sil], np.maximum(h[sil] - sobra, 0))  # misma forma, bajada entera
+    # Con una plancha más gruesa vuelve a estar entero.
+    assert cnc.ajustar_alto([p], 60.0, cfg) == [] and np.array_equal(p.h, h)
+    t = cnc.generar([p], 200, 200, 40.0, 1.0, 12.5, cfg)
+    assert any("por abajo" in a for a in t.avisos)
