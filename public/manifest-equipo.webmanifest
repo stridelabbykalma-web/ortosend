@@ -1,0 +1,17 @@
+{
+  "name": "Ortosend Clínicas",
+  "short_name": "Ortosend",
+  "description": "Panel del equipo Ortosend: agenda, estudios de la pisada, prescripciones y taller.",
+  "id": "/equipo",
+  "start_url": "/equipo",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#0e6e5c",
+  "lang": "es",
+  "icons": [
+    { "src": "/icono-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icono-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icono-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

@@ -14,6 +14,7 @@ export default async function LoginPage({
     <div className="wrap" style={{ maxWidth: 400 }}>
       <div className="sp2" />
       <h2>Acceder</h2>
+      <div className="muted">Acceso de pacientes. El equipo de clínicas y taller entra desde su app.</div>
       <div className="sp" />
       <Flash error={error} ok={ok} />
       <form className="card" action={loginAction}>

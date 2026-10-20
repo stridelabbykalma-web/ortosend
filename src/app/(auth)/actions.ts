@@ -28,10 +28,14 @@ export async function loginAction(formData: FormData) {
     identifier: formData.get("identifier"),
     password: formData.get("password"),
   });
+  // Ámbito de la entrada: la web pública (/login) es solo para pacientes y
+  // /equipo es solo para el personal (clínicas, taller, administración).
+  const ambito = formData.get("ambito") === "equipo" ? "equipo" : "cliente";
+  const base = ambito === "equipo" ? "/equipo" : "/login";
   const next = String(formData.get("next") ?? "");
   const dest = next.startsWith("/") && !next.startsWith("//") ? next : "/panel";
   const loginUrl = (msg: string) =>
-    `/login?error=${encodeURIComponent(msg)}${dest !== "/panel" ? `&next=${encodeURIComponent(dest)}` : ""}`;
+    `${base}?error=${encodeURIComponent(msg)}${dest !== "/panel" ? `&next=${encodeURIComponent(dest)}` : ""}`;
   if (!parsed.success) redirect(loginUrl("Completa email/móvil y contraseña"));
   const id = normalizeIdentifier(parsed.data.identifier);
   const user = await prisma.user.findFirst({
@@ -40,7 +44,13 @@ export async function loginAction(formData: FormData) {
   if (!user || !user.active || !user.passwordHash || !(await verifyPassword(parsed.data.password, user.passwordHash))) {
     redirect(loginUrl("Credenciales incorrectas"));
   }
-  await createSession(user.id);
+  if (ambito === "cliente" && user!.role !== "CLIENTE") {
+    redirect("/equipo?ok=" + encodeURIComponent("Tu cuenta es del equipo: esta es tu entrada. Vuelve a escribir tus credenciales."));
+  }
+  if (ambito === "equipo" && user!.role === "CLIENTE") {
+    redirect("/login?error=" + encodeURIComponent("Esa cuenta es de paciente: entra desde la web de Ortosend."));
+  }
+  await createSession(user!.id);
   redirect(dest);
 }
 

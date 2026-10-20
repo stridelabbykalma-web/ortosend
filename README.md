@@ -38,6 +38,15 @@ despliega automáticamente.
   móvil y cree su contraseña, y desde entonces solo él/ella accede (el tutor recibe aviso y pierde
   el acceso). Detalle en `docs/alta-cliente-flujo-a.md`.
 
+**App del equipo (PWA) y separación de accesos**
+- La web pública es **solo para pacientes** (`/login`). El personal entra por **`/equipo`**,
+  que además es una **app instalable (PWA)**: icono propio, pantalla completa y actualización
+  automática en cada deploy. Funciona en iPhone/iPad (Safari → «Añadir a pantalla de inicio»),
+  Mac (Safari → «Añadir al Dock»), Android y Windows («Instalar aplicación»). Manifest en
+  `public/manifest-equipo.webmanifest`, solo enlazado desde `/equipo`; la cámara del estudio
+  funciona igual dentro de la app. El login valida el ámbito: una cuenta de equipo en `/login`
+  se redirige a `/equipo` y viceversa, sin crear sesión.
+
 **Autenticación y roles**
 - Sesión con cookie firmada (jose) + bcrypt. 6 roles: ADMIN, ADMIN_CLINICA, PROFESIONAL,
   RECETADOR, TALLER, CLIENTE.

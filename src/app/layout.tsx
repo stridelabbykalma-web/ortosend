@@ -27,7 +27,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <span>© 2026 Ortosend</span>
             <span>
               <a href="/legal/aviso-legal">Aviso legal</a> · <a href="/legal/privacidad">Privacidad</a> ·{" "}
-              <a href="/legal/terminos">Términos</a> · <a href="/legal/cookies">Cookies</a>
+              <a href="/legal/terminos">Términos</a> · <a href="/legal/cookies">Cookies</a> ·{" "}
+              <a href="/equipo">Acceso del equipo</a>
             </span>
           </div>
         </div>
