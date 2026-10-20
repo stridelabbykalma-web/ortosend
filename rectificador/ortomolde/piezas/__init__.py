@@ -14,6 +14,10 @@ Cada pieza se coloca sola a partir de las referencias del pie (eje talón → pu
 cabeza; `SistemaPie`), así que gira con el pie y vale igual para el izquierdo y el derecho. Se puede mover
 a mano (`du` a lo largo del pie, `dv` hacia dentro). Los bordes son suaves (sin escalones) y nada sale
 del pie.
+
+Con `adaptar` (por defecto), el largo y el ancho guardados son los de un pie medio (`pie_medio` mm del talón
+a las cabezas) y se escalan con el pie: más pequeñas en un pie pequeño, más grandes en uno grande. La altura
+no cambia nunca (es la prescripción).
 """
 
 from __future__ import annotations
@@ -49,6 +53,7 @@ class Pieza:
     du: float = 0.0  # mm movida a mano a lo largo del pie (+ hacia los dedos)
     dv: float = 0.0  # mm movida a mano de lado (+ hacia dentro)
     sentido: str = "rebajar"  # relleno de arco: "rebajar" (clásico) o "subir" el arco de la plantilla
+    adaptar: bool = True  # largo y ancho para un pie medio, escalados a la medida de este pie
 
     @property
     def nombre(self) -> str:
@@ -63,7 +68,23 @@ class Pieza:
     @classmethod
     def de_dict(cls, d: dict) -> "Pieza":
         validos = {k: v for k, v in d.items() if k in cls.__dataclass_fields__}
+        validos.setdefault("adaptar", False)  # trabajos guardados antes de existir: que salgan igual
         return cls(**validos)
+
+    def medidas(self, escala_pie: float) -> tuple[float, float]:
+        """(largo, ancho) en mm para este pie."""
+        f = escala_pie if self.adaptar else 1.0
+        return self.largo * f, self.ancho * f
+
+
+def escala(refs: Referencias, cfg_ref: dict) -> float:
+    """Tamaño de este pie respecto a un pie medio (1 = medio). 1 si faltan referencias."""
+    try:
+        largo = refs.sistema().largo
+    except ValueError:
+        return 1.0
+    f = largo / cfg_ref.get("pie_medio", 175.0)
+    return float(np.clip(f, cfg_ref.get("escala_minima", 0.6), cfg_ref.get("escala_maxima", 1.4)))
 
 
 def por_defecto(clinicos: dict) -> dict[str, Pieza]:
@@ -134,12 +155,13 @@ def _geometria_local(pieza: Pieza, refs: Referencias, mascara, dx, dy, cfg_ref) 
     except ValueError:
         return None
     m1, m5 = np.array(refs.puntos["mtt1"], float), np.array(refs.puntos["mtt5"], float)
-    out = {"sis": sis}
+    largo, ancho = pieza.medidas(escala(refs, cfg_ref))
+    out = {"sis": sis, "largo": largo, "ancho": ancho}
     if pieza.tipo == "arco":
         u0, u1 = cfg_ref.get("arco_inicio", 0.25) * sis.largo, cfg_ref.get("arco_fin", 0.80) * sis.largo
         cu = (u0 + u1) / 2
         p = np.array(sis.a_global(cu, 0))
-        cv = _borde(mascara, dx, dy, p, sis.medial) - pieza.ancho / 3
+        cv = _borde(mascara, dx, dy, p, sis.medial) - ancho / 3
         out.update(cu=cu, cv=cv)
     elif pieza.tipo == "oliva":
         out.update(cu=sis.largo - pieza.retraso, cv=0.0)
@@ -148,14 +170,14 @@ def _geometria_local(pieza: Pieza, refs: Referencias, mascara, dx, dy, cfg_ref) 
         us = [c[0] for c in cabezas]
         vs = [c[1] for c in cabezas]
         out.update(cu=float(np.mean(us)) - pieza.retraso, cv=float(np.mean([max(vs), min(vs)])),
-                   medio_ancho=(max(vs) - min(vs)) / 2 + pieza.ancho)
+                   medio_ancho=(max(vs) - min(vs)) / 2 + ancho)
     elif pieza.tipo == "descarga_1mtt":
         u, v = sis.a_local(m1[0], m1[1])
         out.update(cu=float(u), cv=float(v))
     elif pieza.tipo == "skive":
         atras = _borde(mascara, dx, dy, sis.origen, -sis.eje)
         medial = _borde(mascara, dx, dy, sis.origen, sis.medial)
-        out.update(cu=-atras + pieza.largo / 2, cv=medial / 2, atras=atras, medial=medial)
+        out.update(cu=-atras + largo / 2, cv=medial / 2, atras=atras, medial=medial)
     else:
         raise ValueError(f"Pieza desconocida: {pieza.tipo}")
     return out
@@ -177,31 +199,31 @@ def cambio_altura(pieza: Pieza, refs: Referencias, mascara: np.ndarray, X: np.nd
     u, v = sis.a_local(X[j0:j1, i0:i1], Y[j0:j1, i0:i1])
     u = u - pieza.du
     v = v - pieza.dv
-    cu, cv = g["cu"], g["cv"]
+    cu, cv, largo, ancho = g["cu"], g["cv"], g["largo"], g["ancho"]
     h = pieza.altura
     if pieza.tipo == "arco":
         # Máximo junto al borde interno a mitad del arco; se desvanece hacia el eje y hacia los extremos.
-        pu = _campana(np.abs(u - cu) / (pieza.largo / 2))
-        pv = _campana(np.abs(v - cv) / (pieza.ancho / 2 + pieza.ancho / 3))
+        pu = _campana(np.abs(u - cu) / (largo / 2))
+        pv = _campana(np.abs(v - cv) / (ancho / 2 + ancho / 3))
         forma = pu * pv
         signo = 1.0 if pieza.sentido == "rebajar" else -1.0
     elif pieza.tipo == "oliva":
-        t = np.hypot((u - cu) / (pieza.largo / 2), (v - cv) / (pieza.ancho / 2))
+        t = np.hypot((u - cu) / (largo / 2), (v - cv) / (ancho / 2))
         forma = _campana(t)
         signo = -1.0
     elif pieza.tipo == "barra":
-        pu = _campana(np.abs(u - cu) / (pieza.largo / 2))
+        pu = _campana(np.abs(u - cu) / (largo / 2))
         borde = max(suavizado_borde, 1.0)
         pv = 1.0 - _rampa((np.abs(v - cv) - (g["medio_ancho"] - borde)) / borde)
         forma = pu * pv
         signo = -1.0
     elif pieza.tipo == "descarga_1mtt":
-        forma = _campana(np.hypot(u - cu, v - cv) / (pieza.largo / 2))
+        forma = _campana(np.hypot(u - cu, v - cv) / (largo / 2))
         signo = 1.0
     else:  # skive: cuña, máxima en el borde medial y nada en el eje; se desvanece hacia delante
         medial = max(g["medial"], 1.0)
         pv = np.clip(v / medial, 0.0, None)
-        fin = -g["atras"] + pieza.largo
+        fin = -g["atras"] + largo
         pu = 1.0 - _rampa((u - (fin - suavizado_borde)) / suavizado_borde)
         forma = pv * pu
         signo = -1.0
@@ -237,18 +259,19 @@ def contorno(pieza: Pieza, refs: Referencias, mascara, dx, dy, cfg_ref, n: int =
     if g is None:
         return None
     sis, cu, cv = g["sis"], g["cu"] + pieza.du, g["cv"] + pieza.dv
+    largo, ancho = g["largo"], g["ancho"]
     t = np.linspace(0, 2 * np.pi, n)
     if pieza.tipo in ("oliva", "descarga_1mtt"):
-        a, b = pieza.largo / 2, (pieza.ancho if pieza.tipo == "oliva" else pieza.largo) / 2
+        a, b = largo / 2, (ancho if pieza.tipo == "oliva" else largo) / 2
         uu, vv = cu + a * np.cos(t), cv + b * np.sin(t)
     elif pieza.tipo == "arco":
-        uu, vv = cu + pieza.largo / 2 * np.cos(t), cv + (pieza.ancho / 2) * np.sin(t)
+        uu, vv = cu + largo / 2 * np.cos(t), cv + (ancho / 2) * np.sin(t)
     elif pieza.tipo == "barra":
-        a, b = pieza.largo / 2, g["medio_ancho"]
+        a, b = largo / 2, g["medio_ancho"]
         uu = np.array([cu - a, cu + a, cu + a, cu - a, cu - a])
         vv = np.array([cv - b, cv - b, cv + b, cv + b, cv - b])
     else:  # skive
-        u0, u1 = -g["atras"] + pieza.du, -g["atras"] + pieza.largo + pieza.du
+        u0, u1 = -g["atras"] + pieza.du, -g["atras"] + largo + pieza.du
         uu = np.array([u0, u1, u1, u0, u0])
         vv = np.array([0, 0, g["medial"], g["medial"], 0]) + pieza.dv
     x, y = sis.a_global(uu, vv)

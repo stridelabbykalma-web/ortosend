@@ -300,6 +300,15 @@ def test_correcciones_desde_la_ventana(stl_sintetico):
     panel.filas_piezas["arco"]["activa"].setChecked(True)
     panel.filas_piezas["arco"]["sentido_subir"].setChecked(True)
     assert pie.piezas["arco"].sentido == "subir"
+    # Tamaño según el pie: en la ventana se ven los mm de este pie y al quitar «Adaptar» no cambia.
+    fila["mas"].setChecked(True)
+    f = panel._escala_pie()
+    oliva = pie.piezas["oliva"]
+    assert fila["adaptar"].isChecked() and fila["ajustes"]["largo"].value() == pytest.approx(round(oliva.largo * f))
+    fila["ajustes"]["largo"].setValue(30)
+    assert oliva.largo * f == pytest.approx(30)
+    fila["adaptar"].setChecked(False)
+    assert not oliva.adaptar and oliva.largo == pytest.approx(30) and fila["ajustes"]["largo"].value() == 30
     v.close()
 
 

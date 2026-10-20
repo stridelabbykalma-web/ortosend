@@ -53,8 +53,9 @@ def test_bordes_suaves(proyecto):
             assert np.hypot(*np.gradient(base + d, 1.0)).max() <= pendiente_base + 0.2
             continue
         gy, gx = np.gradient(d, 1.0)
-        # Sin escalones: la pendiente del cambio es moderada (mm por mm).
-        assert np.hypot(gx, gy).max() < 1.2, tipo
+        # Sin escalones: la pendiente del cambio es moderada (mm por mm). Lo más empinado es la rampa de
+        # 2 mm junto al borde del pie (el arco llega casi entero al borde interno).
+        assert np.hypot(gx, gy).max() < 1.3, tipo
 
 
 def test_arco_en_los_dos_sentidos_y_en_el_lado_interno(proyecto):
@@ -118,3 +119,34 @@ def test_si_no_cabe_se_quita_por_abajo(stl_sintetico, taller):
     assert p.fondo_molde == pytest.approx(p.fondo - 1.5)
     assert np.allclose(z - p.fondo_molde, z0 - p.fondo)  # el relieve no cambia
     assert any("por abajo" in a for a in p.avisos)
+
+
+def test_tamano_segun_la_medida_del_pie(proyecto):
+    """Con «Adaptar», en un pie más pequeño la pieza es más pequeña (la altura es la misma)."""
+    p = proyecto
+    pie = p.pies[0]
+    cfg = p.clinicos["referencias"]
+    f = P.escala(pie.referencias, cfg)
+    assert f == pytest.approx(pie.referencias.sistema().largo / cfg["pie_medio"])
+    oliva = pie.piezas["oliva"]
+    assert oliva.adaptar and oliva.medidas(f) == pytest.approx((oliva.largo * f, oliva.ancho * f))
+    d_medio, _ = _efecto(p, pie, "oliva")
+    try:
+        cfg["pie_medio"] = pie.referencias.sistema().largo / 0.7  # como si el pie fuera un 70 % de uno medio
+        d_peq, _ = _efecto(p, pie, "oliva")
+        assert P.escala(pie.referencias, cfg) == pytest.approx(0.7)
+    finally:
+        cfg["pie_medio"] = 175.0
+    area_medio, area_peq = (np.abs(d_medio) > 0.5).sum(), (np.abs(d_peq) > 0.5).sum()
+    assert area_peq == pytest.approx(area_medio * (0.7 / f) ** 2, rel=0.25)
+    assert abs(d_peq).max() == pytest.approx(abs(d_medio).max(), abs=0.3)
+    # Sin «Adaptar», los mm son fijos.
+    oliva.adaptar = False
+    assert oliva.medidas(0.7) == (oliva.largo, oliva.ancho)
+    oliva.adaptar = True
+
+
+def test_trabajos_antiguos_no_cambian():
+    viejo = {"tipo": "oliva", "activa": True, "altura": 5.0, "largo": 25.0, "ancho": 20.0}
+    assert P.Pieza.de_dict(viejo).adaptar is False
+    assert P.Pieza("oliva").adaptar is True

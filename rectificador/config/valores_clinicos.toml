@@ -63,6 +63,12 @@ altura = 4.0
 largo = 45.0
 
 [referencias]
+# Tamaño de las correcciones según el pie: los largos y anchos de arriba son para un pie medio, que mide
+# esto del talón al punto entre la 2.ª y la 3.ª cabeza (≈ talla 40). En un pie más pequeño o más grande
+# se escalan en proporción (sin pasar de estos límites). La altura no cambia.
+pie_medio = 175.0
+escala_minima = 0.6
+escala_maxima = 1.4
 # El eje del pie va del talón al punto medio entre la 2.ª y la 3.ª cabeza metatarsal.
 # Si no están marcadas, sale de la línea 1.ª-5.ª a esta fracción (0 = 1.ª, 1 = 5.ª). PROVISIONAL.
 eje_sin_2_3 = 0.375

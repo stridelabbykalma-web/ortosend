@@ -258,6 +258,13 @@ class PanelPie(QFrame):
                 widgets[f"sentido_{sentido}"] = b
             f.setContentsMargins(24, 0, 0, 0)
             lay.addLayout(f)
+        adaptar = QCheckBox("Adaptar a la medida del pie")
+        adaptar.setToolTip("Más pequeña en un pie pequeño y más grande en uno grande (la altura no cambia).")
+        adaptar.toggled.connect(lambda v, t=tipo: self._cambiar_adaptar(t, v))
+        ld.addWidget(adaptar)
+        widgets["adaptar"] = adaptar
+        widgets["escala"] = estilo.etiqueta("", "nota")
+        ld.addWidget(widgets["escala"])
         for atributo, texto, minimo, maximo in self.AJUSTES[tipo]:
             f = QHBoxLayout()
             f.addWidget(estilo.etiqueta(texto, "secundario", envolver=False), 1)
@@ -265,7 +272,7 @@ class PanelPie(QFrame):
             c.setRange(minimo, maximo)
             c.setDecimals(0)
             c.setSuffix(" mm")
-            c.valueChanged.connect(lambda v, t=tipo, a=atributo: self.ventana.cambiar_pieza(self.clave, t, **{a: v}))
+            c.valueChanged.connect(lambda v, t=tipo, a=atributo: self._cambiar_medida(t, a, v))
             f.addWidget(c)
             ld.addLayout(f)
             widgets["ajustes"][atributo] = c
@@ -287,19 +294,52 @@ class PanelPie(QFrame):
         self.filas_piezas[tipo] = widgets
         return caja
 
+    def _pieza(self, tipo: str):
+        p = self.ventana.proyecto
+        return p.pies[int(self.clave[1])].piezas[tipo] if p else None
+
+    def _escala_pie(self) -> float:
+        p = self.ventana.proyecto
+        if not p:
+            return 1.0
+        return piezas_mod.escala(p.pies[int(self.clave[1])].referencias, p.clinicos["referencias"])
+
+    def _cambiar_medida(self, tipo: str, atributo: str, valor: float):
+        """En la ventana se ven los mm de ESTE pie; si se adapta, se guarda la medida para un pie medio."""
+        pieza = self._pieza(tipo)
+        if pieza is not None and pieza.adaptar and atributo in ("largo", "ancho"):
+            valor = valor / self._escala_pie()
+        self.ventana.cambiar_pieza(self.clave, tipo, **{atributo: valor})
+
+    def _cambiar_adaptar(self, tipo: str, adaptar: bool):
+        """Al activar o quitar «Adaptar», la pieza se queda del mismo tamaño en este pie."""
+        pieza = self._pieza(tipo)
+        if pieza is None:
+            return
+        f = self._escala_pie()
+        largo, ancho = pieza.medidas(f)
+        if adaptar:
+            largo, ancho = largo / f, ancho / f
+        self.ventana.cambiar_pieza(self.clave, tipo, adaptar=adaptar, largo=largo, ancho=ancho)
+
     def _actualizar_piezas(self, pie, listo: bool):
+        f = self._escala_pie()
         for tipo, w in self.filas_piezas.items():
             pieza = pie.piezas.get(tipo)
             if pieza is None:
                 continue
-            controles = [w["activa"], w["altura"], *w["ajustes"].values()]
+            controles = [w["activa"], w["altura"], w["adaptar"], *w["ajustes"].values()]
             controles += [w[k] for k in ("sentido_rebajar", "sentido_subir") if k in w]
             for c in controles:
                 c.blockSignals(True)
             w["activa"].setChecked(pieza.activa)
             w["altura"].setValue(pieza.altura)
+            w["adaptar"].setChecked(pieza.adaptar)
+            medidas = dict(zip(("largo", "ancho"), pieza.medidas(f)))
             for atributo, c in w["ajustes"].items():
-                c.setValue(getattr(pieza, atributo))
+                c.setValue(medidas.get(atributo, getattr(pieza, atributo)))
+            w["escala"].setText(f"Este pie es un {f * 100:.0f} % de un pie medio: medidas para este pie."
+                                if pieza.adaptar else "Medidas fijas en mm.")
             if "sentido_rebajar" in w:
                 w["sentido_rebajar"].setChecked(pieza.sentido == "rebajar")
                 w["sentido_subir"].setChecked(pieza.sentido == "subir")

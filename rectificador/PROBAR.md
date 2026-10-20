@@ -49,7 +49,8 @@
    subir), oliva retrocapital, barra metatarsal, descarga del 1.er MTT y skive medial. Marca la casilla,
    cambia la altura en mm y, con «···», el tamaño. Cada una se coloca sola según las referencias; para
    moverla, **arrastra su cuadradito** en el 3D. Las alturas son las de la **plantilla** (el programa
-   las invierte en el molde).
+   las invierte en el molde). El tamaño **se adapta a la medida del pie** (más pequeñas en pies pequeños);
+   en «···» ves los mm para ese pie y puedes quitar «Adaptar a la medida del pie» para usar mm fijos.
 6. Mira el **lijado**: cambia el tamaño del taco y marca «Ver el escaneo sin lijar» para comparar.
    Marca **«Ver dónde no llega la fresa»** para ver en rojo la escayola que la bola de Ø25 no podrá quitar
    (huecos más estrechos que la fresa); abajo te dice cuánto en la planta y cuánto en el borde.

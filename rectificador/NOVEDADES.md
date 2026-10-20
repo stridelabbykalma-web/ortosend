@@ -1,5 +1,13 @@
 # Novedades del Rectificador de moldes
 
+## 0.3.2
+- **Las correcciones se adaptan a la medida del pie**: el largo y el ancho del relleno de arco, la oliva,
+  la barra, la descarga y el skive se escalan según lo que mide el pie del talón a las cabezas (los valores
+  de siempre son para un pie medio, ≈ talla 40). La **altura no cambia**: es la que tú pongas.
+- En «···» de cada corrección se ven los mm para ese pie y la casilla «Adaptar a la medida del pie»
+  (quítala para usar mm fijos).
+- Los trabajos guardados antes se abren igual que estaban.
+
 ## 0.3.1
 - El molde puede medir hasta **40 mm** de alto (antes 38).
 - Si con las correcciones pasa de 40 mm, lo que sobra se quita **por abajo** (de la base), nunca de la planta:
