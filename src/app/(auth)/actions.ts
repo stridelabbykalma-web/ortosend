@@ -51,6 +51,24 @@ export async function loginAction(formData: FormData) {
     redirect("/login?error=" + encodeURIComponent("Esa cuenta es de paciente: entra desde la web de Ortosend."));
   }
   await createSession(user!.id);
+  // Continuidad del estudio: si el profesional entra desde otro dispositivo
+  // (p. ej. el móvil) mientras tiene un estudio activo en el PC (latido en los
+  // últimos 30 min), se le lleva directo a ese caso y a ese mismo paso.
+  if (dest === "/panel" && (user!.role === "PROFESIONAL" || user!.role === "ADMIN_CLINICA")) {
+    const activa = await prisma.studySession.findFirst({
+      where: {
+        userId: user!.id,
+        lastSeenAt: { gt: new Date(Date.now() - 30 * 60 * 1000) },
+        case: { state: { in: ["CITA_RESERVADA", "ESTUDIO_EN_CURSO", "DEVUELTO_CLINICA"] } },
+      },
+      orderBy: { lastSeenAt: "desc" },
+    });
+    if (activa)
+      redirect(
+        `/caso/${activa.caseId}${activa.paso > 0 ? `?paso=${activa.paso}&` : "?"}ok=` +
+          encodeURIComponent("Continuando el estudio que tenías abierto en el otro dispositivo")
+      );
+  }
   redirect(dest);
 }
 

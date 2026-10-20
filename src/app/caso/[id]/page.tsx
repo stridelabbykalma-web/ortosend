@@ -6,6 +6,7 @@ import { getSessionUser } from "@/lib/auth";
 import { audit } from "@/lib/cases";
 import { Flash, StatePill, Steps } from "@/components/ui";
 import { Expediente, Historial } from "@/components/caso/expediente";
+import { ContinuidadEstudio } from "@/components/caso/continuidad";
 import { CapturaGuiada } from "@/components/caso/captura-guiada";
 import { RxView } from "@/components/caso/rx-view";
 import { TallerView } from "@/components/caso/taller-view";
@@ -95,6 +96,7 @@ export default async function CasoPage({
     const pasoNum = paso ? Number(paso) || undefined : undefined;
     inner = (
       <>
+        <ContinuidadEstudio caseId={k.id} paso={pasoNum ?? 0} />
         <CapturaGuiada kase={k} paso={pasoNum} puedeRecetar={clinicaReceta} elegir={elegir === "1"} />
         {!pasoNum && <Historial events={k.events} />}
       </>

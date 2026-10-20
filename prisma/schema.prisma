@@ -501,8 +501,25 @@ model Case {
   payLinkExpiresAt DateTime? // 30 días; recordatorios días 0/3/7/15
   incidents        Incident[]
   events           CaseEvent[]
+  studySessions    StudySession[]
   annualReviewAt   DateTime? // revisión anual programada al cerrar
   createdAt        DateTime      @default(now())
+}
+
+// Actividad del asistente de captura por dispositivo: permite continuar el
+// estudio en el móvil justo donde estaba en el PC (y avisar al PC de que se
+// está usando en otro dispositivo). Una fila por caso+usuario+dispositivo.
+model StudySession {
+  id         String   @id @default(cuid())
+  caseId     String
+  case       Case     @relation(fields: [caseId], references: [id])
+  userId     String
+  deviceId   String // aleatorio por navegador (localStorage)
+  paso       Int      @default(0) // 0 = índice del protocolo
+  lastSeenAt DateTime @default(now())
+
+  @@unique([caseId, userId, deviceId])
+  @@index([userId, lastSeenAt])
 }
 
 // Captura del estudio (asistente multi-dispositivo, guardado continuo)
