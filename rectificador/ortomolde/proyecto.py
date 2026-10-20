@@ -49,6 +49,7 @@ class Proyecto:
     informe: InformeLimpieza | None = None  # solo si tipo == "bruto"
     pies: list[Pie] = field(default_factory=list)
     lijado: float = 6.0  # mm, tamaño del taco de lija (ver ortomolde/suavizado.py)
+    paciente: dict = field(default_factory=dict)  # nombre, fecha, notas
     _cache_lijado: tuple | None = field(default=None, repr=False)
 
     @classmethod
@@ -276,6 +277,7 @@ class Proyecto:
             pies.append(d)
         return {
             "programa": "Rectificador de moldes Ortosend",
+            "paciente": self.paciente,
             "version_programa": __version__,
             "version_receta": VERSION_RECETA,
             "escaneo": {"archivo": self.ruta_stl.name, "sha256": self.huella_stl, "tipo": self.tipo},

@@ -301,3 +301,29 @@ def test_correcciones_desde_la_ventana(stl_sintetico):
     panel.filas_piezas["arco"]["sentido_subir"].setChecked(True)
     assert pie.piezas["arco"].sentido == "subir"
     v.close()
+
+
+def test_guardar_y_reabrir_trabajo(stl_sintetico, tmp_path):
+    from PySide6.QtWidgets import QApplication
+
+    from interfaz.principal import VentanaPrincipal
+
+    app = QApplication.instance() or QApplication([])
+    v = VentanaPrincipal()
+    v.show()
+    v.abrir(str(stl_sintetico), esperar=True)
+    assert not v.cambios_sin_guardar and v.caja_nombre.isEnabled()
+    v.proponer_referencias("p0")
+    v.paneles["p0"].filas_piezas["skive"]["activa"].setChecked(True)
+    v.caja_nombre.setText("Ana Ruiz")
+    v.caja_nombre.textEdited.emit("Ana Ruiz")
+    assert v.cambios_sin_guardar and v.isWindowModified() and "Ana Ruiz" in v.windowTitle()
+    assert v._guardar_en(tmp_path / "ana.molde")
+    assert not v.cambios_sin_guardar and v.ruta_trabajo.name == "ana.molde"
+    z = v.proyecto.calcular().z.copy()
+    v.abrir(str(tmp_path / "ana.molde"), esperar=True)
+    assert v.proyecto.paciente["nombre"] == "Ana Ruiz" and v.caja_nombre.text() == "Ana Ruiz"
+    assert v.proyecto.pies[0].piezas["skive"].activa
+    assert (v.proyecto.calcular().z == z).all()
+    assert str(tmp_path / "ana.molde") in v._recientes()
+    v.close()

@@ -30,6 +30,7 @@ from ortomolde import config  # noqa: E402
 from ortomolde.limpieza import NOMBRE_MODO  # noqa: E402
 from ortomolde.proyecto import Proyecto  # noqa: E402
 from ortomolde import piezas as piezas_mod  # noqa: E402
+from ortomolde import trabajo as trabajo_mod  # noqa: E402
 from ortomolde.referencias import NOMBRES, OPCIONALES, ORDEN  # noqa: E402
 
 AYUDA = (
@@ -39,6 +40,24 @@ AYUDA = (
     "2.º, 3.º y 4.º). Para corregir una, pulsa su botón «Marcar» y haz clic derecho donde va.<br>"
     "<b>Vista 3D:</b> girar = arrastrar · desplazar = Mayús + arrastrar · zoom = rueda."
 )
+
+
+def abrir_proyecto(ruta: str, modo: str) -> Proyecto:
+    """Un escaneo (se limpia) o un trabajo guardado (.molde, se abre tal cual)."""
+    if str(ruta).lower().endswith(trabajo_mod.EXTENSION):
+        p = trabajo_mod.abrir(ruta)
+        p.ruta_trabajo = Path(ruta)
+        return p
+    p = Proyecto.abrir(ruta, modo=modo)
+    p.ruta_trabajo = None
+    return p
+
+
+def nombre_para_archivos(proyecto: Proyecto) -> str:
+    """Nombre del paciente (o del escaneo) apto para un nombre de archivo."""
+    nombre = (proyecto.paciente or {}).get("nombre", "").strip() or proyecto.ruta_stl.with_suffix("").name
+    limpio = "".join(c if c.isalnum() or c in " -_" else "_" for c in nombre).strip()
+    return (limpio or "MOLDE").upper()
 
 
 class Cargador(QObject):
@@ -55,7 +74,7 @@ class Cargador(QObject):
 
     def trabajar(self):
         try:
-            proyecto = Proyecto.abrir(self.ruta, modo=self.modo)
+            proyecto = abrir_proyecto(self.ruta, self.modo)
             proyecto.calcular()  # el lijado se calcula aquí, sin congelar la ventana
             self.terminado.emit(self.peticion, proyecto)
         except Exception as e:  # noqa: BLE001 - se muestra al usuario
@@ -341,6 +360,8 @@ class VentanaPrincipal(QMainWindow):
         self.setWindowTitle("Rectificador de moldes – Ortosend")
         self.resize(1400, 850)
         self.ajustes = QSettings("Ortosend", "Rectificador")
+        self.ruta_trabajo: Path | None = None  # .molde donde se guarda el trabajo (Ctrl+S)
+        self.cambios_sin_guardar = False
         self.proyecto: Proyecto | None = None
         self.taller = config.taller()
         self.tirada = None  # ventana «Tirada de CNC» (se crea al abrirla)
@@ -361,6 +382,7 @@ class VentanaPrincipal(QMainWindow):
         self.lay_panel = QVBoxLayout(panel)
         self.lay_panel.setContentsMargins(4, 8, 10, 8)
         self.lay_panel.setSpacing(10)
+        self.lay_panel.addWidget(self._grupo_paciente())
         self.lay_panel.addWidget(self._grupo_escaneo())
         self.lay_panel.addWidget(self._grupo_molde())
         self.paneles = {c: PanelPie(self, c) for c in ("p0", "p1")}
@@ -556,7 +578,7 @@ class VentanaPrincipal(QMainWindow):
             self._t_grupo = ahora
             return
         self._ultimo_grupo, self._t_grupo = agrupar, ahora
-        self.cambios_sin_guardar = True
+        self._marcar_cambio()
         self._deshacer.append(estado or self._estado())
         del self._deshacer[:-100]
         self._rehacer.clear()
@@ -585,6 +607,7 @@ class VentanaPrincipal(QMainWindow):
             hacia.append(self._estado())
             self._poner_estado(paso)
         self.activa = None
+        self._marcar_cambio()
         self._actualizar_todo()
         self._activar_acciones()
         self.notificar(texto)
@@ -594,6 +617,119 @@ class VentanaPrincipal(QMainWindow):
 
     def rehacer(self):
         self._volver(self._rehacer, self._deshacer, "Rehecho.")
+
+    # ---------------------------------------------------------------- paciente y guardar
+
+    def _grupo_paciente(self) -> QFrame:
+        """Datos del paciente: salen en el trabajo guardado, al exportar, en el mapa y en el .nc."""
+        from PySide6.QtCore import QDate
+        from PySide6.QtWidgets import QDateEdit, QLineEdit, QPlainTextEdit
+
+        marco, lay, _ = estilo.tarjeta("Paciente")
+        self.caja_nombre = QLineEdit()
+        self.caja_nombre.setPlaceholderText("Nombre del paciente")
+        self.caja_nombre.textEdited.connect(lambda t: self._cambiar_paciente(nombre=t))
+        fila = QHBoxLayout()
+        fila.addWidget(self.caja_nombre, 1)
+        self.caja_fecha = QDateEdit(QDate.currentDate())
+        self.caja_fecha.setCalendarPopup(True)
+        self.caja_fecha.setDisplayFormat("dd/MM/yyyy")
+        self.caja_fecha.dateChanged.connect(lambda d: self._cambiar_paciente(fecha=d.toString("yyyy-MM-dd")))
+        fila.addWidget(self.caja_fecha)
+        lay.addLayout(fila)
+        self.caja_notas = QPlainTextEdit()
+        self.caja_notas.setPlaceholderText("Notas (diagnóstico, observaciones…)")
+        self.caja_notas.setFixedHeight(54)
+        self.caja_notas.textChanged.connect(lambda: self._cambiar_paciente(notas=self.caja_notas.toPlainText()))
+        lay.addWidget(self.caja_notas)
+        self._cajas_paciente = (self.caja_nombre, self.caja_fecha, self.caja_notas)
+        for c in self._cajas_paciente:
+            c.setEnabled(False)
+        return marco
+
+    def _poner_paciente(self):
+        from PySide6.QtCore import QDate
+
+        pac = self.proyecto.paciente
+        for c in self._cajas_paciente:
+            c.blockSignals(True)
+            c.setEnabled(True)
+        self.caja_nombre.setText(pac.get("nombre", ""))
+        self.caja_nombre.setPlaceholderText(f"Nombre del paciente (si no: {self.proyecto.ruta_stl.stem})")
+        fecha = QDate.fromString(pac.get("fecha", ""), "yyyy-MM-dd")
+        self.caja_fecha.setDate(fecha if fecha.isValid() else QDate.currentDate())
+        self.caja_notas.setPlainText(pac.get("notas", ""))
+        for c in self._cajas_paciente:
+            c.blockSignals(False)
+
+    def _cambiar_paciente(self, **cambios):
+        if self.proyecto is None:
+            return
+        self.proyecto.paciente.update(cambios)
+        self._marcar_cambio()
+
+    def _marcar_cambio(self, hay: bool = True):
+        self.cambios_sin_guardar = hay
+        nombre = ""
+        if self.proyecto is not None:
+            nombre = (self.proyecto.paciente or {}).get("nombre") or (
+                self.ruta_trabajo.stem if self.ruta_trabajo else self.proyecto.ruta_stl.name)
+        self.setWindowTitle(f"{nombre} [*] – Rectificador de moldes · Ortosend" if nombre
+                            else "Rectificador de moldes – Ortosend")
+        self.setWindowModified(hay)
+
+    def _puede_descartar(self) -> bool:
+        """Si hay cambios sin guardar, pregunta qué hacer. True = se puede seguir."""
+        import os
+
+        if self.proyecto is None or not self.cambios_sin_guardar or os.environ.get("RECTIFICADOR_SIN_PREGUNTAR"):
+            return True
+        caja = QMessageBox(self)
+        caja.setIcon(QMessageBox.Question)
+        caja.setWindowTitle("Cambios sin guardar")
+        caja.setText("<b>Hay cambios sin guardar en este molde.</b>")
+        caja.setInformativeText("¿Quieres guardar el trabajo antes de seguir?")
+        guardar = caja.addButton("Guardar", QMessageBox.AcceptRole)
+        caja.addButton("No guardar", QMessageBox.DestructiveRole)
+        cancelar = caja.addButton("Cancelar", QMessageBox.RejectRole)
+        caja.setDefaultButton(guardar)
+        caja.exec()
+        if caja.clickedButton() is cancelar:
+            return False
+        if caja.clickedButton() is guardar:
+            return self.guardar()
+        return True
+
+    def guardar(self) -> bool:
+        if self.proyecto is None:
+            return False
+        if self.ruta_trabajo is None:
+            return self.guardar_como()
+        return self._guardar_en(self.ruta_trabajo)
+
+    def guardar_como(self) -> bool:
+        if self.proyecto is None:
+            return False
+        carpeta = Path(str(self.ajustes.value("carpeta_trabajos", self.ajustes.value("carpeta", ""))))
+        ruta, _ = QFileDialog.getSaveFileName(self, "Guardar trabajo", str(carpeta / (nombre_para_archivos(self.proyecto)
+                                                                                    + trabajo_mod.EXTENSION)),
+                                              "Trabajo del rectificador (*.molde)")
+        if not ruta:
+            return False
+        return self._guardar_en(Path(ruta))
+
+    def _guardar_en(self, ruta: Path) -> bool:
+        try:
+            ruta = trabajo_mod.guardar(self.proyecto, ruta)
+        except OSError as e:
+            QMessageBox.critical(self, "No se ha podido guardar", str(e))
+            return False
+        self.ruta_trabajo = ruta
+        self.ajustes.setValue("carpeta_trabajos", str(ruta.parent))
+        self._anotar_reciente(str(ruta))
+        self._marcar_cambio(False)
+        self.notificar(f"Trabajo guardado: {ruta.name}", "bien")
+        return True
 
     def _grupo_escaneo(self) -> QFrame:
         """Paso 1: el escaneo abierto y qué se ha escaneado (huella en espuma o molde ya hecho)."""
@@ -657,6 +793,10 @@ class VentanaPrincipal(QMainWindow):
         self.ajustes.setValue("modo", modo)
         if self.proyecto is not None:
             # Volver a procesar el mismo escaneo con el otro modo.
+            if not self.proyecto.ruta_stl.exists():
+                self.notificar("No encuentro el escaneo original de este trabajo: el tipo se usará en el próximo.",
+                               "aviso")
+                return
             self.abrir(str(self.proyecto.ruta_stl))
 
     def _grupo_molde(self) -> QFrame:
@@ -747,7 +887,11 @@ class VentanaPrincipal(QMainWindow):
         accion("abrir", "Abrir escaneo…", self.abrir_dialogo, QKeySequence.Open, "abrir", archivo)
         self.menu_recientes = archivo.addMenu(estilo.icono("reciente"), "Abrir reciente")
         archivo.addSeparator()
-        accion("exportar", "Exportar molde…", self.exportar, QKeySequence("Ctrl+E"), "exportar", archivo)
+        accion("guardar", "Guardar trabajo", self.guardar, QKeySequence.Save, "guardar", archivo)
+        accion("guardar_como", "Guardar trabajo como…", self.guardar_como, QKeySequence("Ctrl+Shift+S"), None, archivo)
+        archivo.addSeparator()
+        accion("exportar", "Exportar molde (STL para Fusion)…", self.exportar, QKeySequence("Ctrl+E"), "exportar",
+               archivo)
         archivo.addSeparator()
         accion("anadir", "Añadir este molde a la tirada de CNC", self.anadir_a_tirada, QKeySequence("Ctrl+T"),
                "anadir", archivo)
@@ -862,10 +1006,12 @@ valores clínicos: <code>config/valores_clinicos.toml</code></p>""")
         titulo.setObjectName("titulo_app")
         barra.addWidget(titulo)
         barra.addSeparator()
-        cortos = {"abrir": "Abrir", "exportar": "Exportar", "anadir": "Añadir a la tirada", "tirada": "Tirada CNC",
+        cortos = {"abrir": "Abrir", "guardar": "Guardar", "exportar": "Exportar", "anadir": "Añadir a la tirada",
+                  "tirada": "Tirada CNC",
                   "inicial": "Vista inicial", "planta": "Desde arriba"}
         cortos.update({"deshacer": "", "rehacer": ""})
-        for clave in ("abrir", "exportar", "anadir", "tirada", None, "deshacer", "rehacer", None, "inicial", "planta"):
+        for clave in ("abrir", "guardar", "exportar", "anadir", "tirada", None, "deshacer", "rehacer", None, "inicial",
+                      "planta"):
             if clave is None:
                 barra.addSeparator()
                 continue
@@ -891,7 +1037,7 @@ valores clínicos: <code>config/valores_clinicos.toml</code></p>""")
     def _activar_acciones(self):
         hay = self.proyecto is not None
         acciones = getattr(self, "acciones", {})
-        for clave in ("exportar", "anadir", "inicial", "planta", "lados", "medir_menu"):
+        for clave in ("guardar", "guardar_como", "exportar", "anadir", "inicial", "planta", "lados", "medir_menu"):
             if clave in acciones:
                 acciones[clave].setEnabled(hay)
         if "deshacer" in acciones:
@@ -902,17 +1048,19 @@ valores clínicos: <code>config/valores_clinicos.toml</code></p>""")
 
     def abrir_dialogo(self):
         ruta, _ = QFileDialog.getOpenFileName(
-            self, "Abrir escaneo", str(self.ajustes.value("carpeta", "")),
-            "Escaneos (*.stl *.ply *.obj *.revox *.zip);;Proyecto de Revo Scan (*.revox);;"
-            "Mallas (*.stl *.ply *.obj);;ZIP (*.zip);;Todos los archivos (*.*)")
+            self, "Abrir escaneo o trabajo guardado", str(self.ajustes.value("carpeta", "")),
+            "Escaneos y trabajos (*.stl *.ply *.obj *.revox *.zip *.molde);;Trabajos guardados (*.molde);;"
+            "Proyecto de Revo Scan (*.revox);;Mallas (*.stl *.ply *.obj);;ZIP (*.zip);;Todos los archivos (*.*)")
         if ruta:
             self.abrir(ruta)
 
-    def abrir(self, ruta: str, esperar: bool = False):
-        """Abre el escaneo en segundo plano. Con `esperar` (pruebas) lo hace en este hilo."""
+    def abrir(self, ruta: str, esperar: bool = False, preguntar: bool = True):
+        """Abre el escaneo (o un trabajo .molde) en segundo plano. Con `esperar` (pruebas) lo hace en este hilo."""
+        if preguntar and not self._puede_descartar():
+            return
         self._peticion += 1
         if esperar:
-            self._cargado(self._peticion, Proyecto.abrir(ruta, modo=self.modo))
+            self._cargado(self._peticion, abrir_proyecto(ruta, self.modo))
             return
         self._modo_bienvenida(cargando=True, ruta=ruta)
         self.pila.setCurrentIndex(0)
@@ -936,7 +1084,12 @@ valores clínicos: <code>config/valores_clinicos.toml</code></p>""")
         self.activa = None
         self._deshacer.clear()
         self._rehacer.clear()
-        self._anotar_reciente(str(proyecto.ruta_stl))
+        self.ruta_trabajo = getattr(proyecto, "ruta_trabajo", None)
+        if not proyecto.paciente:
+            proyecto.paciente = trabajo_mod.paciente_vacio()
+        self._anotar_reciente(str(self.ruta_trabajo or proyecto.ruta_stl))
+        self._poner_paciente()
+        self._marcar_cambio(False)
         self.caja_lijado.blockSignals(True)
         self.caja_lijado.setValue(proyecto.lijado)
         self.caja_lijado.blockSignals(False)
@@ -1191,6 +1344,9 @@ valores clínicos: <code>config/valores_clinicos.toml</code></p>""")
             self.abrir(ruta)
 
     def closeEvent(self, evento):
+        if not self._puede_descartar():
+            evento.ignore()
+            return
         self.ajustes.setValue("geometria", self.saveGeometry())
         self.ajustes.setValue("division", self.division.saveState())
         # Si se está procesando un escaneo en segundo plano, esperar a que acabe antes de cerrar.
@@ -1214,14 +1370,14 @@ valores clínicos: <code>config/valores_clinicos.toml</code></p>""")
             return
         t = self.abrir_tirada()
         t.anadir_abierto()
-        self.notificar("Molde añadido a la tirada de CNC.", "bien")
+        self.notificar(f"{nombre_para_archivos(self.proyecto)} añadido a la tirada de CNC.", "bien")
 
     # ---------------------------------------------------------------- exportar
 
     def exportar(self):
         if not self.proyecto:
             return
-        sugerido = str(self.proyecto.ruta_stl.with_suffix("").name).upper()
+        sugerido = nombre_para_archivos(self.proyecto)
         ruta, _ = QFileDialog.getSaveFileName(self, "Exportar molde", sugerido + ".stl", "Mallas STL (*.stl)")
         if not ruta:
             return

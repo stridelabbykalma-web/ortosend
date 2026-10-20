@@ -1,9 +1,12 @@
+import os
 import sys
 from pathlib import Path
 
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+# En las pruebas no se pregunta «¿guardar los cambios?» al cerrar (no hay nadie para contestar).
+os.environ["RECTIFICADOR_SIN_PREGUNTAR"] = "1"
 
 from ortomolde import config  # noqa: E402
 from ortomolde.campo import campo_a_malla  # noqa: E402

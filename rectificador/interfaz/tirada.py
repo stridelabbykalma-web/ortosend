@@ -122,7 +122,7 @@ class VentanaTirada(QDialog):
         fila = QHBoxLayout()
         for texto, accion, ic, ayuda in (
                 ("Molde abierto", self.anadir_abierto, "anadir", "Añadir el molde abierto en la ventana principal"),
-                ("Exportados…", self.anadir_archivos, "abrir", "Añadir moldes ya exportados (STL)")):
+                ("Guardados…", self.anadir_archivos, "abrir", "Añadir trabajos guardados (.molde) o moldes exportados (STL)")):
             b = QPushButton(texto)
             b.setIcon(estilo.icono(ic))
             b.setToolTip(ayuda)
@@ -406,15 +406,23 @@ class VentanaTirada(QDialog):
         if pr is None:
             QMessageBox.information(self, "Tirada", "No hay ningún molde abierto en la ventana principal.")
             return
-        self.anadir_piezas(piezas_de_proyecto(pr, pr.ruta_stl.stem.upper()))
+        from interfaz.principal import nombre_para_archivos
+        self.anadir_piezas(piezas_de_proyecto(pr, nombre_para_archivos(pr)))
 
     def anadir_archivos(self):
-        rutas, _ = QFileDialog.getOpenFileNames(self, "Moldes exportados", "",
-                                                "Moldes (*.stl *.ply *.obj *.zip);;Todos los archivos (*.*)")
+        rutas, _ = QFileDialog.getOpenFileNames(self, "Trabajos guardados o moldes exportados", "",
+                                                "Trabajos y moldes (*.molde *.stl *.ply *.obj *.zip);;"
+                                                "Trabajos guardados (*.molde);;Todos los archivos (*.*)")
         errores = []
         for r in rutas:
             try:
-                self.anadir_piezas(piezas_de_archivo(r, self.taller))
+                if r.lower().endswith(".molde"):
+                    from interfaz.principal import nombre_para_archivos
+                    from ortomolde import trabajo
+                    pr = trabajo.abrir(r)
+                    self.anadir_piezas(piezas_de_proyecto(pr, nombre_para_archivos(pr)))
+                else:
+                    self.anadir_piezas(piezas_de_archivo(r, self.taller))
             except Exception as e:  # noqa: BLE001
                 errores.append(f"{Path(r).name}: {e}")
         if errores:
