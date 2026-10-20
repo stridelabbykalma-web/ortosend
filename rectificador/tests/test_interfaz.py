@@ -499,3 +499,36 @@ def test_nombres_y_correcciones_en_color(stl_sintetico):
     assert not v.leyenda_cambios.isVisibleTo(v)
     v.ver_cambios.setChecked(True)  # se deja como estaba
     v.close()
+
+
+def test_buscar_actualizaciones_a_mano_no_se_queda_pensando(monkeypatch):
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QApplication
+
+    from interfaz import actualizar
+    from interfaz.principal import VentanaPrincipal
+
+    app = QApplication.instance() or QApplication([])
+    v = VentanaPrincipal()
+    monkeypatch.setattr(actualizar, "version_publicada", lambda *a, **k: "99.0.0")
+    monkeypatch.setattr(actualizar, "novedades_publicadas", lambda *a, **k: "## 99.0.0\n- algo")
+    vistos = []
+    monkeypatch.setattr(v, "_dialogo_actualizar",
+                        lambda nueva, notas: vistos.append((nueva, QApplication.overrideCursor() is None)))
+    v.buscar_actualizaciones()
+    assert not v.acciones["actualizar"].isEnabled()  # mientras busca
+    for _ in range(100):
+        QTest.qWait(20)
+        if vistos:
+            break
+    assert vistos == [("99.0.0", True)]  # el aviso sale sin el cursor de espera
+    assert v.acciones["actualizar"].isEnabled()
+    v.close()
+
+
+def test_lee_siempre_lo_ultimo_publicado():
+    from interfaz import actualizar as A
+
+    a, b = A._sin_cache(A.URL_VERSION), A._sin_cache(A.URL_VERSION)
+    assert a.startswith(A.URL_VERSION + "?v=") and a != b
+    assert A._sin_cache(A.URL_DESCARGA) == A.URL_DESCARGA

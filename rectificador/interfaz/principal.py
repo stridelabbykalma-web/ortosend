@@ -1157,22 +1157,22 @@ varios moldes en una plancha (arrastrándolos), calculas y guardas el <b>.nc</b>
         def preguntar():
             nueva = actualizar.version_publicada() or ""
             notas = actualizar.novedades_publicadas() if nueva else ""
-            self._aviso_version.emit(nueva, notas, silencio)
+            self._aviso_version.emit(nueva, notas, silencio)  # la respuesta llega a la ventana (hilo principal)
 
-        if silencio:
-            threading.Thread(target=preguntar, daemon=True).start()
-        else:
-            QApplication.setOverrideCursor(Qt.WaitCursor)
-            try:
-                preguntar()
-            finally:
-                QApplication.restoreOverrideCursor()
+        # Siempre en segundo plano: la ventana no se queda «pensando» mientras se mira en internet.
+        if not silencio:
+            self.acciones["actualizar"].setEnabled(False)
+            self.statusBar().showMessage("Buscando actualizaciones…")
+        threading.Thread(target=preguntar, daemon=True).start()
 
     def _resultado_version(self, nueva: str, notas: str, silencio: bool):
         from datetime import date
 
         from ortomolde import __version__
 
+        if not silencio:
+            self.acciones["actualizar"].setEnabled(True)
+            self.statusBar().clearMessage()
         if not nueva:
             if not silencio:
                 QMessageBox.information(self, "Actualizaciones", "No he podido comprobarlo (¿hay internet?).")

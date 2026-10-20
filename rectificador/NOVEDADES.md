@@ -1,5 +1,9 @@
 # Novedades del Rectificador de moldes
 
+## 0.4.4
+- *Ayuda → Buscar actualizaciones* ya no se queda «pensando» (el cursor de espera no se quitaba).
+- Siempre ve la última versión publicada al momento (antes podía tardar unos minutos en enterarse).
+
 ## 0.4.3
 - **Las correcciones se ven en color** sobre el molde: azul donde se quita escayola (bulto en la plantilla)
   y rojo donde se añade (hueco en la plantilla); más intenso = más mm. Se quita en *Ver → Correcciones en

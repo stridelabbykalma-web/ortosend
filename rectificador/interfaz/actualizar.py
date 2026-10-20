@@ -46,9 +46,19 @@ def version(texto: str) -> tuple:
     return tuple(int(p) for p in texto.strip().split(".") if p.isdigit())
 
 
+def _sin_cache(url: str) -> str:
+    """raw.githubusercontent.com guarda cada archivo 5 minutos: con una marca distinta en cada petición se
+    lee siempre lo último publicado."""
+    if not url.startswith(URL_BRUTO):
+        return url
+    import time
+
+    return f"{url}?v={time.time_ns()}"
+
+
 def _leer(url: str, espera: float) -> str | None:
     try:
-        with urllib.request.urlopen(url, timeout=espera) as r:
+        with urllib.request.urlopen(_sin_cache(url), timeout=espera) as r:
             return r.read().decode("utf-8")
     except Exception:  # noqa: BLE001 - sin internet no pasa nada
         return None
@@ -103,7 +113,7 @@ def _bajar(url: str, espera: float = 60.0, intentos: int = 3) -> bytes:
     ultimo = None
     for _ in range(intentos):
         try:
-            with urllib.request.urlopen(url, timeout=espera) as r:
+            with urllib.request.urlopen(_sin_cache(url), timeout=espera) as r:
                 return r.read()
         except urllib.error.HTTPError as e:
             if e.code < 500:
