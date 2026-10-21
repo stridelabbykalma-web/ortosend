@@ -20,6 +20,7 @@ Fusion del taller (`molde_yeso.nc`).
 
 from __future__ import annotations
 
+import math
 import unicodedata
 from dataclasses import dataclass, field
 
@@ -579,6 +580,23 @@ class _Escritor:
     def subir(self, z=None):
         self.rapido(z=self.z_paso if z is None else z)
 
+    def helice(self, cx: float, cy: float, z_ini: float, z_fin: float, radio: float, grados: float,
+               avance: float, por_vuelta: int = 24) -> None:
+        """Entra en el material bajando en hélice alrededor de (cx, cy), como el desbaste de Fusion, en vez
+        de clavar la fresa en vertical. Empieza y acaba en la posición actual (que está en la
+        circunferencia), con vueltas enteras."""
+        x0, y0 = float(self.pos[0]), float(self.pos[1])
+        a0 = math.atan2(y0 - cy, x0 - cx)
+        baja = 2 * math.pi * radio * math.tan(math.radians(grados))
+        vueltas = max(1, math.ceil((z_ini - z_fin) / baja - 1e-9))
+        self.corte(x0, y0, z_ini, avance)
+        n = vueltas * por_vuelta
+        for k in range(1, n + 1):
+            a = a0 + 2 * math.pi * k / por_vuelta
+            z = z_ini + (z_fin - z_ini) * min(1.0, k / n)
+            x, y = (x0, y0) if k % por_vuelta == 0 else (cx + radio * math.cos(a), cy + radio * math.sin(a))
+            self.corte(x, y, z, avance)
+
 
 @dataclass
 class Ficha:
@@ -665,6 +683,10 @@ def _desbaste(w: _Escritor, punta, c: _Colocada, paso, H, cfg, radio) -> int:
     techo = ndimage.maximum_filter(objetivo, size=2 * r + 1)  # lo más alto que puede quedar cerca
     dentro = c.sil
     material = np.where(dentro, float(H), -np.inf)
+    # Dónde puede ir la hélice de entrada: dentro de la silueta o en la ranura que ya ha vaciado el contorno.
+    libre_de = dentro
+    if cfg.get("contorno", True) and cfg.get("radio_helice", 3.0) > 0:
+        libre_de = ndimage.binary_dilation(dentro, iterations=int(np.ceil(cfg.get("radio_helice", 3.0) / paso)) + 1)
     filas = list(range(0, sub.shape[0], max(1, int(round(cfg["paso_desbaste"] / paso)))))
     if filas[-1] != sub.shape[0] - 1:
         filas.append(sub.shape[0] - 1)
@@ -697,7 +719,27 @@ def _desbaste(w: _Escritor, punta, c: _Colocada, paso, H, cfg, radio) -> int:
                     w.corte(xs[k0], y, prof[k0] - H, cfg["avance_entrada"])
                 else:
                     libre = min(float(H), max(anterior, techo[j, k0]) + 0.3)
-                    w.bajar_a(xs[k0], y, prof[k0] - H, libre - H)
+                    h, centro, fondo_h = _sitio_helice(corte, libre_de, j, rango, sentido, paso, cfg) \
+                        if libre - prof[k0] > 0.5 else (0, None, 0.0)
+                    if centro is None:  # no cabe la hélice (o casi no hay que bajar): en vertical, despacio
+                        w.bajar_a(xs[k0], y, prof[k0] - H, libre - H)
+                    else:
+                        # Como Fusion: baja en hélice donde cabe, desbasta hacia atrás hasta el principio
+                        # del tramo y desde ahí sigue el tramo entero.
+                        kh = rango[h]
+                        # Empieza justo encima del yeso que queda alrededor (no da vueltas en el aire).
+                        v = int(np.ceil((radio + cfg.get("radio_helice", 3.0)) / paso)) + 1
+                        cj, ck = int(round(centro[0])), int(round(centro[1]))
+                        cerca = material[max(cj - v, 0):cj + v + 1, max(ck - v, 0):ck + v + 1]
+                        lib = min(float(H), max(anterior, techo[j, kh]) + 0.3, float(cerca.max()) + 0.3)
+                        w.bajar_a(xs[kh], y, lib - H, lib - H)
+                        w.helice((c.x0 + centro[1]) * paso, (c.y0 + centro[0]) * paso, lib - H,
+                                 min(fondo_h, lib) - H, cfg.get("radio_helice", 3.0), cfg.get("rampa_grados", 2.0),
+                                 cfg["avance_entrada"])
+                        w.corte(xs[kh], y, prof[kh] - H, cfg["avance_bajada"])
+                        atras = rango[h::-1]
+                        for k in atras[_simplificar(xs[atras] * -sentido, prof[atras])][1:]:
+                            w.corte(xs[k], y, prof[k] - H, cfg["avance_desbaste"])
                 for k in rango[_simplificar(xs[rango] * sentido, prof[rango])]:
                     w.corte(xs[k], y, prof[k] - H, cfg["avance_desbaste"])
                 ultimo = (j, rango[-1])
@@ -709,6 +751,39 @@ def _desbaste(w: _Escritor, punta, c: _Colocada, paso, H, cfg, radio) -> int:
         anterior = nivel
     w.subir()
     return capas
+
+
+def _sitio_helice(corte: np.ndarray, libre_de: np.ndarray, j: int, rango: np.ndarray, sentido: int, paso: float,
+                  cfg: dict) -> tuple[int, tuple[float, float] | None, float]:
+    """Primer punto del tramo (índice en `rango`) donde cabe la hélice de entrada: su centro y la altura
+    (sobre el fondo) a la que acaba la hélice. Si el terreno de la vuelta está un poco más alto que el punto
+    (en pendiente), la hélice acaba ahí y lo que falta (≤ 1 mm) se baja en vertical."""
+    for h in range(0, len(rango), max(1, int(round(1.0 / paso)))):
+        centro, fondo = _centro_helice(corte, libre_de, j, int(rango[h]), sentido, paso, cfg)
+        if centro is not None:
+            return h, centro, fondo
+    return 0, None, 0.0
+
+
+def _centro_helice(corte: np.ndarray, libre_de: np.ndarray, j: int, k: int, sentido: int, paso: float,
+                   cfg: dict, resto_max: float = 1.0) -> tuple[tuple[float, float] | None, float]:
+    """Centro (fila, columna, en celdas) de una hélice que pasa por (j, k), con toda la vuelta donde se
+    puede fresar (`libre_de`) y sin bajar de lo que debe quedar en esta capa; y a qué altura acaba."""
+    radio = cfg.get("radio_helice", 3.0)
+    if radio <= 0:
+        return None, 0.0
+    r = radio / paso
+    angulos = np.linspace(0, 2 * np.pi, 48, endpoint=False)
+    for dj, dk in ((0, sentido), (1, 0), (-1, 0), (0, -sentido)):
+        cj, ck = j + dj * r, k + dk * r
+        jj = np.rint(cj + r * np.sin(angulos)).astype(int)
+        kk = np.rint(ck + r * np.cos(angulos)).astype(int)
+        if jj.min() < 0 or kk.min() < 0 or jj.max() >= corte.shape[0] or kk.max() >= corte.shape[1]:
+            continue
+        fondo = float(corte[jj, kk].max())
+        if libre_de[jj, kk].all() and fondo <= corte[j, k] + resto_max:
+            return (cj, ck), max(fondo, float(corte[j, k]))
+    return None, 0.0
 
 
 def _acabado(w: _Escritor, punta, c: _Colocada, paso, H, cfg) -> int:

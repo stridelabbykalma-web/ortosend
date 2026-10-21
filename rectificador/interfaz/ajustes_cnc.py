@@ -28,6 +28,8 @@ GRUPOS = (
         ("bajada_contorno", "Bajada por vuelta (contorno)", " mm", 1),
         ("paso_desbaste", "Separación de líneas (desbaste)", " mm", 2),
         ("sobrante_desbaste", "Lo que deja para el acabado", " mm", 2),
+        ("radio_helice", "Entrada en hélice: radio (0 = vertical)", " mm", 1),
+        ("rampa_grados", "Entrada en hélice: inclinación", " °", 1),
         ("paso_acabado", "Separación de líneas (acabado)", " mm", 2),
         ("altura_seguridad", "Altura para ir de un pie a otro", " mm", 1),
     )),
@@ -118,6 +120,10 @@ class DialogoAjustesCNC(QDialog):
             avisos.append(f"Separar el desbaste más de {self.radio:g} mm deja demasiado material para el acabado.")
         if v["avance_bajada"] > v["avance_entrada"]:
             avisos.append("La bajada en vertical suele ir más despacio que la entrada: si va rápido el yeso se desconcha.")
+        if v["radio_helice"] == 0:
+            avisos.append("Sin hélice, el desbaste clava la fresa en vertical al entrar en el yeso.")
+        elif v["rampa_grados"] > 5:
+            avisos.append("Con la hélice muy inclinada la fresa entra casi como en vertical (Fusion usa 2°).")
         if v["sobrante_desbaste"] == 0:
             avisos.append("Sin sobrante, el acabado no quita las marcas del desbaste.")
         self.avisos.setText("<br>".join(estilo.html("⚠ " + a, "aviso") for a in avisos))

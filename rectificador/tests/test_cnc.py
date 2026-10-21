@@ -316,3 +316,23 @@ def test_gcode_con_ajustes_cambiados(piezas_sinteticas, cfg):
     assert "F2200" in t.gcode
     assert "Ajustes de la CNC" in t.gcode
     assert "Ajustes de la CNC" not in cnc.generar(piezas_sinteticas("A"), 300, 400, 40, 1.0, 12.5, cfg).gcode
+
+
+def _bajadas_verticales(gcode, minimo=2.0):
+    """Bajadas en vertical (solo Z) de más de `minimo` mm dentro del desbaste."""
+    n = 0
+    for fase, tipo, a, b in _por_fase(gcode):
+        if fase == "Desbaste" and tipo == "G1" and a["X"] == b["X"] and a["Y"] == b["Y"] and a["Z"] - b["Z"] > minimo:
+            n += 1
+    return n
+
+
+def test_desbaste_entra_en_helice_como_fusion(piezas_sinteticas, cfg):
+    """Como el ejemplo de Fusion: el desbaste entra en el yeso bajando en hélice, no clavando la fresa."""
+    vertical = cnc.generar(piezas_sinteticas("A"), 300, 400, 40, 1.0, 12.5, dict(cfg, radio_helice=0.0))
+    helice = cnc.generar(piezas_sinteticas("A"), 300, 400, 40, 1.0, 12.5, cfg)
+    assert _bajadas_verticales(helice.gcode) < 0.75 * _bajadas_verticales(vertical.gcode)
+    # Hay vueltas de hélice: muchos G1 seguidos que cambian X, Y y Z a la vez en el desbaste.
+    en_xyz = sum(1 for fase, tipo, a, b in _por_fase(helice.gcode)
+                 if fase == "Desbaste" and a["X"] != b["X"] and a["Y"] != b["Y"] and b["Z"] < a["Z"])
+    assert en_xyz > 100

@@ -24,6 +24,8 @@ CNC_EDITABLE: dict[str, tuple[float, float]] = {
     "bajada_contorno": (0.5, 20),
     "paso_desbaste": (0.5, 25),
     "sobrante_desbaste": (0, 3),
+    "radio_helice": (0, 10),
+    "rampa_grados": (0.5, 15),
     "paso_acabado": (0.2, 10),
     "altura_seguridad": (5, 50),
 }

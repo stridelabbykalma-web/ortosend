@@ -78,6 +78,9 @@ suelo_minimo = 3.0           # si el pie es muy alto se deja menos suelo, pero n
 bajada_por_pasada = 5.0      # mm que baja cada capa
 paso_desbaste = 7.0          # mm entre líneas del desbaste (con la bola de 25 deja crestas de 0,5 mm)
 sobrante_desbaste = 0.5      # mm que deja el desbaste para el acabado
+# Entrada en el material del desbaste: en hélice (como Fusion), no clavando la fresa en vertical.
+radio_helice = 3.0           # mm de radio de la hélice (Fusion: ~3,1). 0 = bajar en vertical
+rampa_grados = 2.0           # inclinación de la hélice (Fusion: 2°): baja ~0,66 mm por vuelta
 # 3) Acabado en líneas paralelas a X.
 paso_acabado = 1.75          # mm entre líneas (con la bola de 25 deja crestas de 0,03 mm)
 # Disposición (los pies lo más juntos posible):
