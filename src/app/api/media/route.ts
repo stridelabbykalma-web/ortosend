@@ -124,7 +124,9 @@ export async function POST(req: Request) {
       const prev = (fresh?.physicalExam ?? {}) as Record<string, unknown>;
       await prisma.capture.update({
         where: { id: capture.id },
-        data: { physicalExam: { ...prev, v: 2, ...derivado } as object },
+        // done se conserva (o nace en false): el bloque de exploración solo lo
+        // cierra la clínica desde su última pantalla, no el prellenado del vídeo.
+        data: { physicalExam: { ...prev, v: 2, ...derivado, done: prev.done === true } as object },
       });
       await pushEvent(caseId, "Análisis de la marcha rellenado con el informe del vídeo", "Ortosend (análisis de vídeo)");
     }

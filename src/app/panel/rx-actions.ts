@@ -20,21 +20,34 @@ function fail(path: string, msg: string): never {
 // El usuario puede valorar este caso: recetador central (casos enviados a
 // Ortosend o para revisión) o profesional prescriptor de la clínica del caso
 // (casos que la clínica se quedó).
-async function requirePrescriberFor(caseId: string) {
+async function requirePrescriberFor(caseId: string, opts: { permitirRevocado?: boolean } = {}) {
   const u = await requireRole("RECETADOR", "PROFESIONAL");
   const kase = await prisma.case.findUnique({
     where: { id: caseId },
     include: { clinic: true, patient: true, prescription: true },
   });
   if (!kase) throw new Error("Caso no encontrado");
-  await exigirTratamientoPermitido(kase.patientId);
+  // Soltar un caso debe poder hacerse siempre (si no, un paciente que revoca
+  // deja el caso bloqueado en manos de quien lo tenía abierto).
+  if (!opts.permitirRevocado) await exigirTratamientoPermitido(kase.patientId);
+  if (!["EN_PRESCRIPCION", "EN_CONTACTO"].includes(kase.state))
+    throw new Error("El caso no está en valoración");
   if (u.role === "RECETADOR") {
     if (!esCentral(kase)) throw new Error("Este caso lo receta el prescriptor de su clínica");
   } else {
     if (u.clinicId !== kase.clinicId) throw new Error("Caso de otra clínica");
     if (esCentral(kase)) throw new Error("Este caso lo está valorando el equipo de Ortosend");
   }
+  // Valorar y firmar es cosa de prescriptores con colegiación verificada; un
+  // técnico de la clínica no puede cerrar ni bloquear casos en valoración.
   const profile = await prisma.professionalProfile.findUnique({ where: { userId: u.id } });
+  if (!profile?.canPrescribe || !profile.verifiedAt)
+    throw new Error("Solo un prescriptor con colegiación verificada puede valorar casos");
+  // Quien ya lo tiene abierto refresca su marca de actividad (la liberación a
+  // los 45 min es por inactividad, no desde la apertura).
+  if (kase.openBy === u.id) {
+    await prisma.case.update({ where: { id: caseId }, data: { openAt: new Date() } });
+  }
   return { u, kase, profile };
 }
 
@@ -44,7 +57,7 @@ export async function nextRxAction() {
   const u = await requireRole("RECETADOR");
   await releaseStale();
   const candidates = await prisma.case.findMany({
-    where: { state: "EN_PRESCRIPCION", openBy: null, ...CENTRAL_WHERE },
+    where: { state: "EN_PRESCRIPCION", openBy: null, patient: { status: "ACEPTADO" }, ...CENTRAL_WHERE },
     orderBy: { createdAt: "asc" },
     take: 5,
   });
@@ -73,6 +86,7 @@ export async function signRxAction(formData: FormData) {
   const caseId = String(formData.get("caseId"));
   const { u, kase, profile } = await requirePrescriberFor(caseId);
   const back = `/caso/${caseId}`;
+  if (kase.openBy && kase.openBy !== u.id) fail(back, "Otro profesional tiene abierto ese caso");
   if (!["EN_PRESCRIPCION", "EN_CONTACTO"].includes(kase.state)) fail(back, "El caso no está en valoración");
   // Guardas duras: solo prescriptor verificado firma; sin prescripción no hay pago.
   if (!profile?.canPrescribe || !profile.verifiedAt || !profile.collegiateNum)
@@ -107,26 +121,27 @@ export async function signRxAction(formData: FormData) {
     pautaUso: usageGuidelines,
     firmadoEl,
   });
+  const rxData = {
+    prescriberId: u.id,
+    prescriberName: u.name,
+    collegiateNum: profile.collegiateNum,
+    assessment,
+    diagnosis,
+    fabricationOrder,
+    orderLeft,
+    orderRight,
+    usageGuidelines,
+    pdfUrl: `/api/rx-pdf/${caseId}`,
+    pdfBytes,
+    pdfSha256,
+    signedAt: firmadoEl,
+  };
   await prisma.$transaction([
-    prisma.prescription.create({
-      data: {
-        caseId,
-        prescriberId: u.id,
-        prescriberName: u.name,
-        collegiateNum: profile.collegiateNum,
-        assessment,
-        diagnosis,
-        fabricationOrder,
-        orderLeft,
-        orderRight,
-        usageGuidelines,
-        pdfUrl: `/api/rx-pdf/${caseId}`,
-        pdfBytes,
-        pdfSha256,
-        signedAt: firmadoEl,
-      },
-    }),
-    prisma.payment.create({ data: { caseId, amountCents: PRICE_CENTS } }),
+    // Un caso devuelto y reenviado puede firmarse de nuevo: la receta se
+    // sustituye (upsert) en vez de chocar con la única existente, y el pago no
+    // se duplica si ya estaba creado.
+    prisma.prescription.upsert({ where: { caseId }, create: { caseId, ...rxData }, update: rxData }),
+    prisma.payment.upsert({ where: { caseId }, create: { caseId, amountCents: PRICE_CENTS }, update: {} }),
     prisma.case.update({
       where: { id: caseId },
       data: { state: "PENDIENTE_PAGO", openBy: null, openAt: null, rxDraft: null, payLinkExpiresAt: expires },
@@ -205,7 +220,8 @@ export async function noPrescribeAction(formData: FormData) {
 // Guardar borrador y soltar el caso (vuelve a la cola conservando antigüedad).
 export async function draftAction(formData: FormData) {
   const caseId = String(formData.get("caseId"));
-  const { u, kase } = await requirePrescriberFor(caseId);
+  const { u, kase } = await requirePrescriberFor(caseId, { permitirRevocado: true });
+  if (kase.openBy && kase.openBy !== u.id) fail(`/caso/${caseId}`, "Otro profesional tiene abierto ese caso");
   await prisma.case.update({
     where: { id: caseId },
     data: { rxDraft: String(formData.get("assessment") ?? "").trim() || null, openBy: null, openAt: null },

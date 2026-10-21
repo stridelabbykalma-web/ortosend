@@ -11,7 +11,7 @@ import { BARO_KINDS, SCAN_KIND } from "@/lib/format";
 import { nombreProyectoRevoScan } from "@/lib/scan";
 import type { Questionnaire } from "@/lib/questionnaire";
 import type { Exam } from "@/lib/exploracion";
-import { nucleoCompleto, ramasSinCubrir } from "@/lib/tests-podologicos";
+import { complementariosCompletos, nucleoCompleto, ramasSinCubrir } from "@/lib/tests-podologicos";
 import { RX_ROUTES, type RxRoute } from "@/lib/rx-route";
 import type { User } from "@prisma/client";
 
@@ -200,11 +200,15 @@ export async function saveQuestionnaireSectionAction(formData: FormData) {
   )
     fail(back, "Marca al menos una zona de dolor (o vuelve atrás y elige «Sin dolor localizado»)");
 
-  const questionnaire = {
-    ...merged,
-    v: 2,
-    done: def.last ? true : prev.done === true,
-  } as Questionnaire;
+  let qDone = prev.done === true;
+  if (def.last) {
+    const q = merged as Questionnaire;
+    if (!String(q.motivo ?? "").trim()) fail(`/caso/${caseId}?paso=1`, "Falta el motivo de consulta (pantalla 1) para cerrar el cuestionario");
+    if (q.lado !== "Sin dolor localizado" && !(Array.isArray(q.zonas) && q.zonas.length))
+      fail(`/caso/${caseId}?paso=2`, "Faltan las zonas de dolor (pantalla 2) para cerrar el cuestionario");
+    qDone = true;
+  }
+  const questionnaire = { ...merged, v: 2, done: qDone } as Questionnaire;
   await prisma.capture.update({ where: { id: capture.id }, data: { questionnaire } });
   redirect(`/caso/${caseId}${next ? `?paso=${next}` : ""}`);
 }
@@ -255,12 +259,22 @@ export async function saveExamSectionAction(formData: FormData) {
     }
   }
 
-  const physicalExam = {
-    ...prev,
-    ...values,
-    v: 2,
-    done: def.last ? true : prev.done === true,
-  } as Exam;
+  // La última pantalla cierra el bloque: antes de marcarlo hecho se valida el
+  // bloque ENTERO, no solo esta sección (si no, saltando pasos desde el índice
+  // se podía enviar una exploración vacía con la checklist en verde).
+  let done = prev.done === true;
+  if (def.last) {
+    const completo = merged as Exam;
+    const q = (capture.questionnaire ?? null) as Questionnaire | null;
+    if (!completo.tipoPie) fail(`/caso/${caseId}?paso=6`, "Falta el tipo de pie (pantalla 6) para cerrar la exploración");
+    if (!nucleoCompleto(completo)) fail(`/caso/${caseId}?paso=7`, "Faltan los 5 tests generales (pantalla 7) para cerrar la exploración");
+    const sinCubrir = ramasSinCubrir(q, completo);
+    if (sinCubrir.length) fail(`/caso/${caseId}?paso=8`, `Faltan tests complementarios de: ${sinCubrir.join(", ")}`);
+    if (!complementariosCompletos(completo)) fail(`/caso/${caseId}?paso=9`, "Faltan resultados de los tests complementarios (pantalla 9)");
+    if (!completo.dismetria) fail(`/caso/${caseId}?paso=10`, "Falta la dismetría (pantalla 10) para cerrar la exploración");
+    done = true;
+  }
+  const physicalExam = { ...prev, ...values, v: 2, done } as Exam;
   await prisma.capture.update({ where: { id: capture.id }, data: { physicalExam } });
   redirect(`/caso/${caseId}${next ? `?paso=${next}` : ""}`);
 }
@@ -326,6 +340,9 @@ export async function sendCaseAction(formData: FormData) {
     // Estudio completo de Ortosend: checklist bloqueante, sin todo en verde no hay envío.
     const cl = checklistOf(kase!.capture);
     if (!cl.completa) fail(`/caso/${caseId}`, "La checklist del protocolo debe estar completa (todo en verde)");
+    const q = kase!.capture?.questionnaire as { motivo?: string } | null;
+    if (!q?.motivo?.trim())
+      fail(`/caso/${caseId}?paso=1`, "El motivo de consulta es obligatorio: regístralo antes de enviar");
   } else {
     // Receta propia (con o sin segunda opinión): las pruebas son elegibles salvo el
     // motivo de consulta, la baropodometría y el escaneo de las espumas.
@@ -339,6 +356,29 @@ export async function sendCaseAction(formData: FormData) {
   void back;
 
   await prisma.capture.update({ where: { caseId }, data: { completedAt: new Date() } });
+  // Si venía de una incidencia, la prueba repetida la resuelve.
+  if (fromRepeat)
+    await prisma.incident.updateMany({
+      where: { caseId, type: "CAPTURA_INVALIDA", closedAt: null },
+      data: { closedAt: new Date(), resolution: `Prueba repetida y reenviada por ${u.name}` },
+    });
+  // Caso ya pagado (incidencia del taller tras el pago): la receta y el pago
+  // siguen vigentes, así que vuelve directo al taller sin pasar otra vez por
+  // prescripción ni por pago (firmar de nuevo chocaría con la receta única y
+  // volver a PENDIENTE_PAGO le pediría pagar dos veces).
+  const pagoVigente = await prisma.payment.findUnique({ where: { caseId } });
+  if (fromRepeat && pagoVigente?.paidAt) {
+    await prisma.case.update({
+      where: { id: caseId },
+      data: { state: "ENTRADA_TALLER", openBy: null, openAt: null },
+    });
+    await pushEvent(caseId, "Prueba repetida: el caso vuelve al taller (receta y pago vigentes)", u.name);
+    await avisarPaciente(kase!.patientId, "estudio_completo", {
+      caseId,
+      nota: "Ya hemos repetido la prueba pendiente: tu pedido sigue en fabricación, sin coste adicional.",
+    });
+    redirect("/panel?ok=" + encodeURIComponent(`Caso #${kase!.number} reenviado al taller (ya estaba pagado)`));
+  }
   await prisma.case.update({
     where: { id: caseId },
     data: {

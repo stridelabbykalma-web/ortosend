@@ -16,6 +16,7 @@ import { isValidPhone, normalizeEmail, normalizePhone } from "@/lib/contacto";
 import { EDAD_MAYORIA_SALUD, esMenor, parseBirth } from "@/lib/edad";
 import { CONSENT_VERSION } from "@/lib/legal";
 import { enviarBienvenida } from "@/lib/cuenta";
+import { exigirTratamientoPermitido } from "@/lib/alta";
 
 const reservaSchema = z.object({
   clinicId: z.string().min(1),
@@ -165,9 +166,11 @@ export async function reservaClienteAction(formData: FormData) {
       },
     });
   }
+  // Con los consentimientos retirados no se abren estudios nuevos.
+  await exigirTratamientoPermitido(patient!.id).catch(() => back("Esa persona tiene los consentimientos retirados o pendientes: su clínica debe regularizarlos antes de reservar"));
   // Un paciente no puede tener dos estudios abiertos a la vez.
   const abierto = await prisma.case.findFirst({
-    where: { patientId: patient!.id, state: { in: ["CITA_RESERVADA", "ESTUDIO_EN_CURSO", "ESTUDIO_COMPLETO", "EN_PRESCRIPCION", "EN_CONTACTO"] } },
+    where: { patientId: patient!.id, state: { in: ["CITA_RESERVADA", "ESTUDIO_EN_CURSO", "ESTUDIO_COMPLETO", "EN_PRESCRIPCION", "EN_CONTACTO", "DEVUELTO_CLINICA"] } },
   });
   if (abierto) back(`${patient!.name} ya tiene un estudio en marcha (caso #${abierto.number}). Cambia su cita desde el panel.`);
 

@@ -22,6 +22,30 @@ export type DatosRxPdf = {
   firmadoEl: Date;
 };
 
+// Helvetica estándar codifica WinAnsi: un \r (textarea de Windows), una flecha
+// o un «≥» lanzan excepción y la firma falla. Se normaliza y lo no codificable
+// se sustituye por un equivalente ASCII.
+const SUSTITUCIONES: [RegExp, string][] = [
+  [/\r\n?/g, "\n"],
+  [/\t/g, "  "],
+  [/[\u2192\u279C\u27A1]/g, "->"],
+  [/\u2190/g, "<-"],
+  [/\u2265/g, ">="],
+  [/\u2264/g, "<="],
+  [/[\u2713\u2714\u2705]/g, "[ok]"],
+  [/[\u2022\u25CF\u25AA\u2023]/g, "-"],
+  [/\u00B4/g, "'"],
+  [/[\u2018\u2019\u201A]/g, "'"],
+  [/[\u201C\u201D\u201E]/g, '"'],
+];
+// WinAnsi: ASCII imprimible + latin-1 + los extras de cp1252 (€, comillas, guiones…).
+const NO_WINANSI = /[^\x20-\x7E\n\u00A0-\u00FF\u20AC\u2013\u2014\u2026\u0160\u0161\u017D\u017E\u0152\u0153\u0178\u02C6\u02DC\u2020\u2021\u2030\u2039\u203A\u2122]/g;
+function saneaWinAnsi(texto: string): string {
+  let t = texto ?? "";
+  for (const [re, rep] of SUSTITUCIONES) t = t.replace(re, rep);
+  return t.replace(NO_WINANSI, "?");
+}
+
 const A4: [number, number] = [595.28, 841.89];
 const MARGEN = 56;
 const ANCHO = A4[0] - MARGEN * 2;
@@ -35,7 +59,7 @@ export async function generarPdfPrescripcion(d: DatosRxPdf): Promise<{ bytes: Ui
 
   const wrap = (texto: string, size: number, font = fuente): string[] => {
     const out: string[] = [];
-    for (const parrafo of (texto || "—").split("\n")) {
+    for (const parrafo of saneaWinAnsi(texto || "—").split("\n")) {
       let linea = "";
       for (const palabra of parrafo.split(/\s+/)) {
         const prueba = linea ? `${linea} ${palabra}` : palabra;

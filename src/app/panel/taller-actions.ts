@@ -16,14 +16,16 @@ function fail(path: string, msg: string): never {
   redirect(`${path}${path.includes("?") ? "&" : "?"}error=` + encodeURIComponent(msg));
 }
 
-async function tallerCase(caseId: string) {
+async function tallerCase(caseId: string, opts: { permitirRevocado?: boolean } = {}) {
   const u = await requireRole("TALLER", "ADMIN");
   const kase = await prisma.case.findUnique({
     where: { id: caseId },
     include: { patient: true, clinic: true, prescription: true, payment: true, shipment: true },
   });
   if (!kase || !TALLER_STATES.includes(kase.state)) throw new Error("Caso no activo en taller");
-  await exigirTratamientoPermitido(kase.patientId);
+  // Soltarlo a la cola debe poder hacerse aunque el paciente haya revocado.
+  if (!opts.permitirRevocado) await exigirTratamientoPermitido(kase.patientId);
+  if (kase.openBy === u.id) await prisma.case.update({ where: { id: caseId }, data: { openAt: new Date() } });
   await auditar(u.id, "case.edit", kase.patientId, { caseId, rol: "taller" });
   return { u, kase };
 }
@@ -37,7 +39,7 @@ export async function nextTallerAction(formData?: FormData) {
   const wanted = String(formData?.get("state") ?? "") as CaseState;
   const states = TALLER_STATES.includes(wanted) ? [wanted] : TALLER_STATES;
   const found = await prisma.case.findMany({
-    where: { state: { in: states }, openBy: null },
+    where: { state: { in: states }, openBy: null, patient: { status: "ACEPTADO" } },
     include: { incidents: { where: { type: "REHACER_DEFECTO", closedAt: null }, select: { id: true } } },
     orderBy: [{ state: "asc" }, { createdAt: "asc" }],
     take: 20,
@@ -55,7 +57,7 @@ export async function nextTallerAction(formData?: FormData) {
 }
 
 export async function releaseCaseAction(formData: FormData) {
-  const { u, kase } = await tallerCase(String(formData.get("caseId")));
+  const { u, kase } = await tallerCase(String(formData.get("caseId")), { permitirRevocado: true });
   await prisma.case.update({ where: { id: kase.id }, data: { openBy: null, openAt: null } });
   await pushEvent(kase.id, "Caso soltado a la cola", u.name);
   redirect("/panel");

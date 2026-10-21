@@ -4,6 +4,7 @@
 import { redirect } from "next/navigation";
 import { SignJWT, jwtVerify } from "jose";
 import { prisma } from "@/lib/db";
+import { exigirTratamientoPermitido } from "@/lib/alta";
 import { hashPassword, requireRole, verifyPassword } from "@/lib/auth";
 import { audit, pushEvent, avisarPaciente } from "@/lib/cases";
 import { isValidPhone, normalizeEmail, normalizePhone } from "@/lib/contacto";
@@ -37,17 +38,19 @@ export async function payAction(formData: FormData) {
   const back = "/panel";
   if (kase.state !== "PENDIENTE_PAGO") fail(back, "El caso no está pendiente de pago");
   if (!kase.prescription) fail(back, "Sin prescripción no hay pago"); // regla dura
+  // Con el consentimiento retirado no se fabrica: no tiene sentido cobrar.
+  await exigirTratamientoPermitido(kase.patientId);
   if (kase.payLinkExpiresAt && kase.payLinkExpiresAt < new Date())
     fail(back, "El enlace de pago ha caducado. Escríbenos para reactivarlo.");
   const delivery = formData.get("delivery") === "CLINICA" ? "CLINICA" : "DOMICILIO";
   const method = formData.get("method") === "bizum" ? "bizum" : "card";
-  await prisma.$transaction([
-    prisma.payment.update({
-      where: { caseId },
-      data: { paidAt: new Date(), method, providerId: `pi_sim_${kase.number}` },
-    }),
-    prisma.case.update({ where: { id: caseId }, data: { state: "ENTRADA_TALLER", delivery } }),
-  ]);
+  // Idempotente: un doble clic no registra el pago dos veces ni duplica avisos.
+  const cobrado = await prisma.payment.updateMany({
+    where: { caseId, paidAt: null },
+    data: { paidAt: new Date(), method, providerId: `pi_sim_${kase.number}` },
+  });
+  if (cobrado.count === 0) redirect("/panel?ok=" + encodeURIComponent("Este pago ya estaba registrado."));
+  await prisma.case.update({ where: { id: caseId }, data: { state: "ENTRADA_TALLER", delivery } });
   await pushEvent(
     caseId,
     `Pago 199,99 € recibido (${method === "bizum" ? "Bizum" : "tarjeta"}, simulado). Entrega: ${
