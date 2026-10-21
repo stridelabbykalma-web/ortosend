@@ -42,18 +42,29 @@ export const STATE_COLOR: Record<CaseState, string> = {
 export const PRICE_CENTS = 19999;
 export const PRICE_LABEL = "199,99 €";
 
+// Todas las fechas se muestran en hora española: el servidor corre en UTC y
+// sin timeZone las citas saldrían una o dos horas desplazadas.
+const TZ = "Europe/Madrid";
 export function fmtd(d: Date | string | null | undefined) {
   if (!d) return "—";
-  return new Date(d).toLocaleDateString("es-ES", { day: "numeric", month: "short" });
+  return new Date(d).toLocaleDateString("es-ES", { timeZone: TZ, day: "numeric", month: "short" });
 }
 export function fmtdt(d: Date | string | null | undefined) {
   if (!d) return "—";
   return new Date(d).toLocaleString("es-ES", {
+    timeZone: TZ,
     day: "numeric",
     month: "short",
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+// Fecha completa y legible para emails y WhatsApp («lunes, 3 de noviembre de 2026, 9:30»).
+export function fechaTextoLarga(d: Date | string | null | undefined) {
+  if (!d) return "";
+  const x = new Date(d);
+  if (isNaN(+x)) return "";
+  return x.toLocaleString("es-ES", { timeZone: TZ, dateStyle: "full", timeStyle: "short" });
 }
 export function fmtEUR(cents: number) {
   return (cents / 100).toLocaleString("es-ES", { style: "currency", currency: "EUR" });

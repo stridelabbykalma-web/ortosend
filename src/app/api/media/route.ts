@@ -7,6 +7,7 @@ import { prisma } from "@/lib/db";
 import { requireRole } from "@/lib/auth";
 import { audit, pushEvent } from "@/lib/cases";
 import { MEDIA_LABEL, FOTO_KINDS, VIDEO_KINDS } from "@/lib/format";
+import { completeTodaysAppointment } from "@/lib/agenda-db";
 import { sanitizeHelbing } from "@/lib/helbing";
 import { marchaDesdeInformes, sanitizeMarcha, type MarchaInforme } from "@/lib/marcha";
 
@@ -58,6 +59,9 @@ export async function POST(req: Request) {
     kase.capture ?? (await prisma.capture.create({ data: { caseId } }));
   if (kase.state === "CITA_RESERVADA") {
     await prisma.case.update({ where: { id: caseId }, data: { state: "ESTUDIO_EN_CURSO" } });
+    // El paciente ha venido: la cita del día queda como realizada (igual que
+    // cuando el estudio arranca desde el asistente de captura).
+    await completeTodaysAppointment(prisma, caseId);
     await pushEvent(caseId, "Estudio iniciado en clínica", user.name);
   }
 

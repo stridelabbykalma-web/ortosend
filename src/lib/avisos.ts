@@ -25,7 +25,9 @@ export function camposAviso(payload: Record<string, unknown>) {
     [CAMPOS.avisoDireccion]: str(payload.direccion),
     [CAMPOS.avisoEnlace]: enlace.startsWith("http") ? enlace : `${EMPRESA.web}${enlace}`,
     [CAMPOS.avisoSeguimiento]: str(payload.seguimiento),
-    ...(str(payload.paciente) ? { [CAMPOS.paciente]: str(payload.paciente) } : {}),
+    // Siempre se escribe: los campos de ManyChat persisten entre avisos y un
+    // nombre de un aviso anterior (p. ej. un menor a cargo) no debe colarse.
+    [CAMPOS.paciente]: str(payload.paciente) || str(payload.nombre),
   };
 }
 

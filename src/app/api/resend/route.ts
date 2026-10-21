@@ -36,7 +36,7 @@ export async function POST(request: Request) {
   if (!firmaValida(secret, id, timestamp, payload, signatures))
     return NextResponse.json({ error: "firma no válida" }, { status: 401 });
 
-  let evento: { type?: string; data?: { to?: string[] } };
+  let evento: { type?: string; data?: { to?: string[]; email_id?: string } };
   try {
     evento = JSON.parse(payload);
   } catch {
@@ -44,12 +44,17 @@ export async function POST(request: Request) {
   }
   if (evento.type !== "email.bounced" && evento.type !== "email.complained") return NextResponse.json({ ok: true });
   const to = (evento.data?.to ?? []).map((e) => e.toLowerCase());
-  if (!to.length) return NextResponse.json({ ok: true });
-  // Se marca el último aviso enviado a esa dirección (no guardamos el id del proveedor).
-  const n = await prisma.notification.findFirst({
-    where: { channel: "email", toEmail: { in: to }, sentAt: { not: null }, bouncedAt: null },
-    orderBy: { sentAt: "desc" },
-  });
+  // Primero por el id del email en Resend (aviso exacto); si no, el último
+  // enviado a esa dirección (avisos de antes de guardar resendId).
+  const emailId = evento.data?.email_id;
+  const n =
+    (emailId ? await prisma.notification.findFirst({ where: { resendId: emailId } }) : null) ??
+    (to.length
+      ? await prisma.notification.findFirst({
+          where: { channel: "email", toEmail: { in: to }, sentAt: { not: null }, bouncedAt: null },
+          orderBy: { sentAt: "desc" },
+        })
+      : null);
   if (n) await prisma.notification.update({ where: { id: n.id }, data: { bouncedAt: new Date() } });
   return NextResponse.json({ ok: true, marcado: !!n });
 }

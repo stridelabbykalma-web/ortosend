@@ -12,7 +12,7 @@ import { enviarAvisoMayoria } from "@/lib/mayoria";
 import { avisarContrasenaCambiada, enviarVerificacionEmail } from "@/lib/cuenta";
 import { activeAppointmentOf, bookAppointment, cancelAppointment } from "@/lib/agenda-db";
 import { agendaErrorMessage, parseSlot, type SlotOk } from "@/lib/reserva-form";
-import { fmtdt } from "@/lib/format";
+import { fechaTextoLarga, fmtdt } from "@/lib/format";
 
 const secret = () => new TextEncoder().encode(process.env.AUTH_SECRET || "dev-secret");
 
@@ -212,6 +212,8 @@ export async function reprogramarCitaAction(formData: FormData) {
     clinica: kase.clinic.name,
     direccion: kase.clinic.address,
     fecha: startsAt!.toISOString(),
+    fechaTexto: fechaTextoLarga(startsAt),
+    enlace: "/panel",
   });
   redirect("/panel?ok=" + encodeURIComponent(`Cita ${actual ? "cambiada" : "confirmada"}: ${fmtdt(startsAt)}`));
 }
@@ -229,6 +231,7 @@ export async function cancelarCitaAction(formData: FormData) {
     caseId,
     clinica: kase.clinic.name,
     fecha: actual!.startsAt.toISOString(),
+    fechaTexto: fechaTextoLarga(actual!.startsAt),
     nota: "Tu cita queda anulada. Puedes reservar otra hora cuando quieras desde tu panel.",
   });
   redirect("/panel?ok=" + encodeURIComponent("Cita anulada. Puedes elegir otra hora cuando quieras."));

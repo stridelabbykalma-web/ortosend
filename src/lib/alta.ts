@@ -547,8 +547,10 @@ export async function enviarRecordatorios(now = new Date()) {
       await manychat().lanzarFlujo(inv.manychatSubscriberId, FLUJOS.recordatorio());
       await prisma.consentInvitation.update({ where: { id: inv.id }, data: { reminderSentAt: now } });
       n++;
-    } catch {
-      /* se reintenta en la próxima pasada */
+    } catch (e) {
+      // Queda registrado (y se reintenta en la próxima pasada): un catch mudo
+      // escondía recordatorios que llevaban semanas sin salir.
+      console.error(`[alta] recordatorio de ManyChat fallido (invitación ${inv.id}):`, e instanceof Error ? e.message : e);
     }
   }
   return n;

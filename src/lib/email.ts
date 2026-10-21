@@ -19,6 +19,20 @@ export function renderEmail(template: string, p: Payload): { subject: string; te
           str(p.paciente) ? `\nPaciente: ${str(p.paciente)}.` : ""
         }\n\n${str(p.nota)}\n\nPuedes seguir tu tratamiento en ${link(p)}${firma}`,
       };
+    case "cita_cambiada":
+      return {
+        subject: `Cita cambiada en ${str(p.clinica)}`,
+        text: `Hola ${str(p.nombre)},\n\nTu cita en ${str(p.clinica)} ha cambiado: la nueva hora es el ${str(p.fechaTexto)}.${
+          str(p.paciente) ? `\nPaciente: ${str(p.paciente)}.` : ""
+        }\n\n${str(p.nota) || "Si la nueva hora no te viene bien, puedes cambiarla desde tu panel."}\n\n${link(p)}${firma}`,
+      };
+    case "cita_cancelada":
+      return {
+        subject: `Cita anulada en ${str(p.clinica)}`,
+        text: `Hola ${str(p.nombre)},\n\nTu cita en ${str(p.clinica)}${str(p.fechaTexto) ? ` del ${str(p.fechaTexto)}` : ""} queda anulada.${
+          str(p.paciente) ? `\nPaciente: ${str(p.paciente)}.` : ""
+        }\n\n${str(p.nota) || "Puedes reservar otra hora cuando quieras desde tu panel."}\n\n${link(p)}${firma}`,
+      };
     case "recordatorio_24h":
       return {
         subject: `Recordatorio: mañana tienes cita en ${str(p.clinica)}`,
@@ -141,19 +155,22 @@ export function renderEmail(template: string, p: Payload): { subject: string; te
   }
 }
 
-// Devuelve true si el email salió por el proveedor; false si solo queda encolado.
-export async function deliverEmail(to: string, subject: string, text: string): Promise<boolean> {
+// Envía por el proveedor. ok=false si no hay proveedor o falló; id = el id del
+// email en Resend (para casar los rebotes del webhook con el aviso exacto).
+export async function deliverEmail(to: string, subject: string, text: string): Promise<{ ok: boolean; id: string | null }> {
   const key = process.env.RESEND_API_KEY;
   const from = process.env.EMAIL_FROM;
-  if (!key || !from) return false;
+  if (!key || !from) return { ok: false, id: null };
   try {
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
       body: JSON.stringify({ from, to, subject, text }),
     });
-    return res.ok;
+    if (!res.ok) return { ok: false, id: null };
+    const data = (await res.json().catch(() => null)) as { id?: string } | null;
+    return { ok: true, id: data?.id ?? null };
   } catch {
-    return false;
+    return { ok: false, id: null };
   }
 }

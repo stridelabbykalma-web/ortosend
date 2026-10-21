@@ -499,6 +499,7 @@ model Case {
   rxRequestedBy    String? // User de la clínica que envió el estudio
   qcPhotoUrl       String? // foto obligatoria del par en calidad
   payLinkExpiresAt DateTime? // 30 días; recordatorios días 0/3/7/15
+  payReminderDay   Int             @default(0) // último recordatorio de pago enviado (día 3/7/15); reserva atómica del cron
   incidents        Incident[]
   events           CaseEvent[]
   studySessions    StudySession[]
@@ -680,7 +681,12 @@ model Notification {
   attempts  Int       @default(0) // reintentos de entrega hechos por el cron
   failedAt  DateTime? // agotados los reintentos
   bouncedAt DateTime? // el proveedor devolvió el email (dirección inexistente, buzón lleno…)
+  resendId  String? // id del email en Resend: el webhook de rebotes marca el aviso exacto
   createdAt DateTime  @default(now())
+
+  @@index([template, createdAt])
+  @@index([resendId])
+  @@index([channel, sentAt, failedAt])
 }
 
 // Registro de accesos a datos de salud (obligación RGPD)

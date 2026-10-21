@@ -8,6 +8,10 @@ import {
   signRxAction,
 } from "@/app/panel/rx-actions";
 import { REVISION_PREFIJO } from "@/lib/rx-route";
+import { MEDIA_LABEL } from "@/lib/format";
+
+// Pruebas del protocolo que se pueden señalar al pedir repetición (su check se invalida).
+const PRUEBAS_REPETIBLES = Object.entries(MEDIA_LABEL).filter(([k]) => k !== "foto_calidad");
 
 // Vista de valoración y prescripción (prescriptor de clínica o recetador central).
 export function RxView({
@@ -118,7 +122,16 @@ export function RxView({
             <input type="hidden" name="caseId" value={kase.id} />
             <b style={{ fontSize: 13 }}>Pedir repetición de prueba</b>
             <label>¿Qué prueba hay que repetir?</label>
-            <input name="what" placeholder="Ej.: vídeo marcha posterior descalzo" required />
+            <select name="mediaKind" defaultValue="">
+              <option value="">Otra cosa (descríbelo abajo)</option>
+              {PRUEBAS_REPETIBLES.map(([k, label]) => (
+                <option key={k} value={k}>
+                  {label}
+                </option>
+              ))}
+            </select>
+            <label>Si es otra cosa, cuál</label>
+            <input name="what" placeholder="Ej.: cuestionario incompleto" />
             <label>Motivo (lo verá la clínica)</label>
             <input name="why" />
             <div className="sp" />

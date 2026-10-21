@@ -6,6 +6,7 @@
 import { auditar, exigirTratamientoPermitido } from "@/lib/alta";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
+import { MEDIA_LABEL } from "@/lib/format";
 import { requireRole } from "@/lib/auth";
 import { pushEvent, releaseStale, avisarPaciente } from "@/lib/cases";
 import { QC_CHECKS, TALLER_STATES } from "@/lib/taller";
@@ -88,13 +89,19 @@ export async function acceptCaseAction(formData: FormData) {
 // Incidencia de captura en entrada → devolver a clínica (sin coste para el cliente).
 export async function captureIncidentAction(formData: FormData) {
   const { u, kase } = await tallerCase(String(formData.get("caseId")));
-  const reason = String(formData.get("reason") ?? "").trim();
+  const mediaKind = String(formData.get("mediaKind") ?? "").trim();
+  const detalle = String(formData.get("reason") ?? "").trim();
+  const reason = [mediaKind && MEDIA_LABEL[mediaKind] ? `Repetir: ${MEDIA_LABEL[mediaKind]}` : "", detalle].filter(Boolean).join(" — ");
   if (!reason) fail(`/caso/${kase.id}`, "Indica el motivo de la incidencia");
   if (kase.state !== "ENTRADA_TALLER") fail(`/caso/${kase.id}`, "Solo desde entrada de taller");
   await prisma.$transaction([
     prisma.case.update({ where: { id: kase.id }, data: { state: "DEVUELTO_CLINICA", openBy: null, openAt: null } }),
     prisma.incident.create({ data: { caseId: kase.id, type: "CAPTURA_INVALIDA", reason, openedBy: u.name } }),
     prisma.capture.updateMany({ where: { caseId: kase.id }, data: { completedAt: null } }),
+    // La prueba señalada pierde su check verde: así la clínica debe repetirla de verdad.
+    ...(mediaKind && MEDIA_LABEL[mediaKind]
+      ? [prisma.mediaAsset.updateMany({ where: { capture: { caseId: kase.id }, kind: mediaKind }, data: { confirmedAt: null } })]
+      : []),
   ]);
   await pushEvent(kase.id, "Incidencia de captura — devuelto a clínica sin coste para el cliente", u.name);
   await avisarPaciente(kase.patientId, "repetir_prueba", {

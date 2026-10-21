@@ -12,7 +12,7 @@ import { pushEvent, avisarPaciente } from "@/lib/cases";
 import { activeAppointmentOf, bookAppointment, cancelAppointment } from "@/lib/agenda-db";
 import { agendaErrorMessage, parseSlot, type SlotOk } from "@/lib/reserva-form";
 import { localToDateColumn, parseDateKey, parseHHMM, zonedToUtc } from "@/lib/agenda";
-import { fmtdt } from "@/lib/format";
+import { fechaTextoLarga, fmtdt } from "@/lib/format";
 
 const KINDS: AppointmentKind[] = ["ESTUDIO", "REPETICION", "REVISION", "AJUSTE"];
 
@@ -70,8 +70,10 @@ export async function darCitaAction(formData: FormData) {
   if (!startsAt || startsAt < new Date()) fail(back, "La hora debe ser futura");
   if (force && professionalId === undefined) professionalId = null;
 
+  // Si el caso ya tiene una cita activa, dar otra la SUSTITUYE (un caso no
+  // debe tener dos citas vivas; antes el olvido de la casilla las duplicaba).
   const actual = await activeAppointmentOf(prisma, caseId);
-  const replace = formData.get("replace") === "on" && actual ? actual.id : null;
+  const replace = actual ? actual.id : null;
   let appt: { startsAt: Date; professionalId: string | null } | null = null;
   try {
     appt = await prisma.$transaction((tx) =>
@@ -104,6 +106,8 @@ export async function darCitaAction(formData: FormData) {
     clinica: kase!.clinic.name,
     direccion: kase!.clinic.address,
     fecha: appt!.startsAt.toISOString(),
+    fechaTexto: fechaTextoLarga(appt!.startsAt),
+    enlace: "/panel",
   });
   ok(back, `Cita ${replace ? "cambiada" : "dada"} a ${nombreCompleto(kase!.patient)}: ${fmtdt(appt!.startsAt)}`);
 }
@@ -136,6 +140,7 @@ export async function cancelarCitaClinicaAction(formData: FormData) {
       caseId: appt!.caseId,
       clinica: appt!.clinic.name,
       fecha: appt!.startsAt.toISOString(),
+      fechaTexto: fechaTextoLarga(appt!.startsAt),
       nota: "Tu clínica ha tenido que anular tu cita. Elige otra hora desde tu panel o te llamaremos para darte una nueva.",
     });
   ok(back, noShow ? "Marcada como no presentado" : "Cita anulada");

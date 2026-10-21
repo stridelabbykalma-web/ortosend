@@ -4,7 +4,7 @@ import { CheckLine } from "@/components/ui";
 import { FotoCalidad } from "@/components/caso/foto-calidad";
 import { CopiarTexto } from "@/components/caso/copiar-texto";
 import { checklistOf, titularDe } from "@/lib/cases";
-import { PRICE_LABEL, SCAN_KIND, fmtEUR, fmtd, fmtdt } from "@/lib/format";
+import { PRICE_LABEL, SCAN_KIND, fmtEUR, fmtd, fmtdt, MEDIA_LABEL } from "@/lib/format";
 import { nombreProyectoRevoScan } from "@/lib/scan";
 import { PROD_STEPS, QC_CHECKS, fichaTecnica, prodStepIndex, slaDe, trabajoPorPie, type CapaHoja } from "@/lib/taller";
 import type { Questionnaire } from "@/lib/questionnaire";
@@ -148,6 +148,16 @@ export function TallerView({ kase }: { kase: CaseTaller }) {
           </summary>
           <form action={captureIncidentAction} className="row" style={{ marginTop: 8 }}>
             {hid}
+            <select name="mediaKind" defaultValue="">
+              <option value="">Prueba afectada (opcional)</option>
+              {Object.entries(MEDIA_LABEL)
+                .filter(([k]) => k !== "foto_calidad")
+                .map(([k, label]) => (
+                  <option key={k} value={k}>
+                    {label}
+                  </option>
+                ))}
+            </select>
             <input name="reason" placeholder="Qué falla y qué debe repetir la clínica" style={{ flex: 1, minWidth: 220 }} />
             <button type="submit" className="warn">
               Devolver a clínica (sin coste)

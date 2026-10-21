@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { requireRole } from "@/lib/auth";
 import { checklistOf, pushEvent, titularDePaciente, avisarPaciente } from "@/lib/cases";
-import { completeTodaysAppointment } from "@/lib/agenda-db";
+import { syncCaseAppointment, completeTodaysAppointment } from "@/lib/agenda-db";
 import { BARO_KINDS, SCAN_KIND } from "@/lib/format";
 import { nombreProyectoRevoScan } from "@/lib/scan";
 import type { Questionnaire } from "@/lib/questionnaire";
@@ -356,12 +356,21 @@ export async function sendCaseAction(formData: FormData) {
   void back;
 
   await prisma.capture.update({ where: { caseId }, data: { completedAt: new Date() } });
-  // Si venía de una incidencia, la prueba repetida la resuelve.
-  if (fromRepeat)
+  // Si venía de una incidencia, la prueba repetida la resuelve; y la cita de
+  // repetición (si la había) queda como realizada en vez de colgada en la agenda.
+  if (fromRepeat) {
     await prisma.incident.updateMany({
       where: { caseId, type: "CAPTURA_INVALIDA", closedAt: null },
       data: { closedAt: new Date(), resolution: `Prueba repetida y reenviada por ${u.name}` },
     });
+    const rep = await prisma.appointment.findFirst({
+      where: { caseId, kind: "REPETICION", status: { in: ["RESERVADA", "CONFIRMADA"] } },
+    });
+    if (rep) {
+      await prisma.appointment.update({ where: { id: rep.id }, data: { status: "COMPLETADA" } });
+      await syncCaseAppointment(prisma, caseId);
+    }
+  }
   // Caso ya pagado (incidencia del taller tras el pago): la receta y el pago
   // siguen vigentes, así que vuelve directo al taller sin pasar otra vez por
   // prescripción ni por pago (firmar de nuevo chocaría con la receta única y

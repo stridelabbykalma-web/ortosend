@@ -11,7 +11,7 @@ import { createSession, getSessionUser, hashPassword } from "@/lib/auth";
 import { notifyOwner, pushEvent, avisarPaciente } from "@/lib/cases";
 import { bookAppointment } from "@/lib/agenda-db";
 import { agendaErrorMessage, parseSlot, type SlotOk } from "@/lib/reserva-form";
-import { fmtdt } from "@/lib/format";
+import { fechaTextoLarga, fmtdt } from "@/lib/format";
 import { isValidPhone, normalizeEmail, normalizePhone } from "@/lib/contacto";
 import { EDAD_MAYORIA_SALUD, esMenor, parseBirth } from "@/lib/edad";
 import { CONSENT_VERSION } from "@/lib/legal";
@@ -116,7 +116,7 @@ export async function reservaAction(formData: FormData) {
     clinica: clinic!.name,
     direccion: clinic!.address,
     fecha: result!.startsAt.toISOString(),
-    fechaTexto: result!.startsAt.toLocaleString("es-ES", { dateStyle: "full", timeStyle: "short" }),
+    fechaTexto: fechaTextoLarga(result!.startsAt),
     enlace: "/panel",
     nota: "Trae tu calzado habitual. Reserva gratuita: solo pagarás si un profesional prescribe tu tratamiento.",
   });
@@ -214,7 +214,7 @@ export async function reservaClienteAction(formData: FormData) {
     clinica: clinic!.name,
     direccion: clinic!.address,
     fecha: result!.startsAt.toISOString(),
-    fechaTexto: result!.startsAt.toLocaleString("es-ES", { dateStyle: "full", timeStyle: "short" }),
+    fechaTexto: fechaTextoLarga(result!.startsAt),
     enlace: "/panel",
   });
   redirect("/panel?ok=" + encodeURIComponent(`Cita confirmada para ${result!.patientName}: ${fmtdt(result!.startsAt)}`));

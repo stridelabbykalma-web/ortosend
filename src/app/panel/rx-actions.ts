@@ -8,7 +8,7 @@ import { prisma } from "@/lib/db";
 import { requireRole } from "@/lib/auth";
 import { audit, pushEvent, releaseStale, avisarPaciente } from "@/lib/cases";
 import { PAY_LINK_DAYS } from "@/lib/states";
-import { PRICE_CENTS } from "@/lib/format";
+import { PRICE_CENTS, MEDIA_LABEL } from "@/lib/format";
 import { CENTRAL_WHERE, REVISION_PREFIJO, esCentral } from "@/lib/rx-route";
 import { generarPdfPrescripcion } from "@/lib/rx-pdf";
 import { nombreCompleto } from "@/lib/nombre";
@@ -178,7 +178,10 @@ export async function contactAction(formData: FormData) {
 export async function repeatAction(formData: FormData) {
   const caseId = String(formData.get("caseId"));
   const { u, kase } = await requirePrescriberFor(caseId);
-  const what = String(formData.get("what") ?? "").trim();
+  // La prueba señalada viene del desplegable (una de las del protocolo) o, si
+  // es «otra cosa», del texto libre.
+  const mediaKind = String(formData.get("mediaKind") ?? "").trim();
+  const what = (mediaKind && MEDIA_LABEL[mediaKind]) || String(formData.get("what") ?? "").trim();
   const why = String(formData.get("why") ?? "").trim();
   if (!what) fail(`/caso/${caseId}`, "Indica qué prueba hay que repetir");
   if (!["EN_PRESCRIPCION", "EN_CONTACTO"].includes(kase.state)) fail(`/caso/${caseId}`, "El caso no está en valoración");
@@ -188,9 +191,15 @@ export async function repeatAction(formData: FormData) {
       data: { caseId, type: "CAPTURA_INVALIDA", reason: `Repetir: ${what}${why ? ` — ${why}` : ""}`, openedBy: u.name },
     }),
   ]);
-  // Se invalida la prueba para que la clínica la repita.
+  // Se invalida la prueba para que la clínica la repita; si se señaló una del
+  // protocolo, su check deja de estar en verde (antes se podía reenviar sin
+  // repetir nada porque la checklist seguía completa).
   const capture = await prisma.capture.findUnique({ where: { caseId } });
-  if (capture) await prisma.capture.update({ where: { caseId }, data: { completedAt: null } });
+  if (capture) {
+    await prisma.capture.update({ where: { caseId }, data: { completedAt: null } });
+    if (mediaKind && MEDIA_LABEL[mediaKind])
+      await prisma.mediaAsset.updateMany({ where: { captureId: capture.id, kind: mediaKind }, data: { confirmedAt: null } });
+  }
   await pushEvent(caseId, `Devuelto a clínica — repetir: ${what}${why ? ` (${why})` : ""}`, u.name);
   await avisarPaciente(kase.patientId, "repetir_prueba", {
     caseId,

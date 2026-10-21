@@ -44,7 +44,7 @@ function redactarSecretos(payload: Record<string, unknown>): { limpio: Record<st
 export async function notifyEmail(toEmail: string, template: string, payload: Record<string, unknown> = {}): Promise<boolean> {
   if (!toEmail) return false;
   const { subject, text } = renderEmail(template, payload);
-  const sent = await deliverEmail(toEmail, subject, text);
+  const r = await deliverEmail(toEmail, subject, text);
   const { limpio, efimero } = redactarSecretos(payload);
   await prisma.notification.create({
     data: {
@@ -52,13 +52,14 @@ export async function notifyEmail(toEmail: string, template: string, payload: Re
       toEmail,
       template,
       payload: { ...limpio, asunto: subject } as object,
-      sentAt: sent ? new Date() : null,
+      sentAt: r.ok ? new Date() : null,
+      resendId: r.id,
       // Sin el secreto guardado no hay reintento posible: si no salió, fallido.
-      failedAt: !sent && efimero ? new Date() : null,
+      failedAt: !r.ok && efimero ? new Date() : null,
       attempts: 1,
     },
   });
-  return sent;
+  return r.ok;
 }
 
 // Reintenta desde el cron los emails que no salieron (proveedor caído, sin
@@ -77,15 +78,15 @@ export async function reintentarEmailsPendientes() {
     if (!n.toEmail) continue;
     const p = (n.payload ?? {}) as Record<string, unknown>;
     const { subject, text } = renderEmail(n.template, p);
-    const sent = await deliverEmail(n.toEmail, subject, text);
+    const r = await deliverEmail(n.toEmail, subject, text);
     const attempts = n.attempts + 1;
     await prisma.notification.update({
       where: { id: n.id },
-      data: sent
-        ? { sentAt: new Date(), attempts }
+      data: r.ok
+        ? { sentAt: new Date(), attempts, resendId: r.id }
         : { attempts, ...(attempts >= MAX_EMAIL_ATTEMPTS ? { failedAt: new Date() } : {}) },
     });
-    if (sent) enviados++;
+    if (r.ok) enviados++;
   }
   return enviados;
 }
