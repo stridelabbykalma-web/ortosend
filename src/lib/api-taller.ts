@@ -1,4 +1,4 @@
-// Utilidades de la API del taller para el Rectificador (programa del taller): sesión por
+// Utilidades de la API del taller para Ortosend Taller (programa del taller): sesión por
 // token (cabecera Authorization: Bearer) solo para usuarios TALLER o ADMIN, y respuestas
 // JSON con el mensaje de error en español.
 import type { User } from "@prisma/client";

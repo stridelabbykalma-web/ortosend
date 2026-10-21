@@ -4,7 +4,7 @@ import { CheckLine } from "@/components/ui";
 import { FotoCalidad } from "@/components/caso/foto-calidad";
 import { CopiarTexto } from "@/components/caso/copiar-texto";
 import { checklistOf, titularDe } from "@/lib/cases";
-import { PRICE_LABEL, SCAN_KIND, fmtEUR, fmtd, fmtdt, MEDIA_LABEL } from "@/lib/format";
+import { PRICE_LABEL, SCAN_KIND, fmtd, fmtdt, MEDIA_LABEL } from "@/lib/format";
 import { nombreProyectoRevoScan } from "@/lib/scan";
 import { PROD_STEPS, QC_CHECKS, fichaTecnica, prodStepIndex, slaDe, trabajoPorPie, type CapaHoja } from "@/lib/taller";
 import type { Questionnaire } from "@/lib/questionnaire";
@@ -35,13 +35,13 @@ type CaseTaller = Case & {
 
 const PIES_TXT: Record<string, string> = { par: "Par", I: "Pie izquierdo", D: "Pie derecho" };
 
-// Hoja de confección del par (se rellena desde el Rectificador, el programa del taller).
+// Hoja de confección del par (se rellena desde Ortosend Taller, el programa del taller).
 function HojaConfeccionCard({ hoja }: { hoja: HojaConfeccion }) {
   const capas = (hoja.capas ?? []) as CapaHoja[];
   return (
     <div className="card" style={{ marginTop: 12 }}>
       <div className="row between">
-        <b style={{ fontFamily: "var(--font-sora)" }}>Confección y coste</b>
+        <b style={{ fontFamily: "var(--font-sora)" }}>Hoja de confección</b>
         <span className="tiny">
           {hoja.actualizadoPor ? `${hoja.actualizadoPor} · ` : ""}
           {fmtdt(hoja.updatedAt)}
@@ -58,20 +58,12 @@ function HojaConfeccionCard({ hoja }: { hoja: HojaConfeccion }) {
             <li key={i}>
               {c.nombre ?? c.materialId} · {PIES_TXT[c.pies] ?? c.pies}
               {c.notas ? ` · ${c.notas}` : ""}
-              {typeof c.cents === "number" ? ` · ${fmtEUR(c.cents)}` : ""}
             </li>
           ))}
         </ol>
       )}
       {hoja.notas && <p className="muted" style={{ margin: "4px 0 8px" }}>{hoja.notas}</p>}
-      <div className="row">
-        <span className="pill n">Material {fmtEUR(hoja.costeMaterialCents)}</span>
-        <span className="pill n">Fresado {fmtEUR(hoja.costeFresadoCents)}</span>
-        <span className="pill n">Mano de obra {fmtEUR(hoja.costeManoObraCents)}</span>
-        <span className="pill g">
-          <b>Coste {fmtEUR(hoja.costeTotalCents)}</b>
-        </span>
-      </div>
+      {/* Los costes no se enseñan en el taller (los verá el administrador en la parte de ingresos). */}
     </div>
   );
 }

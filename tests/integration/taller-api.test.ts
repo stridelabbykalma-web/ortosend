@@ -1,4 +1,4 @@
-// API del taller para el Rectificador (programa del taller) contra Postgres real:
+// API del taller para Ortosend Taller (programa del taller) contra Postgres real:
 // entrar con el usuario de TALLER, lista en orden de salida, hoja de confección con coste,
 // materiales y ajustes, y cambios de estado con las mismas guardas que el panel.
 import { beforeAll, describe, expect, it } from "vitest";
@@ -23,6 +23,7 @@ const pet = (metodo: string, token?: string, body?: unknown) =>
 const conId = (id: string) => ({ params: Promise.resolve({ id }) });
 
 let token = "";
+let tokenAdmin = "";
 let tallerId = "";
 let clinicId = "";
 const casos: Record<string, string> = {};
@@ -66,6 +67,9 @@ beforeAll(async () => {
   });
   tallerId = u.id;
   await prisma.user.create({
+    data: { role: "ADMIN", name: "Admin", email: "admin@ortosend.test", passwordHash: await hashPassword("clave-admin") },
+  });
+  await prisma.user.create({
     data: { role: "PROFESIONAL", name: "Pro", email: "pro@ortosend.test", passwordHash: await hashPassword("clave-pro"), clinicId },
   });
   casos.reciente = await crearCaso("Reciente", { pagadoHaceDias: 0, fase: "MECANIZADO" });
@@ -83,6 +87,7 @@ describe("entrar", () => {
     const j = await r.json();
     expect(j.nombre).toBe("Toni Taller");
     token = j.token;
+    tokenAdmin = (await (await entrar(pet("POST", undefined, { email: "admin@ortosend.test", password: "clave-admin" }))).json()).token;
   });
   it("sin token o con token falso: 401", async () => {
     expect((await listar(pet("GET"))).status).toBe(401);
@@ -114,11 +119,22 @@ describe("pedidos", () => {
 });
 
 describe("hoja de confección y coste", () => {
-  it("guarda la hoja y calcula el coste con los materiales y ajustes de la web", async () => {
-    await guardarAjustes(pet("PUT", token, { precioHoraCents: 2400, costeCncMinutoCents: 10, costeMoldeCents: 500, minutosCnc: 30, minutosConfeccion: 40 }));
-    const { materiales } = await (await verMateriales(pet("GET", token))).json();
-    const eva = materiales.find((m: { id: string }) => m.id === "mat_eva_3_45");
-    expect(eva).toMatchObject({ precioCents: 2500, paresPorPlancha: 20 });
+  it("el taller no ve costes ni precios; el administrador sí", async () => {
+    expect((await verAjustes(pet("GET", token))).status).toBe(403);
+    expect((await guardarAjustes(pet("PUT", token, { precioHoraCents: 1 }))).status).toBe(403);
+    const ajustes = await guardarAjustes(
+      pet("PUT", tokenAdmin, { precioHoraCents: 2400, costeCncMinutoCents: 10, costeMoldeCents: 500, minutosCnc: 30, minutosConfeccion: 40 })
+    );
+    expect(ajustes.status).toBe(200);
+    const delTaller = (await (await verMateriales(pet("GET", token))).json()).materiales;
+    const eva = delTaller.find((m: { id: string }) => m.id === "mat_eva_3_45");
+    expect(eva.nombre).toBe("EVA 3 mm");
+    expect(eva).not.toHaveProperty("precioCents");
+    expect(eva).not.toHaveProperty("paresPorPlancha");
+    const delAdmin = (await (await verMateriales(pet("GET", tokenAdmin))).json()).materiales;
+    expect(delAdmin.find((m: { id: string }) => m.id === "mat_eva_3_45")).toMatchObject({ precioCents: 2500, paresPorPlancha: 20 });
+  });
+  it("guarda la hoja; el coste se calcula en la web pero solo lo ve el administrador", async () => {
     const r = await guardarHoja(
       pet("PUT", token, {
         proceso: "TERMOFORMADO",
@@ -131,9 +147,14 @@ describe("hoja de confección y coste", () => {
     );
     expect(r.status).toBe(200);
     const { hoja } = await r.json();
-    expect(hoja.coste).toEqual({ materialCents: 125 + 100, fresadoCents: 20 * 10 + 500, manoObraCents: 1200, totalCents: 225 + 700 + 1200 });
-    expect(hoja.capas[1]).toMatchObject({ nombre: "Forro piel sintética", notas: "negro", cents: 100 });
+    expect(hoja).not.toHaveProperty("coste");
+    expect(hoja.capas[1]).toEqual({ materialId: "mat_forro_piel", pies: "par", notas: "negro", nombre: "Forro piel sintética" });
     expect(hoja.actualizadoPor).toBe("Toni Taller");
+    const comoAdmin = (await (await detalle(pet("GET", tokenAdmin), conId(casos.reciente))).json()).hoja;
+    expect(comoAdmin.coste).toEqual({ materialCents: 125 + 100, fresadoCents: 20 * 10 + 500, manoObraCents: 1200, totalCents: 225 + 700 + 1200 });
+    expect(comoAdmin.capas[1].cents).toBe(100);
+    const delTaller = (await (await detalle(pet("GET", token), conId(casos.reciente))).json()).hoja;
+    expect(JSON.stringify(delTaller)).not.toMatch(/cents|coste/i);
   });
   it("rechaza datos malos", async () => {
     const malo = await guardarHoja(pet("PUT", token, { proceso: "OTRO", capas: [] }), conId(casos.reciente));
@@ -168,25 +189,38 @@ describe("estados", () => {
 });
 
 describe("materiales y ajustes", () => {
-  it("la lista se guarda entera: se cambian, se añaden y los que faltan se desactivan", async () => {
+  it("el taller edita la lista sin tocar los precios", async () => {
     const { materiales } = await (await verMateriales(pet("GET", token))).json();
+    const cambiados = materiales.map((m: { id: string; nombre: string }) =>
+      m.id === "mat_eva_3_45" ? { ...m, nombre: "EVA 3 mm negra", precioCents: 1 } : m
+    );
+    cambiados.push({ nombre: "Corcho 2 mm", tipo: "REFUERZO", grosorMm: 2 });
+    const r = await guardarMateriales(pet("PUT", token, { materiales: cambiados }));
+    expect(r.status).toBe(200);
+    expect(JSON.stringify(await r.json())).not.toMatch(/precioCents/);
+    const eva = await prisma.material.findUniqueOrThrow({ where: { id: "mat_eva_3_45" } });
+    expect(eva).toMatchObject({ nombre: "EVA 3 mm negra", precioCents: 2500, paresPorPlancha: 20 });
+    expect(await prisma.material.findFirst({ where: { nombre: "Corcho 2 mm" } })).toMatchObject({ precioCents: 0 });
+  });
+  it("el administrador: la lista se guarda entera, se cambian precios y los que faltan se desactivan", async () => {
+    const { materiales } = await (await verMateriales(pet("GET", tokenAdmin))).json();
     const nuevos = materiales
       .filter((m: { id: string }) => m.id !== "mat_cola")
       .map((m: { id: string; precioCents: number }) => (m.id === "mat_eva_5_30" ? { ...m, precioCents: 4000 } : m));
     nuevos.push({ nombre: "Corcho 3 mm", tipo: "REFUERZO", grosorMm: 3, precioCents: 1200, paresPorPlancha: 10 });
-    const r = await guardarMateriales(pet("PUT", token, { materiales: nuevos }));
+    const r = await guardarMateriales(pet("PUT", tokenAdmin, { materiales: nuevos }));
     expect(r.status).toBe(200);
     const todos = await prisma.material.findMany();
     expect(todos.find((m) => m.id === "mat_eva_5_30")?.precioCents).toBe(4000);
     expect(todos.find((m) => m.id === "mat_cola")?.activo).toBe(false);
     expect(todos.find((m) => m.nombre === "Corcho 3 mm")).toBeTruthy();
-    const malo = await guardarMateriales(pet("PUT", token, { materiales: [{ nombre: "", precioCents: 1 }] }));
+    const malo = await guardarMateriales(pet("PUT", tokenAdmin, { materiales: [{ nombre: "", precioCents: 1 }] }));
     expect(malo.status).toBe(400);
   });
-  it("ajustes", async () => {
-    const { ajustes } = await (await verAjustes(pet("GET", token))).json();
+  it("ajustes (administrador)", async () => {
+    const { ajustes } = await (await verAjustes(pet("GET", tokenAdmin))).json();
     expect(ajustes).toMatchObject({ precioHoraCents: 2400, costeMoldeCents: 500 });
-    expect((await guardarAjustes(pet("PUT", token, { precioHoraCents: -1 }))).status).toBe(400);
+    expect((await guardarAjustes(pet("PUT", tokenAdmin, { precioHoraCents: -1 }))).status).toBe(400);
   });
   it("al cambiar la contraseña el token deja de valer", async () => {
     await prisma.user.update({ where: { id: tallerId }, data: { passwordHash: await hashPassword("otra-clave") } });

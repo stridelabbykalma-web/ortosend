@@ -1,4 +1,4 @@
-// Pedidos del taller tal como los ve el Rectificador (programa del taller): la lista en el
+// Pedidos del taller tal como los ve Ortosend Taller (programa del taller): la lista en el
 // mismo orden que el tablero del panel y el detalle con la pauta por pie, la ficha técnica
 // y la hoja de confección. Solo lo necesario para fabricar (datos mínimos, RGPD).
 import type { Case, Clinic, HojaConfeccion, Incident, Patient, Payment, User } from "@prisma/client";
@@ -40,26 +40,47 @@ export async function listaPedidos() {
   return ordenTaller(casos).map(resumen);
 }
 
-function hojaJson(h: HojaConfeccion | null) {
+// Los costes (y el importe de cada capa) solo los ve el administrador: el taller no.
+function hojaJson(h: HojaConfeccion | null, verCostes = false) {
   if (!h) return null;
+  const capas = ((h.capas ?? []) as Record<string, unknown>[]).map((c) => {
+    if (verCostes) return c;
+    const { cents: _cents, ...resto } = c;
+    void _cents;
+    return resto;
+  });
   return {
     proceso: h.proceso,
-    capas: h.capas,
+    capas,
     notas: h.notas ?? "",
     minutosCnc: h.minutosCnc,
     minutosConfeccion: h.minutosConfeccion,
-    coste: {
-      materialCents: h.costeMaterialCents,
-      fresadoCents: h.costeFresadoCents,
-      manoObraCents: h.costeManoObraCents,
-      totalCents: h.costeTotalCents,
-    },
+    ...(verCostes
+      ? {
+          coste: {
+            materialCents: h.costeMaterialCents,
+            fresadoCents: h.costeFresadoCents,
+            manoObraCents: h.costeManoObraCents,
+            totalCents: h.costeTotalCents,
+          },
+        }
+      : {}),
     actualizadoPor: h.actualizadoPor,
     actualizado: h.updatedAt.toISOString(),
   };
 }
 
-export async function detallePedido(caseId: string, user: Pick<User, "id">) {
+export const veCostes = (user: Pick<User, "role">) => user.role === "ADMIN";
+
+// Material tal como lo ve quien no puede ver costes (sin precio ni rendimiento).
+export function materialSinCostes<T extends { precioCents: number; paresPorPlancha: number }>(m: T) {
+  const { precioCents: _p, paresPorPlancha: _r, ...resto } = m;
+  void _p;
+  void _r;
+  return resto;
+}
+
+export async function detallePedido(caseId: string, user: Pick<User, "id" | "role">) {
   const c = await prisma.case.findUnique({
     where: { id: caseId },
     include: { patient: true, clinic: true, payment: true, incidents: true, capture: true, prescription: true, hoja: true },
@@ -75,7 +96,7 @@ export async function detallePedido(caseId: string, user: Pick<User, "id">) {
     pies: [izq, dcho],
     pauta: c.prescription?.fabricationOrder ?? null,
     ficha: fichaTecnica(q, e, c),
-    hoja: hojaJson(c.hoja),
+    hoja: hojaJson(c.hoja, veCostes(user)),
   };
 }
 

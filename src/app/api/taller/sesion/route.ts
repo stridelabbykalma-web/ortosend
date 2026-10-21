@@ -1,4 +1,4 @@
-// Entrada del Rectificador (programa del taller) con el usuario de TALLER de la web.
+// Entrada dOrtosend Taller (programa del taller) con el usuario de TALLER de la web.
 // Devuelve un token de 30 días para la cabecera Authorization (ver src/lib/auth.ts).
 import { prisma } from "@/lib/db";
 import { createAppToken, verifyPassword, APP_DAYS } from "@/lib/auth";

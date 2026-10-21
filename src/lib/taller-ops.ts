@@ -1,5 +1,5 @@
 // Operaciones del taller sobre un caso, compartidas por el panel web (server actions)
-// y por la API del Rectificador (programa del taller): mismas guardas, mismo registro
+// y por la API dOrtosend Taller (programa del taller): mismas guardas, mismo registro
 // de auditoría y mismos eventos en el historial del caso.
 import type { Prisma, User } from "@prisma/client";
 import { prisma } from "./db";
@@ -191,13 +191,16 @@ export function limpiarMaterial(entrada: unknown): DatosMaterial {
 
 // Guarda el catálogo entero tal como llega del programa. Los materiales que ya no
 // vienen se desactivan (no se borran: hojas antiguas pueden usarlos).
-export async function guardarMateriales(entrada: unknown) {
+// Sin `conPrecios` (el taller) no se tocan precio ni rendimiento: los nuevos quedan a 0 hasta que el
+// administrador los ponga.
+export async function guardarMateriales(entrada: unknown, { conPrecios = true } = {}) {
   if (!Array.isArray(entrada)) throw new ErrorTaller("Se esperaba una lista de materiales", 400);
   const lista = entrada.map(limpiarMaterial);
   const vistos = new Set<string>();
   await prisma.$transaction(async (tx) => {
     for (const m of lista) {
-      const { id, ...datos } = m;
+      const { id, precioCents, paresPorPlancha, ...resto } = m;
+      const datos = conPrecios ? { ...resto, precioCents, paresPorPlancha } : resto;
       if (id && (await tx.material.findUnique({ where: { id } }))) {
         await tx.material.update({ where: { id }, data: datos });
         vistos.add(id);
