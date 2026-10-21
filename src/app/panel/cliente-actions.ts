@@ -12,6 +12,7 @@ import { enviarAvisoMayoria } from "@/lib/mayoria";
 import { avisarContrasenaCambiada, enviarVerificacionEmail } from "@/lib/cuenta";
 import { activeAppointmentOf, bookAppointment, cancelAppointment } from "@/lib/agenda-db";
 import { agendaErrorMessage, parseSlot, type SlotOk } from "@/lib/reserva-form";
+import { crearSesionCheckout, stripeConfigurado } from "@/lib/stripe";
 import { fechaTextoLarga, fmtdt } from "@/lib/format";
 
 function fail(path: string, msg: string): never {
@@ -28,8 +29,8 @@ async function myCase(caseId: string) {
   return { u, kase };
 }
 
-// Pago vía Ortosend (Stripe: tarjeta/Bizum). Aquí simulado: en producción se
-// crea un PaymentIntent y el webhook de Stripe ejecuta esta transición.
+// Pago vía Ortosend. Con STRIPE_SECRET_KEY: sesión de Stripe Checkout (tarjeta
+// y Bizum) y confirmación por webhook/retorno. Sin la clave: pago simulado (entornos de prueba).
 export async function payAction(formData: FormData) {
   const caseId = String(formData.get("caseId"));
   const { u, kase } = await myCase(caseId);
@@ -41,6 +42,18 @@ export async function payAction(formData: FormData) {
   if (kase.payLinkExpiresAt && kase.payLinkExpiresAt < new Date())
     fail(back, "El enlace de pago ha caducado. Escríbenos para reactivarlo.");
   const delivery = formData.get("delivery") === "CLINICA" ? "CLINICA" : "DOMICILIO";
+  if (stripeConfigurado()) {
+    if (kase.payment?.paidAt) redirect("/panel?ok=" + encodeURIComponent("Este pago ya estaba registrado."));
+    let url: string;
+    try {
+      url = (await crearSesionCheckout({ caseId, numero: kase.number, delivery })).url!;
+    } catch (e) {
+      console.error("[stripe] no se pudo crear la sesión de Checkout:", e instanceof Error ? e.message : e);
+      fail(back, "No hemos podido abrir la pasarela de pago. Inténtalo de nuevo en unos minutos.");
+    }
+    await pushEvent(caseId, `Pago iniciado en Stripe (entrega: ${delivery === "CLINICA" ? "recogida en clínica" : "domicilio"})`, u.name);
+    redirect(url!);
+  }
   const method = formData.get("method") === "bizum" ? "bizum" : "card";
   // Idempotente: un doble clic no registra el pago dos veces ni duplica avisos.
   const cobrado = await prisma.payment.updateMany({

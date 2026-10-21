@@ -176,15 +176,13 @@ export async function PanelCliente({ user }: { user: User }) {
                       <option value="DOMICILIO">Envío a mi domicilio</option>
                       <option value="CLINICA">Recogida en mi clínica ({c.clinic.name})</option>
                     </select>
-                    <label>Método</label>
-                    <select name="method" defaultValue="card">
-                      <option value="card">Tarjeta</option>
-                      <option value="bizum">Bizum</option>
-                    </select>
                     <div className="sp" />
                     <button type="submit" className="pri wfull">
-                      Pagar {PRICE_LABEL} (simulado — Stripe pendiente)
+                      Pagar {PRICE_LABEL} — tarjeta o Bizum
                     </button>
+                    <div className="tiny muted" style={{ marginTop: 6 }}>
+                      Pago seguro con Stripe. Elegirás tarjeta o Bizum en la siguiente pantalla.
+                    </div>
                   </form>
                 </div>
               </>
