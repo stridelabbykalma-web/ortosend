@@ -9,7 +9,8 @@ import { prisma } from "@/lib/db";
 import { hashSecreto } from "@/lib/consent/tokens";
 import { OBLIGATORIOS, ORDEN, SLUG, esObligatorio } from "@/lib/consent/tipos";
 import { registrar } from "@/lib/consent/registro";
-import { abrirFichaTrasAceptar } from "@/lib/alta";
+import { abrirFichaTrasAceptar, confirmarEnManyChat } from "@/lib/alta";
+import { ETIQUETAS, manychat } from "@/lib/manychat";
 import { origenPeticion, permitirPublico } from "@/lib/rate-limit";
 
 export async function aceptarAltaWebAction(formData: FormData) {
@@ -53,9 +54,18 @@ export async function aceptarAltaWebAction(formData: FormData) {
         userAgent,
       });
     }
-    await tx.consentInvitation.update({ where: { id: vigente.id }, data: { completedAt: new Date(), startedAt: vigente.startedAt ?? new Date() } });
+    await tx.consentInvitation.update({
+      where: { id: vigente.id },
+      data: { completedAt: new Date(), startedAt: vigente.startedAt ?? new Date(), confirmPending: true },
+    });
     await tx.patient.update({ where: { id: patient.id }, data: { status: "ACEPTADO" } });
     await abrirFichaTrasAceptar(tx, patient, "web");
   });
+  // Mismos efectos en ManyChat que la vía de WhatsApp (si hay contacto): la
+  // etiqueta consent_ok y, en su caso, la de marketing. Si falla, el cron lo
+  // reintenta gracias a confirmPending.
+  await confirmarEnManyChat(inv!.id);
+  if (marketing === "acepto" && inv!.manychatSubscriberId)
+    await manychat().ponerEtiqueta(inv!.manychatSubscriberId, ETIQUETAS.marketingOk).catch(() => {});
   redirect(`/alta/${encodeURIComponent(token)}`);
 }

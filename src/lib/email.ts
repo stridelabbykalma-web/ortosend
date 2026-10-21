@@ -121,6 +121,11 @@ export function renderEmail(template: string, p: Payload): { subject: string; te
           p.validez
         )}):\n\n${link(p)}\n\nSi el enlace caduca, tu clínica puede reenviártelo.${firma}`,
       };
+    case "codigo_acceso":
+      return {
+        subject: `Tu código de acceso a ${EMPRESA.nombreComercial}`,
+        text: `Hola ${str(p.nombre)},\n\nTu código para crear o restablecer tu contraseña en ${EMPRESA.nombreComercial} es:\n\n${str(p.codigo)}\n\nCaduca en ${str(p.validez)}. Si no lo has pedido tú, ignora este mensaje.${firma}`,
+      };
     case "acceso_listo":
       return {
         subject: `Tu perfil en ${EMPRESA.nombreComercial} está listo`,

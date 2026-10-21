@@ -143,42 +143,55 @@ export async function reservaClienteAction(formData: FormData) {
 
   const patientId = String(formData.get("patientId") ?? "");
   const now = new Date();
-  let patient: { id: string; name: string } | null = null;
+  let existente: { id: string; name: string } | null = null;
+  let nuevo: { name: string; birth: Date | null; menor: boolean } | null = null;
   if (patientId && patientId !== "nuevo") {
-    patient = await prisma.patient.findFirst({ where: { id: patientId, ownerId: user!.id } });
-    if (!patient) back("Paciente no válido");
+    existente = await prisma.patient.findFirst({ where: { id: patientId, ownerId: user!.id } });
+    if (!existente) back("Paciente no válido");
+    // Con los consentimientos retirados no se abren estudios nuevos.
+    await exigirTratamientoPermitido(existente!.id).catch(() =>
+      back("Esa persona tiene los consentimientos retirados o pendientes: su clínica debe regularizarlos antes de reservar")
+    );
+    // Un paciente no puede tener dos estudios abiertos a la vez.
+    const abierto = await prisma.case.findFirst({
+      where: {
+        patientId: existente!.id,
+        state: { in: ["CITA_RESERVADA", "ESTUDIO_EN_CURSO", "ESTUDIO_COMPLETO", "EN_PRESCRIPCION", "EN_CONTACTO", "DEVUELTO_CLINICA"] },
+      },
+    });
+    if (abierto) back(`${existente!.name} ya tiene un estudio en marcha (caso #${abierto.number}). Cambia su cita desde el panel.`);
   } else {
     const newName = String(formData.get("newName") ?? "").trim();
     if (newName.length < 3) back("Indica el nombre y apellidos del paciente");
-    const newBirth = parseBirth(String(formData.get("newBirth") ?? ""));
-    const menor = esMenor(newBirth, now);
-    patient = await prisma.patient.create({
-      data: {
-        status: "ACEPTADO",
-        ownerId: user!.id,
-        name: newName,
-        birthDate: newBirth,
-        isMinor: menor,
-        consents: {
-          salud: { aceptado: true, fecha: now.toISOString(), version: CONSENT_VERSION, via: "titular" },
-          ...(menor ? { tutor: { declarado: true, fecha: now.toISOString(), version: CONSENT_VERSION } } : {}),
-        },
-      },
-    });
+    const birthRaw = String(formData.get("newBirth") ?? "").trim();
+    const newBirth = parseBirth(birthRaw);
+    // Fecha escrita pero no válida: avisar, no tragársela (de esto depende isMinor).
+    if (birthRaw && !newBirth) back("La fecha de nacimiento no es válida: escríbela como dd/mm/aaaa");
+    nuevo = { name: newName, birth: newBirth, menor: esMenor(newBirth, now) };
   }
-  // Con los consentimientos retirados no se abren estudios nuevos.
-  await exigirTratamientoPermitido(patient!.id).catch(() => back("Esa persona tiene los consentimientos retirados o pendientes: su clínica debe regularizarlos antes de reservar"));
-  // Un paciente no puede tener dos estudios abiertos a la vez.
-  const abierto = await prisma.case.findFirst({
-    where: { patientId: patient!.id, state: { in: ["CITA_RESERVADA", "ESTUDIO_EN_CURSO", "ESTUDIO_COMPLETO", "EN_PRESCRIPCION", "EN_CONTACTO", "DEVUELTO_CLINICA"] } },
-  });
-  if (abierto) back(`${patient!.name} ya tiene un estudio en marcha (caso #${abierto.number}). Cambia su cita desde el panel.`);
 
-  let result: { caseId: string; startsAt: Date } | null = null;
+  let result: { caseId: string; startsAt: Date; patientId: string; patientName: string } | null = null;
   try {
     result = await prisma.$transaction(async (tx) => {
+      // El paciente nuevo se crea DENTRO de la transacción: si la hora ya no
+      // está libre no queda un paciente huérfano duplicado en el selector.
+      const patient = existente
+        ? existente
+        : await tx.patient.create({
+            data: {
+              status: "ACEPTADO",
+              ownerId: user!.id,
+              name: nuevo!.name,
+              birthDate: nuevo!.birth,
+              isMinor: nuevo!.menor,
+              consents: {
+                salud: { aceptado: true, fecha: now.toISOString(), version: CONSENT_VERSION, via: "titular" },
+                ...(nuevo!.menor ? { tutor: { declarado: true, fecha: now.toISOString(), version: CONSENT_VERSION } } : {}),
+              },
+            },
+          });
       const kase = await tx.case.create({
-        data: { patientId: patient!.id, clinicId, state: "CITA_RESERVADA", flow: "A" },
+        data: { patientId: patient.id, clinicId, state: "CITA_RESERVADA", flow: "A" },
       });
       const appt = await bookAppointment(tx, {
         clinicId,
@@ -190,13 +203,13 @@ export async function reservaClienteAction(formData: FormData) {
         bookedBy: user!.id,
         mode: "online",
       });
-      return { caseId: kase.id, startsAt: appt.startsAt };
+      return { caseId: kase.id, startsAt: appt.startsAt, patientId: patient.id, patientName: patient.name };
     });
   } catch (e) {
     back(agendaErrorMessage(e));
   }
   await pushEvent(result!.caseId, `Cita reservada online desde la cuenta del cliente — ${fmtdt(result!.startsAt)}`, user!.name);
-  await avisarPaciente(patient!.id, "cita_confirmada", {
+  await avisarPaciente(result!.patientId, "cita_confirmada", {
     caseId: result!.caseId,
     clinica: clinic!.name,
     direccion: clinic!.address,
@@ -204,7 +217,7 @@ export async function reservaClienteAction(formData: FormData) {
     fechaTexto: result!.startsAt.toLocaleString("es-ES", { dateStyle: "full", timeStyle: "short" }),
     enlace: "/panel",
   });
-  redirect("/panel?ok=" + encodeURIComponent(`Cita confirmada para ${patient!.name}: ${fmtdt(result!.startsAt)}`));
+  redirect("/panel?ok=" + encodeURIComponent(`Cita confirmada para ${result!.patientName}: ${fmtdt(result!.startsAt)}`));
 }
 
 const appSchema = z.object({

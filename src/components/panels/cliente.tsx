@@ -37,8 +37,7 @@ export async function PanelCliente({ user }: { user: User }) {
           </Link>
         </div>
         <MisConsentimientos user={user} />
-        <MisConsentimientos user={user} />
-      <MisDatos user={user} />
+        <MisDatos user={user} />
       </>
     );
   }
@@ -263,6 +262,7 @@ export async function PanelCliente({ user }: { user: User }) {
         </Link>
       </div>
       {menores.length > 0 && <PersonasACargo menores={menores} />}
+      <MisConsentimientos user={user} />
       <MisDatos user={user} />
     </>
   );

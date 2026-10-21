@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { recoverAction } from "@/app/(auth)/actions";
 import { Flash } from "@/components/ui";
 
@@ -30,8 +31,9 @@ export default async function RecuperarPage({
         </form>
       )}
       <div className="tiny" style={{ marginTop: 12 }}>
-        Si tu clínica te invitó y aún no has creado la cuenta, usa el enlace de la invitación o pide a
-        la clínica que lo reenvíe.
+        ¿No tienes email en tu cuenta o aún no la creaste? Entra en{" "}
+        <Link href="/acceso">ortosend.es/acceso</Link> con tu DNI y tu móvil: recibirás un código para
+        crear o restablecer tu contraseña.
       </div>
     </div>
   );

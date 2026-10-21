@@ -5,6 +5,7 @@ import { FechaNacimiento } from "@/components/fecha-nacimiento";
 // Formulario de pre-alta del profesional. Si la fecha de nacimiento indica un
 // menor de 16 años, pide los datos del tutor (los mensajes irán a él).
 import { useState } from "react";
+import { useFormStatus } from "react-dom";
 
 const EDAD_MAYORIA_SALUD = 16;
 
@@ -72,9 +73,18 @@ export function PreAltaForm({ action, declaracion }: { action: (f: FormData) => 
         <input type="checkbox" name="declaracion" required /> {declaracion}
       </label>
       <div className="sp" />
-      <button type="submit" className="pri">
-        Dar de alta y enviar WhatsApp
-      </button>
+      <BotonEnviar texto={"Dar de alta y enviar WhatsApp"} />
     </form>
+  );
+}
+
+// Botón que se desactiva mientras la action está en marcha: evita que un doble
+// clic cree dos altas.
+function BotonEnviar({ texto }: { texto: string }) {
+  const { pending } = useFormStatus();
+  return (
+    <button type="submit" className="pri" disabled={pending}>
+      {pending ? "Enviando…" : texto}
+    </button>
   );
 }

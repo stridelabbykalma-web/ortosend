@@ -10,6 +10,7 @@ import { isValidDni, normalizeDni, normalizeEmail, normalizePhone } from "./cont
 import { EMPRESA } from "./legal";
 import { CAMPOS, FLUJOS, aE164, manychat } from "./manychat";
 import { auditar, destinatario } from "./alta";
+import { avisarContrasenaCambiada } from "./cuenta";
 import { CODIGO_INTENTOS, CODIGO_MINUTOS, hashCodigo, mismoHash, nuevoCodigo } from "./consent/tokens";
 
 export const URL_ACCESO = () => `${EMPRESA.web}/acceso`;
@@ -54,13 +55,14 @@ export async function enviarAcceso(patientId: string, actor: Pick<User, "id">): 
 
 // ---------------------------------------------------------------- paso 1: DNI + móvil → código
 
-// Pacientes que ese DNI + móvil pueden reclamar: aceptados, con acceso enviado y sin cuenta.
+// Pacientes que ese DNI + móvil pueden reclamar: aceptados y con acceso enviado.
+// Si ya tienen cuenta, el mismo código sirve para restablecer la contraseña
+// (única vía de recuperación para cuentas sin email).
 async function candidatos(dni: string, telefono: string) {
   return prisma.patient.findMany({
     where: {
       status: "ACEPTADO",
       accessSentAt: { not: null },
-      ownerId: null,
       OR: [
         { isMinor: false, dni, phone: telefono },
         { isMinor: true, tutorDni: dni, tutorPhone: telefono },
@@ -106,9 +108,25 @@ export async function solicitarCodigo(dniRaw: string, telefonoRaw: string): Prom
     nombre: destinatario(lista[0]).nombre,
     fraseConsentimiento: "Código de acceso solicitado por el titular en ortosend.com",
   }).catch(() => null));
+  let porWhatsApp = false;
   if (sub) {
-    await manychat().ponerCampos(sub, { [CAMPOS.codigo]: codigo }).catch(() => {});
-    await manychat().lanzarFlujo(sub, FLUJOS.codigo()).catch(() => {});
+    try {
+      await manychat().ponerCampos(sub, { [CAMPOS.codigo]: codigo });
+      await manychat().lanzarFlujo(sub, FLUJOS.codigo());
+      porWhatsApp = true;
+    } catch {
+      /* cae al email */
+    }
+  }
+  // Móvil sin WhatsApp (o ManyChat caído): el código va al email del titular.
+  if (!porWhatsApp) {
+    const email = normalizeEmail(destinatario(lista[0]).email) || null;
+    if (email)
+      await notifyEmail(email, "codigo_acceso", {
+        nombre: destinatario(lista[0]).nombre,
+        codigo,
+        validez: `${CODIGO_MINUTOS} minutos`,
+      });
   }
   return { ok: true };
 }
@@ -144,10 +162,18 @@ export async function crearCuentaConCodigo(dniRaw: string, telefonoRaw: string, 
 
   const existente = await prisma.user.findUnique({ where: { phone: telefono } });
   if (existente) {
-    // Ya tiene cuenta (p. ej. una madre con dos hijos): se le añaden los pacientes.
-    // Nunca se cambia su contraseña desde aquí: entra con la que tiene.
+    // Ya tiene cuenta (p. ej. una madre con dos hijos): se le añaden los
+    // pacientes sueltos y, como el código demuestra el control del móvil
+    // (DNI + móvil + código de un solo uso), la contraseña introducida pasa a
+    // ser la suya — es la única vía de recuperación para cuentas sin email.
     if (existente.role !== "CLIENTE") return { ok: false, error: "Ese móvil pertenece a una cuenta profesional. Contacta con Ortosend." };
+    const actualizado = await prisma.user.update({
+      where: { id: existente.id },
+      data: { passwordHash: await hashPassword(password) },
+    });
     await prisma.patient.updateMany({ where: { id: { in: lista.map((p) => p.id) }, ownerId: null }, data: { ownerId: existente.id } });
+    await prisma.auditLog.create({ data: { userId: existente.id, action: "account.reset_acceso", target: `user:${existente.id}` } });
+    if (actualizado.email) await avisarContrasenaCambiada(actualizado);
     return { ok: true, userId: existente.id, nueva: false };
   }
   const titular = destinatario(lista[0]);

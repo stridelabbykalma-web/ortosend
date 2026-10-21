@@ -5,6 +5,9 @@
 // Pone las barras solo y valida el formato; el servidor lo parsea con
 // parseBirth (acepta dd/mm/aaaa e ISO).
 export function formatearFecha(v: string): string {
+  // Pegado en ISO (2015-02-01, con o sin hora detrás) → dd/mm/aaaa.
+  const iso = v.trim().match(/^(\d{4})-(\d{2})-(\d{2})(?:[T\s].*)?$/);
+  if (iso) return `${iso[3]}/${iso[2]}/${iso[1]}`;
   const d = v.replace(/\D/g, "").slice(0, 8);
   if (d.length <= 2) return d;
   if (d.length <= 4) return `${d.slice(0, 2)}/${d.slice(2)}`;

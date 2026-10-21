@@ -347,13 +347,14 @@ describe("5. acceso con DNI + móvil + código", () => {
     expect((await prisma.patient.findUniqueOrThrow({ where: { id: p.id } })).ownerId).toBeNull();
   });
 
-  it("si el móvil ya tiene cuenta, añade el paciente sin tocar la contraseña", async () => {
+  it("si el móvil ya tiene cuenta, añade el paciente y restablece la contraseña (es la vía de recuperación sin email)", async () => {
     const p = await pacienteAceptadoConAcceso("Y1234567X");
     const existente = await prisma.user.create({ data: { role: "CLIENTE", name: "Ya existía", phone: p.phone, passwordHash: "hash-original" } });
     await solicitarCodigo("Y1234567X", p.phone!);
     const r = await crearCuentaConCodigo("Y1234567X", p.phone!, mc.campo(CAMPOS.codigo)!, "otra-clave-larga");
     expect(r).toMatchObject({ ok: true, nueva: false, userId: existente.id });
-    expect((await prisma.user.findUniqueOrThrow({ where: { id: existente.id } })).passwordHash).toBe("hash-original");
+    const hash = (await prisma.user.findUniqueOrThrow({ where: { id: existente.id } })).passwordHash;
+    expect(hash).not.toBe("hash-original"); // la nueva contraseña sustituye a la olvidada
     expect((await prisma.patient.findUniqueOrThrow({ where: { id: p.id } })).ownerId).toBe(existente.id);
   });
 });

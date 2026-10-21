@@ -32,8 +32,9 @@ export default async function LoginPage({
         </div>
       </form>
       <div className="tiny" style={{ marginTop: 12 }}>
-        ¿Primera vez? Si has reservado cita online ya tienes cuenta con la contraseña que creaste.
-        Si tu clínica inició tu estudio, activa tu cuenta desde el enlace que te enviamos por WhatsApp.
+        ¿Primera vez? Si reservaste online ya tienes cuenta con la contraseña que creaste. Si tu
+        clínica te dio de alta, crea tu contraseña en <Link href="/acceso">ortosend.es/acceso</Link>{" "}
+        con tu DNI y tu móvil.
       </div>
     </div>
   );

@@ -89,37 +89,57 @@ export async function crearPreAlta(pro: Profesional, d: DatosPreAlta): Promise<R
     if (tutorEmail && !tutorEmail.includes("@")) return { ok: false, error: "Email del tutor no válido" };
   }
   const toPhone = menor ? tutorTelefono : telefono;
-  // Un móvil solo puede tener un alta en curso: ManyChat guarda un único «ref» por contacto.
-  const enCurso = await invitacionActivaDelTelefono(toPhone);
-  if (enCurso)
-    return {
-      ok: false,
-      error: `Ese móvil ya tiene un alta en curso (${nombreCompleto(enCurso.patient)}). Espera a que termine o caduque antes de dar de alta a otro paciente con el mismo móvil.`,
-    };
-
-  const patient = await prisma.patient.create({
-    data: {
-      name: d.nombre,
-      lastName: d.apellidos,
-      birthDate: birth,
-      isMinor: menor,
-      phone: telefono || null,
-      email,
-      status: "PENDIENTE",
-      professionalId: pro.id,
-      clinicId: pro.clinicId,
-      tutorName: menor ? d.tutorNombre : null,
-      tutorPhone: menor ? tutorTelefono : null,
-      tutorEmail: menor ? tutorEmail : null,
-    },
-  });
+  // Un móvil solo puede tener un alta en curso: ManyChat guarda un único «ref»
+  // por contacto. La comprobación y la creación van en la misma transacción con
+  // un cerrojo por teléfono: un doble clic ya no crea dos pacientes.
+  let patient: Patient;
+  try {
+    patient = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${"prealta:" + toPhone}))`;
+      const enCurso = await invitacionActivaDelTelefono(toPhone, undefined, tx);
+      if (enCurso) throw new AltaEnCurso(nombreCompleto(enCurso.patient));
+      return crearPacientePreAlta(tx, d, { birth, menor, telefono, email, tutorTelefono, tutorEmail, pro });
+    });
+  } catch (e) {
+    if (e instanceof AltaEnCurso)
+      return {
+        ok: false,
+        error: `Ese móvil ya tiene un alta en curso (${e.message}). Espera a que termine o caduque antes de dar de alta a otro paciente con el mismo móvil.`,
+      };
+    throw e;
+  }
   await auditar(pro.id, "patient.prealta", patient.id, { menor, destinatario: menor ? "tutor" : "paciente" });
   const envio = await enviarInvitacion(patient.id, pro.id);
   return { ok: true, patient: (await prisma.patient.findUniqueOrThrow({ where: { id: patient.id } })), envio };
 }
 
-async function invitacionActivaDelTelefono(toPhone: string, salvoPaciente?: string) {
-  return prisma.consentInvitation.findFirst({
+class AltaEnCurso extends Error {}
+
+function crearPacientePreAlta(
+  tx: Tx,
+  d: DatosPreAlta,
+  x: { birth: Date; menor: boolean; telefono: string; email: string | null; tutorTelefono: string; tutorEmail: string | null; pro: Profesional }
+) {
+  return tx.patient.create({
+    data: {
+      name: d.nombre,
+      lastName: d.apellidos,
+      birthDate: x.birth,
+      isMinor: x.menor,
+      phone: x.telefono || null,
+      email: x.email,
+      status: "PENDIENTE",
+      professionalId: x.pro.id,
+      clinicId: x.pro.clinicId,
+      tutorName: x.menor ? d.tutorNombre : null,
+      tutorPhone: x.menor ? x.tutorTelefono : null,
+      tutorEmail: x.menor ? x.tutorEmail : null,
+    },
+  });
+}
+
+async function invitacionActivaDelTelefono(toPhone: string, salvoPaciente?: string, db: Tx | typeof prisma = prisma) {
+  return db.consentInvitation.findFirst({
     where: {
       toPhone,
       invalidatedAt: null,
@@ -212,20 +232,23 @@ async function enviarEmailAlta(
   dest: ReturnType<typeof destinatario>
 ): Promise<boolean> {
   if (!dest.email) return false;
-  await notifyEmail(dest.email, "alta_documentos", {
+  const sent = await notifyEmail(dest.email, "alta_documentos", {
     nombre: dest.nombre,
     paciente: patient.isMinor ? patient.name : undefined,
     enlace: `/alta/${webToken}`,
     validez: `${INVITACION_HORAS} horas`,
   });
-  await prisma.consentInvitation.update({ where: { id: invitationId }, data: { emailSentAt: new Date() } });
-  return true;
+  if (sent) await prisma.consentInvitation.update({ where: { id: invitationId }, data: { emailSentAt: new Date() } });
+  return sent;
 }
 
 // Genera un enlace web nuevo para la invitación vigente (el anterior deja de
-// valer) y lo devuelve: para reenviarlo por email o abrirlo en un dispositivo
-// de la clínica delante del paciente.
-export async function nuevoEnlaceWeb(patientId: string): Promise<{ ok: true; token: string } | { ok: false; error: string }> {
+// valer) y lo devuelve: para abrirlo en un dispositivo de la clínica o
+// reenviarlo. Si el destinatario tiene email, se le reenvía el enlace nuevo en
+// el acto — el anterior queda invalidado y, si no, su email quedaría muerto.
+export async function nuevoEnlaceWeb(
+  patientId: string
+): Promise<{ ok: true; token: string; emailReenviado: boolean } | { ok: false; error: string }> {
   const inv = await prisma.consentInvitation.findFirst({
     where: { patientId, invalidatedAt: null, completedAt: null, expiresAt: { gt: new Date() } },
     orderBy: { createdAt: "desc" },
@@ -233,21 +256,19 @@ export async function nuevoEnlaceWeb(patientId: string): Promise<{ ok: true; tok
   if (!inv) return { ok: false, error: "No hay ninguna invitación vigente: reenvía primero la invitación." };
   const token = nuevoSecreto();
   await prisma.consentInvitation.update({ where: { id: inv.id }, data: { webTokenHash: hashSecreto(token) } });
-  return { ok: true, token };
+  const patient = await prisma.patient.findUniqueOrThrow({ where: { id: patientId } });
+  const dest = destinatario(patient);
+  const emailReenviado = dest.email ? await enviarEmailAlta(inv.id, token, patient, dest) : false;
+  return { ok: true, token, emailReenviado };
 }
 
 // Reenvía por email el enlace de aceptación (con token nuevo) de la invitación vigente.
 export async function reenviarEmailAlta(patientId: string, actor: Pick<User, "id">): Promise<{ ok: boolean; error?: string }> {
   const patient = await prisma.patient.findUniqueOrThrow({ where: { id: patientId } });
-  const dest = destinatario(patient);
-  if (!dest.email) return { ok: false, error: "Este alta no tiene email de contacto. Añádelo dando de alta de nuevo o usa WhatsApp." };
+  if (!destinatario(patient).email)
+    return { ok: false, error: "Este alta no tiene email de contacto. Añádelo dando de alta de nuevo o usa WhatsApp." };
   const r = await nuevoEnlaceWeb(patientId);
   if (!r.ok) return r;
-  const inv = await prisma.consentInvitation.findFirstOrThrow({
-    where: { patientId, invalidatedAt: null, completedAt: null },
-    orderBy: { createdAt: "desc" },
-  });
-  await enviarEmailAlta(inv.id, r.token, patient, dest);
   await auditar(actor.id, "patient.reenvio_email", patientId);
   return { ok: true };
 }
@@ -351,11 +372,13 @@ export async function procesarWebhook(e: EntradaWebhook): Promise<SalidaWebhook>
   const ref = limpio(e.ref);
   let out = ref ? await procesarConRef({ ...e, ref }) : INVALIDO;
   if (e.accion !== "empezar") return out;
-  // Al empezar sin ref válido (escribió ALTA, o el campo tiene uno de una invitación
-  // anterior), se intenta por el móvil del contacto.
+  // Al empezar sin ref utilizable se intenta por el móvil del contacto. El ref
+  // guardado en ManyChat puede ser inválido, pero también de un alta ANTERIOR ya
+  // terminada o caducada (segundo hijo del mismo tutor, reinvitación tras una
+  // revocación): en todos esos casos manda el alta pendiente del teléfono.
   let vigente = ref;
   const telefono = limpio(e.telefono);
-  if (out.estado === "invalido" && telefono) {
+  if (["invalido", "fin", "caducado"].includes(out.estado) && telefono) {
     const nuevo = await reclamarPorTelefono(telefono, limpio(e.subscriberId) || null);
     if (nuevo) {
       vigente = nuevo;
@@ -366,17 +389,20 @@ export async function procesarWebhook(e: EntradaWebhook): Promise<SalidaWebhook>
 }
 
 async function procesarConRef(e: EntradaWebhook): Promise<SalidaWebhook> {
-  const inv = await prisma.consentInvitation.findUnique({ where: { refHash: hashSecreto(e.ref) } });
-  if (!inv) return INVALIDO;
+  const previa = await prisma.consentInvitation.findUnique({ where: { refHash: hashSecreto(e.ref) } });
+  if (!previa) return INVALIDO;
   const sub = limpio(e.subscriberId);
-  if (sub && inv.manychatSubscriberId && sub !== inv.manychatSubscriberId) return INVALIDO;
-  if (inv.invalidatedAt) return INVALIDO;
+  if (sub && previa.manychatSubscriberId && sub !== previa.manychatSubscriberId) return INVALIDO;
+  if (previa.invalidatedAt) return INVALIDO;
 
   type Efecto = { aceptado?: boolean; marketing?: boolean };
   const efecto: Efecto = {};
   const res = await prisma.$transaction(async (tx) => {
     // Serializa las pulsaciones de una misma invitación (doble toque, reintentos de ManyChat).
-    await tx.$executeRaw`SELECT 1 FROM "consent_invitations" WHERE "id" = ${inv.id} FOR UPDATE`;
+    await tx.$executeRaw`SELECT 1 FROM "consent_invitations" WHERE "id" = ${previa.id} FOR UPDATE`;
+    // Releída tras el bloqueo: un «Reenviar» simultáneo puede haberla invalidado.
+    const inv = await tx.consentInvitation.findUniqueOrThrow({ where: { id: previa.id } });
+    if (inv.invalidatedAt) return INVALIDO;
     const patient = await tx.patient.findUniqueOrThrow({ where: { id: inv.patientId } });
     const u = await ultimasDeInvitacion(tx, inv.id);
     const terminada = !!inv.completedAt;
@@ -435,9 +461,9 @@ async function procesarConRef(e: EntradaWebhook): Promise<SalidaWebhook> {
   });
 
   // Efectos fuera de la transacción: si ManyChat falla, el cron lo reintenta.
-  if (efecto.aceptado) await confirmarEnManyChat(inv.id);
-  if (efecto.marketing && inv.manychatSubscriberId)
-    await manychat().ponerEtiqueta(inv.manychatSubscriberId, ETIQUETAS.marketingOk).catch(() => {});
+  if (efecto.aceptado) await confirmarEnManyChat(previa.id);
+  if (efecto.marketing && previa.manychatSubscriberId)
+    await manychat().ponerEtiqueta(previa.manychatSubscriberId, ETIQUETAS.marketingOk).catch(() => {});
   return res;
 }
 

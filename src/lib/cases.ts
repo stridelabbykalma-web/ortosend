@@ -21,22 +21,44 @@ export async function notify(toPhone: string, template: string, payload: Record<
   return sent;
 }
 
+// Enlaces de un solo uso y códigos: no se guardan en la cola (un volcado de la
+// BD no debe permitir usarlos) y sus emails no se reintentan (caducan enseguida
+// y el texto guardado ya no lleva el secreto).
+const ENLACE_EFIMERO = /^\/(alta\/|restablecer\?|verificar\?|mayoria\?|activar\?)/;
+function redactarSecretos(payload: Record<string, unknown>): { limpio: Record<string, unknown>; efimero: boolean } {
+  const limpio = { ...payload };
+  let efimero = false;
+  if (typeof limpio.codigo === "string") {
+    limpio.codigo = "[oculto]";
+    efimero = true;
+  }
+  if (typeof limpio.enlace === "string" && ENLACE_EFIMERO.test(limpio.enlace)) {
+    limpio.enlace = "[enlace-de-un-solo-uso]";
+    efimero = true;
+  }
+  return { limpio, efimero };
+}
+
 // Canal email (respaldo y avisos legales): encola el aviso y, si hay proveedor
-// configurado, lo envía en el acto (ver src/lib/email.ts).
-export async function notifyEmail(toEmail: string, template: string, payload: Record<string, unknown> = {}) {
-  if (!toEmail) return;
+// configurado, lo envía en el acto (ver src/lib/email.ts). Devuelve si salió.
+export async function notifyEmail(toEmail: string, template: string, payload: Record<string, unknown> = {}): Promise<boolean> {
+  if (!toEmail) return false;
   const { subject, text } = renderEmail(template, payload);
   const sent = await deliverEmail(toEmail, subject, text);
+  const { limpio, efimero } = redactarSecretos(payload);
   await prisma.notification.create({
     data: {
       channel: "email",
       toEmail,
       template,
-      payload: { ...payload, asunto: subject } as object,
+      payload: { ...limpio, asunto: subject } as object,
       sentAt: sent ? new Date() : null,
+      // Sin el secreto guardado no hay reintento posible: si no salió, fallido.
+      failedAt: !sent && efimero ? new Date() : null,
       attempts: 1,
     },
   });
+  return sent;
 }
 
 // Reintenta desde el cron los emails que no salieron (proveedor caído, sin
