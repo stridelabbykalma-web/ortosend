@@ -461,7 +461,13 @@ async function procesarConRef(e: EntradaWebhook): Promise<SalidaWebhook> {
   });
 
   // Efectos fuera de la transacción: si ManyChat falla, el cron lo reintenta.
-  if (efecto.aceptado) await confirmarEnManyChat(previa.id);
+  if (efecto.aceptado) {
+    await confirmarEnManyChat(previa.id);
+    // Si el DNI ya está relleno, el acceso al perfil sale solo (import dinámico:
+    // acceso.ts importa de este fichero y el estático sería un ciclo).
+    const { enviarAccesoSiProcede } = await import("./acceso");
+    await enviarAccesoSiProcede(previa.patientId);
+  }
   if (efecto.marketing && previa.manychatSubscriberId)
     await manychat().ponerEtiqueta(previa.manychatSubscriberId, ETIQUETAS.marketingOk).catch(() => {});
   return res;

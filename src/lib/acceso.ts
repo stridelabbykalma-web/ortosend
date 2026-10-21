@@ -21,7 +21,9 @@ export const dniTitular = (p: Pick<Patient, "isMinor" | "dni" | "tutorDni">) => 
 
 // ---------------------------------------------------------------- enviar acceso (profesional)
 
-export async function enviarAcceso(patientId: string, actor: Pick<User, "id">): Promise<{ ok: true; canal: string } | { ok: false; error: string }> {
+// actor=null cuando lo dispara el sistema (al completarse el alta): sin fila de
+// auditoría de usuario; accessSentAt deja constancia del envío.
+export async function enviarAcceso(patientId: string, actor: Pick<User, "id"> | null): Promise<{ ok: true; canal: string } | { ok: false; error: string }> {
   const p = await prisma.patient.findUniqueOrThrow({ where: { id: patientId } });
   if (p.status !== "ACEPTADO") return { ok: false, error: "El paciente aún no ha aceptado los documentos" };
   const dni = dniTitular(p);
@@ -49,8 +51,25 @@ export async function enviarAcceso(patientId: string, actor: Pick<User, "id">): 
   }
   if (!canal) return { ok: false, error: "No se pudo enviar por WhatsApp y no hay email. Revisa la configuración de ManyChat o añade un email." };
   await prisma.patient.update({ where: { id: patientId }, data: { accessSentAt: new Date() } });
-  await auditar(actor.id, "patient.acceso_enviado", patientId, { canal });
+  if (actor) await auditar(actor.id, "patient.acceso_enviado", patientId, { canal });
   return { ok: true, canal };
+}
+
+// Envío automático del acceso cuando la ficha queda lista (aceptación completada
+// y DNI relleno, en cualquier orden). No rompe el flujo que lo llama: si no
+// procede o falla, devuelve null y el profesional conserva el botón de enviar.
+export async function enviarAccesoSiProcede(patientId: string): Promise<string | null> {
+  try {
+    const p = await prisma.patient.findUnique({ where: { id: patientId } });
+    if (!p || p.status !== "ACEPTADO" || p.ownerId || p.accessSentAt) return null;
+    const dni = dniTitular(p);
+    if (!dni || !isValidDni(dni)) return null;
+    const r = await enviarAcceso(patientId, null);
+    return r.ok ? r.canal : null;
+  } catch (e) {
+    console.error(`[acceso] envío automático fallido (paciente ${patientId}):`, e instanceof Error ? e.message : e);
+    return null;
+  }
 }
 
 // ---------------------------------------------------------------- paso 1: DNI + móvil → código

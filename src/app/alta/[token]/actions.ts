@@ -10,6 +10,7 @@ import { hashSecreto } from "@/lib/consent/tokens";
 import { OBLIGATORIOS, ORDEN, SLUG, esObligatorio } from "@/lib/consent/tipos";
 import { registrar } from "@/lib/consent/registro";
 import { abrirFichaTrasAceptar, confirmarEnManyChat } from "@/lib/alta";
+import { enviarAccesoSiProcede } from "@/lib/acceso";
 import { ETIQUETAS, manychat } from "@/lib/manychat";
 import { origenPeticion, permitirPublico } from "@/lib/rate-limit";
 
@@ -67,5 +68,7 @@ export async function aceptarAltaWebAction(formData: FormData) {
   await confirmarEnManyChat(inv!.id);
   if (marketing === "acepto" && inv!.manychatSubscriberId)
     await manychat().ponerEtiqueta(inv!.manychatSubscriberId, ETIQUETAS.marketingOk).catch(() => {});
+  // Si el DNI ya está relleno, el acceso al perfil sale solo.
+  await enviarAccesoSiProcede(inv!.patientId);
   redirect(`/alta/${encodeURIComponent(token)}`);
 }

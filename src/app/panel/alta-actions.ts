@@ -6,7 +6,7 @@ import type { ConsentType, User } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { requireRole } from "@/lib/auth";
 import { auditar, crearPreAlta, leerPreAlta, nuevoEnlaceWeb, puedeVerFicha, reenviar, reenviarEmailAlta, revocar, tratamientoPermitido } from "@/lib/alta";
-import { enviarAcceso } from "@/lib/acceso";
+import { enviarAcceso, enviarAccesoSiProcede } from "@/lib/acceso";
 import { isValidDni, normalizeDni } from "@/lib/contacto";
 import { ORDEN, esObligatorio } from "@/lib/consent/tipos";
 import { origenPeticion } from "@/lib/rate-limit";
@@ -88,7 +88,15 @@ export async function guardarDniAction(formData: FormData) {
     data: { dni: dni || null, ...(p.isMinor ? { tutorDni: tutorDni || null } : {}) },
   });
   await auditar(u.id, "patient.edit", p.id, { campos: p.isMinor ? ["dni", "tutorDni"] : ["dni"] });
-  volver(back, "ok", "Datos guardados");
+  // Ficha completa (documentos aceptados + DNI): el acceso al perfil sale solo.
+  const canal = await enviarAccesoSiProcede(p.id);
+  volver(
+    back,
+    "ok",
+    canal
+      ? `Datos guardados. Acceso al perfil enviado por ${canal === "whatsapp" ? "WhatsApp" : "email"}`
+      : "Datos guardados"
+  );
 }
 
 export async function enviarAccesoAction(formData: FormData) {
