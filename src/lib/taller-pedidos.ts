@@ -1,7 +1,8 @@
 // Pedidos del taller tal como los ve Ortosend Taller (programa del taller): la lista en el
-// mismo orden que el tablero del panel y el detalle con la pauta por pie, la ficha técnica
-// y la hoja de confección. Solo lo necesario para fabricar (datos mínimos, RGPD).
-import type { Case, Clinic, ConsumoMaterial, HojaConfeccion, Incident, LoteMaterial, Material, Patient, Payment, User } from "@prisma/client";
+// mismo orden que el tablero del panel y el detalle con la pauta por pie, la ficha técnica,
+// la hoja de confección y el expediente (receta, vídeos y fotos, cuestionario y exploración),
+// lo mismo que el taller ve en la web. Cada consulta queda registrada (RGPD).
+import type { Case, Clinic, ConsumoMaterial, HojaConfeccion, Incident, LoteMaterial, Material, MediaAsset, Patient, Payment, Prescription, User } from "@prisma/client";
 import { prisma } from "./db";
 import { audit } from "./cases";
 import { nombreCompleto } from "./nombre";
@@ -9,6 +10,8 @@ import { PROD_STEPS, TALLER_STATES, fichaTecnica, ordenTaller, prodStepIndex, re
 import type { Questionnaire } from "./questionnaire";
 import type { Exam } from "./exploracion";
 import { ErrorTaller, ajustesTaller, materialesTaller } from "./taller-ops";
+import { tratamientoPermitido } from "./alta";
+import { escaneoJson, estudioJson, expedienteSecciones, recetaJson } from "./expediente-texto";
 
 type Fila = Case & { patient: Patient; clinic: Clinic; payment: Payment | null; incidents: Incident[] };
 
@@ -84,11 +87,11 @@ export async function detallePedido(caseId: string, user: Pick<User, "id" | "rol
   const c = await prisma.case.findUnique({
     where: { id: caseId },
     include: {
-      patient: true,
+      patient: { include: { owner: { select: { name: true, phone: true, email: true } } } },
       clinic: true,
       payment: true,
       incidents: true,
-      capture: true,
+      capture: { include: { media: true } },
       prescription: true,
       hoja: true,
       consumos: { include: { lote: true, material: true }, orderBy: { createdAt: "asc" } },
@@ -107,6 +110,36 @@ export async function detallePedido(caseId: string, user: Pick<User, "id" | "rol
     ficha: fichaTecnica(q, e, c),
     hoja: hojaJson(c.hoja, veCostes(user)),
     materiales: c.consumos.map(consumoJson),
+    ...expedienteDe(c, q, e),
+  };
+}
+
+// Receta, capturas del estudio, cuestionario y exploración. Sin consentimientos en vigor no se
+// enseña nada clínico (igual que en la web).
+type ConExpediente = Fila & {
+  patient: Parameters<typeof escaneoJson>[1];
+  capture: { media: MediaAsset[] } | null;
+  prescription: Prescription | null;
+};
+
+function expedienteDe(c: ConExpediente, q: Questionnaire | null, e: Exam | null) {
+  if (!tratamientoPermitido(c.patient)) {
+    return {
+      receta: null,
+      estudio: null,
+      expediente: null,
+      escaneo: null,
+      aviso: "El paciente no tiene en vigor los consentimientos: no se puede ver su expediente.",
+    };
+  }
+  const media = c.capture?.media ?? [];
+  return {
+    diagnostico: c.prescription?.diagnosis ?? null,
+    receta: recetaJson(c.id, c.prescription),
+    estudio: estudioJson(media),
+    expediente: expedienteSecciones(q, e, c.reason),
+    escaneo: escaneoJson(c, c.patient, media, c.clinic.name),
+    aviso: null,
   };
 }
 

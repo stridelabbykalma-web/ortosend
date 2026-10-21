@@ -15,6 +15,8 @@ import { GET as verAjustes, PUT as guardarAjustes } from "@/app/api/taller/ajust
 import { POST as registrarMaterial } from "@/app/api/taller/pedidos/[id]/materiales/route";
 import { POST as anular } from "@/app/api/taller/consumos/[id]/anular/route";
 import { GET as buscarLote } from "@/app/api/taller/lotes/route";
+import { GET as verMedia } from "@/app/api/media/[id]/route";
+import { GET as verRecetaPdf } from "@/app/api/rx-pdf/[caseId]/route";
 
 // Foto de la etiqueta (un JPEG mínimo) + lo leído del código de barras.
 const formMaterial = (token: string, campos: Record<string, string>, conFoto = true) => {
@@ -126,6 +128,93 @@ describe("pedidos", () => {
     expect(d.hoja).toBeNull();
     const log = await prisma.auditLog.findFirst({ where: { userId: tallerId, action: "case.view" }, orderBy: { at: "desc" } });
     expect(log?.detail).toMatchObject({ via: "rectificador" });
+  });
+});
+
+describe("expediente del pedido (receta, vídeos y fotos, cuestionario y exploración)", () => {
+  let videoId = "";
+  beforeAll(async () => {
+    await prisma.case.update({ where: { id: casos.reciente }, data: { reason: "Dolor de talón al correr" } });
+    await prisma.prescription.update({
+      where: { caseId: casos.reciente },
+      data: { pdfBytes: Buffer.from("%PDF-1.4 receta"), pdfSha256: "abc", assessment: "Pronación marcada" },
+    });
+    const captura = await prisma.capture.create({
+      data: { caseId: casos.reciente, questionnaire: {}, physicalExam: {} },
+    });
+    const video = await prisma.mediaAsset.create({
+      data: { captureId: captura.id, kind: "video_post_descalzo", url: "", confirmedAt: new Date(), meta: { seconds: 6, mime: "video/webm" } },
+    });
+    videoId = video.id;
+    await prisma.mediaAsset.update({
+      where: { id: video.id },
+      data: { url: `/api/media/${video.id}`, blob: { create: { mime: "video/webm", bytes: Buffer.from([0x1a, 0x45, 0xdf, 0xa3]) } } },
+    });
+    const foto = await prisma.mediaAsset.create({
+      data: {
+        captureId: captura.id,
+        kind: "foto_posterior",
+        url: "",
+        confirmedAt: new Date(),
+        meta: { helbing: { dcha: { deg: 7, lado: "valgo" }, izq: { deg: 4, lado: "neutro" } } },
+      },
+    });
+    await prisma.mediaAsset.update({
+      where: { id: foto.id },
+      data: { url: `/api/media/${foto.id}`, blob: { create: { mime: "image/jpeg", bytes: Buffer.from([0xff, 0xd8, 0xff, 0xd9]) } } },
+    });
+    await prisma.mediaAsset.create({
+      data: { captureId: captura.id, kind: "scan_espumas", url: "", confirmedAt: new Date(), meta: { proyecto: "Reciente 600111222" } },
+    });
+  });
+
+  it("el detalle trae la receta, los vídeos y fotos con su análisis, el cuestionario y el escaneo", async () => {
+    const d = await (await detalle(pet("GET", token), conId(casos.reciente))).json();
+    expect(d.aviso).toBeNull();
+    expect(d.diagnostico).toBe("Pie plano");
+    expect(d.receta).toMatchObject({
+      prescriptor: "Dra. Receta",
+      colegiado: "123",
+      diagnostico: "Pie plano",
+      valoracion: "Pronación marcada",
+      pauta: "Plantilla EVA con relleno de arco",
+      pautaIzq: "Skive medial 4 mm",
+      pdf: `/api/rx-pdf/${casos.reciente}`,
+    });
+    expect(d.estudio.map((m: { tipo: string }) => m.tipo)).toEqual(["video", "foto"]);
+    expect(d.estudio[0]).toMatchObject({ url: `/api/media/${videoId}`, segundos: 6, mime: "video/webm" });
+    expect(d.estudio[1].resumen.join(" ")).toMatch(/Helbing.*7° valgo/);
+    expect(d.expediente[0]).toMatchObject({ titulo: "Cuestionario clínico" });
+    expect(d.expediente[0].filas[0]).toEqual(["Motivo indicado al reservar", "Dolor de talón al correr"]);
+    expect(d.escaneo).toEqual({ proyecto: "Reciente 600111222", clinica: "Clínica Taller" });
+  });
+
+  it("sin consentimientos en vigor no trae nada clínico", async () => {
+    const d = await (await detalle(pet("GET", token), conId(casos.revocado))).json();
+    expect(d.receta).toBeNull();
+    expect(d.estudio).toBeNull();
+    expect(d.expediente).toBeNull();
+    expect(d.aviso).toMatch(/consentimientos/);
+  });
+
+  it("el vídeo y la receta firmada se bajan con el token del programa, y queda registrado", async () => {
+    const v = await verMedia(pet("GET", token), conId(videoId));
+    expect(v.status).toBe(200);
+    expect(v.headers.get("content-type")).toBe("video/webm");
+    expect(new Uint8Array(await v.arrayBuffer())).toEqual(new Uint8Array([0x1a, 0x45, 0xdf, 0xa3]));
+    const r = await verRecetaPdf(pet("GET", token), { params: Promise.resolve({ caseId: casos.reciente }) });
+    expect(r.status).toBe(200);
+    expect(r.headers.get("content-type")).toBe("application/pdf");
+    expect(await r.text()).toMatch(/^%PDF/);
+    const acciones = (await prisma.auditLog.findMany({ where: { userId: tallerId, action: { in: ["media.view", "prescription.pdf"] } } }))
+      .map((l) => l.action);
+    expect(acciones).toEqual(expect.arrayContaining(["media.view", "prescription.pdf"]));
+  });
+
+  it("sin token o con un token falso no se baja nada", async () => {
+    expect((await verMedia(pet("GET"), conId(videoId))).status).toBe(401);
+    expect((await verMedia(pet("GET", "falso"), conId(videoId))).status).toBe(401);
+    expect((await verRecetaPdf(pet("GET", "falso"), { params: Promise.resolve({ caseId: casos.reciente }) })).status).toBe(401);
   });
 });
 

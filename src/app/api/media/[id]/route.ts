@@ -1,16 +1,17 @@
 // Servido autenticado de capturas (datos de salud): mismo control de acceso
-// que el expediente + registro de acceso RGPD en AuditLog.
+// que el expediente + registro de acceso RGPD en AuditLog. Con la sesión de la web
+// o con el token de Ortosend Taller (programa del taller).
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { getSessionUser } from "@/lib/auth";
+import { usuarioPeticion } from "@/lib/api-taller";
 import { audit } from "@/lib/cases";
 import { esCentral } from "@/lib/rx-route";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const user = await getSessionUser();
+export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const user = await usuarioPeticion(req);
   if (!user) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
   const { id } = await params;
   const asset = await prisma.mediaAsset.findUnique({
