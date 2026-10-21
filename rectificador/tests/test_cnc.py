@@ -81,7 +81,7 @@ def test_gcode_como_fusion(tirada, cfg):
             assert linea.endswith(")") and "(" not in linea[1:-1] and ")" not in linea[1:-1]
     # Por cada pie: desbaste, acabado y contorno, en ese orden (como Fusion).
     fases = [l for l in lineas if l.startswith(("(2D", "(Desbaste", "(Paralelo"))]
-    assert [f.split()[0] for f in fases] == ["(Desbaste", "(Paralelo", "(2D"] * 4
+    assert [f.split()[0] for f in fases] == ["(Desbaste"] * 4 + ["(Paralelo"] * 4 + ["(2D"] * 4
 
 
 def test_movimientos_dentro_de_la_plancha(tirada, cfg):
@@ -190,7 +190,7 @@ def test_mapa_de_la_tirada(tirada, tmp_path):
     # Una ficha por pie, numeradas en el mismo orden que «Pieza N» del .nc.
     assert [f.numero for f in tirada.fichas] == [1, 2, 3, 4]
     for f in tirada.fichas:
-        assert f"(Pieza {f.numero}: {cnc.texto_cnc(f.nombre)}" in tirada.gcode
+        assert f" - Pieza {f.numero}: {cnc.texto_cnc(f.nombre)}" in tirada.gcode
         assert 0 <= f.x[0] < f.x[1] <= 600 and 0 <= f.y[0] < f.y[1] <= 500
         assert abs(np.hypot(*f.dedos) - 1) < 1e-6
         if f.pieza.giro == 0:
@@ -319,11 +319,12 @@ def test_gcode_con_ajustes_cambiados(piezas_sinteticas, cfg):
 
 
 def test_orden_como_fusion_contorno_al_final(tirada):
-    """Como el ejemplo de Fusion: desbaste, acabado y el contorno al final de cada pie (la escayola trabaja
-    entera mientras se desbasta)."""
+    """Como el ejemplo de Fusion: primero el desbaste de todos los pies, después el paralelo y el contorno al
+    final (la escayola trabaja entera mientras se desbasta)."""
     fases = [l.split()[0][1:] for l in tirada.gcode.splitlines()
              if l.startswith(("(Desbaste", "(Paralelo", "(2D Contorneado"))]
-    assert fases == ["Desbaste", "Paralelo", "2D"] * (len(fases) // 3) and len(fases) >= 6
+    n = len(fases) // 3
+    assert n >= 2 and fases == ["Desbaste"] * n + ["Paralelo"] * n + ["2D"] * n
 
 
 def test_al_empezar_junto_al_borde_no_baja_en_rapido():
@@ -333,3 +334,33 @@ def test_al_empezar_junto_al_borde_no_baja_en_rapido():
     w.bajar_a(10.0, 20.0, -12.0, -10.5, 0.0)
     assert "G0 Z1.000" in w.lineas
     assert not any(l.startswith("G0") and "Z-" in l for l in w.lineas)
+
+
+def test_desbaste_en_niveles_planos(tirada):
+    """Como el desbaste de Fusion: corta a Z constante (no sigue la forma del pie como el paralelo)."""
+    plano = total = 0.0
+    for fase, tipo, a, b in _por_fase(tirada.gcode):
+        if fase != "Desbaste" or tipo != "G1" or a["Y"] != b["Y"]:  # los cortes van a lo largo de X
+            continue
+        largo = abs(b["X"] - a["X"])
+        total += largo
+        if abs(b["Z"] - a["Z"]) < 1e-6:
+            plano += largo
+    assert total > 0 and plano / total > 0.9
+
+
+def _bajadas_verticales(gcode, minimo=2.0):
+    """Bajadas en vertical (solo Z) de más de `minimo` mm dentro del desbaste."""
+    return sum(1 for fase, tipo, a, b in _por_fase(gcode)
+               if fase == "Desbaste" and tipo == "G1" and a["X"] == b["X"] and a["Y"] == b["Y"]
+               and a["Z"] - b["Z"] > minimo)
+
+
+def test_desbaste_entra_en_helice_como_fusion(piezas_sinteticas, cfg):
+    """Como el ejemplo de Fusion: el desbaste entra en el yeso bajando en hélice, no clavando la fresa."""
+    vertical = cnc.generar(piezas_sinteticas("A"), 300, 400, 40, 1.0, 12.5, dict(cfg, radio_helice=0.0))
+    helice = cnc.generar(piezas_sinteticas("A"), 300, 400, 40, 1.0, 12.5, cfg)
+    assert _bajadas_verticales(helice.gcode) < 0.75 * _bajadas_verticales(vertical.gcode)
+    en_xyz = sum(1 for fase, tipo, a, b in _por_fase(helice.gcode)
+                 if fase == "Desbaste" and a["X"] != b["X"] and a["Y"] != b["Y"] and b["Z"] < a["Z"])
+    assert en_xyz > 100

@@ -1,5 +1,14 @@
 # Novedades de Ortosend Taller
 
+## 0.8.2
+- **El fresado va como en Fusion, en toda la plancha**: primero el **desbaste grande** de todos los pies
+  (quita la carga), después el **paralelo** de todos y el **contorno** al final.
+- **Desbaste en niveles planos cada 3 mm** (como el «Desbaste de desfase 3D» de Fusion): ya no sigue la
+  forma del pie (por eso parecía el paralelo); vacía la escayola por capas y deja escalones que quita el
+  paralelo.
+- **Entra en el yeso en espiral** (hélice de 3 mm de radio y 2°, como Fusion) donde cabe, en vez de clavar
+  la fresa en vertical. Se cambia en *Ajustes de la CNC* (radio 0 = en vertical, más rápido).
+
 ## 0.8.1
 - **El contorno, al final** (como en vuestro Fusion): cada pie se fresa ahora en el orden desbaste →
   acabado → contorno, así la escayola trabaja entera y firme casi todo el tiempo. El contorno sigue sin

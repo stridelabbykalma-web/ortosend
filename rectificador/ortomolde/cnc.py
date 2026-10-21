@@ -9,9 +9,10 @@ Fusion del taller (`molde_yeso.nc`).
 - Cada pie se fresa con su parte más alta justo debajo de la cara de arriba de la plancha.
 - Fresa de punta de bola (Ø25): se calcula dónde debe ir la PUNTA para que la bola toque el molde
   sin comérselo (superficie desplazada).
-- Por cada pie, tres fases y en el mismo orden que Fusion (el contorno al final, para que la escayola
-  trabaje entera y firme mientras se desbasta y se da el acabado):
-  1. DESBASTE por capas (`bajada_por_pasada`) dentro de la silueta, dejando `sobrante_desbaste`.
+- Tres fases y en el mismo orden que Fusion, cada una en todos los pies de la plancha antes de la siguiente
+  (el contorno al final, para que la escayola trabaje entera y firme mientras se desbasta y se da el acabado):
+  1. DESBASTE grande en niveles planos de Z cada `bajada_por_pasada` mm (como el «Desbaste de desfase 3D»
+     de Fusion): quita la carga sin seguir la forma del pie; deja escalones y `sobrante_desbaste`.
   2. ACABADO en líneas paralelas a X separadas `paso_acabado` mm.
   3. CONTORNO: se rodea la silueta del pie bajando en espiral (`bajada_contorno` mm por vuelta)
      hasta dejar `suelo_contorno` mm de escayola debajo. El pie queda como una isla con la pared
@@ -21,6 +22,7 @@ Fusion del taller (`molde_yeso.nc`).
 
 from __future__ import annotations
 
+import math
 import unicodedata
 from dataclasses import dataclass, field
 
@@ -582,6 +584,23 @@ class _Escritor:
     def subir(self, z=None):
         self.rapido(z=self.z_paso if z is None else z)
 
+    def helice(self, cx: float, cy: float, z_ini: float, z_fin: float, radio: float, grados: float,
+               avance: float, por_vuelta: int = 24) -> None:
+        """Entra en el material bajando en hélice alrededor de (cx, cy), como el desbaste de Fusion, en vez
+        de clavar la fresa en vertical. Empieza y acaba en la posición actual (que está en la
+        circunferencia), con vueltas enteras. En G1 cortos (la prueba en vacío y las comprobaciones los leen)."""
+        x0, y0 = float(self.pos[0]), float(self.pos[1])
+        a0 = math.atan2(y0 - cy, x0 - cx)
+        baja = 2 * math.pi * radio * math.tan(math.radians(grados))
+        vueltas = max(1, math.ceil((z_ini - z_fin) / baja - 1e-9))
+        self.corte(x0, y0, z_ini, avance)
+        n = vueltas * por_vuelta
+        for k in range(1, n + 1):
+            a = a0 + 2 * math.pi * k / por_vuelta
+            z = z_ini + (z_fin - z_ini) * k / n
+            x, y = (x0, y0) if k % por_vuelta == 0 else (cx + radio * math.cos(a), cy + radio * math.sin(a))
+            self.corte(x, y, z, avance)
+
 
 @dataclass
 class Ficha:
@@ -661,15 +680,17 @@ def _contorno(w: _Escritor, pts: np.ndarray, H: float, suelo: float, cfg: dict) 
 
 
 def _desbaste(w: _Escritor, punta, c: _Colocada, paso, H, cfg, radio) -> int:
-    """Desbaste por capas dentro de la silueta, en líneas a lo largo de X."""
+    """Desbaste «grande» como el de Fusion: en niveles planos de Z (`bajada_por_pasada`), en líneas a lo largo
+    de X. En cada nivel solo se vacía lo que queda por encima de él donde el molde está más abajo; la fresa no
+    sigue la forma del pie (eso lo hace el paralelo) y quedan escalones que quita el acabado."""
     sub = punta[c.y0:c.y1, c.x0:c.x1]
     objetivo = sub + cfg["sobrante_desbaste"]
     r = int(np.ceil(radio / paso))
-    techo = ndimage.maximum_filter(objetivo, size=2 * r + 1)  # lo más alto que puede quedar cerca
     dentro = c.sil
     material = np.where(dentro, float(H), -np.inf)
     # Donde la bola llega a fuera de la silueta todavía hay escayola entera (el contorno va al final).
     al_borde = _cerca_del_borde(dentro, r)
+    rh = int(np.ceil(cfg.get("radio_helice", 0.0) / paso))
     filas = list(range(0, sub.shape[0], max(1, int(round(cfg["paso_desbaste"] / paso)))))
     if filas[-1] != sub.shape[0] - 1:
         filas.append(sub.shape[0] - 1)
@@ -680,16 +701,19 @@ def _desbaste(w: _Escritor, punta, c: _Colocada, paso, H, cfg, radio) -> int:
     niveles = [float(z) for z in np.arange(H - baj, fondo_min, -baj)] + [fondo_min]
     enlace_max = int(round((cfg["paso_desbaste"] + 3) / paso))
     capas = 0
-    anterior = float(H)
     for nivel in niveles:
-        corte = np.maximum(nivel, objetivo)
+        corte = np.maximum(nivel, objetivo)  # lo más bajo que puede ir la punta en este nivel sin tocar el molde
+        vaciar = (material - nivel > 0.05) & (objetivo <= nivel)
+        puede = dentro & (objetivo <= nivel)  # donde la punta puede ir al nivel (para la hélice)
+        # Lo más alto que hay cerca (escalones de niveles anteriores): para bajar en rápido sin tocarlo.
+        alto_cerca = ndimage.maximum_filter(material, size=2 * (r + rh) + 1)
         hubo = False
         sentido = 1
         ultimo = None  # (fila, columna) donde terminó el último tramo de esta capa
         for j in filas:
             prof = corte[j]
             y = (c.y0 + j) * paso
-            for a, b in _tramos(material[j] - prof > 0.05, int(round(10 / paso)))[::sentido]:
+            for a, b in _tramos(vaciar[j], int(round(3 / paso)))[::sentido]:
                 rango = np.arange(a, b + 1)[::sentido]
                 k0 = rango[0]
                 if ultimo is not None and abs(j - ultimo[0]) <= enlace_max and abs(k0 - ultimo[1]) <= enlace_max:
@@ -701,8 +725,22 @@ def _desbaste(w: _Escritor, punta, c: _Colocada, paso, H, cfg, radio) -> int:
                     w.corte(xs[k0], y, zl - H, cfg["avance_entrada"])
                     w.corte(xs[k0], y, prof[k0] - H, cfg["avance_entrada"])
                 else:
-                    libre = min(float(H), max(anterior, techo[j, k0]) + 0.3)
-                    w.bajar_a(xs[k0], y, prof[k0] - H, libre - H, 0.0 if al_borde[j, k0] else None)
+                    libre = min(float(H), max(alto_cerca[j, k0], prof[k0]) + 0.3)
+                    h, centro = _sitio_helice(puede, j, rango, sentido, paso, cfg) \
+                        if libre - nivel > 0.5 else (0, None)
+                    if centro is None:  # no cabe la hélice (o casi no hay que bajar): en vertical, despacio
+                        w.bajar_a(xs[k0], y, prof[k0] - H, libre - H, 0.0 if al_borde[j, k0] else None)
+                    else:
+                        # Como Fusion: baja en hélice donde cabe, vacía hacia atrás hasta el principio del
+                        # tramo y desde ahí sigue el tramo entero.
+                        kh = rango[h]
+                        lib = min(float(H), max(alto_cerca[j, kh], nivel) + 0.3)
+                        w.bajar_a(xs[kh], y, lib - H, lib - H, 0.0 if al_borde[j, kh] else None)
+                        w.helice((c.x0 + centro[1]) * paso, (c.y0 + centro[0]) * paso, lib - H, nivel - H,
+                                 cfg["radio_helice"], cfg.get("rampa_grados", 2.0), cfg["avance_entrada"])
+                        atras = rango[h::-1]
+                        for k in atras[_simplificar(xs[atras] * -sentido, prof[atras])][1:]:
+                            w.corte(xs[k], y, prof[k] - H, cfg["avance_desbaste"])
                 for k in rango[_simplificar(xs[rango] * sentido, prof[rango])]:
                     w.corte(xs[k], y, prof[k] - H, cfg["avance_desbaste"])
                 ultimo = (j, rango[-1])
@@ -710,10 +748,36 @@ def _desbaste(w: _Escritor, punta, c: _Colocada, paso, H, cfg, radio) -> int:
             sentido = -sentido
         if hubo:
             capas += 1
-            material = np.minimum(material, np.where(dentro, corte, -np.inf))
-        anterior = nivel
+            material = np.where(vaciar, nivel, material)
     w.subir()
     return capas
+
+
+def _sitio_helice(puede: np.ndarray, j: int, rango: np.ndarray, sentido: int, paso: float,
+                  cfg: dict) -> tuple[int, tuple[float, float] | None]:
+    """Primer punto del tramo (índice en `rango`) donde cabe la hélice de entrada, y su centro (fila, columna)."""
+    if cfg.get("radio_helice", 0.0) <= 0:
+        return 0, None
+    for h in range(0, len(rango), max(1, int(round(1.0 / paso)))):
+        centro = _centro_helice(puede, j, int(rango[h]), sentido, cfg["radio_helice"] / paso)
+        if centro is not None:
+            return h, centro
+    return 0, None
+
+
+def _centro_helice(puede: np.ndarray, j: int, k: int, sentido: int, r: float) -> tuple[float, float] | None:
+    """Centro (en celdas) de una hélice que pasa por (j, k) con toda la vuelta donde la punta puede bajar al
+    nivel sin tocar el molde. None si no cabe."""
+    angulos = np.linspace(0, 2 * np.pi, 48, endpoint=False)
+    for dj, dk in ((0, sentido), (1, 0), (-1, 0), (0, -sentido)):
+        cj, ck = j + dj * r, k + dk * r
+        jj = np.rint(cj + r * np.sin(angulos)).astype(int)
+        kk = np.rint(ck + r * np.cos(angulos)).astype(int)
+        if jj.min() < 0 or kk.min() < 0 or jj.max() >= puede.shape[0] or kk.max() >= puede.shape[1]:
+            continue
+        if puede[jj, kk].all():
+            return cj, ck
+    return None
 
 
 def _cerca_del_borde(sil: np.ndarray, r: int) -> np.ndarray:
@@ -837,32 +901,46 @@ def generar(piezas: list[Pieza], ancho: float, largo: float, alto: float, paso: 
     numero = {id(p): n for n, p in enumerate(orden_fresado(puestas, paso))}
     orden = sorted(colocadas, key=lambda c: numero[id(c.pieza)])
     tiempos = {"contorno": 0.0, "desbaste": 0.0, "acabado": 0.0, "movimientos": 0.0}
-    capas = lineas = vueltas = 0
+    capas_de: list[int] = []
+    lineas_de: list[int] = []
+    vueltas_de: list[int] = []
     fichas = []
+    t_pieza = {id(c): 0.0 for c in orden}
+
+    def fase(c: _Colocada, n: int, nombre: str, hacer) -> None:
+        """Una fase de una pieza: comentario con la fase delante (como Fusion) y su tiempo."""
+        p = c.pieza
+        a, b = p.forma()
+        t0 = w.tiempo
+        w.lineas.append(comentario(f"{nombre} - Pieza {n}: {p.nombre} - X {p.x * paso:.0f}-{(p.x + b - 1) * paso:.0f}, "
+                                   f"Y {p.y * paso:.0f}-{(p.y + a - 1) * paso:.0f}"))
+        hacer()
+        w.rapido(z=zseg)
+        t_pieza[id(c)] += w.tiempo - t0
+
+    # Como Fusion, operación por operación en toda la plancha: primero el desbaste grande de todos los pies
+    # (quita la carga), después el paralelo y el contorno al final (la escayola trabaja entera y firme).
+    t0 = w.tiempo
+    for n, c in enumerate(orden, 1):
+        fase(c, n, f"Desbaste en niveles de {cfg['bajada_por_pasada']:g} mm",
+             lambda c=c: capas_de.append(_desbaste(w, punta, c, paso, H, cfg, radio)))
+    tiempos["desbaste"] = w.tiempo - t0
+    t0 = w.tiempo
+    for n, c in enumerate(orden, 1):
+        fase(c, n, f"Paralelo - acabado cada {cfg['paso_acabado']:g} mm",
+             lambda c=c: lineas_de.append(_acabado(w, punta, c, paso, H, cfg)))
+    tiempos["acabado"] = w.tiempo - t0
+    t0 = w.tiempo
+    for n, c in enumerate(orden, 1):
+        if c.contorno is not None and cfg.get("contorno", True):
+            fase(c, n, "2D Contorneado", lambda c=c: vueltas_de.append(_contorno(w, c.contorno, H, c.suelo, cfg)))
+    tiempos["contorno"] = w.tiempo - t0
+    capas, lineas, vueltas = max(capas_de, default=0), sum(lineas_de), sum(vueltas_de)
     for n, c in enumerate(orden, 1):
         p = c.pieza
         a, b = p.forma()
-        t_pieza = w.tiempo
-        w.lineas.append(comentario(f"Pieza {n}: {p.nombre} - X {p.x * paso:.0f}-{(p.x + b - 1) * paso:.0f}, "
-                                   f"Y {p.y * paso:.0f}-{(p.y + a - 1) * paso:.0f}"))
-        t0 = w.tiempo
-        w.lineas.append(comentario(f"Desbaste en capas de {cfg['bajada_por_pasada']:g} mm"))
-        capas = max(capas, _desbaste(w, punta, c, paso, H, cfg, radio))
-        tiempos["desbaste"] += w.tiempo - t0
-        t0 = w.tiempo
-        w.lineas.append(comentario(f"Paralelo - acabado cada {cfg['paso_acabado']:g} mm"))
-        lineas += _acabado(w, punta, c, paso, H, cfg)
-        tiempos["acabado"] += w.tiempo - t0
-        t0 = w.tiempo
-        w.lineas.append("(2D Contorneado)")
-        if c.contorno is not None and cfg.get("contorno", True):
-            vueltas += _contorno(w, c.contorno, H, c.suelo, cfg)
-        tiempos["contorno"] += w.tiempo - t0
-        t0 = w.tiempo
-        w.rapido(z=zseg)
-        tiempos["movimientos"] += w.tiempo - t0
         fichas.append(Ficha(n, p, c.contorno, (p.x * paso, (p.x + b - 1) * paso), (p.y * paso, (p.y + a - 1) * paso),
-                            p.alto, c.suelo, w.tiempo - t_pieza, _hacia_dedos(p)))
+                            p.alto, c.suelo, t_pieza[id(c)], _hacia_dedos(p)))
     w.rapido(z=zseg)
     w.rapido(x=0.0, y=0.0)
     w.lineas += ["M5", "M30"]

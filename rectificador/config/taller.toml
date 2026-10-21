@@ -69,10 +69,13 @@ avance_rapido = 3000         # mm/min (solo para estimar el tiempo; los G0 los h
 altura_seguridad = 15.0      # mm sobre la plancha para ir de un pie a otro (como Fusion)
 altura_paso = 2.0            # mm sobre la plancha para saltar dentro de un mismo pie
 rebaje_superior = 0.5        # mm por debajo de la cara de arriba queda lo más alto del pie
-# 1) Desbaste por capas dentro de la silueta.
-bajada_por_pasada = 5.0      # mm que baja cada capa
+# 1) Desbaste grande en niveles planos (como Fusion), dentro de la silueta. Quita la carga primero.
+bajada_por_pasada = 3.0      # mm entre niveles del desbaste (Fusion: cada 3 mm)
 paso_desbaste = 7.0          # mm entre líneas del desbaste (con la bola de 25 deja crestas de 0,5 mm)
 sobrante_desbaste = 0.5      # mm que deja el desbaste para el acabado
+# Entrada en el material del desbaste: en hélice (como Fusion), no clavando la fresa en vertical.
+radio_helice = 3.0           # mm de radio de la hélice (Fusion: ~3,1). 0 = bajar en vertical
+rampa_grados = 2.0           # inclinación de la hélice (Fusion: 2°): baja ~0,66 mm por vuelta
 # 2) Acabado en líneas paralelas a X.
 paso_acabado = 1.75          # mm entre líneas (con la bola de 25 deja crestas de 0,03 mm)
 # 3) Contorno, al final como en Fusion: rodea la silueta del pie (pared vertical, sin base plana
