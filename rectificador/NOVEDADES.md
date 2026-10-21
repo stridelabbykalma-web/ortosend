@@ -1,5 +1,12 @@
 # Novedades de Ortosend Taller
 
+## 0.8.5
+- **Más rápido para escayola celular** (es blanda): desbaste y contorno a 4000 mm/min (antes 2500), entrada
+  2000 (1500), bajada 1000 (800), acabado 4500 (3000) y el desbaste baja 5 mm por nivel (antes 3). Con un
+  par real la tirada pasa de unos 41 a unos 21 min. Las revoluciones siguen en 10.000.
+- Si la máquina vibra, hace ruido raro o los moldes salen desplazados, bajad las velocidades un 20 % en
+  *Ajustes de la CNC*. Si alguien ya había cambiado algún valor ahí, se le respeta el suyo.
+
 ## 0.8.4
 - **Desbaste en cajeras, mucho más rápido** (como Fusion): en cada nivel de 3 mm la fresa da vueltas
   paralelas al borde de dentro hacia fuera, entrando una sola vez por zona (en espiral, o en rampa si la zona

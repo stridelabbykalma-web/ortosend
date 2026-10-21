@@ -58,20 +58,21 @@ taco = 6.0
 # Salida directa para la CNC (Two Trees TTC 6050, archivo .nc por USB/tarjeta), con la misma
 # estrategia y formato que el ejemplo de Fusion del taller (molde_yeso.nc).
 # Origen del trabajo: X0 Y0 en la esquina DELANTERA IZQUIERDA de la plancha, Z0 en su cara de ARRIBA.
-# Velocidades copiadas del ejemplo de Fusion (escayola): ajustar tras la 1.ª prueba si hace falta.
-material = "escayola"
+# Velocidades para escayola celular (blanda): más rápidas que las del ejemplo de Fusion (2500 / 1500 / 800 / 3000
+# y capas de 3 mm). Si la máquina vibra o pierde pasos, bajarlas un 20 % en Ajustes de la CNC.
+material = "escayola celular"
 revoluciones = 10000         # rpm del cabezal
-avance_desbaste = 2500       # mm/min cortando en el contorno y el desbaste
-avance_entrada = 1500        # mm/min al entrar en el material y al cambiar de línea
-avance_bajada = 800          # mm/min al bajar en vertical dentro del material
-avance_acabado = 3000        # mm/min en el acabado
+avance_desbaste = 4000       # mm/min cortando en el contorno y el desbaste
+avance_entrada = 2000        # mm/min al entrar en el material y al cambiar de línea
+avance_bajada = 1000         # mm/min al bajar en vertical dentro del material
+avance_acabado = 4500        # mm/min en el acabado
 avance_rapido = 3000         # mm/min (solo para estimar el tiempo; los G0 los hace la máquina)
 altura_seguridad = 15.0      # mm sobre la plancha para ir de un pie a otro (como Fusion)
 altura_paso = 2.0            # mm sobre la plancha para saltar dentro de un mismo pie
 rebaje_superior = 3.0        # mm por debajo de la cara de arriba queda lo más alto del pie: así toda la
                              # cara de arriba se fresa aunque la plancha no esté del todo plana
 # 1) Desbaste grande en cajeras por niveles planos (como Fusion), dentro de la silueta. Quita la carga primero.
-bajada_por_pasada = 3.0      # mm entre niveles del desbaste (Fusion: cada 3 mm)
+bajada_por_pasada = 5.0      # mm entre niveles del desbaste (Fusion: cada 3 mm; con escayola celular, 5)
 paso_desbaste = 7.0          # mm entre vueltas del desbaste (con la bola de 25 deja crestas de 0,5 mm)
 sobrante_desbaste = 0.5      # mm que deja el desbaste para el acabado
 # Entrada en el material del desbaste: en hélice (como Fusion), no clavando la fresa en vertical.
