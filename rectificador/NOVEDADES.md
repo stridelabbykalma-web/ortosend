@@ -1,5 +1,17 @@
 # Novedades de Ortosend Taller
 
+## 0.7.0
+- **Cada persona del taller con su móvil**: entra en la web de Ortosend (**/taller**) con su usuario y ve los
+  mismos post-its. Lo que hace cada uno se ve al momento en todos (aquí se actualiza cada 30 s).
+- **Trazabilidad de materiales (lotes)**: en el móvil, «📷 Escanear material» → foto de la etiqueta de la
+  plancha → se lee el código de barras (lote y caducidad) → se elige el material y el pie → queda en esa
+  plantilla con la foto, quién y cuándo. La misma plancha se reconoce sola la siguiente vez. Un registro
+  equivocado no se borra: se anula con el motivo.
+- Aquí, en la hoja de cada pedido, salen los **materiales usados** con su lote, y van en la hoja impresa.
+- **Confección terminada** ya no pide el material a mano: van los lotes registrados (y sin ellos no se
+  puede terminar).
+- Las personas del taller las da de alta el administrador en la web (Personal del taller).
+
 ## 0.6.0
 - **Ahora se llama Ortosend Taller** y tiene **dos apartados**, arriba: **Fresado** (rectificar el molde,
   tirada y CNC, lo de siempre) y **Confección**. El acceso directo pasa a llamarse «Ortosend Taller».

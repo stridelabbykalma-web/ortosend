@@ -33,6 +33,14 @@ class WebFalsa:
                    "plazo": {"dia": 1, "nivel": "ok", "texto": "Día 1 de 5"}, "rehacer": False, "entrega": "DOMICILIO"},
         }
         self.hojas = {}
+        # Materiales registrados con el móvil (trazabilidad).
+        self.materiales_usados = {"c1": [
+            {"id": "m1", "material": "EVA 3 mm", "lote": "EVA-7781", "caducidad": "2027-12-31", "pies": "par",
+             "foto": "/api/media/x", "quien": "Rosa", "cuando": "2026-10-21T09:15:00Z", "anulado": None},
+            {"id": "m2", "material": "Forro piel", "lote": "F-1", "caducidad": None, "pies": "I", "foto": None,
+             "quien": "Rosa", "cuando": "2026-10-21T09:20:00Z",
+             "anulado": {"quien": "Rosa", "motivo": "No era esa plancha", "cuando": "2026-10-21T09:21:00Z"}},
+        ]}
         self.token = None
         self.peticiones = []
         self.servidor = ThreadingHTTPServer(("127.0.0.1", 0), self._manejador())
@@ -48,6 +56,7 @@ class WebFalsa:
                      {"pie": "D", "nombre": "Derecho", "pauta": "EVA con relleno de arco", "especifica": False, "datos": []}]
         p["ficha"] = [["Talla de calzado (EU)", "39"]]
         p["hoja"] = self.hojas.get(id_)
+        p["materiales"] = self.materiales_usados.get(id_, [])
         return p
 
     def responder(self, metodo, ruta, cabeceras, cuerpo):
@@ -90,8 +99,8 @@ class WebFalsa:
             if partes[2] == "confeccion":
                 if p["fase"] != "CONFECCION":
                     return 409, {"error": "El caso no está en confección"}
-                if not cuerpo.get("material", "").strip():
-                    return 400, {"error": "Registra el material/lote para trazabilidad"}
+                if not [m for m in self.materiales_usados.get(id_, []) if not m["anulado"]]:
+                    return 409, {"error": "Registra antes los materiales usados"}
                 p.update(estado="CALIDAD", material=cuerpo["material"])
                 del self.pedidos[id_]
                 return 200, {"ok": True, "numero": p["numero"], "estado": "CALIDAD"}
@@ -223,9 +232,13 @@ def test_apartados_y_tablero_de_postits(falsa, tmp_path, monkeypatch):
     pdf = tmp_path / "hoja.pdf"
     c.guardar_pdf(str(pdf))
     assert pdf.stat().st_size > 1000 and "€" not in c.html_hoja()
-    # Confección terminada → sale del tablero.
-    monkeypatch.setattr(QInputDialog, "getText", staticmethod(lambda *a, **k: ("EVA lote M-9", True)))
-    c.marcar_terminado()
+    # Materiales registrados con el móvil (trazabilidad), con el anulado tachado.
+    texto = c.texto_materiales.text()
+    assert "EVA-7781" in texto and "31/12/2027" in texto and "<s>" in texto and "No era esa plancha" in texto
+    assert "Materiales usados (trazabilidad)" in c.html_hoja() and "EVA-7781" in c.html_hoja()
+    assert "F-1" not in c.html_hoja()  # el anulado no va en la hoja impresa
+    # Confección terminada → sale del tablero (sin preguntar el material: van los lotes registrados).
+    c.marcar_terminado(preguntar=False)
     assert "c1" not in falsa.pedidos and "c1" not in c.postits and c.pedido is None
     # Sin internet: se ve la última lista guardada.
     c2 = PanelConfeccion(v)

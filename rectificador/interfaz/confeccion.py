@@ -262,6 +262,12 @@ class PanelConfeccion(QWidget):
         self.caja_notas.setPlaceholderText("Notas de confección (colores, acabados, observaciones…)")
         self.caja_notas.setFixedHeight(64)
         lh.addWidget(self.caja_notas)
+        # Materiales usados (trazabilidad): se registran con el móvil (foto del código de barras de cada plancha).
+        self.texto_materiales = QLabel()
+        self.texto_materiales.setTextFormat(Qt.RichText)
+        self.texto_materiales.setWordWrap(True)
+        self.texto_materiales.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        lh.addWidget(self.texto_materiales)
         fila = QHBoxLayout()
         self.boton_guardar = QPushButton("Guardar hoja")
         self.boton_guardar.setIcon(estilo.icono("guardar", "white"))
@@ -306,7 +312,7 @@ class PanelConfeccion(QWidget):
             atajo.activated.connect(lambda p=paso: self.mover(p))
 
         self._reloj = QTimer(self)
-        self._reloj.setInterval(120_000)
+        self._reloj.setInterval(30_000)  # para ver al momento lo que hacen los demás (móviles del taller)
         self._reloj.timeout.connect(lambda: self.actualizar(silencio=True))
         self._mostrar_sesion()
         self._mostrar_pedido()
@@ -554,9 +560,34 @@ class PanelConfeccion(QWidget):
                 f"{html.escape(a)}: {html.escape(b)}" for a, b in ficha)))
         self.texto_pauta.setText("<br>".join(pauta))
         self._poner_hoja(p.get("hoja"))
+        self._poner_materiales(p.get("materiales") or [])
         fase = (p.get("estado"), p.get("fase"))
         self.boton_fresado.setVisible(fase == ("FABRICACION", "MECANIZADO"))
         self.boton_terminado.setVisible(fase == ("FABRICACION", "CONFECCION"))
+
+    def _poner_materiales(self, materiales: list[dict]):
+        pies = dict(PIES)
+        filas = []
+        for m in materiales:
+            cad = f" · cad. {m['caducidad'][8:10]}/{m['caducidad'][5:7]}/{m['caducidad'][:4]}" if m.get("caducidad") else ""
+            try:  # la web da la hora en UTC: aquí, la del ordenador
+                cuando = datetime.fromisoformat(m["cuando"].replace("Z", "+00:00")).astimezone().strftime("%d/%m %H:%M")
+            except (KeyError, ValueError):
+                cuando = ""
+            texto = (f"<b>{html.escape(m.get('material') or 'Material')}</b> · lote {html.escape(m.get('lote', ''))}{cad}"
+                     f" · {pies.get(m.get('pies'), m.get('pies'))} · {html.escape(m.get('quien', ''))}, {cuando}"
+                     + (" · foto ✓" if m.get("foto") else ""))
+            if m.get("anulado"):
+                texto = (f"<s>{texto}</s> <span style='color:{C['secundario']}'>— anulado por "
+                         f"{html.escape(m['anulado'].get('quien') or '')}: {html.escape(m['anulado'].get('motivo') or '')}</span>")
+            filas.append(texto)
+        activos = sum(1 for m in materiales if not m.get("anulado"))
+        url = f"{self.web.url.split('://')[-1]}/taller → #{self.pedido.get('numero', '')}" if self.pedido else ""
+        self.texto_materiales.setText(
+            f"<b>Materiales usados (trazabilidad)</b> · {activos}<br>"
+            + ("<br>".join(filas) if filas else f"<span style='color:{C['mal']}'>Aún no hay ninguno registrado.</span>")
+            + f"<br><span style='color:{C['secundario']}'>Se registran con el móvil: foto del código de barras de "
+              f"cada plancha en <b>{html.escape(url)}</b></span>")
 
     def _poner_hoja(self, hoja: dict | None):
         self._cargando_hoja = True
@@ -643,20 +674,19 @@ class PanelConfeccion(QWidget):
         self._en_segundo_plano(lambda: self.web.marcar_fresado(id_, lote.strip()),
                                lambda d: self._estado_cambiado(d, "Molde fresado: pasa a confección."))
 
-    def marcar_terminado(self, material: str | None = None):
+    def marcar_terminado(self, preguntar: bool = True):
+        """El par pasa a control de calidad. El material y sus lotes son los registrados con el móvil."""
         if not self.pedido:
             return
-        if material is None:
-            sugerido = ", ".join(dict.fromkeys(
-                self.tabla.cellWidget(f, 0).currentText().split(" (")[0] for f in range(self.tabla.rowCount())))
-            material, ok = QInputDialog.getText(
+        activos = [m for m in self.pedido.get("materiales") or [] if not m.get("anulado")]
+        if not activos:
+            QMessageBox.warning(self, "Confección", "Registra antes los materiales usados con el móvil (foto del "
+                                "código de barras de cada plancha): sin ellos no se puede terminar.")
+            return
+        if preguntar and QMessageBox.question(
                 self, "Confección terminada",
-                "Material y lote de material (trazabilidad del par).\nEl par pasa a control de calidad en la web:",
-                text=self.pedido.get("material") or sugerido)
-            if not ok:
-                return
-        if not material.strip():
-            QMessageBox.warning(self, "Confección", "Escribe el material y su lote para la trazabilidad.")
+                f"¿Confección del #{self.pedido.get('numero', '')} terminada? Pasa a control de calidad con "
+                f"{len(activos)} material(es) registrado(s).") != QMessageBox.Yes:
             return
         id_ = self.pedido["id"]
 
@@ -666,7 +696,7 @@ class PanelConfeccion(QWidget):
 
         # Primero se guarda la hoja y luego se cambia el estado.
         self.guardar_hoja(al_terminar=lambda: self._en_segundo_plano(
-            lambda: self.web.marcar_confeccion(id_, material.strip()), hecho))
+            lambda: self.web.marcar_confeccion(id_, ""), hecho))
 
     def _estado_cambiado(self, detalle: dict, texto: str):
         self.principal.notificar(texto, "bien")
@@ -740,6 +770,14 @@ class PanelConfeccion(QWidget):
             f"<tr><td>{i}</td><td>{e(nombres.get(capa['materialId'], capa['materialId']))}</td>"
             f"<td>{e(dict(PIES)[capa['pies']])}</td><td>{e(capa.get('notas', ''))}</td></tr>"
             for i, capa in enumerate(hoja["capas"], 1))
+        usados = "".join(
+            f"<tr><td>{e(m.get('material') or '')}</td><td>{e(m.get('lote', ''))}</td>"
+            f"<td>{e(m.get('caducidad') or '')}</td><td>{e(dict(PIES).get(m.get('pies'), ''))}</td>"
+            f"<td>{e(m.get('quien', ''))}</td></tr>"
+            for m in p.get("materiales") or [] if not m.get("anulado"))
+        tabla_usados = (f"<h3>Materiales usados (trazabilidad)</h3><table border='1' cellspacing='0' cellpadding='4' "
+                        f"width='100%'><tr><th>Material</th><th>Lote</th><th>Caducidad</th><th>Pies</th><th>Registrado por</th>"
+                        f"</tr>{usados}</table>" if usados else "<p>Materiales y lotes: se registran con el móvil.</p>")
         plazo = (p.get("plazo") or {}).get("texto") or "sin pago"
         proceso = "Termoformado al vacío" if hoja["proceso"] == "TERMOFORMADO" else "Capas pegadas y prensadas"
         return f"""<html><body style="font-family:sans-serif; font-size:10pt">
@@ -751,7 +789,8 @@ Plazo: {e(plazo)}{(' · lote ' + e(p['lote'])) if p.get('lote') else ''} · impr
 <table border="1" cellspacing="0" cellpadding="4" width="100%"><tr><th>#</th><th>Material</th><th>Pies</th><th>Notas</th></tr>{capas}</table>
 <p>Fresado: {hoja['minutosCnc']} min · Confección: {hoja['minutosConfeccion']} min</p>
 <p>{e(hoja['notas']).replace(chr(10), '<br>')}</p>
-<p>Material y lote: ______________________ · Hecho por: ______________ · Fecha: ________</p>
+{tabla_usados}
+<p>Hecho por: ______________________ · Fecha: ____________</p>
 </body></html>"""
 
     def guardar_pdf(self, ruta: str):

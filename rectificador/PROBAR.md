@@ -132,6 +132,15 @@ Arriba hay dos apartados: **Fresado** (todo lo anterior) y **Confección**.
 4. **Molde fresado → a confección** y **Confección terminada → a calidad** cambian el pedido en la web.
 5. **Materiales…**: la lista de materiales (sin precios).
 
+### En el móvil (cada persona con su usuario)
+1. El administrador da de alta a cada persona en la web: *Panel → Personal del taller* (nombre, email y móvil).
+   Le llega una invitación para crear su contraseña.
+2. En el móvil: web de Ortosend → **Acceso del equipo** → entra → **/taller**. Salen los mismos post-its.
+3. En un pedido, por **cada plancha** que uses: **📷 Escanear material** → foto de la etiqueta → revisa el
+   lote (sale solo si el código se lee) → elige el material y si es para el par o un pie → **Guardar**.
+4. Lo registrado sale al momento en Ortosend Taller (hoja del pedido) y en la hoja impresa.
+5. **Confección terminada** (en el móvil o aquí) solo se puede si hay materiales registrados.
+
 ### Aviso de la CNC
 1. En Fresado, cada molde lleva su **Pedido nº** (se lee del nombre del escaneo «… caso 123»; si no, escríbelo
    en la tarjeta del paciente).
