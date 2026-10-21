@@ -1,13 +1,13 @@
 @echo off
-rem Rectificador de moldes - Ortosend: DESINSTALAR.
+rem Ortosend Taller: DESINSTALAR.
 rem Quita los accesos directos, la asociacion de los archivos .molde y la carpeta
 rem %LOCALAPPDATA%\RectificadorOrtosend (programa y Python del programa).
 rem NO borra tus trabajos guardados (.molde), escaneos ni archivos .nc.
 setlocal
-title Desinstalar el Rectificador de moldes - Ortosend
+title Desinstalar Ortosend Taller
 set "BASE=%LOCALAPPDATA%\RectificadorOrtosend"
 echo.
-echo   Se va a quitar el Rectificador de moldes de este ordenador.
+echo   Se va a quitar Ortosend Taller de este ordenador.
 echo   Tus trabajos guardados (.molde), escaneos y archivos .nc NO se borran.
 echo.
 choice /c SN /m "Quitarlo"
@@ -15,7 +15,7 @@ if errorlevel 2 goto :eof
 
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "foreach ($d in @([Environment]::GetFolderPath('Desktop'), [Environment]::GetFolderPath('Programs'))) {" ^
-  "  $l = Join-Path $d 'Rectificador Ortosend.lnk'; if (Test-Path $l) { Remove-Item $l } }"
+  "  foreach ($n in @('Rectificador Ortosend.lnk', 'Ortosend Taller.lnk')) { $l = Join-Path $d $n; if (Test-Path $l) { Remove-Item $l } } }"
 reg delete "HKCU\Software\Classes\.molde" /f >nul 2>&1
 reg delete "HKCU\Software\Classes\RectificadorOrtosend.Trabajo" /f >nul 2>&1
 

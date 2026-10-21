@@ -45,6 +45,7 @@ class Pieza:
     giro: int = 0  # cuartos de vuelta (0..3)
     fija: bool = False  # puesta a mano: la colocación automática no la mueve
     h_entero: np.ndarray | None = field(default=None, repr=False)  # `h` antes de quitarle nada por abajo
+    pedido: int | None = None  # nº de pedido (caso de la web) del molde, si se sabe
 
     @property
     def colocada(self) -> bool:
@@ -810,7 +811,7 @@ def generar(piezas: list[Pieza], ancho: float, largo: float, alto: float, paso: 
     suelo = min(c.suelo for c in colocadas)
     w = _Escritor(cfg, zseg)
     w.lineas += [
-        comentario(f"Rectificador de moldes Ortosend - tirada de {len(puestas)} pieza/s en {cfg.get('material', '')}"),
+        comentario(f"Ortosend Taller - tirada de {len(puestas)} pieza/s en {cfg.get('material', '')}"),
         comentario(f"Plancha {ancho:.0f} x {largo:.0f} x {H:.0f} mm - ancho X x largo Y x alto Z"),
         comentario("ORIGEN: X0 Y0 = esquina DELANTERA IZQUIERDA de la plancha - Z0 = cara de ARRIBA"),
         comentario(f"T1 D={2 * radio:g} CR={radio:g} - ZMIN={-(H - suelo):.3f} - fresa con punta de bola"),

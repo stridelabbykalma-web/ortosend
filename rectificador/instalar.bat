@@ -1,5 +1,5 @@
 @echo off
-rem Rectificador de moldes - Ortosend: INSTALADOR.
+rem Ortosend Taller (fresado y confeccion): INSTALADOR.
 rem  - Copia el programa a %LOCALAPPDATA%\RectificadorOrtosend\programa (asi da igual donde
 rem    estuviera el ZIP descomprimido).
 rem  - Prepara Python y lo necesario (solo la primera vez o si cambia la lista de requisitos).
@@ -8,7 +8,7 @@ rem    programa SIN ventana negra, y hace que los trabajos .molde se abran con d
 rem Para ACTUALIZAR: descomprime la version nueva y vuelve a hacer doble clic en instalar.bat.
 setlocal
 cd /d "%~dp0"
-title Instalar el Rectificador de moldes - Ortosend
+title Instalar Ortosend Taller
 
 set "BASE=%LOCALAPPDATA%\RectificadorOrtosend"
 set "PROGRAMA=%BASE%\programa"
@@ -19,7 +19,7 @@ set "PYW=%ENTORNO%\Scripts\pythonw.exe"
 if not exist "%BASE%" mkdir "%BASE%"
 
 echo.
-echo   Rectificador de moldes - Ortosend
+echo   Ortosend Taller
 echo   Instalando... (la primera vez tarda unos minutos y hace falta internet)
 echo.
 echo Instalacion %DATE% %TIME% > "%LOG%"
@@ -82,18 +82,19 @@ set "ACCESO_PROG=%PROGRAMA%"
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "$s = New-Object -ComObject WScript.Shell;" ^
   "foreach ($d in @([Environment]::GetFolderPath('Desktop'), [Environment]::GetFolderPath('Programs'))) {" ^
-  "  $l = $s.CreateShortcut((Join-Path $d 'Rectificador Ortosend.lnk'));" ^
+  "  $viejo = Join-Path $d 'Rectificador Ortosend.lnk'; if (Test-Path $viejo) { Remove-Item $viejo };" ^
+  "  $l = $s.CreateShortcut((Join-Path $d 'Ortosend Taller.lnk'));" ^
   "  $l.TargetPath = $env:ACCESO_PY;" ^
   "  $l.Arguments = '\"' + (Join-Path $env:ACCESO_PROG 'interfaz\principal.py') + '\"';" ^
   "  $l.WorkingDirectory = $env:ACCESO_PROG;" ^
   "  $l.IconLocation = (Join-Path $env:ACCESO_PROG 'interfaz\icono.ico');" ^
-  "  $l.Description = 'Rectificador de moldes - Ortosend';" ^
+  "  $l.Description = 'Ortosend Taller - fresado y confeccion';" ^
   "  $l.Save() }" >> "%LOG%" 2>&1
 if errorlevel 1 echo       (No se han podido crear los accesos directos: mira el registro.)
 
 rem Los trabajos guardados (.molde) se abren con doble clic.
 reg add "HKCU\Software\Classes\.molde" /ve /d "RectificadorOrtosend.Trabajo" /f >> "%LOG%" 2>&1
-reg add "HKCU\Software\Classes\RectificadorOrtosend.Trabajo" /ve /d "Trabajo del Rectificador Ortosend" /f >> "%LOG%" 2>&1
+reg add "HKCU\Software\Classes\RectificadorOrtosend.Trabajo" /ve /d "Trabajo de Ortosend Taller" /f >> "%LOG%" 2>&1
 reg add "HKCU\Software\Classes\RectificadorOrtosend.Trabajo\DefaultIcon" /ve /d "%PROGRAMA%\interfaz\icono.ico" /f >> "%LOG%" 2>&1
 reg add "HKCU\Software\Classes\RectificadorOrtosend.Trabajo\shell\open\command" /ve /d "\"%PYW%\" \"%PROGRAMA%\interfaz\principal.py\" \"%%1\"" /f >> "%LOG%" 2>&1
 
@@ -102,7 +103,7 @@ echo [4/4] Abriendo el programa...
 cd /d "%PROGRAMA%"
 start "" "%PYW%" "%PROGRAMA%\interfaz\principal.py"
 echo.
-echo   Listo. A partir de ahora abrelo con el icono "Rectificador Ortosend" del Escritorio
+echo   Listo. A partir de ahora abrelo con el icono "Ortosend Taller" del Escritorio
 echo   o del menu Inicio. Ya puedes borrar la carpeta que descomprimiste.
 echo.
 timeout /t 8 >nul

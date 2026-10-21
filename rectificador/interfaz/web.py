@@ -2,8 +2,9 @@
 
 El programa entra con el usuario de TALLER de la web (la primera vez) y guarda un token de 30 días.
 Con él lee los pedidos del taller (en el orden en que deben salir), su pauta y su hoja de confección,
-guarda la hoja, cambia el estado (molde fresado, confección terminada) y edita los materiales y los
-ajustes de coste. Todo va por la API `/api/taller/...` de la web (src/app/api/taller en la web).
+guarda la hoja, cambia el estado (molde fresado, confección terminada) y edita la lista de materiales.
+Todo va por la API `/api/taller/...` de la web (src/app/api/taller en la web). Los costes y precios no
+llegan aquí: solo los ve el administrador en la web.
 """
 
 from __future__ import annotations
@@ -91,39 +92,3 @@ class ClienteWeb:
 
     def guardar_materiales(self, materiales: list[dict]) -> list[dict]:
         return self._pedir("PUT", "/materiales", {"materiales": materiales})["materiales"]
-
-    def ajustes(self) -> dict:
-        return self._pedir("GET", "/ajustes")["ajustes"]
-
-    def guardar_ajustes(self, ajustes: dict) -> dict:
-        return self._pedir("PUT", "/ajustes", ajustes)["ajustes"]
-
-
-def _redondear(x: float) -> int:
-    """Como Math.round de JavaScript (las mitades hacia arriba), para dar lo mismo que la web."""
-    import math
-
-    return int(math.floor(x + 0.5))
-
-
-def coste(hoja: dict, materiales: list[dict], ajustes: dict) -> dict:
-    """El mismo cálculo que la web (`costeConfeccion` en src/lib/taller.ts), para verlo al momento.
-    Si se cambia allí, cambiarlo aquí. Céntimos de euro."""
-    por_id = {m["id"]: m for m in materiales}
-    capas = []
-    for c in hoja.get("capas", []):
-        m = por_id.get(c.get("materialId"))
-        pares = m["paresPorPlancha"] if m and m.get("paresPorPlancha", 0) > 0 else 1
-        fraccion = 1.0 if c.get("pies", "par") == "par" else 0.5
-        capas.append(_redondear(m["precioCents"] / pares * fraccion) if m else 0)
-    material = sum(capas)
-    fresado = _redondear(max(0, hoja.get("minutosCnc", 0)) * ajustes["costeCncMinutoCents"]) + ajustes["costeMoldeCents"]
-    mano = _redondear(max(0, hoja.get("minutosConfeccion", 0)) / 60 * ajustes["precioHoraCents"])
-    return {"materialCents": material, "fresadoCents": fresado, "manoObraCents": mano,
-            "totalCents": material + fresado + mano, "capas": capas}
-
-
-def euros(cents: int | float) -> str:
-    """12345 → «123,45 €»."""
-    texto = f"{cents / 100:,.2f}"
-    return texto.replace(",", " ").replace(".", ",").replace(" ", ".") + " €"

@@ -1,4 +1,18 @@
-# Novedades del Rectificador de moldes
+# Novedades de Ortosend Taller
+
+## 0.6.0
+- **Ahora se llama Ortosend Taller** y tiene **dos apartados**, arriba: **Fresado** (rectificar el molde,
+  tirada y CNC, lo de siempre) y **Confección**. El acceso directo pasa a llamarse «Ortosend Taller».
+- **Confección con post-its**: los pedidos salen como notas en un tablero por columnas (Por diseñar ·
+  Por fresar · En confección · Calidad), cada columna con el que debe salir antes arriba. Rojo = fuera de
+  plazo, amarillo = justo, verde = en plazo. Clic en uno y se abre su hoja; con ◀ ▶ (o Re Pág / Av Pág)
+  pasas al anterior o al siguiente.
+- **Sin costes ni precios** en el taller (los verá el administrador cuando se haga esa parte).
+- **Aviso de la CNC**: en la tirada, al arrancar la máquina pulsa **▶ Inicio**. Arriba ves cuánto le
+  queda y, cuando acaba (según el tiempo estimado), sale un aviso en Confección con un botón para pasar sus
+  pedidos a confección. Si cierras el programa, el aviso sale igual al volver a abrirlo.
+- **Pedido nº** en cada molde: se lee solo del nombre del escaneo («… caso 123»); si no, escríbelo. Sale
+  delante del nombre de cada pie en la tirada, el mapa y el .nc.
 
 ## 0.5.0
 - **Nuevo apartado «Confección»** (botón *Confección* arriba): los pedidos del taller de la web de

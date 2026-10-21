@@ -451,7 +451,7 @@ class VentanaPrincipal(QMainWindow):
     def __init__(self):
         super().__init__()
         self._aviso_version.connect(self._resultado_version)
-        self.setWindowTitle("Rectificador de moldes – Ortosend")
+        self.setWindowTitle("Ortosend Taller")
         self.resize(1400, 850)
         self.ajustes = QSettings("Ortosend", "Rectificador")
         self.ruta_trabajo: Path | None = None  # .molde donde se guarda el trabajo (Ctrl+S)
@@ -509,7 +509,13 @@ class VentanaPrincipal(QMainWindow):
         lc = QVBoxLayout(contenedor)
         lc.setContentsMargins(10, 10, 6, 6)
         lc.addWidget(division)
-        self.setCentralWidget(contenedor)
+        # Dos apartados: Fresado (rectificar el molde y la CNC) y Confección (pedidos de la web).
+        from interfaz.confeccion import PanelConfeccion
+        self.confeccion = PanelConfeccion(self)
+        self.apartados = QStackedWidget()
+        self.apartados.addWidget(contenedor)
+        self.apartados.addWidget(self.confeccion)
+        self.setCentralWidget(self.apartados)
         self.setAcceptDrops(True)
         self.aviso = estilo.Aviso(self)
         self._deshacer: list = []  # estados anteriores (para Ctrl+Z)
@@ -517,6 +523,13 @@ class VentanaPrincipal(QMainWindow):
         self._estado_arrastre = None
         self._menus()
         self._barra()
+        self._reloj_cnc = QTimer(self)
+        self._reloj_cnc.setInterval(30_000)
+        self._reloj_cnc.timeout.connect(self._cnc_tic)
+        self._reloj_cnc.start()
+        self._cnc_tic()
+        apartado = self.ajustes.value("apartado", "fresado")
+        self.botones_apartado["confeccion" if apartado == "confeccion" else "fresado"].setChecked(True)
         self._refrescar_panel()
         self._refrescar_recientes()
         geometria = self.ajustes.value("geometria")
@@ -611,7 +624,7 @@ class VentanaPrincipal(QMainWindow):
         else:
             self._reloj_carga.stop()
             self.texto_bienvenida.setText(
-                f"<p style='font-size:16pt; font-weight:600'>Rectificador de moldes</p>"
+                f"<p style='font-size:16pt; font-weight:600'>Fresado · rectificar el molde</p>"
                 f"<p style='color:{C['secundario']}'>Abre un escaneo del Revopoint (.revox, .stl, .ply, .obj o .zip)"
                 f"<br>o <b>arrástralo aquí</b> desde una carpeta.</p>")
 
@@ -738,12 +751,26 @@ class VentanaPrincipal(QMainWindow):
         self.caja_fecha.dateChanged.connect(lambda d: self._cambiar_paciente(fecha=d.toString("yyyy-MM-dd")))
         fila.addWidget(self.caja_fecha)
         lay.addLayout(fila)
+        fila = QHBoxLayout()
+        fila.addWidget(estilo.etiqueta("Pedido nº", "secundario", envolver=False))
+        self.caja_pedido = QLineEdit()
+        self.caja_pedido.setPlaceholderText("nº de caso")
+        self.caja_pedido.setToolTip("El nº de caso del pedido en la web de Ortosend. Se lee solo del nombre del\n"
+                                    "escaneo («… caso 123»). Sirve para que, al acabar la CNC, sus pedidos pasen a\n"
+                                    "confección.")
+        from PySide6.QtGui import QIntValidator
+        self.caja_pedido.setValidator(QIntValidator(1, 99999999, self.caja_pedido))
+        self.caja_pedido.setMaximumWidth(150)
+        self.caja_pedido.textEdited.connect(lambda t: self._cambiar_paciente(pedido=int(t) if t.isdigit() else None))
+        fila.addWidget(self.caja_pedido)
+        fila.addStretch(1)
+        lay.addLayout(fila)
         self.caja_notas = QPlainTextEdit()
         self.caja_notas.setPlaceholderText("Notas (diagnóstico, observaciones…)")
         self.caja_notas.setFixedHeight(54)
         self.caja_notas.textChanged.connect(lambda: self._cambiar_paciente(notas=self.caja_notas.toPlainText()))
         lay.addWidget(self.caja_notas)
-        self._cajas_paciente = (self.caja_nombre, self.caja_fecha, self.caja_notas)
+        self._cajas_paciente = (self.caja_nombre, self.caja_fecha, self.caja_pedido, self.caja_notas)
         for c in self._cajas_paciente:
             c.setEnabled(False)
         return marco
@@ -760,6 +787,7 @@ class VentanaPrincipal(QMainWindow):
         fecha = QDate.fromString(pac.get("fecha", ""), "yyyy-MM-dd")
         self.caja_fecha.setDate(fecha if fecha.isValid() else QDate.currentDate())
         self.caja_notas.setPlainText(pac.get("notas", ""))
+        self.caja_pedido.setText(str(pac["pedido"]) if pac.get("pedido") else "")
         for c in self._cajas_paciente:
             c.blockSignals(False)
 
@@ -775,8 +803,7 @@ class VentanaPrincipal(QMainWindow):
         if self.proyecto is not None:
             nombre = (self.proyecto.paciente or {}).get("nombre") or (
                 self.ruta_trabajo.stem if self.ruta_trabajo else self.proyecto.ruta_stl.name)
-        self.setWindowTitle(f"{nombre} [*] – Rectificador de moldes · Ortosend" if nombre
-                            else "Rectificador de moldes – Ortosend")
+        self.setWindowTitle(f"{nombre} [*] – Ortosend Taller" if nombre else "Ortosend Taller")
         self.setWindowModified(hay)
 
     def _puede_descartar(self) -> bool:
@@ -1041,7 +1068,8 @@ class VentanaPrincipal(QMainWindow):
                "anadir", archivo)
         accion("tirada", "Tirada de CNC (varios moldes en una plancha)…", self.abrir_tirada,
                QKeySequence("Ctrl+Shift+T"), "cnc", archivo)
-        accion("confeccion", "Confección (pedidos del taller)…", self.abrir_confeccion,
+        accion("ir_fresado", "Ir a Fresado", lambda: self.ir_a("fresado"), QKeySequence("Ctrl+Shift+F"), "cnc", archivo)
+        accion("confeccion", "Ir a Confección (pedidos del taller)", self.abrir_confeccion,
                QKeySequence("Ctrl+Shift+C"), "confeccion", archivo)
         archivo.addSeparator()
         accion("salir", "Salir", self.close, QKeySequence.Quit, None, archivo)
@@ -1336,7 +1364,7 @@ varios moldes en una plancha (arrastrándolos), calculas y guardas el <b>.nc</b>
 
     def acerca_de(self):
         self._dialogo_texto("Acerca de", f"""
-<h2>Rectificador de moldes · Ortosend</h2>
+<h2>Ortosend Taller</h2>
 <p style='color:{C["secundario"]}'>Versión {__import__("ortomolde").__version__}</p>
 <p>Limpia el escaneo del Revopoint, lija el molde, marca las referencias del pie, recorta en arco por
 delante de las cabezas metatarsales y genera el archivo para la CNC.</p>
@@ -1349,15 +1377,45 @@ valores clínicos: <code>config/valores_clinicos.toml</code></p>""")
         barra.setMovable(False)
         barra.setIconSize(estilo.TAM_ICONO)
         barra.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
-        titulo = QLabel("  Ortosend · Rectificador")
+        # Barra de arriba de todo: nombre, apartados (Fresado | Confección) y el reloj de la CNC.
+        cabecera = QToolBar("Apartados")
+        cabecera.setMovable(False)
+        titulo = QLabel("  Ortosend Taller  ")
         titulo.setObjectName("titulo_app")
-        barra.addWidget(titulo)
-        barra.addSeparator()
+        cabecera.addWidget(titulo)
+        grupo = QButtonGroup(self)
+        self.botones_apartado = {}
+        for clave, texto, ic, lado in (("fresado", "Fresado", "cnc", "izq"), ("confeccion", "Confección", "confeccion", "der")):
+            b = QPushButton(f" {texto}")
+            b.setIcon(estilo.icono(ic))
+            b.setCheckable(True)
+            b.setProperty("segmento", lado)
+            b.setMinimumWidth(130)
+            b.setToolTip("Rectificar el molde, tirada y CNC" if clave == "fresado" else "Pedidos del taller y hoja de confección")
+            b.toggled.connect(lambda v, c=clave: v and self.ir_a(c))
+            grupo.addButton(b)
+            cabecera.addWidget(b)
+            self.botones_apartado[clave] = b
+        relleno = QWidget()
+        relleno.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        cabecera.addWidget(relleno)
+        self.boton_cnc = QToolButton()
+        self.boton_cnc.setPopupMode(QToolButton.InstantPopup)
+        self.boton_cnc.setToolButtonStyle(Qt.ToolButtonTextOnly)
+        menu = QMenu(self.boton_cnc)
+        menu.addAction("Quitar el aviso de la CNC", self.cnc_parar)
+        self.boton_cnc.setMenu(menu)
+        # (Un botón dentro de una barra se enseña y se esconde con su acción, no con show/hide.)
+        self.accion_cnc = cabecera.addWidget(self.boton_cnc)
+        self.accion_cnc.setVisible(False)
+        self.addToolBar(Qt.TopToolBarArea, cabecera)
+        self.addToolBarBreak(Qt.TopToolBarArea)
+        self.cabecera = cabecera
         cortos = {"abrir": "Abrir", "escanear": "Escanear", "guardar": "Guardar", "exportar": "Exportar", "anadir": "Añadir a la tirada",
-                  "tirada": "Tirada CNC", "confeccion": "Confección",
+                  "tirada": "Tirada CNC",
                   "inicial": "Vista inicial", "planta": "Desde arriba"}
         cortos.update({"deshacer": "", "rehacer": ""})
-        for clave in ("abrir", "escanear", "guardar", "exportar", "anadir", "tirada", "confeccion", None, "deshacer", "rehacer", None, "inicial",
+        for clave in ("abrir", "escanear", "guardar", "exportar", "anadir", "tirada", None, "deshacer", "rehacer", None, "inicial",
                       "planta"):
             if clave is None:
                 barra.addSeparator()
@@ -1499,6 +1557,10 @@ valores clínicos: <code>config/valores_clinicos.toml</code></p>""")
         self.ruta_trabajo = getattr(proyecto, "ruta_trabajo", None)
         if not proyecto.paciente:
             proyecto.paciente = trabajo_mod.paciente_vacio()
+        if not proyecto.paciente.get("pedido"):
+            pedido = trabajo_mod.pedido_de_ruta(proyecto.ruta_stl)
+            if pedido:
+                proyecto.paciente["pedido"] = pedido
         self._anotar_reciente(str(self.ruta_trabajo or proyecto.ruta_stl))
         self._poner_paciente()
         self._marcar_cambio(False)
@@ -1782,13 +1844,80 @@ valores clínicos: <code>config/valores_clinicos.toml</code></p>""")
         self.tirada.raise_()
         return self.tirada
 
+    # ---------------------------------------------------------------- apartados
+
+    def ir_a(self, apartado: str):
+        """Cambia entre los apartados Fresado y Confección."""
+        confeccion = apartado == "confeccion"
+        if self.botones_apartado[apartado].isChecked() is False:
+            self.botones_apartado[apartado].setChecked(True)  # vuelve a entrar aquí por la señal
+            return
+        self.apartados.setCurrentIndex(1 if confeccion else 0)
+        self.barra.setVisible(not confeccion)
+        self.ajustes.setValue("apartado", apartado)
+        if confeccion:
+            self.confeccion.al_entrar()
+        else:
+            self.confeccion.al_salir()
+
     def abrir_confeccion(self):
-        from interfaz.confeccion import VentanaConfeccion
-        if getattr(self, "confeccion", None) is None:
-            self.confeccion = VentanaConfeccion(self)
-        self.confeccion.show()
-        self.confeccion.raise_()
+        self.ir_a("confeccion")
         return self.confeccion
+
+    # ---------------------------------------------------------------- reloj de la CNC
+
+    def cnc_estado(self) -> dict | None:
+        """La tirada que está fresando la CNC (o ha terminado y no se ha quitado el aviso)."""
+        import json
+
+        try:
+            estado = json.loads(self.ajustes.value("cnc_en_marcha", "") or "null")
+        except ValueError:
+            return None
+        return estado if isinstance(estado, dict) and estado.get("inicio") else None
+
+    def cnc_iniciar(self, minutos: float, lote: str, pedidos: list[int], moldes: list[str], inicio=None):
+        """«Inicio» de la tirada: con el tiempo estimado avisa en Confección cuando la CNC acabe."""
+        import json
+        from datetime import datetime
+
+        estado = {"inicio": (inicio or datetime.now()).isoformat(timespec="seconds"), "minutos": float(minutos),
+                  "lote": lote, "pedidos": sorted(set(int(n) for n in pedidos)), "moldes": list(moldes),
+                  "avisado": False}
+        self.ajustes.setValue("cnc_en_marcha", json.dumps(estado))
+        self._cnc_tic()
+        if not (self.cnc_estado() or {}).get("avisado"):  # (si ya ha acabado, el aviso ya ha salido)
+            self.notificar(f"CNC en marcha: te aviso en Confección en unos {minutos:.0f} min.", "bien")
+
+    def cnc_parar(self):
+        self.ajustes.remove("cnc_en_marcha")
+        self.confeccion.mostrar_aviso_cnc(None)
+        self._cnc_tic()
+
+    def _cnc_tic(self):
+        """Cada medio minuto: cuánto le queda a la CNC y, si ha acabado, el aviso."""
+        import json
+        from datetime import datetime, timedelta
+
+        estado = self.cnc_estado()
+        if not estado:
+            self.accion_cnc.setVisible(False)
+            return
+        fin = datetime.fromisoformat(estado["inicio"]) + timedelta(minutes=estado["minutos"])
+        quedan = (fin - datetime.now()).total_seconds() / 60
+        self.accion_cnc.setVisible(True)
+        if quedan > 0:
+            self.boton_cnc.setText(f"⏱ CNC: quedan {max(1, round(quedan))} min · acaba a las {fin:%H:%M}"
+                                   + (f" · {estado['lote']}" if estado.get("lote") else ""))
+            return
+        self.boton_cnc.setText(f"✔ CNC terminada ({fin:%H:%M})" + (f" · {estado['lote']}" if estado.get("lote") else ""))
+        self.confeccion.mostrar_aviso_cnc(estado)
+        if not estado.get("avisado"):
+            estado["avisado"] = True
+            self.ajustes.setValue("cnc_en_marcha", json.dumps(estado))
+            self.notificar("La CNC ha terminado la tirada: mira el aviso en Confección.", "bien")
+            QApplication.beep()
+            QApplication.alert(self, 0)
 
     def anadir_a_tirada(self):
         if not self.proyecto:
@@ -1857,10 +1986,32 @@ def _registro_de_errores():
     sys.excepthook = al_fallar
 
 
+def _renombrar_accesos_directos():
+    """El programa se llamaba «Rectificador Ortosend»: al actualizar, el acceso directo pasa a «Ortosend Taller»
+    (Escritorio y menú Inicio). Solo en Windows y solo si aún tiene el nombre viejo."""
+    if not sys.platform.startswith("win"):
+        return
+    try:
+        import ctypes
+
+        carpetas = []
+        for csidl in (0x10, 0x02):  # Escritorio y Programas del menú Inicio (aunque estén en OneDrive)
+            buf = ctypes.create_unicode_buffer(260)
+            if ctypes.windll.shell32.SHGetFolderPathW(None, csidl, None, 0, buf) == 0:
+                carpetas.append(Path(buf.value))
+        for c in carpetas:
+            viejo, nuevo = c / "Rectificador Ortosend.lnk", c / "Ortosend Taller.lnk"
+            if viejo.exists() and not nuevo.exists():
+                viejo.rename(nuevo)
+    except Exception:  # noqa: BLE001 - no es importante: el acceso viejo sigue funcionando
+        traceback.print_exc()
+
+
 def main():
     _registro_de_errores()
+    _renombrar_accesos_directos()
     app = QApplication(sys.argv)
-    app.setApplicationName("Rectificador Ortosend")
+    app.setApplicationName("Ortosend Taller")
     estilo.aplicar(app)
     ventana = VentanaPrincipal()
     ventana.show()

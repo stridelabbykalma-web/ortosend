@@ -287,7 +287,7 @@ class Proyecto:
             }
             pies.append(d)
         return {
-            "programa": "Rectificador de moldes Ortosend",
+            "programa": "Ortosend Taller",
             "paciente": self.paciente,
             "version_programa": __version__,
             "version_receta": VERSION_RECETA,

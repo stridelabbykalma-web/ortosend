@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import io
 import json
+import re
 import zipfile
 from datetime import date
 from pathlib import Path
@@ -34,6 +35,16 @@ EXTENSION = ".molde"
 
 class ErrorTrabajo(ValueError):
     pass
+
+
+def pedido_de_ruta(ruta: str | Path) -> int | None:
+    """Nº de pedido (caso de la web) que va en el nombre del escaneo: la web nombra los proyectos de Revo Scan
+    «Nombre Apellido … caso 123». Se mira el nombre del archivo y el de sus carpetas."""
+    for parte in reversed(Path(ruta).parts):
+        m = re.search(r"(?i)\bcaso\s*(?:n[º°o.]*\s*)?#?\s*(\d+)", parte)
+        if m:
+            return int(m.group(1))
+    return None
 
 
 def paciente_vacio() -> dict:

@@ -119,19 +119,26 @@ la lista de atajos · el programa recuerda el tamaño de la ventana y la última
 
 ## 5. Confección (pedidos de la web)
 
-1. Pulsa **Confección** (arriba) y **Entrar** con tu usuario de **taller** de la web de Ortosend (el mismo
-   de /equipo). Solo la primera vez: el programa se queda conectado (botón «Desconectar»).
-2. A la izquierda salen los **pedidos del taller en el orden en que deben salir** (rojo = fuera de plazo,
-   ámbar = justo, verde = en plazo; «⚠ REHACER» primero). Filtra «Por fresar» o «En confección».
-3. Elige un pedido: arriba ves la **pauta de cada pie** (I/D). Elige el **proceso** (termoformado o capas),
-   añade las **capas de material** (y si son del par o de un pie), los **minutos** de CNC y de confección y
-   las notas. Abajo sale el **coste del par** al momento. **Guardar hoja** la guarda en la web;
-   **Imprimir hoja…** la imprime (o la guarda en PDF con «Microsoft Print to PDF»).
-4. **Molde fresado → a confección** (pide el lote de la tirada) y **Confección terminada → a calidad**
-   (pide el material y su lote) cambian el pedido en la web. Calidad, envío y entrega se hacen en la web.
-5. **Materiales…**: tu lista de materiales con el precio de la plancha y cuántos pares salen de ella
-   (vienen unos de ejemplo: pon los tuyos). **Costes…**: precio de la hora de taller, de la CNC por
-   minuto y de la escayola de los moldes.
+Arriba hay dos apartados: **Fresado** (todo lo anterior) y **Confección**.
+
+1. En **Confección** pulsa **Entrar** con tu usuario de **taller** de la web de Ortosend (el mismo de
+   /equipo). Solo la primera vez: el programa se queda conectado («Desconectar» para salir).
+2. Los pedidos salen como **post-its** en columnas: Por diseñar · Por fresar · En confección · Calidad. En
+   cada columna, arriba el que debe salir antes (rojo = fuera de plazo, amarillo = justo, verde = en plazo;
+   «⚠ REHACER» primero).
+3. **Clic en un post-it**: a la derecha su hoja con la **pauta de cada pie** (I/D). Elige el **proceso**
+   (termoformado o capas), añade las **capas de material**, los minutos y notas; **Guardar hoja** la guarda
+   en la web e **Imprimir hoja…** la imprime. Con **◀ ▶** (o Re Pág / Av Pág) pasas al anterior/siguiente.
+4. **Molde fresado → a confección** y **Confección terminada → a calidad** cambian el pedido en la web.
+5. **Materiales…**: la lista de materiales (sin precios).
+
+### Aviso de la CNC
+1. En Fresado, cada molde lleva su **Pedido nº** (se lee del nombre del escaneo «… caso 123»; si no, escríbelo
+   en la tarjeta del paciente).
+2. En la **Tirada CNC**, después de calcular y guardar el .nc, cuando arranques la máquina pulsa
+   **▶ Inicio: la CNC empieza**.
+3. Arriba a la derecha verás «CNC: quedan X min». Cuando acaba sale un **aviso azul en Confección** con
+   **«Pasar sus pedidos a confección»** (los pasa todos de golpe) y **Hecho** (quita el aviso).
 
 ## Si algo falla
 

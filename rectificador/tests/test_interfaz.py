@@ -208,7 +208,7 @@ def test_ventana_tirada(stl_sintetico, tmp_path):
     assert (p.x, p.y, p.giro) == fijo
     t._silencio = True
     t.guardar(str(tmp_path / "TIRADA.nc"))
-    assert (tmp_path / "TIRADA.nc").read_text().startswith("(Rectificador")
+    assert (tmp_path / "TIRADA.nc").read_text().startswith("(Ortosend Taller")
     assert (tmp_path / "TIRADA_mapa.png").exists() and (tmp_path / "TIRADA_mapa.pdf").exists()
     assert (tmp_path / "TIRADA.txt").exists()
     # Volver a automático: ya no hay ninguno puesto a mano.

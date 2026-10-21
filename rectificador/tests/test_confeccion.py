@@ -80,8 +80,7 @@ class WebFalsa:
             if len(partes) == 2:
                 return 200, self._detalle(id_)
             if partes[2] == "hoja" and metodo == "PUT":
-                c = W.coste(cuerpo, self.materiales, self.ajustes)
-                self.hojas[id_] = dict(cuerpo, coste={k: c[k] for k in ("materialCents", "fresadoCents", "manoObraCents", "totalCents")})
+                self.hojas[id_] = dict(cuerpo)  # como la web con un usuario de taller: sin costes
                 return 200, {"hoja": self.hojas[id_]}
             if partes[2] == "fresado":
                 if p["fase"] != "MECANIZADO":
@@ -157,78 +156,142 @@ def test_cliente(falsa):
     assert e.value.status == 0
 
 
-def test_coste_igual_que_la_web():
-    m = [{"id": "eva", "precioCents": 2500, "paresPorPlancha": 20}, {"id": "forro", "precioCents": 1800, "paresPorPlancha": 18}]
-    a = {"precioHoraCents": 2000, "costeCncMinutoCents": 20, "costeMoldeCents": 300}
-    c = W.coste({"capas": [{"materialId": "eva", "pies": "par"}, {"materialId": "forro", "pies": "par"},
-                           {"materialId": "eva", "pies": "I"}], "minutosCnc": 30, "minutosConfeccion": 45}, m, a)
-    # Los mismos números que el test de la web (tests/unit/taller.test.ts).
-    assert c["capas"] == [125, 100, 63] and c["materialCents"] == 288
-    assert (c["fresadoCents"], c["manoObraCents"], c["totalCents"]) == (900, 1500, 2688)
-    assert W.euros(268800) == "2.688,00 €"
+def _ventana(falsa, monkeypatch):
+    from PySide6.QtCore import QSettings
+    from PySide6.QtWidgets import QApplication
 
-
-def test_ventana_confeccion(falsa, tmp_path, monkeypatch):
-    from PySide6.QtWidgets import QApplication, QInputDialog
-
-    from interfaz.confeccion import VentanaConfeccion
+    from interfaz.confeccion import PanelConfeccion
     from interfaz.principal import VentanaPrincipal
 
     app = QApplication.instance() or QApplication([])
+    ajustes = QSettings("Ortosend", "Rectificador")
+    for k in ("web_token", "web_usuario", "web_cache", "web_email", "cnc_en_marcha", "apartado"):
+        ajustes.remove(k)
+    monkeypatch.setattr(PanelConfeccion, "SINCRONO", True)
     v = VentanaPrincipal()
-    for k in ("web_token", "web_usuario", "web_cache"):
-        v.ajustes.remove(k)
-    v.taller = {**v.taller, "web": {"url": falsa.url}}
-    monkeypatch.setattr(VentanaConfeccion, "SINCRONO", True)
-    c = v.abrir_confeccion()
-    assert c.boton_sesion.text() == "Entrar" and c.lista.count() == 0
-    assert c.entrar("taller@ortosend.es", "clave")
-    assert "Toni Taller" in c.texto_sesion.text()
-    # Lista en el orden de la web, con su semáforo.
-    assert c.lista.count() == 2 and c.lista.item(0).text().startswith("#101  Ana Ruiz")
-    assert "Fuera de plazo" in c.lista.item(0).text()
-    c.botones_filtro["fresar"].setChecked(True)
-    assert c.lista.count() == 1 and "#102" in c.lista.item(0).text()
-    c.botones_filtro["todos"].setChecked(True)
-    # Hoja del pedido 101: pauta por pie y coste en vivo.
-    c.lista.setCurrentRow(0)
-    assert c.pedido["id"] == "c1" and "Skive medial 4 mm" in c.texto_pauta.text()
-    assert c.boton_terminado.isVisibleTo(c) and not c.boton_fresado.isVisibleTo(c)
-    assert c.caja_cnc.value() == 30 and c.caja_confeccion.value() == 45  # los de por defecto
-    c.anadir_capa({"materialId": "eva", "pies": "par"})
-    c.anadir_capa({"materialId": "forro", "pies": "par", "notas": "negro"})
-    c.botones_proceso["CAPAS"].setChecked(True)
-    assert c.ultimo_coste["totalCents"] == 125 + 100 + 900 + 1500
-    assert "26,25 €" in c.texto_coste.text()
-    c.guardar_hoja()
-    assert falsa.hojas["c1"]["proceso"] == "CAPAS" and falsa.hojas["c1"]["capas"][1]["notas"] == "negro"
-    # Hoja impresa (PDF).
-    pdf = tmp_path / "hoja.pdf"
-    c.guardar_pdf(str(pdf))
-    assert pdf.stat().st_size > 1000 and "Skive medial 4 mm" in c.html_hoja()
-    # Confección terminada → sale de la lista (pasa a calidad en la web).
-    monkeypatch.setattr(QInputDialog, "getText", staticmethod(lambda *a, **k: ("EVA lote M-9", True)))
-    c.marcar_terminado()
-    assert "c1" not in falsa.pedidos and c.lista.count() == 1 and c.pedido is None
-    # Molde fresado (102) → confección, con su lote.
-    c.lista.setCurrentRow(0)
-    c.marcar_fresado("L-08")
-    assert falsa.pedidos["c2"]["fase"] == "CONFECCION" and falsa.pedidos["c2"]["lote"] == "L-08"
-    assert c.boton_terminado.isVisibleTo(c)
-    # Sin internet: se ve la última lista guardada.
-    c2 = VentanaConfeccion(v)
-    assert c2.lista.count() == 1 and "guardada" in c2.texto_lista.text()
-    # La sesión caducada (otro token en la web) desconecta y pide entrar.
-    falsa.token = "otro"
-    monkeypatch.setattr("PySide6.QtWidgets.QMessageBox.warning", staticmethod(lambda *a, **k: None))
-    c.actualizar()
-    assert c.web.token is None and c.boton_sesion.text() == "Entrar"
-    for k in ("web_token", "web_usuario", "web_cache", "web_email"):
+    v.confeccion.web.url = falsa.url
+    return app, v
+
+
+def _limpiar(v):
+    for k in ("web_token", "web_usuario", "web_cache", "web_email", "cnc_en_marcha", "apartado"):
         v.ajustes.remove(k)
     v.close()
 
 
-def test_materiales_editables(falsa, monkeypatch):
+def test_apartados_y_tablero_de_postits(falsa, tmp_path, monkeypatch):
+    from PySide6.QtWidgets import QInputDialog
+
+    from interfaz.confeccion import PanelConfeccion
+
+    app, v = _ventana(falsa, monkeypatch)
+    v.show()
+    assert v.windowTitle() == "Ortosend Taller"
+    # Dos apartados: Fresado (con su barra de herramientas) y Confección.
+    assert v.apartados.currentIndex() == 0 and v.barra.isVisibleTo(v)
+    c = v.abrir_confeccion()
+    assert v.apartados.currentWidget() is c and not v.barra.isVisibleTo(v)
+    assert v.botones_apartado["confeccion"].isChecked()
+    assert c.boton_sesion.text() == "Entrar" and not c.postits
+    assert c.entrar("taller@ortosend.es", "clave")
+    assert "Toni Taller" in c.texto_sesion.text()
+    # Post-its en su columna, en el orden de la web, con el color del plazo.
+    assert c.columnas["confeccion"][0].text() == "EN CONFECCIÓN · 1"
+    assert c.columnas["fresar"][0].text() == "POR FRESAR · 1"
+    assert c.postits["c1"].papel == "#ffc9c9" and c.postits["c2"].papel == "#d3f9d8"
+    # Sin costes ni precios en ningún sitio.
+    assert not hasattr(c, "texto_coste") and c.tabla.columnCount() == 3
+    # Clic en un post-it: su hoja; con ▶ / ◀ se pasa al siguiente.
+    from PySide6.QtCore import QPoint, Qt
+    from PySide6.QtTest import QTest
+
+    QTest.mouseClick(c.postits["c2"], Qt.LeftButton, pos=QPoint(20, 20))
+    assert c.pedido["id"] == "c2" and "Skive medial 4 mm" in c.texto_pauta.text()
+    assert c.boton_fresado.isVisibleTo(c) and not c.boton_terminado.isVisibleTo(c)
+    c.mover(1)
+    assert c.pedido["id"] == "c1" and c.boton_terminado.isVisibleTo(c)
+    c.mover(1)
+    assert c.pedido["id"] == "c2"  # vuelve al principio
+    c.mover(-1)
+    assert c.pedido["id"] == "c1"
+    # Hoja: capas, guardar e imprimir.
+    c.anadir_capa({"materialId": "eva", "pies": "par"})
+    c.anadir_capa({"materialId": "forro", "pies": "I", "notas": "negro"})
+    c.botones_proceso["CAPAS"].setChecked(True)
+    c.guardar_hoja()
+    assert falsa.hojas["c1"]["proceso"] == "CAPAS" and falsa.hojas["c1"]["capas"][1] == {"materialId": "forro", "pies": "I", "notas": "negro"}
+    pdf = tmp_path / "hoja.pdf"
+    c.guardar_pdf(str(pdf))
+    assert pdf.stat().st_size > 1000 and "€" not in c.html_hoja()
+    # Confección terminada → sale del tablero.
+    monkeypatch.setattr(QInputDialog, "getText", staticmethod(lambda *a, **k: ("EVA lote M-9", True)))
+    c.marcar_terminado()
+    assert "c1" not in falsa.pedidos and "c1" not in c.postits and c.pedido is None
+    # Sin internet: se ve la última lista guardada.
+    c2 = PanelConfeccion(v)
+    assert list(c2.postits) == ["c2"] and "guardada" in c2.texto_lista.text()
+    # Sesión caducada: desconecta y pide entrar.
+    falsa.token = "otro"
+    monkeypatch.setattr("PySide6.QtWidgets.QMessageBox.warning", staticmethod(lambda *a, **k: None))
+    c.actualizar()
+    assert c.web.token is None and c.boton_sesion.text() == "Entrar"
+    v.ir_a("fresado")
+    assert v.apartados.currentIndex() == 0 and v.barra.isVisibleTo(v)
+    _limpiar(v)
+
+
+def test_aviso_de_fin_de_cnc(falsa, monkeypatch):
+    from datetime import datetime, timedelta
+
+    app, v = _ventana(falsa, monkeypatch)
+    c = v.confeccion
+    assert c.entrar("taller@ortosend.es", "clave")
+    # La CNC empieza una tirada de 40 min con los pedidos 102 (por fresar) y 999 (no está).
+    v.cnc_iniciar(40, "TIRADA 7", [102, 999], ["#102 LUIS · pie izquierdo", "#102 LUIS · pie derecho", "OTRO"])
+    assert "quedan 40 min" in v.boton_cnc.text() and v.accion_cnc.isVisible() and not c.aviso_cnc.isVisibleTo(c)
+    # Tiempo cumplido (también si el programa se cerró entretanto): sale el aviso en Confección.
+    v.cnc_iniciar(40, "TIRADA 7", [102, 999], ["a", "b", "c"], inicio=datetime.now() - timedelta(minutes=41))
+    v.show()
+    v.ir_a("confeccion")
+    assert c.aviso_cnc.isVisibleTo(c) and "TIRADA 7" in c.texto_aviso_cnc.text()
+    assert "CNC terminada" in v.boton_cnc.text() and v.cnc_estado()["avisado"]
+    assert c.boton_pasar.text() == "Pasar sus 2 pedidos a confección"
+    c.pasar_tirada_a_confeccion()
+    assert falsa.pedidos["c2"]["fase"] == "CONFECCION" and falsa.pedidos["c2"]["lote"] == "TIRADA 7"
+    assert v.cnc_estado() is None and not c.aviso_cnc.isVisibleTo(c) and not v.accion_cnc.isVisible()
+    _limpiar(v)
+
+
+def test_inicio_desde_la_tirada(stl_sintetico, monkeypatch, tmp_path):
+    """En Fresado, «Inicio» de la tirada pone en marcha el aviso con el tiempo estimado y los pedidos."""
+    from PySide6.QtCore import QSettings
+    from PySide6.QtWidgets import QApplication
+
+    from interfaz.principal import VentanaPrincipal
+
+    app = QApplication.instance() or QApplication([])
+    QSettings("Ortosend", "Rectificador").remove("cnc_en_marcha")
+    v = VentanaPrincipal()
+    ruta = tmp_path / "Ana Ruiz 600111222 caso 321.stl"
+    ruta.write_bytes(stl_sintetico.read_bytes())
+    v.abrir(str(ruta), esperar=True)
+    assert v.proyecto.paciente["pedido"] == 321 and v.caja_pedido.text() == "321"  # del nombre del escaneo
+    t = v.abrir_tirada()
+    t.anadir_abierto()
+    assert all(p.pedido == 321 and p.nombre.startswith("#321 ") for p in t.piezas)
+    assert not t.boton_inicio.isEnabled()
+    t.calcular(esperar=True)
+    assert t.boton_inicio.isEnabled()
+    t.iniciar("L-09")
+    estado = v.cnc_estado()
+    assert estado["pedidos"] == [321] and estado["lote"] == "L-09" and len(estado["moldes"]) == 2
+    assert abs(estado["minutos"] - t.trabajo.tiempo_min) < 1e-6
+    v.cnc_parar()
+    t.close()
+    v.close()
+
+
+def test_materiales_sin_precios(falsa):
     from PySide6.QtWidgets import QApplication
 
     from interfaz.confeccion import DialogoMateriales
@@ -236,11 +299,14 @@ def test_materiales_editables(falsa, monkeypatch):
     app = QApplication.instance() or QApplication([])
     d = DialogoMateriales(None, falsa.materiales)
     assert d.tabla.rowCount() == 2
-    d.tabla.cellWidget(0, 6).setValue(30.0)  # EVA a 30 €
+    assert not any("€" in d.tabla.horizontalHeaderItem(i).text() or "Pares" in d.tabla.horizontalHeaderItem(i).text()
+                   for i in range(d.tabla.columnCount()))
     d.anadir()
     d.tabla.item(2, 0).setText("Corcho 3 mm")
-    d.tabla.cellWidget(2, 7).setValue(10)
     lista = d.materiales()
-    assert lista[0]["id"] == "eva" and lista[0]["precioCents"] == 3000
-    assert lista[2]["nombre"] == "Corcho 3 mm" and "id" not in lista[2] and lista[2]["paresPorPlancha"] == 10
+    assert lista[0]["id"] == "eva" and "precioCents" not in lista[0]
+    assert lista[2]["nombre"] == "Corcho 3 mm" and "id" not in lista[2]
     assert lista[1]["dureza"] is None and lista[1]["planchaAnchoMm"] is None
+    d.close()
+    d.deleteLater()
+    app.processEvents()

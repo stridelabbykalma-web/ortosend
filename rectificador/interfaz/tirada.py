@@ -18,18 +18,30 @@ from ortomolde import cnc, mapa
 from ortomolde.campo import malla_a_campo
 from ortomolde.entrada import cargar_malla
 from ortomolde.pies import detectar_pies
+from ortomolde.trabajo import pedido_de_ruta
 
 from interfaz import estilo
 from interfaz.estilo import C
 from interfaz.plancha_vista import VistaPlancha
 
 
+def _con_pedido(piezas: list[cnc.Pieza], pedido: int | None) -> list[cnc.Pieza]:
+    """Apunta el nº de pedido en cada pie (y lo pone delante del nombre: sale en el mapa y en el .nc)."""
+    if pedido:
+        for p in piezas:
+            p.pedido = int(pedido)
+            p.nombre = f"#{p.pedido} {p.nombre}"
+    return piezas
+
+
 def piezas_de_proyecto(proyecto, nombre: str) -> list[cnc.Pieza]:
     """Las piezas (un pie cada una) del molde abierto, tal como se exportaría."""
     c = proyecto.calcular()
-    return cnc.piezas_de_molde(c.z, proyecto.fondo_molde, [p.mascara for p in proyecto.pies],
-                               [f"{nombre} · pie {p.lado}" for p in proyecto.pies],
-                               c.rejilla.dx, proyecto.taller["cnc"])
+    piezas = cnc.piezas_de_molde(c.z, proyecto.fondo_molde, [p.mascara for p in proyecto.pies],
+                                 [f"{nombre} · pie {p.lado}" for p in proyecto.pies],
+                                 c.rejilla.dx, proyecto.taller["cnc"])
+    pedido = (proyecto.paciente or {}).get("pedido") or pedido_de_ruta(proyecto.ruta_stl)
+    return _con_pedido(piezas, pedido)
 
 
 def piezas_de_archivo(ruta: str, taller: dict) -> list[cnc.Pieza]:
@@ -45,8 +57,9 @@ def piezas_de_archivo(ruta: str, taller: dict) -> list[cnc.Pieza]:
     if not pies:
         raise ValueError(f"En {Path(ruta).name} ({tam[0]:.0f} × {tam[1]:.0f} mm) no encuentro ningún pie.")
     nombre = Path(ruta).stem.upper()
-    return cnc.piezas_de_molde(z, fondo, [p.mascara for p in pies], [f"{nombre} · pie {p.lado}" for p in pies],
-                               paso, taller["cnc"])
+    piezas = cnc.piezas_de_molde(z, fondo, [p.mascara for p in pies], [f"{nombre} · pie {p.lado}" for p in pies],
+                                 paso, taller["cnc"])
+    return _con_pedido(piezas, pedido_de_ruta(ruta))
 
 
 class _Calculo(QObject):
@@ -168,6 +181,12 @@ class VentanaTirada(QDialog):
         self.boton_guardar.clicked.connect(lambda: self.guardar())
         self.boton_guardar.setEnabled(False)
         lay_cnc.addWidget(self.boton_guardar)
+        self.boton_inicio = QPushButton("▶  Inicio: la CNC empieza")
+        self.boton_inicio.setToolTip("Púlsalo al arrancar la CNC: con el tiempo estimado, te avisa en Confección\n"
+                                     "cuando acabe (y puedes pasar sus pedidos a confección de un clic).")
+        self.boton_inicio.clicked.connect(lambda: self.iniciar())
+        self.boton_inicio.setEnabled(False)
+        lay_cnc.addWidget(self.boton_inicio)
         b = QPushButton("Ver mapa para imprimir")
         b.setIcon(estilo.icono("mapa"))
         b.clicked.connect(self.ver_mapa)
@@ -263,6 +282,7 @@ class VentanaTirada(QDialog):
         """Numeración, lista y mapa (sin recalcular nada pesado)."""
         self.trabajo = None
         self.boton_guardar.setEnabled(False)
+        self.boton_inicio.setEnabled(False)
         puestas = [p for p in self.piezas if p.colocada]
         self.numeros = {id(p): n for n, p in enumerate(cnc.orden_fresado(puestas, self._paso()), 1)}
         self._refrescar_lista()
@@ -301,6 +321,7 @@ class VentanaTirada(QDialog):
         """Lo calculado ya no vale."""
         self.trabajo = None
         self.boton_guardar.setEnabled(False)
+        self.boton_inicio.setEnabled(False)
         self.vista.borrar_contornos()
 
     # ------------------------------------------------------------ elegir
@@ -485,6 +506,7 @@ class VentanaTirada(QDialog):
         self.boton_calcular.setEnabled(True)
         self.trabajo = trabajo
         self.boton_guardar.setEnabled(True)
+        self.boton_inicio.setEnabled(True)
         self.vista.dibujar_contornos(trabajo.contornos)
         a, l, h = trabajo.plancha
         texto = (f"<b>{len(trabajo.piezas)} pie(s) colocados</b> en la plancha de {a:.0f} × {l:.0f} × {h:.0f} mm "
@@ -510,13 +532,14 @@ class VentanaTirada(QDialog):
             if not ruta:
                 return
         ruta = Path(ruta)
+        self.nombre_tirada = ruta.stem.upper()
         ruta.write_text(self.trabajo.gcode, encoding="ascii", errors="replace")
         vacio = ruta.with_name(ruta.stem + "_PRUEBA_EN_VACIO.nc")
         vacio.write_text(cnc.en_vacio(self.trabajo.gcode, 5.0), encoding="ascii", errors="replace")
         hoja = ruta.with_suffix(".txt")
         a, l, h = self.trabajo.plancha
         lineas = [
-            "TIRADA DE CNC - Rectificador de moldes Ortosend", "",
+            "TIRADA DE CNC - Ortosend Taller", "",
             f"Plancha de {self.taller['cnc'].get('material', '')}: {a:.0f} x {l:.0f} x {h:.0f} mm",
             "Origen: X0 Y0 = esquina delantera izquierda de la plancha; Z0 = cara de arriba.",
             f"Prueba sin cortar: {ruta.stem}_PRUEBA_EN_VACIO.nc (todo por encima de la plancha, cabezal apagado).",
@@ -541,6 +564,27 @@ class VentanaTirada(QDialog):
                                     "recorrido por encima de la plancha (nunca baja de 5 mm sobre ella) y sin cortar, "
                                     "para comprobar el origen.\n"
                                     "Imprime el mapa (PDF) para saber qué molde es cada uno en la plancha.")
+
+    def iniciar(self, lote: str | None = None):
+        """La CNC empieza esta tirada: el programa avisa en Confección cuando acabe (según el tiempo estimado)."""
+        if self.trabajo is None:
+            return
+        from datetime import datetime
+        from PySide6.QtWidgets import QInputDialog
+
+        puestas = [f.pieza for f in self.trabajo.fichas]
+        pedidos = sorted({p.pedido for p in puestas if p.pedido})
+        sin = [p.nombre for p in puestas if not p.pedido]
+        if lote is None:
+            sugerido = getattr(self, "nombre_tirada", "") or f"TIRADA {datetime.now():%d-%m %H:%M}"
+            texto = (f"Tiempo estimado: {self.trabajo.tiempo_min:.0f} min. Te aviso en Confección cuando acabe.\n"
+                     + (f"Pedidos: {', '.join(f'#{n}' for n in pedidos)}\n" if pedidos else "")
+                     + (f"Sin nº de pedido: {len(sin)} pie(s) (ponlo en «Pedido nº» del molde).\n" if sin else "")
+                     + "\nNombre de la tirada (lote):")
+            lote, ok = QInputDialog.getText(self, "Inicio de la CNC", texto, text=sugerido)
+            if not ok:
+                return
+        self.principal.cnc_iniciar(self.trabajo.tiempo_min, lote.strip(), pedidos, [p.nombre for p in puestas])
 
     def _cambiar_margen(self, valor: float):
         self.taller["cnc"]["margen_bloque"] = float(valor)
