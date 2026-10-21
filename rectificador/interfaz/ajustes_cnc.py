@@ -26,7 +26,7 @@ GRUPOS = (
     ("Pasadas", "3", (
         ("bajada_por_pasada", "Bajada por capa (desbaste)", " mm", 1),
         ("bajada_contorno", "Bajada por vuelta (contorno)", " mm", 1),
-        ("paso_desbaste", "Separación de líneas (desbaste)", " mm", 2),
+        ("paso_desbaste", "Separación de vueltas (desbaste)", " mm", 2),
         ("sobrante_desbaste", "Lo que deja para el acabado", " mm", 2),
         ("rebaje_superior", "Rebaje de la cara de arriba", " mm", 1),
         ("radio_helice", "Entrada en hélice: radio (0 = vertical)", " mm", 1),

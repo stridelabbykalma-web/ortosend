@@ -337,16 +337,16 @@ def test_al_empezar_junto_al_borde_no_baja_en_rapido():
 
 
 def test_desbaste_en_niveles_planos(tirada):
-    """Como el desbaste de Fusion: corta a Z constante (no sigue la forma del pie como el paralelo)."""
+    """Como el desbaste en cajeras de Fusion: corta a Z constante (no sigue la forma del pie como el paralelo)."""
     plano = total = 0.0
     for fase, tipo, a, b in _por_fase(tirada.gcode):
-        if fase != "Desbaste" or tipo != "G1" or a["Y"] != b["Y"]:  # los cortes van a lo largo de X
+        if fase != "Desbaste" or tipo != "G1":
             continue
-        largo = abs(b["X"] - a["X"])
+        largo = np.hypot(b["X"] - a["X"], b["Y"] - a["Y"])
         total += largo
         if abs(b["Z"] - a["Z"]) < 1e-6:
             plano += largo
-    assert total > 0 and plano / total > 0.9
+    assert total > 0 and plano / total > 0.8  # el resto: entradas en hélice o rampa y pasos entre vueltas
 
 
 def _bajadas_verticales(gcode, minimo=2.0):

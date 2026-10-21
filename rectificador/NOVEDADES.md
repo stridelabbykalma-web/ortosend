@@ -1,5 +1,13 @@
 # Novedades de Ortosend Taller
 
+## 0.8.4
+- **Desbaste en cajeras, mucho más rápido** (como Fusion): en cada nivel de 3 mm la fresa da vueltas
+  paralelas al borde de dentro hacia fuera, entrando una sola vez por zona (en espiral, o en rampa si la zona
+  es estrecha) y sin levantarse entre líneas. Con un par real la tirada pasa de unos 84 a unos 41 min (el
+  desbaste, de 65 a 22 min).
+- Sigue el orden por partes en toda la tanda: primero el desbaste de todos los pies, después el paralelo
+  de todos y al final el perfil (contorno) de todos.
+
 ## 0.8.3
 - **Planchas de 45 mm** y **lo más alto del pie 3 mm por debajo de la cara de arriba** (antes 0,5 mm): así
   toda la cara de arriba sobre cada pie se fresa siempre, aunque la plancha no esté del todo plana (antes
