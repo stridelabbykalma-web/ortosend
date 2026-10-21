@@ -163,3 +163,44 @@ export async function professionalApplicationAction(formData: FormData) {
   void admin;
   redirect(back + "&ok=" + encodeURIComponent(`Cuenta de ${app.fullName} creada e invitación enviada`));
 }
+
+// --- Personal del taller ---
+export async function invitarTallerAction(formData: FormData) {
+  const admin = await requireRole("ADMIN");
+  const back = "/panel?tab=tal";
+  const { invitarPersonalTaller } = await import("@/lib/personal-taller");
+  const { ErrorTaller } = await import("@/lib/taller-ops");
+  let nombre = "";
+  try {
+    const r = await invitarPersonalTaller(admin, {
+      nombre: String(formData.get("nombre") ?? ""),
+      email: String(formData.get("email") ?? ""),
+      telefono: String(formData.get("telefono") ?? ""),
+    });
+    nombre = r.user.name;
+  } catch (e) {
+    if (e instanceof ErrorTaller) fail(back, e.message);
+    throw e;
+  }
+  redirect(back + "&ok=" + encodeURIComponent(`${nombre}: cuenta creada e invitación enviada`));
+}
+
+export async function personalTallerAction(formData: FormData) {
+  const admin = await requireRole("ADMIN");
+  const back = "/panel?tab=tal";
+  const userId = String(formData.get("userId") ?? "");
+  const accion = String(formData.get("accion") ?? "");
+  const { activarPersonalTaller, reenviarInvitacionTaller } = await import("@/lib/personal-taller");
+  const { ErrorTaller } = await import("@/lib/taller-ops");
+  try {
+    if (accion === "reinvitar") await reenviarInvitacionTaller(admin, userId);
+    else if (accion === "baja") await activarPersonalTaller(admin, userId, false);
+    else if (accion === "alta") await activarPersonalTaller(admin, userId, true);
+    else fail(back, "Acción no válida");
+  } catch (e) {
+    if (e instanceof ErrorTaller) fail(back, e.message);
+    throw e;
+  }
+  const textos: Record<string, string> = { reinvitar: "Invitación reenviada", baja: "Dado/a de baja", alta: "Reactivado/a" };
+  redirect(back + "&ok=" + encodeURIComponent(textos[accion]));
+}

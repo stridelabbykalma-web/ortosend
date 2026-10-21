@@ -41,6 +41,7 @@ export default async function CasoPage({
       shipment: true,
       incidents: true,
       hoja: true,
+      consumos: { include: { lote: true, material: true }, orderBy: { createdAt: "asc" } },
       events: { orderBy: { at: "asc" } },
     },
   });

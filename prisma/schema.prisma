@@ -467,13 +467,13 @@ enum Delivery {
 }
 
 model Case {
-  id               String          @id @default(cuid())
-  number           Int             @unique @default(autoincrement())
+  id               String            @id @default(cuid())
+  number           Int               @unique @default(autoincrement())
   patientId        String
-  patient          Patient         @relation(fields: [patientId], references: [id])
+  patient          Patient           @relation(fields: [patientId], references: [id])
   clinicId         String
-  clinic           Clinic          @relation(fields: [clinicId], references: [id])
-  state            CaseState       @default(CITA_RESERVADA)
+  clinic           Clinic            @relation(fields: [clinicId], references: [id])
+  state            CaseState         @default(CITA_RESERVADA)
   flow             String // "A" (web) | "B" (clínica)
   appointmentAt    DateTime? // próxima cita vigente (desnormalizado de Appointment)
   reason           String? // motivo indicado por el cliente al reservar (Flujo A)
@@ -506,7 +506,8 @@ model Case {
   studySessions    StudySession[]
   annualReviewAt   DateTime? // revisión anual programada al cerrar
   hoja             HojaConfeccion?
-  createdAt        DateTime        @default(now())
+  consumos         ConsumoMaterial[]
+  createdAt        DateTime          @default(now())
 }
 
 // Actividad del asistente de captura por dispositivo: permite continuar el
@@ -738,19 +739,21 @@ enum TipoMaterial {
 }
 
 model Material {
-  id              String       @id @default(cuid())
+  id              String            @id @default(cuid())
   nombre          String
-  tipo            TipoMaterial @default(BASE)
+  tipo            TipoMaterial      @default(BASE)
   grosorMm        Float?
   dureza          String? // p. ej. "45 Shore A"
   planchaAnchoMm  Int?
   planchaLargoMm  Int?
-  precioCents     Int          @default(0) // precio de una plancha (o envase)
-  paresPorPlancha Float        @default(1) // rendimiento: cuántos pares salen de una plancha
-  activo          Boolean      @default(true)
-  orden           Int          @default(0)
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
+  precioCents     Int               @default(0) // precio de una plancha (o envase)
+  paresPorPlancha Float             @default(1) // rendimiento: cuántos pares salen de una plancha
+  activo          Boolean           @default(true)
+  orden           Int               @default(0)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  lotes           LoteMaterial[]
+  consumos        ConsumoMaterial[]
 }
 
 enum ProcesoConfeccion {
@@ -785,4 +788,41 @@ model AjustesTaller {
   minutosCnc          Int      @default(30) // por defecto en una hoja nueva
   minutosConfeccion   Int      @default(45)
   updatedAt           DateTime @updatedAt
+}
+
+// Lote de material (la etiqueta con código de barras de cada plancha): se da de alta la primera vez
+// que se escanea y luego se reconoce solo. Trazabilidad del producto sanitario a medida.
+model LoteMaterial {
+  id         String            @id @default(cuid())
+  codigo     String            @unique // texto completo del código de barras (o «manual:…» si se escribió a mano)
+  gtin       String? // GS1 (01)
+  lote       String // GS1 (10) o el que se escriba
+  caducidad  DateTime? // GS1 (17)
+  materialId String?
+  material   Material?         @relation(fields: [materialId], references: [id])
+  creadoPor  String
+  createdAt  DateTime          @default(now())
+  consumos   ConsumoMaterial[]
+}
+
+// Material usado en una plantilla: qué lote, para qué pie, la foto de la etiqueta, quién y cuándo.
+// No se borra nunca: si se registró por error se anula (queda constancia del motivo).
+model ConsumoMaterial {
+  id              String       @id @default(cuid())
+  caseId          String
+  case            Case         @relation(fields: [caseId], references: [id])
+  loteId          String
+  lote            LoteMaterial @relation(fields: [loteId], references: [id])
+  materialId      String?
+  material        Material?    @relation(fields: [materialId], references: [id])
+  pies            String       @default("par") // par | I | D
+  fotoId          String? // MediaAsset (kind etiqueta_material) con la foto de la etiqueta
+  userId          String
+  userName        String
+  createdAt       DateTime     @default(now())
+  anuladoAt       DateTime?
+  anuladoPor      String?
+  motivoAnulacion String?
+
+  @@index([caseId])
 }

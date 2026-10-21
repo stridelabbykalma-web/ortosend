@@ -2,13 +2,14 @@
 // token (cabecera Authorization: Bearer) solo para usuarios TALLER o ADMIN, y respuestas
 // JSON con el mensaje de error en español.
 import type { User } from "@prisma/client";
-import { verifyAppToken } from "./auth";
+import { getSessionUser, verifyAppToken } from "./auth";
 import { ErrorTaller } from "./taller-ops";
 
+// Ortosend Taller manda su token; el móvil (la web) va con la sesión normal de la web.
 export async function usuarioApp(req: Request): Promise<User> {
   const cabecera = req.headers.get("authorization") ?? "";
   const token = cabecera.startsWith("Bearer ") ? cabecera.slice(7).trim() : "";
-  const user = token ? await verifyAppToken(token) : null;
+  const user = token ? await verifyAppToken(token) : await getSessionUser().catch(() => null);
   if (!user) throw new ErrorTaller("Sesión caducada: vuelve a entrar con tu usuario de taller", 401);
   if (user.role !== "TALLER" && user.role !== "ADMIN") throw new ErrorTaller("Sin permiso", 403);
   return user;

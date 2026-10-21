@@ -1,10 +1,25 @@
 import Link from "next/link";
-import type { Capture, Case, Clinic, HojaConfeccion, Incident, MediaAsset, Patient, Payment, Prescription, Shipment, User } from "@prisma/client";
+import type {
+  Capture,
+  Case,
+  Clinic,
+  ConsumoMaterial,
+  HojaConfeccion,
+  Incident,
+  LoteMaterial,
+  Material,
+  MediaAsset,
+  Patient,
+  Payment,
+  Prescription,
+  Shipment,
+  User,
+} from "@prisma/client";
 import { CheckLine } from "@/components/ui";
 import { FotoCalidad } from "@/components/caso/foto-calidad";
 import { CopiarTexto } from "@/components/caso/copiar-texto";
 import { checklistOf, titularDe } from "@/lib/cases";
-import { PRICE_LABEL, SCAN_KIND, fmtd, fmtdt, MEDIA_LABEL } from "@/lib/format";
+import { PRICE_LABEL, SCAN_KIND, fmtCaducidad, fmtd, fmtdt, MEDIA_LABEL } from "@/lib/format";
 import { nombreProyectoRevoScan } from "@/lib/scan";
 import { PROD_STEPS, QC_CHECKS, fichaTecnica, prodStepIndex, slaDe, trabajoPorPie, type CapaHoja } from "@/lib/taller";
 import type { Questionnaire } from "@/lib/questionnaire";
@@ -31,7 +46,47 @@ type CaseTaller = Case & {
   shipment: Shipment | null;
   incidents: Incident[];
   hoja?: HojaConfeccion | null;
+  consumos?: (ConsumoMaterial & { lote: LoteMaterial; material: Material | null })[];
 };
+
+// Materiales usados en el par (trazabilidad): se registran desde el móvil con la foto del código de barras.
+function MaterialesRegistrados({ consumos, caseId }: { consumos: NonNullable<CaseTaller["consumos"]>; caseId: string }) {
+  return (
+    <div className="card" style={{ marginTop: 12 }}>
+      <div className="row between">
+        <b style={{ fontFamily: "var(--font-sora)" }}>Materiales y lotes (trazabilidad)</b>
+        <Link href={`/taller/${caseId}`} className="btn">
+          Registrar con el móvil
+        </Link>
+      </div>
+      {consumos.length === 0 ? (
+        <p className="muted" style={{ margin: "8px 0 0" }}>
+          Aún no hay materiales registrados. Sin ellos no se puede terminar la confección.
+        </p>
+      ) : (
+        <ul style={{ margin: "8px 0 0 18px" }}>
+          {consumos.map((c) => (
+            <li key={c.id} className={c.anuladoAt ? "muted" : ""} style={c.anuladoAt ? { textDecoration: "line-through" } : {}}>
+              <b>{c.material?.nombre ?? "Material"}</b> · lote {c.lote.lote}
+              {c.lote.caducidad ? ` · cad. ${fmtCaducidad(c.lote.caducidad)}` : ""} · {PIES_TXT[c.pies] ?? c.pies} · {c.userName},{" "}
+              {fmtdt(c.createdAt)}
+              {c.fotoId && (
+                <>
+                  {" "}
+                  ·{" "}
+                  <a href={`/api/media/${c.fotoId}`} target="_blank" rel="noreferrer">
+                    foto
+                  </a>
+                </>
+              )}
+              {c.anuladoAt && ` — anulado por ${c.anuladoPor}: ${c.motivoAnulacion}`}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
 
 const PIES_TXT: Record<string, string> = { par: "Par", I: "Pie izquierdo", D: "Pie derecho" };
 
@@ -229,8 +284,8 @@ export function TallerView({ kase }: { kase: CaseTaller }) {
         </div>
         <form action={confectionDoneAction}>
           {hid}
-          <label>Material y lote de material</label>
-          <input name="material" defaultValue={kase.material ?? ""} placeholder="Ej.: EVA-45 lote M-2211" style={{ maxWidth: 280 }} required />
+          <label>Material y lote (si lo dejas vacío se ponen los materiales registrados)</label>
+          <input name="material" defaultValue={kase.material ?? ""} placeholder="Ej.: EVA-45 lote M-2211" style={{ maxWidth: 280 }} />
           <div className="sp" />
           <button type="submit" className="pri">
             Par terminado → control de calidad
@@ -350,6 +405,7 @@ export function TallerView({ kase }: { kase: CaseTaller }) {
         <div className="card">
           {zone}
           {kase.hoja && <HojaConfeccionCard hoja={kase.hoja} />}
+          {kase.consumos && <MaterialesRegistrados consumos={kase.consumos} caseId={kase.id} />}
         </div>
         <div className="card ficha">
           <b style={{ fontFamily: "var(--font-sora)" }}>Ficha de fabricación</b>

@@ -1,7 +1,7 @@
 // Pedidos del taller tal como los ve Ortosend Taller (programa del taller): la lista en el
 // mismo orden que el tablero del panel y el detalle con la pauta por pie, la ficha técnica
 // y la hoja de confección. Solo lo necesario para fabricar (datos mínimos, RGPD).
-import type { Case, Clinic, HojaConfeccion, Incident, Patient, Payment, User } from "@prisma/client";
+import type { Case, Clinic, ConsumoMaterial, HojaConfeccion, Incident, LoteMaterial, Material, Patient, Payment, User } from "@prisma/client";
 import { prisma } from "./db";
 import { audit } from "./cases";
 import { nombreCompleto } from "./nombre";
@@ -83,7 +83,16 @@ export function materialSinCostes<T extends { precioCents: number; paresPorPlanc
 export async function detallePedido(caseId: string, user: Pick<User, "id" | "role">) {
   const c = await prisma.case.findUnique({
     where: { id: caseId },
-    include: { patient: true, clinic: true, payment: true, incidents: true, capture: true, prescription: true, hoja: true },
+    include: {
+      patient: true,
+      clinic: true,
+      payment: true,
+      incidents: true,
+      capture: true,
+      prescription: true,
+      hoja: true,
+      consumos: { include: { lote: true, material: true }, orderBy: { createdAt: "asc" } },
+    },
   });
   if (!c || !TALLER_STATES.includes(c.state)) throw new ErrorTaller("Caso no activo en taller", 404);
   // Registro de accesos a datos de salud (RGPD), como al abrir la ficha en la web.
@@ -97,6 +106,26 @@ export async function detallePedido(caseId: string, user: Pick<User, "id" | "rol
     pauta: c.prescription?.fabricationOrder ?? null,
     ficha: fichaTecnica(q, e, c),
     hoja: hojaJson(c.hoja, veCostes(user)),
+    materiales: c.consumos.map(consumoJson),
+  };
+}
+
+type ConsumoConLote = ConsumoMaterial & { lote: LoteMaterial; material: Material | null };
+
+// Material registrado en la plantilla (trazabilidad): qué, qué lote, para qué pie, quién y cuándo.
+export function consumoJson(c: ConsumoConLote) {
+  return {
+    id: c.id,
+    materialId: c.materialId,
+    material: c.material?.nombre ?? null,
+    lote: c.lote.lote,
+    caducidad: c.lote.caducidad ? c.lote.caducidad.toISOString().slice(0, 10) : null,
+    gtin: c.lote.gtin,
+    pies: c.pies,
+    foto: c.fotoId ? `/api/media/${c.fotoId}` : null,
+    quien: c.userName,
+    cuando: c.createdAt.toISOString(),
+    anulado: c.anuladoAt ? { cuando: c.anuladoAt.toISOString(), quien: c.anuladoPor, motivo: c.motivoAnulacion } : null,
   };
 }
 

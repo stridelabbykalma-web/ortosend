@@ -12,6 +12,17 @@ import { POST as fresado } from "@/app/api/taller/pedidos/[id]/fresado/route";
 import { POST as confeccion } from "@/app/api/taller/pedidos/[id]/confeccion/route";
 import { GET as verMateriales, PUT as guardarMateriales } from "@/app/api/taller/materiales/route";
 import { GET as verAjustes, PUT as guardarAjustes } from "@/app/api/taller/ajustes/route";
+import { POST as registrarMaterial } from "@/app/api/taller/pedidos/[id]/materiales/route";
+import { POST as anular } from "@/app/api/taller/consumos/[id]/anular/route";
+import { GET as buscarLote } from "@/app/api/taller/lotes/route";
+
+// Foto de la etiqueta (un JPEG mínimo) + lo leído del código de barras.
+const formMaterial = (token: string, campos: Record<string, string>, conFoto = true) => {
+  const f = new FormData();
+  for (const [k, v] of Object.entries(campos)) f.set(k, v);
+  if (conFoto) f.set("foto", new File([new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 0xff, 0xd9])], "etiqueta.jpg", { type: "image/jpeg" }));
+  return new Request(URL, { method: "POST", headers: { authorization: `Bearer ${token}` }, body: f });
+};
 
 const URL = "http://localhost/api/taller";
 const pet = (metodo: string, token?: string, body?: unknown) =>
@@ -177,14 +188,46 @@ describe("estados", () => {
     const otra = await fresado(pet("POST", token, { lote: "L-07" }), conId(casos.reciente));
     expect(otra.status).toBe(409);
   });
-  it("confección terminada → calidad, pidiendo el material", async () => {
-    expect((await confeccion(pet("POST", token, { material: " " }), conId(casos.antiguo))).status).toBe(400);
-    const r = await confeccion(pet("POST", token, { material: "EVA lote M-1" }), conId(casos.antiguo));
+  it("confección terminada → calidad, solo con los materiales registrados (trazabilidad)", async () => {
+    const sin = await confeccion(pet("POST", token, { material: "EVA lote M-1" }), conId(casos.antiguo));
+    expect(sin.status).toBe(409);
+    expect((await sin.json()).error).toMatch(/Registra antes los materiales/);
+    // Se escanea la etiqueta GS1 de la plancha: foto + lote + caducidad.
+    const codigo = "]C1010841234567890517271231" + "10EVA-7781";
+    const r1 = await registrarMaterial(
+      formMaterial(token, { codigo, lote: "EVA-7781", caducidad: "2027-12-31", gtin: "08412345678905", materialId: "mat_eva_3_45", pies: "par" }),
+      conId(casos.antiguo)
+    );
+    expect(r1.status).toBe(200);
+    const { material } = await r1.json();
+    expect(material).toMatchObject({ material: "EVA 3 mm", lote: "EVA-7781", caducidad: "2027-12-31", pies: "par", quien: "Toni Taller" });
+    expect(material.foto).toMatch(/^\/api\/media\//);
+    // La siguiente vez el mismo código se reconoce solo.
+    const conocido = await (await buscarLote(new Request(`${URL}/lotes?codigo=${encodeURIComponent(codigo)}`, { headers: { authorization: `Bearer ${token}` } }))).json();
+    expect(conocido.lote).toMatchObject({ lote: "EVA-7781", materialId: "mat_eva_3_45" });
+    expect(conocido.etiqueta).toMatchObject({ esGs1: true, lote: "EVA-7781", caducidad: "2027-12-31" });
+    // Sin código legible: lote escrito a mano (y sin foto también vale, aunque se recomienda).
+    const r2 = await registrarMaterial(formMaterial(token, { codigo: "", lote: "f-22", materialId: "mat_forro_piel", pies: "I" }, false), conId(casos.antiguo));
+    expect(r2.status).toBe(200);
+    expect((await registrarMaterial(formMaterial(token, { lote: "", materialId: "mat_forro_piel" }), conId(casos.antiguo))).status).toBe(400);
+    // Un registro equivocado se anula (con motivo), no se borra.
+    const r3 = await registrarMaterial(formMaterial(token, { lote: "X1", materialId: "mat_pp_2" }), conId(casos.antiguo));
+    const malo = (await r3.json()).material;
+    expect((await anular(pet("POST", token, { motivo: "" }), conId(malo.id))).status).toBe(400);
+    expect((await anular(pet("POST", token, { motivo: "No era esa plancha" }), conId(malo.id))).status).toBe(200);
+    expect((await anular(pet("POST", token, { motivo: "otra vez" }), conId(malo.id))).status).toBe(409);
+    await expect(prisma.consumoMaterial.delete({ where: { id: malo.id } })).rejects.toThrow();
+    await expect(prisma.consumoMaterial.update({ where: { id: malo.id }, data: { pies: "D" } })).rejects.toThrow();
+    const det = await (await detalle(pet("GET", token), conId(casos.antiguo))).json();
+    expect(det.materiales).toHaveLength(3);
+    expect(det.materiales[2].anulado).toMatchObject({ quien: "Toni Taller", motivo: "No era esa plancha" });
+    // Ahora sí: el material del par se apunta solo con lo registrado (sin el anulado).
+    const r = await confeccion(pet("POST", token, {}), conId(casos.antiguo));
     expect(r.status).toBe(200);
     const k = await prisma.case.findUniqueOrThrow({ where: { id: casos.antiguo }, include: { events: true } });
     expect(k.state).toBe("CALIDAD");
-    expect(k.material).toBe("EVA lote M-1");
-    expect(k.events.map((e) => e.text).join(" ")).toMatch(/Confección terminada/);
+    expect(k.material).toBe("EVA 3 mm lote EVA-7781, Forro piel sintética lote f-22");
+    expect(k.events.map((e) => e.text).join(" ")).toMatch(/Material registrado: EVA 3 mm · lote EVA-7781 \(par\)/);
   });
 });
 
@@ -225,5 +268,31 @@ describe("materiales y ajustes", () => {
   it("al cambiar la contraseña el token deja de valer", async () => {
     await prisma.user.update({ where: { id: tallerId }, data: { passwordHash: await hashPassword("otra-clave") } });
     expect((await listar(pet("GET", token))).status).toBe(401);
+  });
+});
+
+describe("personal del taller", () => {
+  it("el administrador da de alta, la persona recibe la invitación y al darla de baja deja de entrar", async () => {
+    const { invitarPersonalTaller, reenviarInvitacionTaller, activarPersonalTaller } = await import("@/lib/personal-taller");
+    const admin = await prisma.user.findFirstOrThrow({ where: { role: "ADMIN", email: "admin@ortosend.test" } });
+    const { user, enlace } = await invitarPersonalTaller(admin, { nombre: "Rosa Taller", email: "Rosa@Ortosend.test", telefono: "612 345 678" });
+    expect(user).toMatchObject({ role: "TALLER", email: "rosa@ortosend.test", active: true });
+    expect(enlace).toMatch(/^\/activar\?token=/);
+    const aviso = await prisma.notification.findFirst({ where: { template: "invitacion_profesional" }, orderBy: { createdAt: "desc" } });
+    expect(JSON.stringify(aviso?.payload)).toMatch(/taller de Ortosend/);
+    await expect(invitarPersonalTaller(admin, { nombre: "Otra", email: "rosa@ortosend.test", telefono: "612345679" })).rejects.toThrow(/Ya existe/);
+    await expect(invitarPersonalTaller(admin, { nombre: "", email: "x@y.es", telefono: "612345670" })).rejects.toThrow(/nombre/);
+    expect(await reenviarInvitacionTaller(admin, user.id)).toMatch(/^\/activar/);
+    // Crea su contraseña (como en /activar) y entra con su móvil o email.
+    await prisma.user.update({ where: { id: user.id }, data: { passwordHash: await hashPassword("clave-rosa"), activatedAt: new Date() } });
+    const r = await entrar(pet("POST", undefined, { email: "612345678", password: "clave-rosa" }));
+    expect(r.status).toBe(200);
+    const suToken = (await r.json()).token;
+    expect((await listar(pet("GET", suToken))).status).toBe(200);
+    await activarPersonalTaller(admin, user.id, false);
+    expect((await listar(pet("GET", suToken))).status).toBe(401);
+    expect((await entrar(pet("POST", undefined, { email: "rosa@ortosend.test", password: "clave-rosa" }))).status).toBe(401);
+    await activarPersonalTaller(admin, user.id, true);
+    expect((await listar(pet("GET", suToken))).status).toBe(200);
   });
 });
