@@ -28,6 +28,7 @@ GRUPOS = (
         ("bajada_contorno", "Bajada por vuelta (contorno)", " mm", 1),
         ("paso_desbaste", "Separación de líneas (desbaste)", " mm", 2),
         ("sobrante_desbaste", "Lo que deja para el acabado", " mm", 2),
+        ("rebaje_superior", "Rebaje de la cara de arriba", " mm", 1),
         ("radio_helice", "Entrada en hélice: radio (0 = vertical)", " mm", 1),
         ("rampa_grados", "Entrada en hélice: inclinación", " °", 1),
         ("paso_acabado", "Separación de líneas (acabado)", " mm", 2),
@@ -124,6 +125,9 @@ class DialogoAjustesCNC(QDialog):
             avisos.append("Sin hélice, el desbaste clava la fresa en vertical al entrar en el yeso.")
         elif v["rampa_grados"] > 5:
             avisos.append("Con la hélice muy inclinada la fresa entra casi como en vertical (Fusion usa 2°).")
+        if v["rebaje_superior"] < 1:
+            avisos.append("Con menos de 1 mm de rebaje, si la plancha no está del todo plana partes del pie "
+                          "pueden quedar sin fresar.")
         if v["sobrante_desbaste"] == 0:
             avisos.append("Sin sobrante, el acabado no quita las marcas del desbaste.")
         self.avisos.setText("<br>".join(estilo.html("⚠ " + a, "aviso") for a in avisos))

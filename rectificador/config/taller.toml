@@ -68,7 +68,8 @@ avance_acabado = 3000        # mm/min en el acabado
 avance_rapido = 3000         # mm/min (solo para estimar el tiempo; los G0 los hace la máquina)
 altura_seguridad = 15.0      # mm sobre la plancha para ir de un pie a otro (como Fusion)
 altura_paso = 2.0            # mm sobre la plancha para saltar dentro de un mismo pie
-rebaje_superior = 0.5        # mm por debajo de la cara de arriba queda lo más alto del pie
+rebaje_superior = 3.0        # mm por debajo de la cara de arriba queda lo más alto del pie: así toda la
+                             # cara de arriba se fresa aunque la plancha no esté del todo plana
 # 1) Desbaste grande en niveles planos (como Fusion), dentro de la silueta. Quita la carga primero.
 bajada_por_pasada = 3.0      # mm entre niveles del desbaste (Fusion: cada 3 mm)
 paso_desbaste = 7.0          # mm entre líneas del desbaste (con la bola de 25 deja crestas de 0,5 mm)
@@ -94,7 +95,7 @@ permitir_giro = true         # girar pies 90° si así caben más
 # Por defecto, la mesa de la Two Trees TTC 6050. Origen: esquina delantera izquierda, arriba.
 ancho_x = 600.0
 largo_y = 500.0
-alto_z = 40.0
+alto_z = 45.0                # planchas de 45 mm (el molde mide 40 y se rebajan 3 mm arriba)
 
 [web]
 # Web de Ortosend: de ahí salen los pedidos del taller (apartado «Confección»).

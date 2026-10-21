@@ -1,5 +1,11 @@
 # Novedades de Ortosend Taller
 
+## 0.8.3
+- **Planchas de 45 mm** y **lo más alto del pie 3 mm por debajo de la cara de arriba** (antes 0,5 mm): así
+  toda la cara de arriba sobre cada pie se fresa siempre, aunque la plancha no esté del todo plana (antes
+  podía quedar el talón o los dedos sin tocar).
+- El rebaje se cambia en *Ajustes de la CNC* («Rebaje de la cara de arriba»).
+
 ## 0.8.2
 - **El fresado va como en Fusion, en toda la plancha**: primero el **desbaste grande** de todos los pies
   (quita la carga), después el **paralelo** de todos y el **contorno** al final.

@@ -364,3 +364,16 @@ def test_desbaste_entra_en_helice_como_fusion(piezas_sinteticas, cfg):
     en_xyz = sum(1 for fase, tipo, a, b in _por_fase(helice.gcode)
                  if fase == "Desbaste" and a["X"] != b["X"] and a["Y"] != b["Y"] and b["Z"] < a["Z"])
     assert en_xyz > 100
+
+
+def test_toda_la_cara_de_arriba_se_fresa_sobre_cada_pie(piezas_sinteticas, cfg):
+    """Lo más alto del pie queda `rebaje_superior` mm bajo la cara de arriba: aunque la plancha no esté del
+    todo plana, sobre el pie no queda nada de la cara original sin fresar."""
+    assert cfg["rebaje_superior"] == 3.0
+    t = cnc.generar(piezas_sinteticas("A"), 300, 400, 45, 1.0, 12.5, cfg)
+    sil = np.zeros(t.altura.shape, bool)
+    for f in t.fichas:
+        p = f.pieza
+        s = p.silueta_girada()
+        sil[p.y:p.y + s.shape[0], p.x:p.x + s.shape[1]] |= s
+    assert sil.any() and t.altura[sil].max() <= 45 - cfg["rebaje_superior"] + 1e-6
