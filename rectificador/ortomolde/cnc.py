@@ -9,12 +9,13 @@ Fusion del taller (`molde_yeso.nc`).
 - Cada pie se fresa con su parte más alta justo debajo de la cara de arriba de la plancha.
 - Fresa de punta de bola (Ø25): se calcula dónde debe ir la PUNTA para que la bola toque el molde
   sin comérselo (superficie desplazada).
-- Por cada pie, tres fases (como Fusion):
-  1. CONTORNO: se rodea la silueta del pie bajando en espiral (`bajada_contorno` mm por vuelta)
+- Por cada pie, tres fases y en el mismo orden que Fusion (el contorno al final, para que la escayola
+  trabaje entera y firme mientras se desbasta y se da el acabado):
+  1. DESBASTE por capas (`bajada_por_pasada`) dentro de la silueta, dejando `sobrante_desbaste`.
+  2. ACABADO en líneas paralelas a X separadas `paso_acabado` mm.
+  3. CONTORNO: se rodea la silueta del pie bajando en espiral (`bajada_contorno` mm por vuelta)
      hasta dejar `suelo_contorno` mm de escayola debajo. El pie queda como una isla con la pared
-     vertical; alrededor no queda base plana y el resto de la plancha no se toca.
-  2. DESBASTE por capas (`bajada_por_pasada`) dentro de la silueta, dejando `sobrante_desbaste`.
-  3. ACABADO en líneas paralelas a X separadas `paso_acabado` mm.
+     vertical, unida a la plancha por debajo; alrededor no queda base plana y el resto no se toca.
 - G-code en el formato del ejemplo de Fusion (comentarios entre paréntesis, T1, S M3, G54…).
 """
 
@@ -564,14 +565,16 @@ class _Escritor:
         self.lineas.append("G1 " + " ".join(partes) + f)
         self._mover(d, avance)
 
-    def bajar_a(self, x, y, z, z_libre):
+    def bajar_a(self, x, y, z, z_libre, z_techo=None):
         """Subir sobre la plancha, ir encima del punto, bajar rápido hasta 1 mm sobre el material
-        que pueda haber ahí (`z_libre`) y entrar despacio hasta z."""
-        arriba = max(self.z_paso, z_libre + 1.0)
+        que pueda haber ahí (`z_libre`) y entrar despacio hasta z. Si la bola alcanza escayola sin fresar
+        más alta (`z_techo`: junto al borde, antes del contorno), en rápido solo hasta 1 mm sobre ella."""
+        z_rapido = z_libre if z_techo is None else max(z_libre, z_techo)
+        arriba = max(self.z_paso, z_rapido + 1.0)
         if self.pos[2] < arriba:
             self.rapido(z=arriba)
         self.rapido(x=x, y=y)
-        self.rapido(z=z_libre + 1.0)
+        self.rapido(z=z_rapido + 1.0)
         if z < z_libre:
             self.corte(x, y, z_libre, self.cfg["avance_entrada"])
         self.corte(x, y, z, self.cfg["avance_bajada"] if z < z_libre else self.cfg["avance_entrada"])
@@ -665,6 +668,8 @@ def _desbaste(w: _Escritor, punta, c: _Colocada, paso, H, cfg, radio) -> int:
     techo = ndimage.maximum_filter(objetivo, size=2 * r + 1)  # lo más alto que puede quedar cerca
     dentro = c.sil
     material = np.where(dentro, float(H), -np.inf)
+    # Donde la bola llega a fuera de la silueta todavía hay escayola entera (el contorno va al final).
+    al_borde = _cerca_del_borde(dentro, r)
     filas = list(range(0, sub.shape[0], max(1, int(round(cfg["paso_desbaste"] / paso)))))
     if filas[-1] != sub.shape[0] - 1:
         filas.append(sub.shape[0] - 1)
@@ -697,7 +702,7 @@ def _desbaste(w: _Escritor, punta, c: _Colocada, paso, H, cfg, radio) -> int:
                     w.corte(xs[k0], y, prof[k0] - H, cfg["avance_entrada"])
                 else:
                     libre = min(float(H), max(anterior, techo[j, k0]) + 0.3)
-                    w.bajar_a(xs[k0], y, prof[k0] - H, libre - H)
+                    w.bajar_a(xs[k0], y, prof[k0] - H, libre - H, 0.0 if al_borde[j, k0] else None)
                 for k in rango[_simplificar(xs[rango] * sentido, prof[rango])]:
                     w.corte(xs[k], y, prof[k] - H, cfg["avance_desbaste"])
                 ultimo = (j, rango[-1])
@@ -709,6 +714,13 @@ def _desbaste(w: _Escritor, punta, c: _Colocada, paso, H, cfg, radio) -> int:
         anterior = nivel
     w.subir()
     return capas
+
+
+def _cerca_del_borde(sil: np.ndarray, r: int) -> np.ndarray:
+    """Celdas de la silueta a menos de `r` celdas de su borde (la bola de ahí alcanza fuera de la silueta)."""
+    con_margen = np.pad(sil, r + 1, constant_values=False)
+    d = ndimage.distance_transform_edt(con_margen)[r + 1:-(r + 1), r + 1:-(r + 1)]
+    return sil & (d <= r)
 
 
 def _acabado(w: _Escritor, punta, c: _Colocada, paso, H, cfg) -> int:
@@ -730,7 +742,9 @@ def _acabado(w: _Escritor, punta, c: _Colocada, paso, H, cfg) -> int:
         y = j * paso
         i = sel[0]
         if primero:
-            w.bajar_a(xs[i], y, punta[j, i] - H, punta[j, i] + holgura - H)
+            # Al empezar puede haber escayola entera cerca (el contorno va al final): en rápido solo
+            # hasta 1 mm sobre la plancha.
+            w.bajar_a(xs[i], y, punta[j, i] - H, punta[j, i] + holgura - H, 0.0)
             primero = False
         else:
             # A la siguiente línea sin levantar: a la altura justa para no tocar el molde.
@@ -832,11 +846,6 @@ def generar(piezas: list[Pieza], ancho: float, largo: float, alto: float, paso: 
         w.lineas.append(comentario(f"Pieza {n}: {p.nombre} - X {p.x * paso:.0f}-{(p.x + b - 1) * paso:.0f}, "
                                    f"Y {p.y * paso:.0f}-{(p.y + a - 1) * paso:.0f}"))
         t0 = w.tiempo
-        w.lineas.append("(2D Contorneado)")
-        if c.contorno is not None and cfg.get("contorno", True):
-            vueltas += _contorno(w, c.contorno, H, c.suelo, cfg)
-        tiempos["contorno"] += w.tiempo - t0
-        t0 = w.tiempo
         w.lineas.append(comentario(f"Desbaste en capas de {cfg['bajada_por_pasada']:g} mm"))
         capas = max(capas, _desbaste(w, punta, c, paso, H, cfg, radio))
         tiempos["desbaste"] += w.tiempo - t0
@@ -844,6 +853,11 @@ def generar(piezas: list[Pieza], ancho: float, largo: float, alto: float, paso: 
         w.lineas.append(comentario(f"Paralelo - acabado cada {cfg['paso_acabado']:g} mm"))
         lineas += _acabado(w, punta, c, paso, H, cfg)
         tiempos["acabado"] += w.tiempo - t0
+        t0 = w.tiempo
+        w.lineas.append("(2D Contorneado)")
+        if c.contorno is not None and cfg.get("contorno", True):
+            vueltas += _contorno(w, c.contorno, H, c.suelo, cfg)
+        tiempos["contorno"] += w.tiempo - t0
         t0 = w.tiempo
         w.rapido(z=zseg)
         tiempos["movimientos"] += w.tiempo - t0

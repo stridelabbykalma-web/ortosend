@@ -85,8 +85,8 @@ class _Calculo(QObject):
 
 def _fases(trabajo: cnc.TrabajoCNC) -> str:
     t = trabajo.tiempos
-    return (f"contorno {t.get('contorno', 0):.0f} min, desbaste {t.get('desbaste', 0):.0f} min, "
-            f"acabado {t.get('acabado', 0):.0f} min")
+    return (f"desbaste {t.get('desbaste', 0):.0f} min, acabado {t.get('acabado', 0):.0f} min, "
+            f"contorno {t.get('contorno', 0):.0f} min")
 
 
 class VentanaTirada(QDialog):

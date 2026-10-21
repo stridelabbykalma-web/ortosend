@@ -1,5 +1,12 @@
 # Novedades de Ortosend Taller
 
+## 0.8.1
+- **El contorno, al final** (como en vuestro Fusion): cada pie se fresa ahora en el orden desbaste →
+  acabado → contorno, así la escayola trabaja entera y firme casi todo el tiempo. El contorno sigue sin
+  atravesar la plancha (deja 7,5 mm debajo): el molde queda unido a la plancha hasta que lo separas.
+- Como alrededor del pie todavía hay escayola entera, al entrar junto al borde la fresa ya no baja en
+  rápido: solo hasta 1 mm sobre la plancha y de ahí despacio.
+
 ## 0.8.0
 - **Ajustes de la CNC desde el programa**: en *Archivo → Ajustes de la CNC* (o con el botón de la ventana
   Tirada de CNC) se cambian las revoluciones, las velocidades (desbaste, entrada, bajada, acabado) y las

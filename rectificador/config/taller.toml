@@ -69,17 +69,18 @@ avance_rapido = 3000         # mm/min (solo para estimar el tiempo; los G0 los h
 altura_seguridad = 15.0      # mm sobre la plancha para ir de un pie a otro (como Fusion)
 altura_paso = 2.0            # mm sobre la plancha para saltar dentro de un mismo pie
 rebaje_superior = 0.5        # mm por debajo de la cara de arriba queda lo más alto del pie
-# 1) Contorno: rodea la silueta del pie (pared vertical, sin base plana alrededor).
+# 1) Desbaste por capas dentro de la silueta.
+bajada_por_pasada = 5.0      # mm que baja cada capa
+paso_desbaste = 7.0          # mm entre líneas del desbaste (con la bola de 25 deja crestas de 0,5 mm)
+sobrante_desbaste = 0.5      # mm que deja el desbaste para el acabado
+# 2) Acabado en líneas paralelas a X.
+paso_acabado = 1.75          # mm entre líneas (con la bola de 25 deja crestas de 0,03 mm)
+# 3) Contorno, al final como en Fusion: rodea la silueta del pie (pared vertical, sin base plana
+#    alrededor). Deja suelo_contorno mm debajo: el molde sigue unido a la plancha.
 contorno = true
 bajada_contorno = 3.0        # mm que baja por cada vuelta
 suelo_contorno = 7.5         # mm de escayola que quedan debajo de la ranura (Fusion: 40 - 32,5)
 suelo_minimo = 3.0           # si el pie es muy alto se deja menos suelo, pero nunca menos de esto
-# 2) Desbaste por capas dentro de la silueta.
-bajada_por_pasada = 5.0      # mm que baja cada capa
-paso_desbaste = 7.0          # mm entre líneas del desbaste (con la bola de 25 deja crestas de 0,5 mm)
-sobrante_desbaste = 0.5      # mm que deja el desbaste para el acabado
-# 3) Acabado en líneas paralelas a X.
-paso_acabado = 1.75          # mm entre líneas (con la bola de 25 deja crestas de 0,03 mm)
 # Disposición (los pies lo más juntos posible):
 margen_bloque = 0.0          # mm extra desde la ranura de cada pie al borde de la plancha
 separacion = 0.0             # mm extra entre las ranuras de dos pies vecinos

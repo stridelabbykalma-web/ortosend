@@ -79,9 +79,9 @@ def test_gcode_como_fusion(tirada, cfg):
     for linea in lineas:
         if linea.startswith("("):
             assert linea.endswith(")") and "(" not in linea[1:-1] and ")" not in linea[1:-1]
-    # Por cada pie: contorno, desbaste y acabado, en ese orden.
+    # Por cada pie: desbaste, acabado y contorno, en ese orden (como Fusion).
     fases = [l for l in lineas if l.startswith(("(2D", "(Desbaste", "(Paralelo"))]
-    assert [f.split()[0] for f in fases] == ["(2D", "(Desbaste", "(Paralelo"] * 4
+    assert [f.split()[0] for f in fases] == ["(Desbaste", "(Paralelo", "(2D"] * 4
 
 
 def test_movimientos_dentro_de_la_plancha(tirada, cfg):
@@ -316,3 +316,20 @@ def test_gcode_con_ajustes_cambiados(piezas_sinteticas, cfg):
     assert "F2200" in t.gcode
     assert "Ajustes de la CNC" in t.gcode
     assert "Ajustes de la CNC" not in cnc.generar(piezas_sinteticas("A"), 300, 400, 40, 1.0, 12.5, cfg).gcode
+
+
+def test_orden_como_fusion_contorno_al_final(tirada):
+    """Como el ejemplo de Fusion: desbaste, acabado y el contorno al final de cada pie (la escayola trabaja
+    entera mientras se desbasta)."""
+    fases = [l.split()[0][1:] for l in tirada.gcode.splitlines()
+             if l.startswith(("(Desbaste", "(Paralelo", "(2D Contorneado"))]
+    assert fases == ["Desbaste", "Paralelo", "2D"] * (len(fases) // 3) and len(fases) >= 6
+
+
+def test_al_empezar_junto_al_borde_no_baja_en_rapido():
+    """Antes del contorno, alrededor del pie hay escayola entera: la entrada del acabado baja en rápido
+    solo hasta 1 mm sobre la plancha y de ahí despacio."""
+    w = cnc._Escritor({"avance_entrada": 1500, "avance_bajada": 800, "avance_rapido": 3000}, 15.0)
+    w.bajar_a(10.0, 20.0, -12.0, -10.5, 0.0)
+    assert "G0 Z1.000" in w.lineas
+    assert not any(l.startswith("G0") and "Z-" in l for l in w.lineas)
