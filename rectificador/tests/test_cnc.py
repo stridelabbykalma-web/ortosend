@@ -284,3 +284,35 @@ def test_pie_muy_alto_se_recorta_por_abajo(cfg):
     assert cnc.ajustar_alto([p], 60.0, cfg) == [] and np.array_equal(p.h, h)
     t = cnc.generar([p], 200, 200, 40.0, 1.0, 12.5, cfg)
     assert any("por abajo" in a for a in t.avisos)
+
+
+def test_ajustes_cnc_guardados_aparte(monkeypatch, tmp_path):
+    from ortomolde import config
+
+    ruta = tmp_path / "Ortosend" / "ajustes_taller.json"
+    monkeypatch.setenv("ORTOSEND_AJUSTES", str(ruta))
+    fabrica = config.cnc_de_fabrica()
+    assert config.taller()["cnc"]["avance_acabado"] == fabrica["avance_acabado"]
+    assert config.taller()["cnc"]["ajustes_propios"] is False
+
+    config.guardar_ajustes_cnc({"avance_acabado": 2200, "revoluciones": 12000, "otra_cosa": 5, "paso_acabado": 99})
+    assert ruta.exists()
+    t = config.taller()["cnc"]
+    assert (t["avance_acabado"], t["revoluciones"], t["ajustes_propios"]) == (2200, 12000, True)
+    assert "otra_cosa" not in t and t["paso_acabado"] == fabrica["paso_acabado"]  # fuera de rango: se ignora
+
+    ruta.write_text("{roto", encoding="utf-8")
+    assert config.ajustes_cnc() == {}
+    assert config.taller()["cnc"]["avance_acabado"] == fabrica["avance_acabado"]
+
+    config.guardar_ajustes_cnc({})  # de fábrica: se borra el archivo
+    assert not ruta.exists()
+
+
+def test_gcode_con_ajustes_cambiados(piezas_sinteticas, cfg):
+    cambiado = dict(cfg, revoluciones=12000, avance_acabado=2200, ajustes_propios=True)
+    t = cnc.generar(piezas_sinteticas("A"), 300, 400, 40, 1.0, 12.5, cambiado)
+    assert "S12000 M3" in t.gcode
+    assert "F2200" in t.gcode
+    assert "Ajustes de la CNC" in t.gcode
+    assert "Ajustes de la CNC" not in cnc.generar(piezas_sinteticas("A"), 300, 400, 40, 1.0, 12.5, cfg).gcode

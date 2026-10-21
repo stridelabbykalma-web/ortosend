@@ -135,6 +135,10 @@ class VentanaTirada(QDialog):
         self.caja_margen.valueChanged.connect(self._cambiar_margen)
         form.addRow(estilo.etiqueta("Margen bordes", "secundario", envolver=False), self.caja_margen)
         lay_pl.addLayout(form)
+        self.boton_ajustes = QPushButton("Ajustes de la CNC (velocidades y pasadas)…")
+        self.boton_ajustes.setToolTip("Revoluciones, velocidades de avance, bajada por capa y separación de líneas")
+        self.boton_ajustes.clicked.connect(lambda: principal.ajustes_cnc())
+        lay_pl.addWidget(self.boton_ajustes)
         izq.addWidget(marco)
 
         marco, lay_pies, _ = estilo.tarjeta("Pies de la tirada", "2")

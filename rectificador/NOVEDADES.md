@@ -1,5 +1,14 @@
 # Novedades de Ortosend Taller
 
+## 0.8.0
+- **Ajustes de la CNC desde el programa**: en *Archivo → Ajustes de la CNC* (o con el botón de la ventana
+  Tirada de CNC) se cambian las revoluciones, las velocidades (desbaste, entrada, bajada, acabado) y las
+  pasadas (bajada por capa, separación de líneas, sobrante, altura de seguridad), sin tocar archivos.
+- Lo que está cambiado sale en naranja (al pasar el ratón se ve el valor de fábrica). Debajo dice qué
+  escalones deja la fresa con esa separación de líneas, y avisa si algo puede romper la escayola.
+- **Se conservan al actualizar** el programa. «Volver a los de fábrica» deja los del ejemplo de Fusion.
+- El archivo .nc lo indica cuando se ha fresado con ajustes cambiados.
+
 ## 0.7.0
 - **Cada persona del taller con su móvil**: entra en la web de Ortosend (**/taller**) con su usuario y ve los
   mismos post-its. Lo que hace cada uno se ve al momento en todos (aquí se actualiza cada 30 s).

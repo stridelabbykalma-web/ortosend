@@ -533,3 +533,49 @@ def test_lee_siempre_lo_ultimo_publicado():
     a, b = A._sin_cache(A.URL_VERSION), A._sin_cache(A.URL_VERSION)
     assert a.startswith(A.URL_VERSION + "?v=") and a != b
     assert A._sin_cache(A.URL_DESCARGA) == A.URL_DESCARGA
+
+
+def test_ajustes_cnc_desde_la_app(monkeypatch, tmp_path):
+    from PySide6.QtCore import QTimer
+    from PySide6.QtWidgets import QApplication
+
+    from interfaz.ajustes_cnc import DialogoAjustesCNC, cresta
+    from interfaz.principal import VentanaPrincipal
+    from ortomolde import config
+
+    ruta = tmp_path / "ajustes_taller.json"
+    monkeypatch.setenv("ORTOSEND_AJUSTES", str(ruta))
+    app = QApplication.instance() or QApplication([])
+    v = VentanaPrincipal()
+    v.taller = config.taller()
+    fabrica = config.cnc_de_fabrica()
+    assert round(cresta(12.5, 1.75), 2) == 0.03
+
+    def cambiar():
+        d = app.activeModalWidget()
+        assert isinstance(d, DialogoAjustesCNC)
+        assert "0.03 mm" in d.info_crestas.text()
+        d.cajas["avance_acabado"].setValue(2200)
+        d.cajas["bajada_por_pasada"].setValue(14)
+        assert "romper" in d.avisos.text()
+        d.cajas["bajada_por_pasada"].setValue(fabrica["bajada_por_pasada"])
+        d.guardar()
+
+    QTimer.singleShot(200, cambiar)
+    assert v.ajustes_cnc() is True
+    assert v.taller["cnc"]["avance_acabado"] == 2200 and v.taller["cnc"]["ajustes_propios"] is True
+    assert config.ajustes_cnc() == {"avance_acabado": 2200}
+
+    def fabrica_otra_vez():
+        d = app.activeModalWidget()
+        assert d.cajas["avance_acabado"].value() == 2200
+        d.de_fabrica()
+        d.guardar()
+
+    QTimer.singleShot(200, fabrica_otra_vez)
+    assert v.ajustes_cnc() is True
+    assert v.taller["cnc"]["avance_acabado"] == fabrica["avance_acabado"]
+    assert v.taller["cnc"]["ajustes_propios"] is False and not ruta.exists()
+    v.close()
+    v.deleteLater()
+    app.processEvents()

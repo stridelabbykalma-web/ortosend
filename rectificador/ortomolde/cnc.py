@@ -815,6 +815,7 @@ def generar(piezas: list[Pieza], ancho: float, largo: float, alto: float, paso: 
         comentario(f"Plancha {ancho:.0f} x {largo:.0f} x {H:.0f} mm - ancho X x largo Y x alto Z"),
         comentario("ORIGEN: X0 Y0 = esquina DELANTERA IZQUIERDA de la plancha - Z0 = cara de ARRIBA"),
         comentario(f"T1 D={2 * radio:g} CR={radio:g} - ZMIN={-(H - suelo):.3f} - fresa con punta de bola"),
+        *([comentario("Velocidades y pasadas cambiadas en Ajustes de la CNC")] if cfg.get("ajustes_propios") else []),
         "G90 G94", "G17", "G21",
         "T1", f"S{cfg['revoluciones']:.0f} M3", "G4 P3", "G17 G90 G94", "G54",
         f"G0 Z{zseg:g}",

@@ -1,5 +1,6 @@
 import os
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -7,6 +8,8 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 # En las pruebas no se pregunta «¿guardar los cambios?» al cerrar (no hay nadie para contestar).
 os.environ["RECTIFICADOR_SIN_PREGUNTAR"] = "1"
+# Los «Ajustes de la CNC» de las pruebas van a un archivo temporal (nunca a los del ordenador).
+os.environ["ORTOSEND_AJUSTES"] = str(Path(tempfile.mkdtemp(prefix="ortosend_")) / "ajustes_taller.json")
 
 from ortomolde import config  # noqa: E402
 from ortomolde.campo import campo_a_malla  # noqa: E402

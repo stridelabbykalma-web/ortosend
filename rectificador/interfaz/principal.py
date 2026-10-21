@@ -1068,6 +1068,7 @@ class VentanaPrincipal(QMainWindow):
                "anadir", archivo)
         accion("tirada", "Tirada de CNC (varios moldes en una plancha)…", self.abrir_tirada,
                QKeySequence("Ctrl+Shift+T"), "cnc", archivo)
+        accion("ajustes_cnc", "Ajustes de la CNC (velocidades y pasadas)…", self.ajustes_cnc, None, None, archivo)
         accion("ir_fresado", "Ir a Fresado", lambda: self.ir_a("fresado"), QKeySequence("Ctrl+Shift+F"), "cnc", archivo)
         accion("confeccion", "Ir a Confección (pedidos del taller)", self.abrir_confeccion,
                QKeySequence("Ctrl+Shift+C"), "confeccion", archivo)
@@ -1843,6 +1844,19 @@ valores clínicos: <code>config/valores_clinicos.toml</code></p>""")
         self.tirada.show()
         self.tirada.raise_()
         return self.tirada
+
+    def ajustes_cnc(self) -> bool:
+        """Abre «Ajustes de la CNC». Si se guardan, la tirada abierta tiene que volver a calcularse."""
+        from interfaz.ajustes_cnc import DialogoAjustesCNC
+        d = DialogoAjustesCNC(self.tirada if self.tirada is not None and self.tirada.isVisible() else self,
+                              self.taller)
+        guardado = d.exec() == QDialog.Accepted
+        if guardado:
+            if self.tirada is not None:
+                self.tirada._invalidar()
+            self.statusBar().showMessage("Ajustes de la CNC guardados: se usan en la próxima tirada que calcules.",
+                                         6000)
+        return guardado
 
     # ---------------------------------------------------------------- apartados
 
