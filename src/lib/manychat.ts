@@ -90,9 +90,15 @@ class ManyChatApi implements ManyChat {
         body: body ? JSON.stringify(body) : undefined,
         signal: ctrl.signal,
       });
-      const json = (await res.json().catch(() => null)) as { status?: string; data?: unknown; message?: string } | null;
-      if (!res.ok || json?.status !== "success")
-        throw new ManyChatError(`ManyChat ${path}: ${json?.message ?? res.status}`, json);
+      const json = (await res.json().catch(() => null)) as
+        | { status?: string; data?: unknown; message?: string; details?: unknown }
+        | null;
+      if (!res.ok || json?.status !== "success") {
+        // El detalle dice qué campo falló (p. ej. whatsapp_phone duplicado): sin él
+        // un «Validation error» es indiagnosticable.
+        const detalle = json?.details ? ` — ${JSON.stringify(json.details).slice(0, 300)}` : "";
+        throw new ManyChatError(`ManyChat ${path}: ${json?.message ?? res.status}${detalle}`, json);
+      }
       return json.data;
     } catch (e) {
       if (e instanceof ManyChatError) throw e;
@@ -102,22 +108,38 @@ class ManyChatApi implements ManyChat {
     }
   }
 
+  // Busca por teléfono en los dos formatos que guarda ManyChat (+34… y 34…).
+  private async buscarPorTelefono(telefonoE164: string) {
+    for (const t of [telefonoE164, telefonoE164.replace(/^\+/, "")]) {
+      const found = (await this.call("GET", `/fb/subscriber/findBySystemField?phone=${encodeURIComponent(t)}`).catch(
+        () => null
+      )) as { id?: string | number } | null;
+      if (found?.id) return String(found.id);
+    }
+    return null;
+  }
+
   async buscarOCrearContacto(c: Contacto) {
-    const found = (await this.call(
-      "GET",
-      `/fb/subscriber/findBySystemField?phone=${encodeURIComponent(c.telefonoE164)}`
-    ).catch(() => null)) as { id?: string | number } | null;
-    if (found?.id) return String(found.id);
-    const created = (await this.call("POST", "/fb/subscriber/createSubscriber", {
-      first_name: c.nombre,
-      last_name: c.apellidos ?? "",
-      whatsapp_phone: c.telefonoE164,
-      has_opt_in_sms: false,
-      has_opt_in_email: false,
-      consent_phrase: c.fraseConsentimiento,
-    })) as { id?: string | number };
-    if (!created?.id) throw new ManyChatError("ManyChat no devolvió el contacto creado", created);
-    return String(created.id);
+    const found = await this.buscarPorTelefono(c.telefonoE164);
+    if (found) return found;
+    try {
+      const created = (await this.call("POST", "/fb/subscriber/createSubscriber", {
+        first_name: c.nombre,
+        last_name: c.apellidos ?? "",
+        whatsapp_phone: c.telefonoE164,
+        has_opt_in_sms: false,
+        has_opt_in_email: false,
+        consent_phrase: c.fraseConsentimiento,
+      })) as { id?: string | number };
+      if (!created?.id) throw new ManyChatError("ManyChat no devolvió el contacto creado", created);
+      return String(created.id);
+    } catch (e) {
+      // «Validation error» suele ser que el contacto ya existe (p. ej. escribió al
+      // WhatsApp antes del alta) y la búsqueda previa no lo vio: se reintenta.
+      const otra = await this.buscarPorTelefono(c.telefonoE164);
+      if (otra) return otra;
+      throw e;
+    }
   }
 
   async ponerCampos(subscriberId: string, campos: Record<string, string | undefined>) {
