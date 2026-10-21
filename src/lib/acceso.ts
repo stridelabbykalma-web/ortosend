@@ -10,6 +10,7 @@ import { isValidDni, normalizeDni, normalizeEmail, normalizePhone } from "./cont
 import { EMPRESA } from "./legal";
 import { CAMPOS, FLUJOS, aE164, manychat } from "./manychat";
 import { auditar, destinatario } from "./alta";
+import { limitar } from "./rate-limit";
 import { avisarContrasenaCambiada } from "./cuenta";
 import { CODIGO_INTENTOS, CODIGO_MINUTOS, hashCodigo, mismoHash, nuevoCodigo } from "./consent/tokens";
 
@@ -98,6 +99,8 @@ export async function solicitarCodigo(dniRaw: string, telefonoRaw: string): Prom
   if (!telefono) return { ok: false, error: "Indica tu móvil" };
   const lista = await candidatos(dni, telefono);
   if (!lista.length) return { ok: true };
+  // Tope global de emisión: 5 códigos por hora y móvil (misma respuesta pública).
+  if (!(await limitar(`codigo:${telefono}`, 5, 3600))) return { ok: true };
   // Bloqueo: tras agotar los intentos, espera antes de pedir otro código.
   const ultimo = await prisma.accessCode.findFirst({ where: { phone: telefono }, orderBy: { createdAt: "desc" } });
   if (
@@ -137,12 +140,18 @@ export async function solicitarCodigo(dniRaw: string, telefonoRaw: string): Prom
       /* cae al email */
     }
   }
-  // Móvil sin WhatsApp (o ManyChat caído): el código va al email del titular.
+  // Móvil sin WhatsApp (o ManyChat caído): el código va por email. Si el móvil
+  // ya tiene cuenta, SOLO al email de esa cuenta: el de la ficha lo escribió un
+  // profesional y no está verificado — con él, un tercero podría recibir un
+  // código capaz de tocar una cuenta ajena.
   if (!porWhatsApp) {
-    const email = normalizeEmail(destinatario(lista[0]).email) || null;
+    const cuenta = await prisma.user.findUnique({ where: { phone: telefono } });
+    const email = cuenta
+      ? normalizeEmail(cuenta.email) || null
+      : normalizeEmail(destinatario(lista[0]).email) || null;
     if (email)
       await notifyEmail(email, "codigo_acceso", {
-        nombre: destinatario(lista[0]).nombre,
+        nombre: cuenta?.name ?? destinatario(lista[0]).nombre,
         codigo,
         validez: `${CODIGO_MINUTOS} minutos`,
       });
@@ -153,7 +162,7 @@ export async function solicitarCodigo(dniRaw: string, telefonoRaw: string): Prom
 // ---------------------------------------------------------------- paso 2: código + contraseña → cuenta
 
 export type ResultadoCuenta =
-  | { ok: true; userId: string; nueva: boolean }
+  | { ok: true; userId: string; nueva: boolean; reset?: boolean }
   | { ok: false; error: string };
 
 export async function crearCuentaConCodigo(dniRaw: string, telefonoRaw: string, codigo: string, password: string): Promise<ResultadoCuenta> {
@@ -181,19 +190,25 @@ export async function crearCuentaConCodigo(dniRaw: string, telefonoRaw: string, 
 
   const existente = await prisma.user.findUnique({ where: { phone: telefono } });
   if (existente) {
-    // Ya tiene cuenta (p. ej. una madre con dos hijos): se le añaden los
-    // pacientes sueltos y, como el código demuestra el control del móvil
-    // (DNI + móvil + código de un solo uso), la contraseña introducida pasa a
-    // ser la suya — es la única vía de recuperación para cuentas sin email.
     if (existente.role !== "CLIENTE") return { ok: false, error: "Ese móvil pertenece a una cuenta profesional. Contacta con Ortosend." };
-    const actualizado = await prisma.user.update({
-      where: { id: existente.id },
-      data: { passwordHash: await hashPassword(password) },
-    });
+    // Ya tiene cuenta (p. ej. una madre con dos hijos): se le añaden los
+    // pacientes sueltos. La contraseña SOLO se restablece si la cuenta ya es
+    // dueña de alguno de los candidatos (recuperación legítima): la ficha que
+    // originó el código la escribió un profesional y no basta para tocar la
+    // contraseña de una cuenta que no tiene nada que ver con ella.
+    const esDueno = lista.some((cand) => cand.ownerId === existente.id);
+    if (esDueno) {
+      const actualizado = await prisma.user.update({
+        where: { id: existente.id },
+        data: { passwordHash: await hashPassword(password) },
+      });
+      await prisma.auditLog.create({ data: { userId: existente.id, action: "account.reset_acceso", target: `user:${existente.id}` } });
+      if (actualizado.email) await avisarContrasenaCambiada(actualizado);
+    } else {
+      await prisma.auditLog.create({ data: { userId: existente.id, action: "account.vincular_acceso", target: `user:${existente.id}` } });
+    }
     await prisma.patient.updateMany({ where: { id: { in: lista.map((p) => p.id) }, ownerId: null }, data: { ownerId: existente.id } });
-    await prisma.auditLog.create({ data: { userId: existente.id, action: "account.reset_acceso", target: `user:${existente.id}` } });
-    if (actualizado.email) await avisarContrasenaCambiada(actualizado);
-    return { ok: true, userId: existente.id, nueva: false };
+    return { ok: true, userId: existente.id, nueva: false, reset: esDueno };
   }
   const titular = destinatario(lista[0]);
   const nombre = lista[0].isMinor ? titular.nombre : [lista[0].name, lista[0].lastName].filter(Boolean).join(" ");

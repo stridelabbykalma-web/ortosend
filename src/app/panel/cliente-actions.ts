@@ -54,6 +54,10 @@ export async function payAction(formData: FormData) {
     await pushEvent(caseId, `Pago iniciado en Stripe (entrega: ${delivery === "CLINICA" ? "recogida en clínica" : "domicilio"})`, u.name);
     redirect(url!);
   }
+  // Sin pasarela configurada, en producción NUNCA se cae al pago simulado
+  // (sería un pedido gratis si la variable desapareciera por error).
+  if (process.env.NODE_ENV === "production")
+    fail(back, "El pago online no está disponible en este momento. Inténtalo de nuevo en unos minutos.");
   const method = formData.get("method") === "bizum" ? "bizum" : "card";
   // Idempotente: un doble clic no registra el pago dos veces ni duplica avisos.
   const cobrado = await prisma.payment.updateMany({

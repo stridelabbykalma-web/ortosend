@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { destinoSeguro } from "@/lib/navegacion";
 import { loginAction } from "@/app/(auth)/actions";
 import { Flash } from "@/components/ui";
 
@@ -10,6 +11,7 @@ export default async function LoginPage({
   searchParams: Promise<{ error?: string; ok?: string; next?: string }>;
 }) {
   const { error, ok, next } = await searchParams;
+  const dest = next ? destinoSeguro(next, "") : "";
   return (
     <div className="wrap" style={{ maxWidth: 400 }}>
       <div className="sp2" />
@@ -18,7 +20,7 @@ export default async function LoginPage({
       <div className="sp" />
       <Flash error={error} ok={ok} />
       <form className="card" action={loginAction}>
-        {next?.startsWith("/") && <input type="hidden" name="next" value={next} />}
+        {dest && <input type="hidden" name="next" value={dest} />}
         <label>Email o móvil</label>
         <input name="identifier" autoComplete="username" required />
         <label>Contraseña</label>

@@ -40,7 +40,11 @@ export async function crearCuentaAction(formData: FormData) {
   if (!r.nueva)
     redirect(
       "/login?ok=" +
-        encodeURIComponent("Ya tenías una cuenta con ese móvil: hemos añadido el perfil a ella. Entra con tu contraseña de siempre.")
+        encodeURIComponent(
+          r.reset
+            ? "Ya tenías una cuenta con ese móvil: hemos añadido el perfil y actualizado tu contraseña. Entra con la nueva."
+            : "Ya tenías una cuenta con ese móvil: hemos añadido el perfil a ella. Entra con tu contraseña de siempre (la escrita aquí no se ha aplicado)."
+        )
     );
   const user = await prisma.user.findUniqueOrThrow({ where: { id: r.userId } });
   if (user.email) await enviarVerificacionEmail(user);

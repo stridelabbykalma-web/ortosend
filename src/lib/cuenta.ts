@@ -33,7 +33,10 @@ export async function enviarVerificacionEmail(user: Pick<User, "id" | "name" | "
 
 // Enlace de restablecimiento (1 h, un solo uso).
 export async function enviarRecuperacion(user: User) {
-  if (!user.email) return;
+  // Solo a emails verificados: el email de una ficha lo pudo escribir un
+  // tercero y el enlace de restablecer no debe llegarle. Sin email verificado
+  // queda la vía /acceso (DNI + móvil + código).
+  if (!user.email || !user.emailVerifiedAt) return;
   const token = await createResetToken(user.id, user.passwordHash);
   await notifyEmail(user.email, "recuperar_contrasena", {
     nombre: user.name,

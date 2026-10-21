@@ -347,15 +347,51 @@ describe("5. acceso con DNI + móvil + código", () => {
     expect((await prisma.patient.findUniqueOrThrow({ where: { id: p.id } })).ownerId).toBeNull();
   });
 
-  it("si el móvil ya tiene cuenta, añade el paciente y restablece la contraseña (es la vía de recuperación sin email)", async () => {
+  it("si la cuenta del móvil NO es dueña de ninguna ficha candidata, vincula sin tocar la contraseña (anti-apropiación)", async () => {
     const p = await pacienteAceptadoConAcceso("Y1234567X");
+    // La víctima tiene cuenta con ese móvil pero ningún paciente de la lista es suyo:
+    // la ficha pudo crearla un profesional malicioso con su móvil.
     const existente = await prisma.user.create({ data: { role: "CLIENTE", name: "Ya existía", phone: p.phone, passwordHash: "hash-original" } });
     await solicitarCodigo("Y1234567X", p.phone!);
     const r = await crearCuentaConCodigo("Y1234567X", p.phone!, mc.campo(CAMPOS.codigo)!, "otra-clave-larga");
-    expect(r).toMatchObject({ ok: true, nueva: false, userId: existente.id });
-    const hash = (await prisma.user.findUniqueOrThrow({ where: { id: existente.id } })).passwordHash;
-    expect(hash).not.toBe("hash-original"); // la nueva contraseña sustituye a la olvidada
+    expect(r).toMatchObject({ ok: true, nueva: false, userId: existente.id, reset: false });
+    expect((await prisma.user.findUniqueOrThrow({ where: { id: existente.id } })).passwordHash).toBe("hash-original");
     expect((await prisma.patient.findUniqueOrThrow({ where: { id: p.id } })).ownerId).toBe(existente.id);
+  });
+
+  it("si la cuenta ya es dueña de una ficha candidata, el código SÍ restablece la contraseña (recuperación sin email)", async () => {
+    const p = await pacienteAceptadoConAcceso("33333333P");
+    // Primera vez: crea la cuenta y queda dueña del paciente.
+    await solicitarCodigo("33333333P", p.phone!);
+    const alta = await crearCuentaConCodigo("33333333P", p.phone!, mc.campo(CAMPOS.codigo)!, "clave-original-1");
+    expect(alta).toMatchObject({ ok: true, nueva: true });
+    if (!alta.ok) return;
+    const hashAntes = (await prisma.user.findUniqueOrThrow({ where: { id: alta.userId } })).passwordHash;
+    // Olvida la contraseña: mismo DNI + móvil + código nuevo → contraseña nueva.
+    await solicitarCodigo("33333333P", p.phone!);
+    const r = await crearCuentaConCodigo("33333333P", p.phone!, mc.campo(CAMPOS.codigo)!, "clave-nueva-22");
+    expect(r).toMatchObject({ ok: true, nueva: false, userId: alta.userId, reset: true });
+    expect((await prisma.user.findUniqueOrThrow({ where: { id: alta.userId } })).passwordHash).not.toBe(hashAntes);
+  });
+
+  it("con ManyChat caído y el móvil con cuenta, el código va al email de la CUENTA, no al de la ficha", async () => {
+    const p = await pacienteAceptadoConAcceso("44444444A");
+    await prisma.patient.update({ where: { id: p.id }, data: { email: "ficha-de-terceros@evil.com" } });
+    const existente = await prisma.user.create({
+      data: { role: "CLIENTE", name: "Titular real", phone: p.phone, email: "titular@real.com", passwordHash: "hash-x" },
+    });
+    mc.fallar = true;
+    try {
+      expect(await solicitarCodigo("44444444A", p.phone!)).toEqual({ ok: true });
+    } finally {
+      mc.fallar = false;
+    }
+    const n = await prisma.notification.findFirst({
+      where: { channel: "email", template: "codigo_acceso" },
+      orderBy: { createdAt: "desc" },
+    });
+    expect(n?.toEmail).toBe("titular@real.com");
+    void existente;
   });
 });
 

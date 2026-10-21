@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { destinoSeguro } from "@/lib/navegacion";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { loginAction } from "@/app/(auth)/actions";
@@ -25,8 +26,9 @@ export default async function EquipoPage({
   searchParams: Promise<{ error?: string; ok?: string; next?: string }>;
 }) {
   const { error, ok, next } = await searchParams;
+  const dest = next ? destinoSeguro(next, "") : "";
   const user = await getSessionUser();
-  if (user) redirect(user.role === "CLIENTE" ? "/panel" : next?.startsWith("/") ? next : "/panel");
+  if (user) redirect(user.role === "CLIENTE" ? "/panel" : dest || "/panel");
   return (
     <div className="wrap" style={{ maxWidth: 440 }}>
       <div className="sp2" />
@@ -36,7 +38,7 @@ export default async function EquipoPage({
       <Flash error={error} ok={ok} />
       <form className="card" action={loginAction}>
         <input type="hidden" name="ambito" value="equipo" />
-        {next?.startsWith("/") && <input type="hidden" name="next" value={next} />}
+        {dest && <input type="hidden" name="next" value={dest} />}
         <label>Email o móvil</label>
         <input name="identifier" autoComplete="username" required />
         <label>Contraseña</label>

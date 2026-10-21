@@ -28,6 +28,7 @@ model User {
   email                  String?                 @unique
   phone                  String?                 @unique
   passwordHash           String? // null hasta activar cuenta (invitación Flujo B)
+  sessionEpoch Int     @default(0) // sube al cerrar sesión: revoca los tokens de todos los dispositivos
   role                   Role
   name                   String
   active                 Boolean                 @default(true)

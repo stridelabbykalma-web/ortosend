@@ -31,7 +31,8 @@ export async function POST(request: Request) {
   const timestamp = request.headers.get("svix-timestamp") ?? "";
   const signatures = request.headers.get("svix-signature") ?? "";
   // Tolerancia de 5 min contra repeticiones.
-  if (Math.abs(Date.now() / 1000 - Number(timestamp)) > 300)
+  const ts = Number(timestamp);
+  if (!Number.isFinite(ts) || Math.abs(Date.now() / 1000 - ts) > 300)
     return NextResponse.json({ error: "timestamp fuera de ventana" }, { status: 401 });
   if (!firmaValida(secret, id, timestamp, payload, signatures))
     return NextResponse.json({ error: "firma no válida" }, { status: 401 });

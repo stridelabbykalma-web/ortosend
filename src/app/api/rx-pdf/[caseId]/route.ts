@@ -34,7 +34,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ case
     ((user.role === "PROFESIONAL" || user.role === "ADMIN_CLINICA") && user.clinicId === kase.clinicId) ||
     (user.role === "RECETADOR" &&
       esCentral(kase) &&
-      (["EN_PRESCRIPCION", "EN_CONTACTO", "PENDIENTE_PAGO"].includes(kase.state) || kase.prescription.prescriberId === user.id)) ||
+      (["EN_PRESCRIPCION", "EN_CONTACTO"].includes(kase.state) || kase.prescription.prescriberId === user.id)) ||
     (user.role === "TALLER" && ([...TALLER_STATES, "ENTREGADO", "CERRADO"] as string[]).includes(kase.state)) ||
     user.role === "ADMIN";
   if (isOwner) {

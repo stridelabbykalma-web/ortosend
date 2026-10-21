@@ -17,6 +17,7 @@ import { audit, notifyEmail, notifyOwner, pushEvent, releaseAllBy, titularDe } f
 import { isValidPhone, normalizeEmail, normalizeIdentifier, normalizePhone } from "@/lib/contacto";
 import { avisarContrasenaCambiada, enviarBienvenida, enviarRecuperacion, enviarVerificacionEmail } from "@/lib/cuenta";
 import { claveIp, limitar, origenPeticion } from "@/lib/rate-limit";
+import { destinoSeguro } from "@/lib/navegacion";
 import { CONSENT_VERSION } from "@/lib/legal";
 
 const loginSchema = z.object({
@@ -80,7 +81,12 @@ export async function loginAction(formData: FormData) {
 
 export async function logoutAction() {
   const user = await getSessionUser();
-  if (user) await releaseAllBy(user.id); // el reparto automático libera los casos abiertos
+  if (user) {
+    await releaseAllBy(user.id); // el reparto automático libera los casos abiertos
+    // Cerrar sesión invalida el token en TODOS los dispositivos (sessionEpoch):
+    // borrar la cookie no basta si alguien se la llevó de un equipo compartido.
+    await prisma.user.update({ where: { id: user.id }, data: { sessionEpoch: { increment: 1 } } });
+  }
   await destroySession();
   redirect("/");
 }

@@ -65,3 +65,21 @@ describe("documentos", () => {
     expect(tipoDeSlug("otro")).toBeNull();
   });
 });
+
+import { destinoSeguro } from "@/lib/navegacion";
+
+describe("destinoSeguro (open redirect)", () => {
+  it("acepta solo rutas internas", () => {
+    expect(destinoSeguro("/panel")).toBe("/panel");
+    expect(destinoSeguro("/caso/abc?paso=2")).toBe("/caso/abc?paso=2");
+  });
+  it("rechaza las variantes que escapan a otro dominio", () => {
+    expect(destinoSeguro("//evil.com")).toBe("/panel");
+    expect(destinoSeguro("/\\evil.com")).toBe("/panel");
+    expect(destinoSeguro("/\t/evil.com")).toBe("/panel"); // el navegador quita el tabulador → //evil.com
+    expect(destinoSeguro("/\n/evil.com")).toBe("/panel");
+    expect(destinoSeguro("https://evil.com")).toBe("/panel");
+    expect(destinoSeguro("")).toBe("/panel");
+    expect(destinoSeguro("/ /evil.com")).toBe("/panel");
+  });
+});

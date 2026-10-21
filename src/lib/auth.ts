@@ -37,11 +37,11 @@ const STAFF_HOURS = 12;
 const CLIENT_DAYS = 30;
 
 export async function createSession(userId: string) {
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { role: true, passwordHash: true } });
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { role: true, passwordHash: true, sessionEpoch: true } });
   const esCliente = user?.role === "CLIENTE";
-  // La sesión lleva la huella de la contraseña: cambiarla revoca todas las
-  // sesiones abiertas (robo de móvil, equipo compartido…).
-  const token = await new SignJWT({ uid: userId, fp: fingerprint(user?.passwordHash ?? null) })
+  // La sesión lleva la huella de la contraseña y la época de sesión: cambiar
+  // la contraseña o cerrar sesión (epoch+1) revocan todas las sesiones abiertas.
+  const token = await new SignJWT({ uid: userId, fp: fingerprint(user?.passwordHash ?? null), se: user?.sessionEpoch ?? 0 })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime(esCliente ? `${CLIENT_DAYS}d` : `${STAFF_HOURS}h`)
@@ -72,8 +72,10 @@ export const getSessionUser = cache(async (): Promise<User | null> => {
     const uid = payload.uid as string;
     const user = await prisma.user.findUnique({ where: { id: uid } });
     if (!user || !user.active) return null;
-    // Sesiones firmadas antes del último cambio de contraseña: fuera.
+    // Sesiones firmadas antes del último cambio de contraseña o del último
+    // cierre de sesión (epoch): fuera.
     if (payload.fp !== fingerprint(user.passwordHash)) return null;
+    if (payload.se !== user.sessionEpoch) return null;
     return user;
   } catch {
     return null;

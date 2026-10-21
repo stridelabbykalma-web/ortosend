@@ -19,7 +19,8 @@ export async function POST(request: Request) {
   } catch {
     return NextResponse.json({ error: "payload no válido" }, { status: 400 });
   }
-  if (evento.type !== "checkout.session.completed" || !evento.data?.object) return NextResponse.json({ ok: true });
+  const tipos = ["checkout.session.completed", "checkout.session.async_payment_succeeded"];
+  if (!tipos.includes(evento.type ?? "") || !evento.data?.object) return NextResponse.json({ ok: true });
   // Se relee la sesión de la API (con el cargo expandido para saber el método):
   // así no se confía en el cuerpo del evento más allá del id.
   let session = evento.data.object;

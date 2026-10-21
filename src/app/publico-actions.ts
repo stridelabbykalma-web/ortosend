@@ -17,6 +17,7 @@ import { EDAD_MAYORIA_SALUD, esMenor, parseBirth } from "@/lib/edad";
 import { CONSENT_VERSION } from "@/lib/legal";
 import { enviarBienvenida } from "@/lib/cuenta";
 import { exigirTratamientoPermitido } from "@/lib/alta";
+import { permitirPublico } from "@/lib/rate-limit";
 
 const reservaSchema = z.object({
   clinicId: z.string().min(1),
@@ -24,7 +25,7 @@ const reservaSchema = z.object({
   phone: z.string().min(6, "Falta el móvil"),
   email: z.string().email("Email no válido"),
   birth: z.string().optional(),
-  motivo: z.string().optional(),
+  motivo: z.string().max(500, "El motivo es demasiado largo").optional(),
   password: z.string().min(8, "La contraseña debe tener al menos 8 caracteres"),
 });
 
@@ -32,6 +33,7 @@ const reservaSchema = z.object({
 export async function reservaAction(formData: FormData) {
   const back = (msg: string): never =>
     redirect(`/reserva/${formData.get("clinicId")}?error=` + encodeURIComponent(msg));
+  if (!(await permitirPublico("reserva"))) back("Demasiadas peticiones. Espera un minuto e inténtalo de nuevo.");
   const slot = parseSlot(formData);
   if (!slot.ok) back(slot.error);
   const parsed = reservaSchema.safeParse(Object.fromEntries(formData));
@@ -221,14 +223,16 @@ export async function reservaClienteAction(formData: FormData) {
 }
 
 const appSchema = z.object({
-  name: z.string().min(2, "Falta el nombre de la clínica"),
-  town: z.string().min(2, "Falta la población"),
-  contact: z.string().min(3, "Falta la persona de contacto"),
+  name: z.string().min(2, "Falta el nombre de la clínica").max(160),
+  town: z.string().min(2, "Falta la población").max(120),
+  contact: z.string().min(3, "Falta la persona de contacto").max(160),
   hasPrescriber: z.enum(["si", "no"]),
-  notes: z.string().optional(),
+  notes: z.string().max(2000, "Las notas son demasiado largas").optional(),
 });
 
 export async function solicitudClinicaAction(formData: FormData) {
+  if (!(await permitirPublico("solicitud-clinica")))
+    redirect("/para-clinicas?error=" + encodeURIComponent("Demasiadas peticiones. Espera un minuto."));
   const parsed = appSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success)
     redirect("/para-clinicas?error=" + encodeURIComponent(parsed.error.issues[0].message));
