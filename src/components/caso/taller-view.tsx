@@ -1,12 +1,12 @@
 import Link from "next/link";
-import type { Capture, Case, Clinic, Incident, MediaAsset, Patient, Payment, Prescription, Shipment, User } from "@prisma/client";
+import type { Capture, Case, Clinic, HojaConfeccion, Incident, MediaAsset, Patient, Payment, Prescription, Shipment, User } from "@prisma/client";
 import { CheckLine } from "@/components/ui";
 import { FotoCalidad } from "@/components/caso/foto-calidad";
 import { CopiarTexto } from "@/components/caso/copiar-texto";
 import { checklistOf, titularDe } from "@/lib/cases";
-import { PRICE_LABEL, SCAN_KIND, fmtd } from "@/lib/format";
+import { PRICE_LABEL, SCAN_KIND, fmtEUR, fmtd, fmtdt } from "@/lib/format";
 import { nombreProyectoRevoScan } from "@/lib/scan";
-import { PROD_STEPS, QC_CHECKS, fichaTecnica, prodStepIndex, slaDe, trabajoPorPie } from "@/lib/taller";
+import { PROD_STEPS, QC_CHECKS, fichaTecnica, prodStepIndex, slaDe, trabajoPorPie, type CapaHoja } from "@/lib/taller";
 import type { Questionnaire } from "@/lib/questionnaire";
 import type { Exam } from "@/lib/exploracion";
 import {
@@ -30,7 +30,51 @@ type CaseTaller = Case & {
   payment: Payment | null;
   shipment: Shipment | null;
   incidents: Incident[];
+  hoja?: HojaConfeccion | null;
 };
+
+const PIES_TXT: Record<string, string> = { par: "Par", I: "Pie izquierdo", D: "Pie derecho" };
+
+// Hoja de confección del par (se rellena desde el Rectificador, el programa del taller).
+function HojaConfeccionCard({ hoja }: { hoja: HojaConfeccion }) {
+  const capas = (hoja.capas ?? []) as CapaHoja[];
+  return (
+    <div className="card" style={{ marginTop: 12 }}>
+      <div className="row between">
+        <b style={{ fontFamily: "var(--font-sora)" }}>Confección y coste</b>
+        <span className="tiny">
+          {hoja.actualizadoPor ? `${hoja.actualizadoPor} · ` : ""}
+          {fmtdt(hoja.updatedAt)}
+        </span>
+      </div>
+      <div className="row" style={{ margin: "8px 0" }}>
+        <span className="pill b">{hoja.proceso === "CAPAS" ? "Capas pegadas y prensadas" : "Termoformado al vacío"}</span>
+        <span className="pill n">CNC {hoja.minutosCnc} min</span>
+        <span className="pill n">Confección {hoja.minutosConfeccion} min</span>
+      </div>
+      {capas.length > 0 && (
+        <ol className="muted" style={{ margin: "4px 0 8px 18px" }}>
+          {capas.map((c, i) => (
+            <li key={i}>
+              {c.nombre ?? c.materialId} · {PIES_TXT[c.pies] ?? c.pies}
+              {c.notas ? ` · ${c.notas}` : ""}
+              {typeof c.cents === "number" ? ` · ${fmtEUR(c.cents)}` : ""}
+            </li>
+          ))}
+        </ol>
+      )}
+      {hoja.notas && <p className="muted" style={{ margin: "4px 0 8px" }}>{hoja.notas}</p>}
+      <div className="row">
+        <span className="pill n">Material {fmtEUR(hoja.costeMaterialCents)}</span>
+        <span className="pill n">Fresado {fmtEUR(hoja.costeFresadoCents)}</span>
+        <span className="pill n">Mano de obra {fmtEUR(hoja.costeManoObraCents)}</span>
+        <span className="pill g">
+          <b>Coste {fmtEUR(hoja.costeTotalCents)}</b>
+        </span>
+      </div>
+    </div>
+  );
+}
 
 // Paso de producción en el que está el par (mecanizado y confección separados).
 export function ProdSteps({ state, fabPhase }: { state: Case["state"]; fabPhase: Case["fabPhase"] }) {
@@ -301,7 +345,10 @@ export function TallerView({ kase }: { kase: CaseTaller }) {
         </form>
       </div>
       <div className="taller-grid">
-        <div className="card">{zone}</div>
+        <div className="card">
+          {zone}
+          {kase.hoja && <HojaConfeccionCard hoja={kase.hoja} />}
+        </div>
         <div className="card ficha">
           <b style={{ fontFamily: "var(--font-sora)" }}>Ficha de fabricación</b>
           {rx ? (

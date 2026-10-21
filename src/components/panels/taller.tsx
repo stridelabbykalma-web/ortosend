@@ -6,7 +6,7 @@ import { releaseStale } from "@/lib/cases";
 import { Kpi } from "@/components/ui";
 import { fmtd, fmtdt } from "@/lib/format";
 import { DELIVERY_PROMISE } from "@/lib/states";
-import { PHASES, TALLER_STATES, fabPhaseLabel, siguienteLote, slaDe, type Sla } from "@/lib/taller";
+import { PHASES, TALLER_STATES, fabPhaseLabel, ordenTaller, rehacerAbierto, siguienteLote, slaDe, type Sla } from "@/lib/taller";
 import {
   closeIncidentAction,
   deliveredAction,
@@ -28,11 +28,6 @@ const TABS: [string, string][] = [
   ["entregados", "Entregados"],
 ];
 
-const SLA_ORDER: Record<Sla["nivel"], number> = { fuera: 0, ajustado: 1, ok: 2 };
-
-function rehacerAbierto(c: CaseRow) {
-  return c.incidents.some((i) => i.type === "REHACER_DEFECTO" && !i.closedAt);
-}
 
 function destino(c: CaseRow) {
   return c.delivery === "CLINICA" ? `Recogida en ${c.clinic.name}` : "Domicilio";
@@ -88,18 +83,7 @@ export async function PanelTaller({ user, tab }: { user: User; tab?: string }) {
   const moldesCnc = active.filter((c) => c.state === "FABRICACION" && c.fabPhase === "MECANIZADO");
   const mineOpen = active.find((c) => c.openBy === user.id);
 
-  const ordenar = (cs: CaseRow[]) =>
-    [...cs].sort((a, b) => {
-      const ra = rehacerAbierto(a) ? -1 : 0;
-      const rb = rehacerAbierto(b) ? -1 : 0;
-      if (ra !== rb) return ra - rb;
-      const sa = slaOf.get(a.id);
-      const sb = slaOf.get(b.id);
-      const oa = sa ? SLA_ORDER[sa.nivel] : 3;
-      const ob = sb ? SLA_ORDER[sb.nivel] : 3;
-      if (oa !== ob) return oa - ob;
-      return a.createdAt.getTime() - b.createdAt.getTime();
-    });
+  const ordenar = (cs: CaseRow[]) => ordenTaller(cs);
 
   let body: React.ReactNode = null;
 

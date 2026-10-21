@@ -40,6 +40,7 @@ export default async function CasoPage({
       payment: true,
       shipment: true,
       incidents: true,
+      hoja: true,
       events: { orderBy: { at: "asc" } },
     },
   });

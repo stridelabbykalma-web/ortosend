@@ -75,7 +75,7 @@ export type Sla = {
 };
 
 // Semáforo del plazo: verde hasta el día 3, ámbar días 4-5, rojo si se pasa.
-export function slaDe(kase: { payment: Payment | null; createdAt: Date }): Sla | null {
+export function slaDe(kase: { payment: Pick<Payment, "paidAt"> | null; createdAt: Date }): Sla | null {
   const desde = kase.payment?.paidAt;
   if (!desde) return null;
   const dia = diasLaborablesDesde(new Date(desde)) + 1;
@@ -83,6 +83,73 @@ export function slaDe(kase: { payment: Payment | null; createdAt: Date }): Sla |
   const texto =
     nivel === "fuera" ? `Fuera de plazo (+${dia - SLA_DIAS})` : `Día ${dia} de ${SLA_DIAS}`;
   return { dia, nivel, texto };
+}
+
+// --- Orden del tablero: qué debe salir antes ---
+// 1) los que hay que rehacer (incidencia de defecto abierta), 2) por semáforo del plazo
+// (fuera → ajustado → ok → sin pago), 3) el más antiguo primero. Lo usan el panel del
+// taller y la API del Rectificador, para que los dos muestren el mismo orden.
+const SLA_ORDER: Record<Sla["nivel"], number> = { fuera: 0, ajustado: 1, ok: 2 };
+
+type ParaOrdenar = {
+  payment: Pick<Payment, "paidAt"> | null;
+  createdAt: Date;
+  incidents: { type: string; closedAt: Date | null }[];
+};
+
+export function rehacerAbierto(c: Pick<ParaOrdenar, "incidents">) {
+  return c.incidents.some((i) => i.type === "REHACER_DEFECTO" && !i.closedAt);
+}
+
+export function ordenTaller<T extends ParaOrdenar>(cs: T[]): T[] {
+  const sla = new Map(cs.map((c) => [c, slaDe(c)]));
+  return [...cs].sort((a, b) => {
+    const ra = rehacerAbierto(a) ? -1 : 0;
+    const rb = rehacerAbierto(b) ? -1 : 0;
+    if (ra !== rb) return ra - rb;
+    const sa = sla.get(a);
+    const sb = sla.get(b);
+    const oa = sa ? SLA_ORDER[sa.nivel] : 3;
+    const ob = sb ? SLA_ORDER[sb.nivel] : 3;
+    if (oa !== ob) return oa - ob;
+    return a.createdAt.getTime() - b.createdAt.getTime();
+  });
+}
+
+// --- Confección: coste del par ---
+// Material: cada capa gasta 1/paresPorPlancha de plancha (la mitad si es de un solo pie).
+// Fresado: minutos de CNC × coste por minuto + escayola de los moldes.
+// Mano de obra: minutos de confección × precio por hora.
+// El Rectificador (interfaz/web.py) calcula lo mismo para la vista previa: si se cambia
+// aquí, cambiarlo también allí.
+export type PiesCapa = "par" | "I" | "D";
+export type CapaHoja = { materialId: string; pies: PiesCapa; notas?: string; nombre?: string; cents?: number };
+export type MaterialCoste = { id: string; precioCents: number; paresPorPlancha: number };
+export type AjustesCoste = { precioHoraCents: number; costeCncMinutoCents: number; costeMoldeCents: number };
+export type CosteConfeccion = {
+  materialCents: number;
+  fresadoCents: number;
+  manoObraCents: number;
+  totalCents: number;
+  capas: { materialId: string; cents: number }[];
+};
+
+export function costeConfeccion(
+  hoja: { capas: CapaHoja[]; minutosCnc: number; minutosConfeccion: number },
+  materiales: MaterialCoste[],
+  ajustes: AjustesCoste
+): CosteConfeccion {
+  const porId = new Map(materiales.map((m) => [m.id, m]));
+  const capas = hoja.capas.map((c) => {
+    const m = porId.get(c.materialId);
+    const pares = m && m.paresPorPlancha > 0 ? m.paresPorPlancha : 1;
+    const fraccion = c.pies === "par" ? 1 : 0.5;
+    return { materialId: c.materialId, cents: m ? Math.round((m.precioCents / pares) * fraccion) : 0 };
+  });
+  const materialCents = capas.reduce((s, c) => s + c.cents, 0);
+  const fresadoCents = Math.round(Math.max(0, hoja.minutosCnc) * ajustes.costeCncMinutoCents) + ajustes.costeMoldeCents;
+  const manoObraCents = Math.round((Math.max(0, hoja.minutosConfeccion) / 60) * ajustes.precioHoraCents);
+  return { materialCents, fresadoCents, manoObraCents, totalCents: materialCents + fresadoCents + manoObraCents, capas };
 }
 
 // Siguiente código de lote de mecanizado a partir de los existentes (L-01, L-02…).
