@@ -211,6 +211,14 @@ class PanelConfeccion(QWidget):
         self.texto_pauta.setWordWrap(True)
         self.texto_pauta.setTextInteractionFlags(Qt.TextSelectableByMouse)
         lay.addWidget(self.texto_pauta)
+        fila_exp = QHBoxLayout()
+        self.boton_expediente = QPushButton("📋 Ver receta y estudio (vídeos, fotos, cuestionario)")
+        self.boton_expediente.setToolTip("La receta firmada, los vídeos de la marcha y las fotos con su análisis, "
+                                         "el cuestionario y la exploración")
+        self.boton_expediente.clicked.connect(self.ver_expediente)
+        fila_exp.addWidget(self.boton_expediente)
+        fila_exp.addStretch(1)
+        lay.addLayout(fila_exp)
 
         self.zona_hoja = QWidget()
         lh = QVBoxLayout(self.zona_hoja)
@@ -525,12 +533,21 @@ class PanelConfeccion(QWidget):
 
     # ---------------------------------------------------------------- hoja del pedido
 
+    def ver_expediente(self):
+        """La receta, los vídeos y fotos y el cuestionario del pedido elegido, en su ventana."""
+        if self.pedido is None:
+            return
+        from . import expediente
+        expediente.abrir(self.principal, self.web, self.pedido["id"],
+                         f"#{self.pedido.get('numero', '')} · {self.pedido.get('paciente', '')}")
+
     def _mostrar_pedido(self):
         p = self.pedido
         hay = p is not None
         self.zona_hoja.setVisible(hay and "pies" in p)
         self.boton_anterior.setEnabled(bool(self.pedidos))
         self.boton_siguiente.setEnabled(bool(self.pedidos))
+        self.boton_expediente.setVisible(hay and bool(self.web.token))
         if not hay:
             self.cabecera.setText("<span style='color:%s'>Elige un post-it del tablero.</span>" % C["secundario"])
             self.texto_pauta.setText("")
@@ -550,6 +567,8 @@ class PanelConfeccion(QWidget):
             self.texto_pauta.setText("Cargando la pauta…" if self.web.token else "")
             return
         pauta = []
+        if p.get("diagnostico"):
+            pauta.append(f"<b>Diagnóstico:</b> {html.escape(p['diagnostico'])}")
         for pie in p["pies"]:
             datos = (f"<br><span style='color:{C['secundario']}'>{html.escape(' · '.join(pie['datos']))}</span>"
                      if pie.get("datos") else "")

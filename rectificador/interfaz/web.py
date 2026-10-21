@@ -4,7 +4,8 @@ El programa entra con el usuario de TALLER de la web (la primera vez) y guarda u
 Con él lee los pedidos del taller (en el orden en que deben salir), su pauta y su hoja de confección,
 guarda la hoja, cambia el estado (molde fresado, confección terminada) y edita la lista de materiales.
 Todo va por la API `/api/taller/...` de la web (src/app/api/taller en la web). Los costes y precios no
-llegan aquí: solo los ve el administrador en la web.
+llegan aquí: solo los ve el administrador en la web. Los vídeos, fotos y la receta firmada (PDF) del
+expediente se bajan con `bajar` (rutas /api/media/… y /api/rx-pdf/… de la web, con el mismo token).
 """
 
 from __future__ import annotations
@@ -44,7 +45,15 @@ class ClienteWeb:
         try:
             with urllib.request.urlopen(peticion, timeout=self.espera) as r:
                 return json.loads(r.read().decode("utf-8") or "{}")
-        except urllib.error.HTTPError as e:
+        except ValueError as e:
+            raise ErrorWeb("La web ha contestado algo que no se entiende.", 0) from e
+        except Exception as e:  # noqa: BLE001 - se traduce a un mensaje para la persona
+            raise self._error(e) from e
+
+    @staticmethod
+    def _error(e: Exception) -> Exception:
+        """El error de la petición con un mensaje claro (o el mismo error si no es de conexión)."""
+        if isinstance(e, urllib.error.HTTPError):
             texto = e.read().decode("utf-8", "replace")
             try:
                 mensaje = json.loads(texto).get("error")
@@ -52,13 +61,29 @@ class ClienteWeb:
                 mensaje = None
             if mensaje is None and e.code in (404, 405):
                 # La página existe pero no es la API: la web aún no tiene esta parte publicada.
-                raise ErrorWeb("La web de Ortosend aún no tiene la conexión del taller (falta publicar su "
-                               "actualización).", e.code) from e
-            raise ErrorWeb(mensaje or f"La web ha contestado «{e.code} {e.reason}».", e.code) from e
-        except (urllib.error.URLError, TimeoutError, ConnectionError, OSError) as e:
-            raise ErrorWeb("No hay conexión con la web de Ortosend (¿hay internet?).", 0) from e
-        except ValueError as e:
-            raise ErrorWeb("La web ha contestado algo que no se entiende.", 0) from e
+                return ErrorWeb("La web de Ortosend aún no tiene la conexión del taller (falta publicar su "
+                                "actualización).", e.code)
+            return ErrorWeb(mensaje or f"La web ha contestado «{e.code} {e.reason}».", e.code)
+        if isinstance(e, (urllib.error.URLError, TimeoutError, ConnectionError, OSError)):
+            return ErrorWeb("No hay conexión con la web de Ortosend (¿hay internet?).", 0)
+        return e
+
+    def bajar(self, ruta: str) -> tuple[bytes, str]:
+        """Un archivo del expediente (vídeo, foto o la receta firmada en PDF): (contenido, tipo)."""
+        if not self.token:
+            raise ErrorWeb("Entra con tu usuario de taller de la web.", 401)
+        url = ruta if ruta.startswith("http") else f"{self.url}{ruta}"
+        peticion = urllib.request.Request(url, headers={"Authorization": f"Bearer {self.token}"})
+        try:
+            with urllib.request.urlopen(peticion, timeout=max(self.espera, 60.0)) as r:
+                return r.read(), r.headers.get_content_type()
+        except Exception as e:  # noqa: BLE001 - se traduce a un mensaje para la persona
+            error = self._error(e)
+            if isinstance(error, ErrorWeb) and error.status == 404:
+                error = ErrorWeb("Ese archivo ya no está en la web.", 404)
+            elif isinstance(error, ErrorWeb) and error.status == 401:
+                error = ErrorWeb("Sesión caducada: vuelve a entrar con tu usuario de taller", 401)
+            raise error from e
 
     # ------------------------------------------------------------------ sesión
 
@@ -75,6 +100,10 @@ class ClienteWeb:
 
     def pedido(self, id_: str) -> dict:
         return self._pedir("GET", f"/pedidos/{id_}")
+
+    def buscar_pedido(self, numero: int) -> str | None:
+        """El id del pedido con ese número (de los que están en el taller), o None."""
+        return next((p["id"] for p in self.pedidos() if p.get("numero") == numero), None)
 
     def guardar_hoja(self, id_: str, hoja: dict) -> dict:
         return self._pedir("PUT", f"/pedidos/{id_}/hoja", hoja)["hoja"]

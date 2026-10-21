@@ -763,6 +763,14 @@ class VentanaPrincipal(QMainWindow):
         self.caja_pedido.setMaximumWidth(150)
         self.caja_pedido.textEdited.connect(lambda t: self._cambiar_paciente(pedido=int(t) if t.isdigit() else None))
         fila.addWidget(self.caja_pedido)
+        self.boton_ver_pedido = QPushButton("📋 Ver pedido")
+        self.boton_ver_pedido.setToolTip("La receta (qué hay que hacer), los vídeos y fotos del estudio y el\n"
+                                         "cuestionario de este pedido, desde la web de Ortosend")
+        self.boton_ver_pedido.clicked.connect(self.ver_pedido)
+        self.boton_ver_pedido.setEnabled(False)
+        self.caja_pedido.textChanged.connect(
+            lambda t: self.boton_ver_pedido.setEnabled(t.isdigit() and self.caja_pedido.isEnabled()))
+        fila.addWidget(self.boton_ver_pedido)
         fila.addStretch(1)
         lay.addLayout(fila)
         self.caja_notas = QPlainTextEdit()
@@ -790,6 +798,7 @@ class VentanaPrincipal(QMainWindow):
         self.caja_pedido.setText(str(pac["pedido"]) if pac.get("pedido") else "")
         for c in self._cajas_paciente:
             c.blockSignals(False)
+        self.boton_ver_pedido.setEnabled(self.caja_pedido.text().isdigit())
 
     def _cambiar_paciente(self, **cambios):
         if self.proyecto is None:
@@ -1844,6 +1853,30 @@ valores clínicos: <code>config/valores_clinicos.toml</code></p>""")
         self.tirada.show()
         self.tirada.raise_()
         return self.tirada
+
+    def ver_pedido(self):
+        """Abre el expediente (receta, vídeos y fotos, cuestionario) del pedido del molde abierto."""
+        texto = self.caja_pedido.text()
+        if not texto.isdigit():
+            return
+        numero = int(texto)
+        web = self.confeccion.web
+        if not web.token:
+            QMessageBox.information(self, "Ver pedido", "Para ver el pedido, entra primero en <b>Confección</b> "
+                                    "con tu usuario de taller de la web.")
+            return
+        from interfaz import expediente
+
+        def listo(id_):
+            if id_ is None:
+                QMessageBox.information(self, "Ver pedido", f"El pedido nº {numero} no está en el taller "
+                                        "(o el número no es correcto).")
+                return
+            nombre = (self.proyecto.paciente.get("nombre") if self.proyecto else "") or ""
+            expediente.abrir(self, web, id_, f"#{numero}" + (f" · {nombre}" if nombre else ""))
+
+        self.confeccion._en_segundo_plano(lambda: web.buscar_pedido(numero), listo,
+                                          lambda m: QMessageBox.warning(self, "Ver pedido", m))
 
     def ajustes_cnc(self) -> bool:
         """Abre «Ajustes de la CNC». Si se guardan, la tirada abierta tiene que volver a calcularse."""

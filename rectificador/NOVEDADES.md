@@ -1,5 +1,17 @@
 # Novedades de Ortosend Taller
 
+## 0.9.0
+- **El expediente de cada pedido, en el programa**: la **receta** (qué hay que hacer: pauta por pie,
+  diagnóstico, valoración y la receta firmada en PDF), los **vídeos de la marcha** con su informe (se ven
+  aquí, con pausa y cámara lenta), las **fotos de los pies** con la línea de Helbing, el **cuestionario**,
+  la **exploración** y el nombre del escaneo en Revo Scan.
+- En **Confección**: botón «📋 Ver receta y estudio» en la hoja de cada pedido (y el diagnóstico debajo de
+  la pauta). En **Fresado**: botón «📋 Ver pedido» junto al nº de pedido del molde abierto.
+- Es lo mismo que el taller ve en la web y cada consulta queda registrada. Los vídeos y fotos se bajan a
+  una carpeta temporal que se borra al cerrar la ventana. Si el paciente ha retirado sus consentimientos,
+  no se enseña nada clínico.
+- Necesita la actualización de la web de Ortosend; hasta entonces la ventana avisa de que falta.
+
 ## 0.8.5
 - **Más rápido para escayola celular** (es blanda): desbaste y contorno a 4000 mm/min (antes 2500), entrada
   2000 (1500), bajada 1000 (800), acabado 4500 (3000) y el desbaste baja 5 mm por nivel (antes 3). Con un

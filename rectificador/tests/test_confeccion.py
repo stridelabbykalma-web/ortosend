@@ -1,5 +1,6 @@
 """Apartado «Confección» contra una web falsa que imita la API del taller de Ortosend."""
 
+import base64
 import json
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -7,6 +8,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import pytest
 
 from interfaz import web as W
+
+# Una foto de verdad (PNG de 1×1) para las miniaturas.
+PNG = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==")
 
 
 class WebFalsa:
@@ -42,6 +46,10 @@ class WebFalsa:
              "anulado": {"quien": "Rosa", "motivo": "No era esa plancha", "cuando": "2026-10-21T09:21:00Z"}},
         ]}
         self.token = None
+        self.con_expediente = True  # False = web antigua, sin el expediente
+        self.revocado = False  # True = el paciente ha retirado los consentimientos
+        self.archivos = {"/api/media/f1": (PNG, "image/png"), "/api/media/v1": (b"\x1aE\xdf\xa3", "video/webm"),
+                         "/api/rx-pdf/c1": (b"%PDF-1.4 receta", "application/pdf")}
         self.peticiones = []
         self.servidor = ThreadingHTTPServer(("127.0.0.1", 0), self._manejador())
         threading.Thread(target=self.servidor.serve_forever, daemon=True).start()
@@ -57,10 +65,36 @@ class WebFalsa:
         p["ficha"] = [["Talla de calzado (EU)", "39"]]
         p["hoja"] = self.hojas.get(id_)
         p["materiales"] = self.materiales_usados.get(id_, [])
+        if not self.con_expediente:
+            return p
+        if self.revocado:
+            p.update(receta=None, estudio=None, expediente=None, escaneo=None,
+                     aviso="El paciente no tiene en vigor los consentimientos: no se puede ver su expediente.")
+            return p
+        p.update(
+            diagnostico="Pie plano valgo",
+            receta={"prescriptor": "Dra. Receta", "colegiado": "4321", "firmada": "2026-10-15T10:00:00Z",
+                    "valoracion": "Pronación marcada en apoyo", "diagnostico": "Pie plano valgo",
+                    "pauta": "EVA con relleno de arco", "pautaIzq": "Skive medial 4 mm", "pautaDcha": None,
+                    "pautaUso": "Uso progresivo", "contacto": None, "pdf": f"/api/rx-pdf/{id_}"},
+            estudio=[{"id": "v1", "tipo": "video", "etiqueta": "Marcha posterior (alejándose) — descalzo",
+                      "url": "/api/media/v1", "mime": "video/webm", "segundos": 6,
+                      "resumen": ["Retropié en apoyo: dcha. 9° · izq. 4° (+ eversión / − inversión)"]},
+                     {"id": "f1", "tipo": "foto", "etiqueta": "Pies de cerca desde atrás (retropié) — en carga",
+                      "url": "/api/media/f1", "mime": None, "segundos": None,
+                      "resumen": ["Línea de Helbing (tendón de Aquiles): dcha. 7° valgo (orientativa)"]}],
+            expediente=[{"titulo": "Cuestionario clínico", "filas": [["Motivo indicado al reservar", "Dolor de talón"]]},
+                        {"titulo": "Exploración biomecánica y tests", "filas": [["FPI-6 izq.", "+8"]]}],
+            escaneo={"proyecto": "Ana Ruiz 600111222", "clinica": "Clínica Sol"},
+            aviso=None)
         return p
 
     def responder(self, metodo, ruta, cabeceras, cuerpo):
         self.peticiones.append((metodo, ruta))
+        if ruta in self.archivos:  # vídeos, fotos y la receta en PDF (con el mismo token)
+            if not self.token or cabeceras.get("Authorization") != f"Bearer {self.token}":
+                return 401, {"error": "No autenticado"}
+            return 200, self.archivos[ruta]
         if not ruta.startswith("/api/taller"):
             return 404, "<html>no</html>"
         ruta = ruta[len("/api/taller"):]
@@ -114,11 +148,15 @@ class WebFalsa:
                 n = int(self.headers.get("Content-Length") or 0)
                 cuerpo = json.loads(self.rfile.read(n) or b"{}") if n else {}
                 status, datos = falsa.responder(metodo, self.path, dict(self.headers), cuerpo)
-                texto = datos if isinstance(datos, str) else json.dumps(datos)
+                if isinstance(datos, tuple):  # archivo: (contenido, tipo)
+                    contenido, tipo = datos
+                else:
+                    contenido = (datos if isinstance(datos, str) else json.dumps(datos)).encode()
+                    tipo = "text/html" if isinstance(datos, str) else "application/json"
                 self.send_response(status)
-                self.send_header("Content-Type", "text/html" if isinstance(datos, str) else "application/json")
+                self.send_header("Content-Type", tipo)
                 self.end_headers()
-                self.wfile.write(texto.encode())
+                self.wfile.write(contenido)
 
             def do_GET(self):
                 self._atender("GET")
@@ -323,3 +361,98 @@ def test_materiales_sin_precios(falsa):
     d.close()
     d.deleteLater()
     app.processEvents()
+
+
+def test_expediente_del_pedido(falsa, monkeypatch):
+    """Receta (qué hay que hacer), vídeos y fotos con su análisis, cuestionario y exploración."""
+    from PySide6.QtWidgets import QApplication, QWidget
+
+    from interfaz import expediente as E
+
+    app = QApplication.instance() or QApplication([])
+    monkeypatch.setattr(E.VentanaExpediente, "SINCRONO", True)
+    abiertos = []
+    monkeypatch.setattr(E.QDesktopServices, "openUrl", lambda u: abiertos.append(u.toLocalFile()) or True)
+    cli = W.ClienteWeb(falsa.url)
+    cli.entrar("taller@ortosend.es", "clave")
+    assert cli.bajar("/api/media/f1") == (PNG, "image/png")
+    assert cli.buscar_pedido(102) == "c2" and cli.buscar_pedido(999) is None
+    padre = QWidget()
+    v = E.abrir(padre, cli, "c1", "#101 · Ana Ruiz")
+    app.processEvents()
+    assert E.abrir(padre, cli, "c1") is v  # una sola ventana por pedido
+    assert "#101 · Ana Ruiz" in v.windowTitle() and not v.aviso.isVisible()
+    receta = v.texto_receta.toPlainText()
+    for t in ("Skive medial 4 mm", "EVA con relleno de arco", "Pie plano valgo", "Pronación marcada", "Dra. Receta",
+              "4321", "15/10/2026"):
+        assert t in receta
+    # La receta firmada en PDF: se baja y se abre con el visor del ordenador.
+    assert v.boton_pdf.isEnabled()
+    v.abrir_pdf()
+    assert abiertos and abiertos[-1].endswith(".pdf") and open(abiertos[-1], "rb").read().startswith(b"%PDF")
+    # Vídeos y fotos: la foto se baja ya (miniatura) y se ve con su análisis.
+    assert v.lista.count() == 2 and "/api/media/f1" in v.archivos and "/api/media/v1" not in v.archivos
+    v.lista.setCurrentRow(1)
+    assert v.visor.currentIndex() == 0 and not v.imagen.pixmap().isNull()
+    assert "Helbing" in v.texto_analisis.text() and v.boton_externo.isEnabled()
+    v.lista.setCurrentRow(0)  # el vídeo se baja al elegirlo
+    assert "/api/media/v1" in v.archivos and "Retropié" in v.texto_analisis.text()
+    if E.QMediaPlayer is not None:
+        assert v.visor.currentIndex() == 1
+    v.abrir_externo()
+    assert abiertos[-1].endswith(".webm")
+    # Cuestionario, exploración y escaneo.
+    texto = v.texto_expediente.toPlainText()
+    assert "Dolor de talón" in texto and "FPI-6" in texto and "Ana Ruiz 600111222" in texto
+    # Al cerrar se borra todo lo bajado (datos de salud).
+    carpeta = v.carpeta
+    assert any(carpeta.iterdir())
+    v.close()
+    app.processEvents()
+    assert not carpeta.exists()
+    # Sin consentimientos: no se ve nada clínico y se dice por qué.
+    falsa.revocado = True
+    v2 = E.abrir(padre, cli, "c2", "#102")
+    assert "consentimientos" in v2.aviso.text() and v2.lista.count() == 1 and not v2.boton_pdf.isEnabled()
+    v2.close()
+    # Web antigua (sin el expediente): se avisa de que falta publicarla.
+    falsa.revocado, falsa.con_expediente = False, False
+    v3 = E.abrir(padre, cli, "c1", "#101")
+    assert "falta publicar" in v3.aviso.text() and "Skive medial 4 mm" in v3.texto_receta.toPlainText()
+    v3.close()
+    padre.deleteLater()
+    app.processEvents()
+
+
+def test_ver_pedido_desde_fresado_y_confeccion(falsa, monkeypatch, stl_sintetico):
+    from PySide6.QtWidgets import QMessageBox
+
+    from interfaz import expediente as E
+
+    app, v = _ventana(falsa, monkeypatch)
+    monkeypatch.setattr(E.VentanaExpediente, "SINCRONO", True)
+    mensajes = []
+    monkeypatch.setattr(QMessageBox, "information", staticmethod(lambda *a, **k: mensajes.append(a[2])))
+    v.abrir(str(stl_sintetico), esperar=True)
+    assert not v.boton_ver_pedido.isEnabled()
+    v.caja_pedido.setText("101")
+    assert v.boton_ver_pedido.isEnabled()
+    v.ver_pedido()  # sin haber entrado: se dice cómo
+    assert "Confección" in mensajes[-1]
+    c = v.confeccion
+    assert c.entrar("taller@ortosend.es", "clave")
+    v.ver_pedido()
+    exp = v._expedientes["c1"]
+    assert "Skive medial 4 mm" in exp.texto_receta.toPlainText()
+    exp.close()
+    v.caja_pedido.setText("999")
+    v.ver_pedido()
+    assert "999" in mensajes[-1]
+    # En Confección: el diagnóstico en la hoja y el botón de la receta y el estudio.
+    c.elegir("c2")
+    assert "Pie plano valgo" in c.texto_pauta.text() and c.boton_expediente.isVisibleTo(c)
+    c.ver_expediente()
+    assert "c2" in v._expedientes
+    v._expedientes["c2"].close()
+    app.processEvents()
+    _limpiar(v)
