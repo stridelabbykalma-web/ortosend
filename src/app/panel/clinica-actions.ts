@@ -355,6 +355,16 @@ export async function sendCaseAction(formData: FormData) {
   }
   void back;
 
+  // Ruta CLINICA: si nadie en la clínica puede firmar (colegiación sin
+  // verificar, baja…), el caso se quedaría en una cola sin salida.
+  if (rxRoute === "CLINICA") {
+    const hayPrescriptor = await prisma.professionalProfile.findFirst({
+      where: { canPrescribe: true, verifiedAt: { not: null }, user: { clinicId: u.clinicId, active: true } },
+    });
+    if (!hayPrescriptor)
+      fail(`/caso/${caseId}?elegir=1`, "Vuestra clínica no tiene ningún prescriptor verificado: elige la receta de Ortosend o contacta con administración");
+  }
+
   await prisma.capture.update({ where: { caseId }, data: { completedAt: new Date() } });
   // Si venía de una incidencia, la prueba repetida la resuelve; y la cita de
   // repetición (si la había) queda como realizada en vez de colgada en la agenda.

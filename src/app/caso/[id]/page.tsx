@@ -11,7 +11,7 @@ import { CapturaGuiada } from "@/components/caso/captura-guiada";
 import { RxView } from "@/components/caso/rx-view";
 import { TallerView } from "@/components/caso/taller-view";
 import { unlockRxAction } from "@/app/panel/cliente-actions";
-import { verifyDocToken } from "@/app/panel/cliente-actions";
+import { verifyDocToken } from "@/lib/doc-token";
 import { fmtd } from "@/lib/format";
 import { esCentral } from "@/lib/rx-route";
 import { TALLER_STATES } from "@/lib/taller";
@@ -52,8 +52,13 @@ export default async function CasoPage({
   const isClinicStaff =
     (user.role === "PROFESIONAL" || user.role === "ADMIN_CLINICA") && user.clinicId === k.clinicId;
   const central = esCentral(k); // lo valora Ortosend (enviado a Ortosend o para revisión)
-  const isCentral = user.role === "RECETADOR" && central;
-  const isTaller = user.role === "TALLER";
+  // El recetador central solo ve casos en valoración (o que ya recetó él);
+  // el taller, solo desde que entra el pedido. Antes podían abrir cualquier caso.
+  const isCentral =
+    user.role === "RECETADOR" &&
+    central &&
+    (["EN_PRESCRIPCION", "EN_CONTACTO"].includes(k.state) || k.prescription?.prescriberId === user.id);
+  const isTaller = user.role === "TALLER" && [...TALLER_STATES, "ENTREGADO", "CERRADO"].includes(k.state);
   const isAdmin = user.role === "ADMIN";
   if (!isOwner && !isClinicStaff && !isCentral && !isTaller && !isAdmin) redirect("/panel");
 

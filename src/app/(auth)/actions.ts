@@ -16,6 +16,7 @@ import {
 import { audit, notifyEmail, notifyOwner, pushEvent, releaseAllBy, titularDe } from "@/lib/cases";
 import { isValidPhone, normalizeEmail, normalizeIdentifier, normalizePhone } from "@/lib/contacto";
 import { avisarContrasenaCambiada, enviarBienvenida, enviarRecuperacion, enviarVerificacionEmail } from "@/lib/cuenta";
+import { claveIp, limitar, origenPeticion } from "@/lib/rate-limit";
 import { CONSENT_VERSION } from "@/lib/legal";
 
 const loginSchema = z.object({
@@ -33,11 +34,16 @@ export async function loginAction(formData: FormData) {
   const ambito = formData.get("ambito") === "equipo" ? "equipo" : "cliente";
   const base = ambito === "equipo" ? "/equipo" : "/login";
   const next = String(formData.get("next") ?? "");
-  const dest = next.startsWith("/") && !next.startsWith("//") ? next : "/panel";
+  // Solo rutas internas: "//" y "/\" son redirecciones a otros dominios.
+  const dest = /^\/(?![\/\\])/.test(next) ? next : "/panel";
   const loginUrl = (msg: string) =>
     `${base}?error=${encodeURIComponent(msg)}${dest !== "/panel" ? `&next=${encodeURIComponent(dest)}` : ""}`;
   if (!parsed.success) redirect(loginUrl("Completa email/móvil y contraseña"));
-  const id = normalizeIdentifier(parsed.data.identifier);
+  // Freno a la fuerza bruta: 10 intentos por minuto y IP.
+  const origen = await origenPeticion();
+  if (!origen.sinPeticion && !(await limitar(claveIp("login", origen.ip), 10, 60)))
+    redirect(loginUrl("Demasiados intentos. Espera un minuto."));
+  const id = normalizeIdentifier(parsed.data.identifier.slice(0, 200));
   const user = await prisma.user.findFirst({
     where: { OR: [{ email: id }, { phone: id }] },
   });
@@ -213,7 +219,11 @@ export async function handoverAction(formData: FormData) {
 // --- Recuperación de contraseña (Flujo A) ---
 // Siempre responde lo mismo, exista o no la cuenta, para no revelar quién está registrado.
 export async function recoverAction(formData: FormData) {
-  const id = normalizeIdentifier(String(formData.get("identifier") ?? ""));
+  // Freno al spam de emails de recuperación: 5 por 10 minutos y IP.
+  const origen = await origenPeticion();
+  if (!origen.sinPeticion && !(await limitar(claveIp("recuperar", origen.ip), 5, 600)))
+    redirect("/recuperar?error=" + encodeURIComponent("Demasiadas peticiones. Espera unos minutos."));
+  const id = normalizeIdentifier(String(formData.get("identifier") ?? "").slice(0, 200));
   if (id.length >= 3) {
     const user = await prisma.user.findFirst({ where: { OR: [{ email: id }, { phone: id }] } });
     if (user && user.active && user.email) await enviarRecuperacion(user);

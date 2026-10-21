@@ -106,7 +106,7 @@ export async function solicitarCodigo(dniRaw: string, telefonoRaw: string): Prom
   const sub = inv?.manychatSubscriberId ?? (await manychat().buscarOCrearContacto({
     telefonoE164: aE164(telefono),
     nombre: destinatario(lista[0]).nombre,
-    fraseConsentimiento: "Código de acceso solicitado por el titular en ortosend.com",
+    fraseConsentimiento: "Código de acceso solicitado por el titular en ortosend.es",
   }).catch(() => null));
   let porWhatsApp = false;
   if (sub) {

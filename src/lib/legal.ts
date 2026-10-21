@@ -6,7 +6,7 @@ export const EMPRESA = {
   cif: "[CIF PENDIENTE]",
   domicilio: "[DOMICILIO SOCIAL PENDIENTE]",
   registro: "[DATOS DE INSCRIPCIÓN EN EL REGISTRO MERCANTIL PENDIENTES]",
-  email: "hola@ortosend.com",
+  email: "hola@ortosend.es",
   web: "https://ortosend.es",
   // WhatsApp de la empresa (ManyChat), en formato internacional sin «+».
   whatsapp: process.env.WHATSAPP_EMPRESA || "34644954520",

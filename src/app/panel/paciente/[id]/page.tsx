@@ -240,7 +240,7 @@ export default async function PacientePage({
               <>
                 <div className="muted">
                   Cuando termines la ficha, envíale el acceso. Recibirá un WhatsApp para crear su contraseña en
-                  ortosend.com/acceso con {p.isMinor ? "el DNI del tutor" : "su DNI"} y su móvil (más un código de
+                  ortosend.es/acceso con {p.isMinor ? "el DNI del tutor" : "su DNI"} y su móvil (más un código de
                   confirmación).
                 </div>
                 {p.accessSentAt && <div className="tiny">Último envío: {fmtdt(p.accessSentAt)}</div>}

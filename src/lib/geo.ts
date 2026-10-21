@@ -25,7 +25,7 @@ export async function geocode(q: string): Promise<LatLng | null> {
       "https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=es&q=" +
       encodeURIComponent(query);
     const res = await fetch(url, {
-      headers: { "User-Agent": "Ortosend/1.0 (hola@ortosend.com)" },
+      headers: { "User-Agent": "Ortosend/1.0 (hola@ortosend.es)" },
       next: { revalidate: 86400 },
     });
     if (!res.ok) return null;

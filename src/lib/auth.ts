@@ -7,7 +7,19 @@ import { prisma } from "./db";
 import type { Role, User } from "@prisma/client";
 
 const COOKIE = "ortosend_session";
-const secret = () => new TextEncoder().encode(process.env.AUTH_SECRET || "dev-secret");
+// En producción el secreto es obligatorio: sin él, cualquiera podría firmarse
+// una sesión con el valor por defecto. En desarrollo se tolera el fallback.
+export function authSecret(): Uint8Array {
+  const s = process.env.AUTH_SECRET;
+  if (!s) {
+    if (process.env.NODE_ENV === "production") throw new Error("AUTH_SECRET sin configurar");
+    return new TextEncoder().encode("dev-secret");
+  }
+  return new TextEncoder().encode(s);
+}
+const secret = authSecret;
+// Huella de la contraseña: viaja en los tokens para que un cambio los revoque.
+const fingerprint = (hash: string | null) => (hash ?? "none").slice(-16);
 
 export async function hashPassword(plain: string) {
   return bcrypt.hash(plain, 10);
@@ -25,9 +37,11 @@ const STAFF_HOURS = 12;
 const CLIENT_DAYS = 30;
 
 export async function createSession(userId: string) {
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } });
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { role: true, passwordHash: true } });
   const esCliente = user?.role === "CLIENTE";
-  const token = await new SignJWT({ uid: userId })
+  // La sesión lleva la huella de la contraseña: cambiarla revoca todas las
+  // sesiones abiertas (robo de móvil, equipo compartido…).
+  const token = await new SignJWT({ uid: userId, fp: fingerprint(user?.passwordHash ?? null) })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime(esCliente ? `${CLIENT_DAYS}d` : `${STAFF_HOURS}h`)
@@ -58,6 +72,8 @@ export const getSessionUser = cache(async (): Promise<User | null> => {
     const uid = payload.uid as string;
     const user = await prisma.user.findUnique({ where: { id: uid } });
     if (!user || !user.active) return null;
+    // Sesiones firmadas antes del último cambio de contraseña: fuera.
+    if (payload.fp !== fingerprint(user.passwordHash)) return null;
     return user;
   } catch {
     return null;
@@ -135,7 +151,6 @@ export async function verifyEmailToken(token: string): Promise<{ uid: string; em
 
 // Restablecer contraseña (enlace de 1 hora). Lleva una huella del hash actual:
 // en cuanto la contraseña cambia, el enlace deja de valer (un solo uso).
-const fingerprint = (hash: string | null) => (hash ?? "none").slice(-16);
 export async function createResetToken(userId: string, passwordHash: string | null) {
   return new SignJWT({ uid: userId, fp: fingerprint(passwordHash), kind: "reset" })
     .setProtectedHeader({ alg: "HS256" })

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { nombreCompleto } from "@/lib/nombre";
 import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
+import { TALLER_STATES } from "@/lib/taller";
 import { getSessionUser } from "@/lib/auth";
 import { audit, titularDe } from "@/lib/cases";
 import { fmtd } from "@/lib/format";
@@ -64,6 +65,8 @@ export default async function HojaPage({ params }: { params: Promise<{ id: strin
   });
   if (!kase) notFound();
   const k = kase!;
+  // El taller solo desde que hay pedido (el admin, siempre).
+  if (user.role === "TALLER" && !([...TALLER_STATES, "ENTREGADO", "CERRADO"] as string[]).includes(k.state)) redirect("/panel");
   await audit(user.id, "case.hoja", `case:${k.number}`, k.patientId);
 
   const q = k.capture?.questionnaire as Questionnaire | null;

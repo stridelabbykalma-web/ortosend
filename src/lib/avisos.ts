@@ -42,7 +42,7 @@ async function contactoDe(telefono: string, nombre: string) {
   return manychat().buscarOCrearContacto({
     telefonoE164: aE164(telefono),
     nombre: nombre.split(" ")[0] || nombre || "Paciente",
-    fraseConsentimiento: "Aceptó recibir los avisos del servicio por WhatsApp en ortosend.com",
+    fraseConsentimiento: "Aceptó recibir los avisos del servicio por WhatsApp en ortosend.es",
   });
 }
 

@@ -19,10 +19,16 @@ export async function limpiarRateLimit() {
 }
 
 // IP del cliente (Vercel la pone primera en x-forwarded-for) y user-agent.
-export async function origenPeticion() {
-  const h = await headers();
-  const ip = (h.get("x-forwarded-for") ?? "").split(",")[0].trim() || h.get("x-real-ip") || null;
-  return { ip, userAgent: h.get("user-agent") };
+// Fuera de una petición (tests, scripts) no hay cabeceras: sinPeticion=true
+// y los límites por IP no aplican.
+export async function origenPeticion(): Promise<{ ip: string | null; userAgent: string | null; sinPeticion?: boolean }> {
+  try {
+    const h = await headers();
+    const ip = (h.get("x-forwarded-for") ?? "").split(",")[0].trim() || h.get("x-real-ip") || null;
+    return { ip, userAgent: h.get("user-agent") };
+  } catch {
+    return { ip: null, userAgent: null, sinPeticion: true };
+  }
 }
 
 // La IP no se usa en claro como clave del contador.
@@ -34,6 +40,7 @@ export const PUBLICO_MAX = 20;
 export const PUBLICO_VENTANA = 60;
 
 export async function permitirPublico(prefijo: string) {
-  const { ip } = await origenPeticion();
+  const { ip, sinPeticion } = await origenPeticion();
+  if (sinPeticion) return true;
   return limitar(claveIp(prefijo, ip), PUBLICO_MAX, PUBLICO_VENTANA);
 }

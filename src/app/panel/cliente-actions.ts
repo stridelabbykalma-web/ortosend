@@ -2,8 +2,8 @@
 
 // Acciones del cliente: pago (simulado hasta integrar Stripe), acceso a documentos clínicos y citas.
 import { redirect } from "next/navigation";
-import { SignJWT, jwtVerify } from "jose";
 import { prisma } from "@/lib/db";
+import { createDocToken } from "@/lib/doc-token";
 import { exigirTratamientoPermitido } from "@/lib/alta";
 import { hashPassword, requireRole, verifyPassword } from "@/lib/auth";
 import { audit, pushEvent, avisarPaciente } from "@/lib/cases";
@@ -13,8 +13,6 @@ import { avisarContrasenaCambiada, enviarVerificacionEmail } from "@/lib/cuenta"
 import { activeAppointmentOf, bookAppointment, cancelAppointment } from "@/lib/agenda-db";
 import { agendaErrorMessage, parseSlot, type SlotOk } from "@/lib/reserva-form";
 import { fechaTextoLarga, fmtdt } from "@/lib/format";
-
-const secret = () => new TextEncoder().encode(process.env.AUTH_SECRET || "dev-secret");
 
 function fail(path: string, msg: string): never {
   redirect(`${path}${path.includes("?") ? "&" : "?"}error=` + encodeURIComponent(msg));
@@ -74,21 +72,9 @@ export async function unlockRxAction(formData: FormData) {
   if (!u.passwordHash || !(await verifyPassword(password, u.passwordHash)))
     fail(`/caso/${caseId}`, "Contraseña incorrecta");
   if (!kase.prescription) fail(`/caso/${caseId}`, "Aún no hay prescripción");
-  const doc = await new SignJWT({ caseId, kind: "doc" })
-    .setProtectedHeader({ alg: "HS256" })
-    .setExpirationTime("10m")
-    .sign(secret());
+  const doc = await createDocToken(caseId);
   await audit(u.id, "prescription.view", `case:${kase.number}`, kase.patientId);
   redirect(`/caso/${caseId}?doc=${encodeURIComponent(doc)}`);
-}
-
-export async function verifyDocToken(token: string, caseId: string) {
-  try {
-    const { payload } = await jwtVerify(token, secret());
-    return payload.kind === "doc" && payload.caseId === caseId;
-  } catch {
-    return false;
-  }
 }
 
 // --- Personas a cargo: contacto del menor (donde recibirá el aviso a los 16) ---

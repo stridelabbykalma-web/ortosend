@@ -8,7 +8,8 @@ import { getSessionUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { audit } from "@/lib/cases";
 import { esCentral } from "@/lib/rx-route";
-import { verifyDocToken } from "@/app/panel/cliente-actions";
+import { TALLER_STATES } from "@/lib/taller";
+import { verifyDocToken } from "@/lib/doc-token";
 
 export const dynamic = "force-dynamic";
 
@@ -21,16 +22,20 @@ export async function GET(request: Request, { params }: { params: Promise<{ case
     include: {
       clinic: { select: { hasPrescriber: true } },
       patient: { select: { ownerId: true } },
-      prescription: { select: { pdfBytes: true, pdfSha256: true } },
+      prescription: { select: { pdfBytes: true, pdfSha256: true, prescriberId: true } },
     },
   });
   if (!kase?.prescription?.pdfBytes) return NextResponse.json({ error: "sin PDF" }, { status: 404 });
 
   const isOwner = user.role === "CLIENTE" && kase.patient.ownerId === user.id;
+  // Mismas ventanas por estado que la ficha del caso: el recetador central
+  // mientras valora (o si la receta es suya) y el taller desde que hay pedido.
   const isStaff =
     ((user.role === "PROFESIONAL" || user.role === "ADMIN_CLINICA") && user.clinicId === kase.clinicId) ||
-    (user.role === "RECETADOR" && esCentral(kase)) ||
-    user.role === "TALLER" ||
+    (user.role === "RECETADOR" &&
+      esCentral(kase) &&
+      (["EN_PRESCRIPCION", "EN_CONTACTO", "PENDIENTE_PAGO"].includes(kase.state) || kase.prescription.prescriberId === user.id)) ||
+    (user.role === "TALLER" && ([...TALLER_STATES, "ENTREGADO", "CERRADO"] as string[]).includes(kase.state)) ||
     user.role === "ADMIN";
   if (isOwner) {
     const t = new URL(request.url).searchParams.get("t") ?? "";
