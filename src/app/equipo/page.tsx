@@ -37,7 +37,7 @@ export default async function EquipoPage({
       </div>
       <div className="sp" />
       <h2>Acceso del equipo</h2>
-      <div className="muted">Clínicas asociadas, taller y administración de Ortosend.</div>
+      <div className="muted">Clínicas asociadas y administración de Ortosend.</div>
       <div className="sp" />
       <Flash error={error} ok={ok} />
       <form className="card" action={loginAction}>
@@ -80,7 +80,8 @@ export default async function EquipoPage({
         </div>
       </details>
       <div className="tiny" style={{ marginTop: 12 }}>
-        ¿Eres paciente? Tu acceso está en la <Link href="/login">web de Ortosend</Link>.
+        ¿Eres paciente? Tu acceso está en la <Link href="/login">web de Ortosend</Link>. ¿Taller? Tu app es{" "}
+        <Link href="/taller">ortosend.es/taller</Link>.
       </div>
       <div className="sp2" />
     </div>
