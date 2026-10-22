@@ -32,6 +32,10 @@ export default async function EquipoPage({
   return (
     <div className="wrap" style={{ maxWidth: 440 }}>
       <div className="sp2" />
+      <div className="logo" style={{ fontSize: 28 }}>
+        orto<b>send</b> <span className="tiny muted" style={{ fontWeight: 400 }}>· clínicas</span>
+      </div>
+      <div className="sp" />
       <h2>Acceso del equipo</h2>
       <div className="muted">Clínicas asociadas, taller y administración de Ortosend.</div>
       <div className="sp" />
