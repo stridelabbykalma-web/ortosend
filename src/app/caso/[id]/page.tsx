@@ -140,8 +140,14 @@ export default async function CasoPage({
       <>
         <Steps state={k.state} />
         {k.prescription && !showDoc && (
-          <form className="card" action={unlockRxAction} style={{ maxWidth: 480 }}>
-            <b>Documento clínico</b>
+          <form className="card px-lift pc-lock" action={unlockRxAction}>
+            <div className="px-ico">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                <rect x="4.5" y="10.5" width="15" height="10" rx="2.5" />
+                <path d="M8 10.5V7.5a4 4 0 0 1 8 0v3" />
+              </svg>
+            </div>
+            <b style={{ fontFamily: "var(--font-sora)", fontSize: 16 }}>Documento clínico</b>
             <p className="muted" style={{ margin: "6px 0" }}>
               Por seguridad, confirma tu contraseña para ver tu prescripción (documento clínico
               firmado, se conserva 5 años).
@@ -150,37 +156,62 @@ export default async function CasoPage({
             <label>Contraseña</label>
             <input name="password" type="password" required />
             <div className="sp" />
-            <button type="submit" className="pri">
+            <button type="submit" className="pri wfull">
               Ver prescripción
             </button>
           </form>
         )}
         {k.prescription && showDoc && (
-          <div className="card">
-            <h3>Prescripción — caso #{k.number}</h3>
-            <div className="tiny">Documento clínico firmado electrónicamente · se conserva 5 años</div>
-            <div className="sp" />
-            <p>
-              <b>Paciente:</b> {nombreCompleto(k.patient)} · <b>Clínica del estudio:</b> {k.clinic.name}
-            </p>
-            <p>
-              <b>Prescriptor:</b> {k.prescription.prescriberName} (col. {k.prescription.collegiateNum})
-            </p>
-            <p>
-              <b>Diagnóstico / indicación:</b> {k.prescription.diagnosis}
-            </p>
-            <p>
-              <b>Pauta de uso:</b> {k.prescription.usageGuidelines}
-            </p>
-            <p className="tiny">Firmado: {fmtd(k.prescription.signedAt)} · {k.prescription.prescriberName}</p>
-            {k.prescription.pdfSha256 && (
-              <p>
-                <a className="btn" href={`/api/rx-pdf/${k.id}?t=${encodeURIComponent(doc!)}`} target="_blank" rel="noreferrer">
+          <div className="card px-lift pc-doc">
+            <div className="pc-doc-head">
+              <h3>Prescripción</h3>
+              <span className="logo">
+                orto<b>send</b>
+              </span>
+            </div>
+            <div className="pc-doc-meta">
+              <div>
+                <div className="pc-k">Paciente</div>
+                <div>{nombreCompleto(k.patient)}</div>
+              </div>
+              <div>
+                <div className="pc-k">Clínica del estudio</div>
+                <div>{k.clinic.name}</div>
+              </div>
+              <div>
+                <div className="pc-k">Prescriptor</div>
+                <div>
+                  {k.prescription.prescriberName} (col. {k.prescription.collegiateNum})
+                </div>
+              </div>
+              <div>
+                <div className="pc-k">Caso</div>
+                <div>#{k.number} · firmado el {fmtd(k.prescription.signedAt)}</div>
+              </div>
+            </div>
+            <div className="pc-doc-sec">
+              <div className="pc-k">Diagnóstico / indicación</div>
+              <div>{k.prescription.diagnosis}</div>
+            </div>
+            <div className="pc-doc-sec">
+              <div className="pc-k">Pauta de uso</div>
+              <div>{k.prescription.usageGuidelines}</div>
+            </div>
+            <div className="pc-doc-firma">
+              <span className="tiny">
+                Documento clínico firmado electrónicamente · se conserva 5 años
+                {k.prescription.pdfSha256 && (
+                  <>
+                    {" "}· Huella SHA-256: {k.prescription.pdfSha256.slice(0, 24)}…
+                  </>
+                )}
+              </span>
+              {k.prescription.pdfSha256 && (
+                <a className="btn pri" href={`/api/rx-pdf/${k.id}?t=${encodeURIComponent(doc!)}`} target="_blank" rel="noreferrer">
                   Descargar PDF firmado
-                </a>{" "}
-                <span className="tiny">Huella SHA-256: {k.prescription.pdfSha256.slice(0, 24)}… (prueba de integridad)</span>
-              </p>
-            )}
+                </a>
+              )}
+            </div>
           </div>
         )}
         {!k.prescription && (

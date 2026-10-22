@@ -495,3 +495,56 @@ button, .btn, a {
   button, .btn, a, .px-lift, .px-faq summary::after { transition: none; }
   .px-lift:hover { transform: none; }
 }
+
+/* ============================================================
+   Panel del cliente (prefijo pc-): capa ADITIVA sobre px-.
+   Solo la usan PanelCliente y la vista del dueño en /caso/[id].
+   ============================================================ */
+.pc-hola h2 { font-size: clamp(26px, 3.4vw, 34px); font-weight: 800; letter-spacing: -0.4px; margin: 0; }
+.pc-hola .muted { margin-top: 4px; }
+.pc-case { border-radius: var(--r-lg); padding: 24px; }
+.pc-case-head {
+  display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding-bottom: 12px; border-bottom: 1px solid var(--line); margin-bottom: 4px;
+}
+.pc-case-head b { font-family: var(--font-sora); font-size: 16px; }
+.pc-steps { margin: 16px 0; }
+.pc-steps .step.cur .lb { font-family: var(--font-sora); font-weight: 600; color: var(--teal-d); }
+.pc-steps .step.cur .dot { box-shadow: 0 0 0 5px var(--teal-l); }
+
+.pc-pay {
+  background: radial-gradient(600px 300px at 12% -30%, var(--bosque2), transparent 60%), var(--bosque);
+  color: var(--crema); border-radius: 16px; padding: 22px; margin-top: 14px;
+}
+.pc-pay .t { font-family: var(--font-sora); color: #fff; font-size: 20px; margin-bottom: 6px; }
+.pc-pay label { color: #b9d2c7; }
+.pc-pay select { background: rgba(255, 255, 255, 0.08); color: #fff; border-color: rgba(255, 255, 255, 0.25); }
+.pc-pay select option { color: var(--ink); background: #fff; }
+.pc-pay .pri { background: var(--crema); border-color: var(--crema); color: var(--bosque); font-weight: 700; }
+.pc-pay .pri:hover { background: #fff; }
+.pc-pay .pc-seguro { color: #b9d2c7; font-size: 12.5px; display: flex; align-items: center; gap: 7px; margin-top: 10px; }
+.pc-pay .pc-seguro svg { color: var(--sand); flex: none; }
+
+.pc-acc { border-radius: var(--r-lg); }
+.pc-acc > summary {
+  cursor: pointer; list-style: none; display: flex; justify-content: space-between; align-items: center;
+  gap: 12px; font-weight: 600; font-family: var(--font-sora); font-size: 15px;
+}
+.pc-acc > summary::-webkit-details-marker { display: none; }
+.pc-acc > summary::after { content: "+"; color: var(--teal); font-size: 20px; font-weight: 400; transition: transform 0.2s ease; flex: none; }
+.pc-acc[open] > summary::after { transform: rotate(45deg); }
+.pc-acc[open] > summary { margin-bottom: 10px; }
+
+.pc-lock { max-width: 460px; border-radius: var(--r-lg); }
+.pc-doc { border-radius: var(--r-lg); padding: 28px; max-width: 760px; }
+.pc-doc-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; border-bottom: 2px solid var(--bosque); padding-bottom: 12px; margin-bottom: 18px; }
+.pc-doc-head h3 { margin: 0; }
+.pc-k { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--mut); font-family: var(--font-sora); margin-bottom: 2px; }
+.pc-doc-meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px 22px; margin-bottom: 8px; }
+.pc-doc-sec { margin: 14px 0; }
+.pc-doc-firma { border-top: 1px solid var(--line); margin-top: 18px; padding-top: 14px; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+
+@media (max-width: 720px) {
+  .pc-case { padding: 18px; }
+  .pc-doc { padding: 20px; }
+}

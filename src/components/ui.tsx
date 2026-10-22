@@ -48,7 +48,7 @@ const STEPS: { key: string; label: string; states: CaseState[] }[] = [
 export function Steps({ state }: { state: CaseState }) {
   const current = STEPS.findIndex((s) => s.states.includes(state));
   return (
-    <div className="steps">
+    <div className="steps pc-steps">
       {STEPS.map((s, i) => (
         <div key={s.key} className={`step ${i < current ? "done" : i === current ? "cur" : ""}`}>
           <div className="dot" />
