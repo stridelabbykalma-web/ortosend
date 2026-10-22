@@ -579,3 +579,51 @@ def test_ajustes_cnc_desde_la_app(monkeypatch, tmp_path):
     v.close()
     v.deleteLater()
     app.processEvents()
+
+
+def test_placa_de_la_cnc_entre_tiradas(stl_sintetico, monkeypatch, tmp_path):
+    """Lo fresado en una tirada queda marcado en la placa; la siguiente va en lo que queda libre."""
+    from PySide6.QtCore import QSettings
+    from PySide6.QtWidgets import QApplication, QMessageBox
+
+    from interfaz.principal import VentanaPrincipal
+    from ortomolde import placa
+
+    app = QApplication.instance() or QApplication([])
+    QSettings("Ortosend", "Rectificador").remove("cnc_en_marcha")
+    v = VentanaPrincipal()
+    v.taller["calculo"]["rejilla"] = 1.0
+    v.abrir(str(stl_sintetico), esperar=True)
+    t = v.abrir_tirada()
+    assert t.plancha() == (600.0, 500.0, 45.0)  # la placa de la mesa de la CNC
+    assert "sin fresar" in t.texto_placa.text() and not t.boton_deshacer_placa.isEnabled()
+    t.anadir_abierto()
+    t.calcular(esperar=True)
+    primera = [cnc.huella(p, t._margen()) for p in t.piezas]
+    t.iniciar("L-01")
+    guardada = placa.cargar(600, 500, 45)
+    assert placa.tiradas(guardada) == ["L-01"] and len(guardada["zonas"]) == 2
+    assert "Usada" in t.texto_placa.text() and t.boton_deshacer_placa.isEnabled()
+    # Siguiente tirada: los pies van a lo libre, nunca encima de lo ya fresado.
+    t.anadir_abierto()
+    assert len(t.piezas) == 2 and all(p.colocada for p in t.piezas)  # la tirada anterior ya no está en la lista
+    for p in t.piezas:
+        assert not any(cnc._se_pisan(cnc.huella(p, t._margen()), u) for u in primera)
+    t.calcular(esperar=True)
+    assert len(t.trabajo.usadas) == 2  # el mapa enseña lo ya fresado
+    # Deshacer la última (no se llegó a fresar) y placa nueva.
+    t.iniciar("L-02")
+    assert placa.tiradas(placa.cargar(600, 500, 45)) == ["L-01", "L-02"]
+    t.deshacer_ultima_tirada()
+    assert placa.tiradas(placa.cargar(600, 500, 45)) == ["L-01"]
+    monkeypatch.setattr(QMessageBox, "question", staticmethod(lambda *a, **k: QMessageBox.Yes))
+    t.placa_nueva()
+    assert placa.cargar(600, 500, 45)["zonas"] == [] and "sin fresar" in t.texto_placa.text()
+    # Otra medida de plancha: se avisa de que la placa en uso es otra.
+    t.cajas[2].setValue(40)
+    t._poner_plancha()
+    assert "Placa nueva" in t.texto_placa.text()
+    v.cnc_parar()
+    t.close()
+    v.close()
+    app.processEvents()

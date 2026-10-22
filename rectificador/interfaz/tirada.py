@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
 )
 
 from ortomolde import cnc, mapa
+from ortomolde import placa as placa_mod
 from ortomolde.campo import malla_a_campo
 from ortomolde.entrada import cargar_malla
 from ortomolde.pies import detectar_pies
@@ -111,11 +112,15 @@ class VentanaTirada(QDialog):
         izq = QVBoxLayout()
         izq.setSpacing(10)
         pl = self.taller["plancha"]
+        # La placa que hay ahora en la CNC (con lo ya fresado en tiradas anteriores).
+        self.placa = placa_mod.cargar(pl["ancho_x"], pl["largo_y"], pl["alto_z"])
+        self._lote_iniciado: str | None = None  # tras «Inicio»: estos pies ya están en marcha
         marco, lay_pl, _ = estilo.tarjeta("Plancha de escayola", "1")
         form = QFormLayout()
         form.setHorizontalSpacing(12)
         self.cajas = []
-        for texto, valor in (("Ancho (X)", pl["ancho_x"]), ("Largo (Y)", pl["largo_y"]), ("Alto (Z)", pl["alto_z"])):
+        for texto, valor in (("Ancho (X)", self.placa["ancho"]), ("Largo (Y)", self.placa["largo"]),
+                             ("Alto (Z)", self.placa["alto"])):
             c = QDoubleSpinBox()
             c.setRange(20, 2000)
             c.setDecimals(0)
@@ -139,6 +144,22 @@ class VentanaTirada(QDialog):
         self.boton_ajustes.setToolTip("Revoluciones, velocidades de avance, bajada por capa y separación de líneas")
         self.boton_ajustes.clicked.connect(lambda: principal.ajustes_cnc())
         lay_pl.addWidget(self.boton_ajustes)
+        izq.addWidget(marco)
+
+        marco, lay_placa, _ = estilo.tarjeta("Placa en la CNC")
+        self.texto_placa = estilo.etiqueta("", "secundario")
+        self.texto_placa.setTextFormat(Qt.RichText)
+        lay_placa.addWidget(self.texto_placa)
+        fila = QHBoxLayout()
+        self.boton_placa_nueva = QPushButton("Placa nueva")
+        self.boton_placa_nueva.setToolTip("Has puesto una placa sin fresar: todo vuelve a estar libre")
+        self.boton_placa_nueva.clicked.connect(lambda: self.placa_nueva())
+        fila.addWidget(self.boton_placa_nueva)
+        self.boton_deshacer_placa = QPushButton("Deshacer la última tirada")
+        self.boton_deshacer_placa.setToolTip("Si pulsaste «Inicio» pero la tirada no se llegó a fresar, libera su zona")
+        self.boton_deshacer_placa.clicked.connect(lambda: self.deshacer_ultima_tirada())
+        fila.addWidget(self.boton_deshacer_placa)
+        lay_placa.addLayout(fila)
         izq.addWidget(marco)
 
         marco, lay_pies, _ = estilo.tarjeta("Pies de la tirada", "2")
@@ -250,35 +271,112 @@ class VentanaTirada(QDialog):
 
     def _motivo(self, p: cnc.Pieza, x: int, y: int, giro: int) -> str | None:
         return cnc.cabe(p, self.piezas, *self.plancha()[:2], self._paso(), self.taller["cnc"], self._radio(),
-                        x, y, giro)
+                        x, y, giro, self._usadas())
+
+    # ------------------------------------------------------------ placa en la CNC
+
+    def _zonas_mm(self) -> list[tuple[float, float, float, float]]:
+        """Lo ya fresado de otras tiradas (para el mapa); sin los pies de esta si ya se pulsó Inicio."""
+        if not self._placa_coincide():
+            return []
+        return [(z["x"], z["y"], z["ancho"], z["largo"]) for z in self.placa["zonas"]
+                if self._lote_iniciado is None or z.get("tirada") != self._lote_iniciado]
+
+    def _placa_coincide(self) -> bool:
+        return placa_mod.misma_medida(self.placa, *self.plancha())
+
+    def _usadas(self) -> list[tuple[int, int, int, int]]:
+        """Zonas ya fresadas de la placa en uso (celdas). Si las medidas no son las de esa placa, ninguna."""
+        return placa_mod.zonas_celdas(self.placa, self._paso()) if self._placa_coincide() else []
+
+    def _texto_placa(self):
+        if not self._placa_coincide():
+            self.texto_placa.setText(
+                f"<span style='color:{C['aviso']}'>La placa en uso mide {self.placa['ancho']:.0f} × "
+                f"{self.placa['largo']:.0f} × {self.placa['alto']:.0f} mm. Si has puesto otra, pulsa "
+                "<b>Placa nueva</b>.</span>")
+        elif not self.placa["zonas"]:
+            self.texto_placa.setText("Placa sin fresar: toda libre. El origen es siempre la esquina delantera "
+                                     "izquierda (X0 Y0).")
+        else:
+            n = len(placa_mod.tiradas(self.placa))
+            desde = self.placa.get("creada", "")[:10]
+            desde = f" desde el {desde[8:10]}/{desde[5:7]}" if len(desde) == 10 else ""
+            self.texto_placa.setText(
+                f"Usada: <b>{100 * placa_mod.fraccion_usada(self.placa):.0f} %</b> · {n} tirada(s){desde}. "
+                "Lo nuevo va en lo que queda libre (gris rayado = ya fresado), con el mismo origen X0 Y0.")
+        self.boton_deshacer_placa.setEnabled(bool(self.placa["zonas"]))
+
+    def placa_nueva(self, preguntar: bool = True):
+        if preguntar and self.placa["zonas"]:
+            r = QMessageBox.question(self, "Placa nueva", "¿Has puesto una placa nueva sin fresar?\n\n"
+                                     "Toda la placa vuelve a estar libre para las próximas tiradas.")
+            if r != QMessageBox.Yes:
+                return
+        self.placa = placa_mod.nueva(*self.plancha())
+        placa_mod.guardar(self.placa)
+        self._lote_iniciado = None
+        self._invalidar()
+        self._colocar(conservar=False)
+
+    def deshacer_ultima_tirada(self):
+        nombre = placa_mod.deshacer_ultima(self.placa)
+        if nombre is None:
+            return
+        placa_mod.guardar(self.placa)
+        self._lote_iniciado = None
+        self._invalidar()
+        self._colocar(conservar=True)
+        self._texto_info(f"Liberada la zona de la tirada «{nombre}».")
+
+    def _marcar_en_placa(self, lote: str):
+        """«Inicio»: la zona de cada pie de esta tirada queda gastada en la placa."""
+        if not self._placa_coincide():
+            self.placa = placa_mod.nueva(*self.plancha())
+        paso, m = self._paso(), self._margen()
+        huellas = [tuple(v * paso for v in cnc.huella(p, m)) for p in self.piezas if p.colocada]
+        placa_mod.anadir_tirada(self.placa, huellas, lote)
+        placa_mod.guardar(self.placa)
+        self._lote_iniciado = lote
+        self.vista.poner_zonas(self.placa["zonas"])
+        self._texto_placa()
 
     # ------------------------------------------------------------ colocación
 
     def _poner_plancha(self):
         ancho, largo, _ = self.plancha()
         self.vista.poner_plancha(ancho, largo, self._paso(), self._margen())
+        self.vista.poner_zonas(self.placa["zonas"] if self._placa_coincide() else [])
+        self._texto_placa()
 
     def _colocar(self, conservar: bool = True):
         """Coloca los pies que no tienen sitio. Con `conservar`, los que ya están colocados no se mueven
-        (los nuevos van a los huecos); si así no caben, se recolocan los que no están puestos a mano."""
+        (los nuevos van a los huecos); si así no caben, se recolocan los que no están puestos a mano.
+        Nunca encima de lo ya fresado de la placa en uso."""
         cnc.a_paso(self.piezas, self._paso())
         self._poner_plancha()
+        if self._lote_iniciado is not None:
+            self._refrescar()  # esta tirada ya está en marcha: sus pies no se mueven
+            return
         ancho, largo, _ = self.plancha()
+        usadas = self._usadas()
         args = (ancho, largo, self._paso(), self.taller["cnc"], self._radio())
         fijas = {id(p): p.fija for p in self.piezas}
         avisos: list[str] = []
         if conservar:
             for p in self.piezas:
                 p.fija = p.fija or p.colocada
-        sobran = cnc.colocar(self.piezas, *args, avisos)
+        sobran = cnc.colocar(self.piezas, *args, avisos, usadas)
         for p in self.piezas:
             p.fija = fijas[id(p)] and p.colocada
         if conservar and sobran:
             avisos = []
-            sobran = cnc.colocar(self.piezas, *args, avisos)
+            sobran = cnc.colocar(self.piezas, *args, avisos, usadas)
         if sobran:
+            donde = ("en lo que queda libre de la placa. Pon una placa nueva o hazlos en otra tirada"
+                     if usadas else ". Usa una plancha más grande o hazlos en otra tirada")
             avisos.append(f"No caben {len(sobran)} pie(s): " + ", ".join(p.nombre for p in sobran)
-                          + ". Usa una plancha más grande o hazlos en otra tirada.")
+                          + (" " if usadas else "") + donde + ".")
         self.avisos = avisos
         self._refrescar()
 
@@ -429,6 +527,10 @@ class VentanaTirada(QDialog):
         self._colocar(conservar=False)
 
     def anadir_piezas(self, nuevas: list[cnc.Pieza]):
+        if self._lote_iniciado is not None:
+            # La tirada anterior ya está en la CNC (su zona quedó marcada): se empieza una nueva.
+            self.piezas = []
+            self._lote_iniciado = None
         for p in nuevas:
             p.x = p.y = None
             p.fija = False
@@ -508,6 +610,7 @@ class VentanaTirada(QDialog):
 
     def _listo(self, trabajo: cnc.TrabajoCNC):
         self.boton_calcular.setEnabled(True)
+        trabajo.usadas = self._zonas_mm()
         self.trabajo = trabajo
         self.boton_guardar.setEnabled(True)
         self.boton_inicio.setEnabled(True)
@@ -589,6 +692,7 @@ class VentanaTirada(QDialog):
             if not ok:
                 return
         self.principal.cnc_iniciar(self.trabajo.tiempo_min, lote.strip(), pedidos, [p.nombre for p in puestas])
+        self._marcar_en_placa(lote.strip())
 
     def _cambiar_margen(self, valor: float):
         self.taller["cnc"]["margen_bloque"] = float(valor)
@@ -603,6 +707,7 @@ class VentanaTirada(QDialog):
                 return
             hecho = cnc.previsualizar(self.piezas, *self.plancha(), self._paso(), self._radio(),
                                       self.taller["cnc"], colocar_antes=False)
+            hecho.usadas = self._zonas_mm()
         carpeta = Path(tempfile.mkdtemp(prefix="tirada_"))
         _, pdf = mapa.guardar(hecho, carpeta / "TIRADA", "Tirada de CNC", self.taller["fresa"]["diametro"])
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(pdf)))

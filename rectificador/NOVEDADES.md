@@ -1,5 +1,15 @@
 # Novedades de Ortosend Taller
 
+## 0.10.0
+- **La placa de la CNC se aprovecha entre tiradas**: al pulsar **▶ Inicio** en una tirada, la zona de
+  sus pies queda marcada como fresada en la placa. La siguiente tirada se coloca sola en lo que queda
+  libre (y tampoco deja arrastrar un pie encima), siempre con el mismo origen: X0 Y0 en la esquina
+  delantera izquierda (el home de la CNC), Z0 arriba.
+- En la ventana Tirada, tarjeta **«Placa en la CNC»**: cuánto se ha usado, **Placa nueva** (cuando
+  pongáis una sin fresar) y **Deshacer la última tirada** (si se pulsó Inicio y no se llegó a fresar).
+- Lo ya fresado se ve en gris rayado en la plancha y en el mapa para imprimir.
+- La plancha por defecto es la de la mesa: 600 × 500 × 45 mm.
+
 ## 0.9.0
 - **El expediente de cada pedido, en el programa**: la **receta** (qué hay que hacer: pauta por pie,
   diagnóstico, valoración y la receta firmada en PDF), los **vídeos de la marcha** con su informe (se ven

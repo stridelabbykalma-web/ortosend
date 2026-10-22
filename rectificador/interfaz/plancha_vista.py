@@ -248,6 +248,7 @@ class VistaPlancha(QGraphicsView):
         self.margen = 0
         self.items: dict[int, PieItem] = {}
         self._fondo = []
+        self._usadas: list = []  # zonas ya fresadas de la placa (tiradas anteriores)
         self._contornos: list[QGraphicsPathItem] = []
         self.setRenderHints(QPainter.Antialiasing | QPainter.SmoothPixmapTransform)
         self.setBackgroundBrush(QColor("#1f2124"))
@@ -325,6 +326,26 @@ class VistaPlancha(QGraphicsView):
         self._fondo.append(t)
         e.setSceneRect(QRectF(-40, -20, ancho + 80, largo + 50))
         self.ajustar()
+
+    def poner_zonas(self, zonas: list[dict]):
+        """Zonas de la placa ya fresadas en tiradas anteriores (mm desde el origen): gris rayado."""
+        for it in self._usadas:
+            self.escena.removeItem(it)
+        self._usadas = []
+        relleno = QBrush(QColor("#9a9a9a"), Qt.BDiagPattern)
+        f = QFont()
+        f.setPixelSize(9)
+        for z in zonas:
+            r = self.escena.addRect(QRectF(z["x"], self.largo - z["y"] - z["largo"], z["ancho"], z["largo"]),
+                                    QPen(QColor("#9a9a9a"), 0.8, Qt.DashLine), relleno)
+            r.setZValue(-8)
+            r.setToolTip(f"Ya fresado: {z.get('tirada', '')}")
+            self._usadas.append(r)
+            t = self.escena.addSimpleText(z.get("tirada", "") or "ya fresado", f)
+            t.setBrush(QColor("#777777"))
+            t.setPos(z["x"] + 3, self.largo - z["y"] - z["largo"] + 2)
+            t.setZValue(-7)
+            self._usadas.append(t)
 
     def poner_piezas(self, piezas: list[cnc.Pieza], numeros: dict[int, int]):
         """Crea, quita o recoloca los items según la lista de piezas (sin recalcular imágenes)."""

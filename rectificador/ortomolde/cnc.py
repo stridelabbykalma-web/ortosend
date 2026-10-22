@@ -157,8 +157,10 @@ def _se_pisan(a, b) -> bool:
 
 
 def cabe(p: Pieza, otras: list[Pieza], ancho: float, largo: float, paso: float, cfg: dict, radio: float,
-         x: int, y: int, giro: int) -> str | None:
-    """¿Cabe la pieza en esa posición (celdas) y giro? None si cabe; si no, el motivo."""
+         x: int, y: int, giro: int, usadas: list[tuple[int, int, int, int]] | None = None) -> str | None:
+    """¿Cabe la pieza en esa posición (celdas) y giro? None si cabe; si no, el motivo.
+
+    `usadas`: zonas de la placa ya fresadas en tiradas anteriores (x, y, ancho, largo en celdas)."""
     borde = int(round(cfg.get("margen_bloque", 0.0) / paso))
     m = margen_celdas(radio, paso, cfg)
     W, L = int(round(ancho / paso)) + 1, int(round(largo / paso)) + 1
@@ -168,14 +170,19 @@ def cabe(p: Pieza, otras: list[Pieza], ancho: float, largo: float, paso: float, 
     for q in otras:
         if q is not p and q.colocada and _se_pisan(r, huella(q, m)):
             return f"queda demasiado cerca de {q.nombre} (las fresas de los dos se tocarían)"
+    for u in usadas or []:
+        if _se_pisan(r, u):
+            return "esa parte de la placa ya está fresada (de una tirada anterior)"
     return None
 
 
 def colocar(piezas: list[Pieza], ancho: float, largo: float, paso: float, cfg: dict,
-            radio: float, avisos: list[str] | None = None) -> list[Pieza]:
+            radio: float, avisos: list[str] | None = None,
+            usadas: list[tuple[int, int, int, int]] | None = None) -> list[Pieza]:
     """Coloca las piezas en la plancha lo más juntas posible (MaxRects: mejor hueco por el lado
     corto), girándolas 90° si cabe mejor. Las puestas a mano (`fija`) se dejan donde están si siguen
-    cabiendo; el resto se coloca alrededor. Devuelve las que NO caben."""
+    cabiendo; el resto se coloca alrededor. Las zonas `usadas` (ya fresadas en tiradas anteriores de la
+    misma placa) no se tocan. Devuelve las que NO caben."""
     borde = int(round(cfg.get("margen_bloque", 0.0) / paso))
     m = margen_celdas(radio, paso, cfg)
     W = int(round(ancho / paso)) + 1 - 2 * borde
@@ -184,6 +191,8 @@ def colocar(piezas: list[Pieza], ancho: float, largo: float, paso: float, cfg: d
     giros = (0, 1) if cfg.get("permitir_giro", True) else (0,)
     sobran = []
     fijas = []
+    for ux, uy, uw, ul in usadas or []:
+        libres = _partir(libres, (ux - borde, uy - borde, uw, ul))
     for p in piezas:
         if not p.fija:
             p.x = p.y = None
@@ -192,7 +201,7 @@ def colocar(piezas: list[Pieza], ancho: float, largo: float, paso: float, cfg: d
             continue
         motivo = None if p.colocada else "sin posición"
         if motivo is None:
-            motivo = cabe(p, fijas, ancho, largo, paso, cfg, radio, p.x, p.y, p.giro)
+            motivo = cabe(p, fijas, ancho, largo, paso, cfg, radio, p.x, p.y, p.giro, usadas)
         if motivo:
             p.fija = False
             p.x = p.y = None
@@ -633,6 +642,8 @@ class TrabajoCNC:
     fichas: list["Ficha"] = field(default_factory=list)  # una por pie, en el orden en que se fresan
     previa: bool = False  # True = solo la colocación (todavía sin trayectorias ni G-code)
     tiempos: dict = field(default_factory=dict)  # minutos por fase
+    # Zonas de la placa ya fresadas en tiradas anteriores (x, y, ancho, largo en mm), para el mapa.
+    usadas: list = field(default_factory=list)
     resumen: dict = field(default_factory=dict)
     avisos: list[str] = field(default_factory=list)
 
@@ -865,14 +876,15 @@ def orden_fresado(puestas: list[Pieza], paso: float) -> list[Pieza]:
 
 
 def previsualizar(piezas: list[Pieza], ancho: float, largo: float, alto: float, paso: float, radio: float,
-                  cfg: dict, colocar_antes: bool = True) -> TrabajoCNC:
+                  cfg: dict, colocar_antes: bool = True,
+                  usadas: list[tuple[int, int, int, int]] | None = None) -> TrabajoCNC:
     """Coloca las piezas y prepara el mapa SIN calcular trayectorias (es casi instantáneo).
 
     La numeración y las posiciones son las mismas que tendrá el .nc si después se llama a
     `generar(..., colocar_antes=False)`. El contorno que se dibuja es aproximado (a un radio de la silueta)."""
     a_paso(piezas, paso)
     avisos = ajustar_alto(piezas, alto, cfg)
-    sobran = (colocar(piezas, ancho, largo, paso, cfg, radio, avisos) if colocar_antes
+    sobran = (colocar(piezas, ancho, largo, paso, cfg, radio, avisos, usadas) if colocar_antes
               else [p for p in piezas if not p.colocada])
     puestas = [p for p in piezas if p.colocada]
     nx, ny = int(round(ancho / paso)) + 1, int(round(largo / paso)) + 1
@@ -907,11 +919,12 @@ def previsualizar(piezas: list[Pieza], ancho: float, largo: float, alto: float, 
 
 
 def generar(piezas: list[Pieza], ancho: float, largo: float, alto: float, paso: float,
-            radio: float, cfg: dict, colocar_antes: bool = True) -> TrabajoCNC:
+            radio: float, cfg: dict, colocar_antes: bool = True,
+            usadas: list[tuple[int, int, int, int]] | None = None) -> TrabajoCNC:
     """Coloca las piezas en la plancha y genera el G-code de toda la tirada."""
     a_paso(piezas, paso)
     avisos = ajustar_alto(piezas, alto, cfg)
-    sobran = (colocar(piezas, ancho, largo, paso, cfg, radio) if colocar_antes
+    sobran = (colocar(piezas, ancho, largo, paso, cfg, radio, usadas=usadas) if colocar_antes
               else [p for p in piezas if not p.colocada])
     puestas = [p for p in piezas if p.colocada]
     if not puestas:

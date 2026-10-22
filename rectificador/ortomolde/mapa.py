@@ -50,6 +50,10 @@ def figura(trabajo: TrabajoCNC, titulo: str = "", fresa: float | None = None,
     ax.add_patch(_rect(0, 0, ancho, largo, "#ffffff", "#333333", 1.6))
     ax.imshow(h, origin="lower", extent=[-paso / 2, ancho + paso / 2, -paso / 2, largo + paso / 2],
               cmap=gris, vmin=0, vmax=alto, interpolation="bilinear", zorder=1)
+    # Lo ya fresado en tiradas anteriores de esta placa: gris rayado (ahí no se fresa ahora).
+    for x, y, w, l in trabajo.usadas:
+        from matplotlib.patches import Rectangle
+        ax.add_patch(Rectangle((x, y), w, l, fc="#e9e9e9", ec="#9a9a9a", lw=0.8, hatch="///", zorder=0.5))
 
     for f in trabajo.fichas:
         color = COLORES[(f.numero - 1) % len(COLORES)]

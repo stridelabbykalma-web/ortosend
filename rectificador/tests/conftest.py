@@ -32,3 +32,13 @@ def stl_sintetico(tmp_path_factory, campo_sint):
     ruta = tmp_path_factory.mktemp("ejemplo") / "sintetico.stl"
     campo_a_malla(campo_sint).export(ruta)
     return ruta
+
+
+@pytest.fixture(autouse=True)
+def placa_limpia():
+    """Cada prueba empieza con la placa de la CNC sin fresar (no se arrastra lo de otra prueba)."""
+    from ortomolde import placa
+
+    placa.ruta().unlink(missing_ok=True)
+    yield
+    placa.ruta().unlink(missing_ok=True)
