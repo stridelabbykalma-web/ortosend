@@ -17,7 +17,9 @@ import { EDAD_MAYORIA_SALUD, esMenor, parseBirth } from "@/lib/edad";
 import { CONSENT_VERSION } from "@/lib/legal";
 import { enviarBienvenida } from "@/lib/cuenta";
 import { exigirTratamientoPermitido } from "@/lib/alta";
-import { permitirPublico } from "@/lib/rate-limit";
+import { origenPeticion, permitirPublico } from "@/lib/rate-limit";
+import { registrarSaludReserva } from "@/lib/consent/registro";
+import { pareceBot } from "@/lib/antibot";
 
 const reservaSchema = z.object({
   clinicId: z.string().min(1),
@@ -34,6 +36,8 @@ export async function reservaAction(formData: FormData) {
   const back = (msg: string): never =>
     redirect(`/reserva/${formData.get("clinicId")}?error=` + encodeURIComponent(msg));
   if (!(await permitirPublico("reserva"))) back("Demasiadas peticiones. Espera un minuto e inténtalo de nuevo.");
+  const bot = await pareceBot(formData);
+  if (bot) back(bot);
   const slot = parseSlot(formData);
   if (!slot.ok) back(slot.error);
   const parsed = reservaSchema.safeParse(Object.fromEntries(formData));
@@ -62,6 +66,7 @@ export async function reservaAction(formData: FormData) {
     salud: { aceptado: true, fecha: now.toISOString(), version: CONSENT_VERSION, via: "web" },
     whatsapp: { aceptado: consentWhatsApp, fecha: now.toISOString(), version: CONSENT_VERSION },
   };
+  const { ip, userAgent } = await origenPeticion();
   let result: { userId: string; caseId: string; startsAt: Date } | null = null;
   try {
     result = await prisma.$transaction(async (tx) => {
@@ -85,6 +90,7 @@ export async function reservaAction(formData: FormData) {
           consents,
         },
       });
+      await registrarSaludReserva(tx, { patientId: patient.id, actor: "paciente", actorUserId: user.id, ip, userAgent });
       const kase = await tx.case.create({
         data: {
           patientId: patient.id,
@@ -172,6 +178,7 @@ export async function reservaClienteAction(formData: FormData) {
     nuevo = { name: newName, birth: newBirth, menor: esMenor(newBirth, now) };
   }
 
+  const { ip, userAgent } = await origenPeticion();
   let result: { caseId: string; startsAt: Date; patientId: string; patientName: string } | null = null;
   try {
     result = await prisma.$transaction(async (tx) => {
@@ -192,6 +199,14 @@ export async function reservaClienteAction(formData: FormData) {
               },
             },
           });
+      if (!existente)
+        await registrarSaludReserva(tx, {
+          patientId: patient.id,
+          actor: nuevo!.menor ? "tutor" : "paciente",
+          actorUserId: user!.id,
+          ip,
+          userAgent,
+        });
       const kase = await tx.case.create({
         data: { patientId: patient.id, clinicId, state: "CITA_RESERVADA", flow: "A" },
       });
@@ -233,6 +248,8 @@ const appSchema = z.object({
 export async function solicitudClinicaAction(formData: FormData) {
   if (!(await permitirPublico("solicitud-clinica")))
     redirect("/para-clinicas?error=" + encodeURIComponent("Demasiadas peticiones. Espera un minuto."));
+  const bot = await pareceBot(formData);
+  if (bot) redirect("/para-clinicas?error=" + encodeURIComponent(bot));
   const parsed = appSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success)
     redirect("/para-clinicas?error=" + encodeURIComponent(parsed.error.issues[0].message));

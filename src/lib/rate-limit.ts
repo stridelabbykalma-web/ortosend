@@ -35,6 +35,10 @@ export async function origenPeticion(): Promise<{ ip: string | null; userAgent: 
 export const claveIp = (prefijo: string, ip: string | null) =>
   `${prefijo}:${createHash("sha256").update(ip ?? "sin-ip").digest("hex").slice(0, 32)}`;
 
+// Por cuenta (email o móvil), para frenar la fuerza bruta repartida entre muchas IP.
+export const claveCuenta = (prefijo: string, identificador: string) =>
+  `${prefijo}:${createHash("sha256").update(identificador.trim().toLowerCase()).digest("hex").slice(0, 32)}`;
+
 // Páginas públicas con secreto en la URL: 20 peticiones por minuto y IP.
 export const PUBLICO_MAX = 20;
 export const PUBLICO_VENTANA = 60;

@@ -101,8 +101,8 @@ registro de actividades y DPA correspondiente.
   `npm install` antes de trabajar**.
 - El sandbox no tiene salida a internet desde Chromium/Node (solo curl vía proxy). El puerto
   5432 de Neon está bloqueado: para tocar datos de producción usar el **endpoint HTTP SQL de
-  Neon** (`POST https://ep-autumn-cell-b1mnye97.c-5.eu-central-1.aws.neon.tech/sql` con
-  header `Neon-Connection-String`).
+  Neon** (`POST https://<host-de-neon>/sql` con header `Neon-Connection-String`; el host está en
+  el panel de Neon y en `DATABASE_URL`, nunca en el repositorio, que es público).
 - Postgres local en `127.0.0.1:5433` (cluster en `/var/lib/postgresql/ortosend-data`); se
   para entre turnos, rearrancar con `pg_ctl` como usuario `postgres`.
 

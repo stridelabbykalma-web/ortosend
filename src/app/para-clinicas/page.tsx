@@ -1,5 +1,6 @@
 import { Flash } from "@/components/ui";
 import { solicitudClinicaAction } from "@/app/publico-actions";
+import { AntiBot } from "@/components/antibot";
 
 export const dynamic = "force-dynamic";
 
@@ -34,6 +35,7 @@ export default async function ParaClinicasPage({
         <label>Comentarios</label>
         <textarea name="notes" rows={3} />
         <div className="sp" />
+        <AntiBot />
         <button type="submit" className="pri">
           Enviar solicitud
         </button>

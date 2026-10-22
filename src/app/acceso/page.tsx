@@ -4,6 +4,7 @@ import { Flash } from "@/components/ui";
 import { leerAccesoPendiente } from "@/lib/auth";
 import { CODIGO_INTENTOS, CODIGO_MINUTOS } from "@/lib/consent/tokens";
 import { crearCuentaAction, solicitarCodigoAction } from "./actions";
+import { AntiBot } from "@/components/antibot";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { robots: { index: false }, title: "Crea tu contraseña · Ortosend" };
@@ -29,6 +30,7 @@ export default async function AccesoPage({ searchParams }: { searchParams: Promi
           <label htmlFor="telefono">Móvil</label>
           <input id="telefono" name="telefono" type="tel" autoComplete="tel" placeholder="+34 600 112 233" required />
           <div className="sp" />
+          <AntiBot />
           <button type="submit" className="pri wfull">
             Enviarme el código
           </button>

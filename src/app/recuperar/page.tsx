@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { recoverAction } from "@/app/(auth)/actions";
 import { Flash } from "@/components/ui";
+import { AntiBot } from "@/components/antibot";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +26,7 @@ export default async function RecuperarPage({
           <label>Email o móvil</label>
           <input name="identifier" autoComplete="username" required />
           <div className="sp" />
+          <AntiBot />
           <button type="submit" className="pri wfull">
             Enviar enlace
           </button>

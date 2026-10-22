@@ -8,6 +8,7 @@ import { crearCuentaConCodigo, solicitarCodigo } from "@/lib/acceso";
 import { enviarVerificacionEmail } from "@/lib/cuenta";
 import { normalizeDni, normalizePhone } from "@/lib/contacto";
 import { claveIp, limitar, origenPeticion } from "@/lib/rate-limit";
+import { pareceBot } from "@/lib/antibot";
 
 function fail(msg: string, paso = ""): never {
   redirect(`/acceso?${paso ? `paso=${paso}&` : ""}error=` + encodeURIComponent(msg));
@@ -20,6 +21,8 @@ async function frenar(prefijo: string, max: number) {
 
 export async function solicitarCodigoAction(formData: FormData) {
   await frenar("acceso-codigo", 10);
+  const bot = await pareceBot(formData);
+  if (bot) fail(bot);
   const dni = normalizeDni(String(formData.get("dni") ?? ""));
   const telefono = normalizePhone(String(formData.get("telefono") ?? ""));
   const r = await solicitarCodigo(dni, telefono);
