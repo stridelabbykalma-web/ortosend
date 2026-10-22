@@ -6,7 +6,7 @@ import { AudioPrimer } from "@/components/audio-primer";
 import { CookieBanner } from "@/components/cookies";
 import { SoloWeb } from "@/components/solo-web";
 
-const sora = Sora({ variable: "--font-sora", subsets: ["latin"], weight: ["400", "600", "700"] });
+const sora = Sora({ variable: "--font-sora", subsets: ["latin"], weight: ["400", "600", "700", "800"] });
 const inter = Inter({ variable: "--font-inter", subsets: ["latin"], weight: ["400", "500", "600"] });
 
 export const metadata: Metadata = {
@@ -26,14 +26,36 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {children}
         <SoloWeb>
           <CookieBanner />
-          <div className="footer">
-            <div className="wrap row between">
-              <span>© 2026 Ortosend</span>
-              <span>
-                <a href="/legal/aviso-legal">Aviso legal</a> · <a href="/legal/privacidad">Privacidad</a> ·{" "}
-                <a href="/legal/terminos">Términos</a> · <a href="/legal/cookies">Cookies</a> ·{" "}
-                <a href="/para-clinicas">Para clínicas</a>
-              </span>
+          <div className="px-footer">
+            <div className="wrap">
+              <div className="px-fcols">
+                <div>
+                  <span className="logo">
+                    orto<b>send</b>
+                  </span>
+                  <div style={{ marginTop: 10, maxWidth: 320 }}>
+                    Plantillas ortopédicas a medida, con estudio completo de la pisada en clínicas
+                    asociadas y prescripción de profesionales colegiados.
+                  </div>
+                </div>
+                <nav>
+                  <div className="t">Ortosend</div>
+                  <a href="/como-funciona">Cómo funciona</a>
+                  <a href="/buscar">Buscar clínica</a>
+                  <a href="/para-clinicas">Para clínicas</a>
+                </nav>
+                <nav>
+                  <div className="t">Legal</div>
+                  <a href="/legal/aviso-legal">Aviso legal</a>
+                  <a href="/legal/privacidad">Privacidad</a>
+                  <a href="/legal/terminos">Términos</a>
+                  <a href="/legal/cookies">Cookies</a>
+                </nav>
+              </div>
+              <div className="px-fbase">
+                <span>© 2026 Ortosend</span>
+                <span>Producto sanitario a medida — Reglamento (UE) 2017/745</span>
+              </div>
             </div>
           </div>
         </SoloWeb>
