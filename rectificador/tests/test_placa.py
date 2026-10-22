@@ -8,23 +8,45 @@ from ortomolde import cnc, placa
 
 
 def test_registro_de_la_placa():
-    p = placa.cargar(600, 500, 45)
-    assert p["zonas"] == [] and placa.fraccion_usada(p) == 0
-    placa.anadir_tirada(p, [(0, 0, 150, 300), (150, 0, 150, 300)], "L-01")
+    estado = placa.cargar_estado(600, 500, 45)
+    p = estado["placa"]
+    assert estado["maquina"] is None and estado["pendientes"] == []
+    assert p["zonas"] == [] and placa.fraccion_usada(p) == 0 and p["id"]
+    op1 = placa.anadir_tirada(p, [(0, 0, 150, 300), (150, 0, 150, 300)], "L-01")
+    assert op1["op"] == "tirada" and op1["placaId"] == p["id"] and len(op1["zonas"]) == 2
     placa.anadir_tirada(p, [(300, 0, 100, 100)], "L-02")
-    placa.guardar(p)
+    placa.guardar_estado(estado)
     otra = placa.cargar(600, 500, 45)
-    assert placa.tiradas(otra) == ["L-01", "L-02"]
+    assert otra["id"] == p["id"] and placa.tiradas(otra) == ["L-01", "L-02"]
     assert abs(placa.fraccion_usada(otra) - (300 * 300 + 100 * 100) / (600 * 500)) < 0.01
     assert placa.misma_medida(otra, 600, 500, 45) and not placa.misma_medida(otra, 600, 500, 40)
     # En celdas, redondeado hacia fuera (nunca se queda corto).
     assert placa.zonas_celdas({"zonas": [{"x": 0.3, "y": 0, "ancho": 10.1, "largo": 5}]}, 1.0) == [(0, 0, 11, 5)]
-    assert placa.deshacer_ultima(otra) == "L-02" and placa.tiradas(otra) == ["L-01"]
-    # Archivo roto: placa nueva.
+    nombre, tid = placa.deshacer_ultima(otra)
+    assert nombre == "L-02" and tid and placa.tiradas(otra) == ["L-01"]
+    # Archivo roto: placa nueva. Archivo de la 0.10.0 (solo la placa): se sigue leyendo.
     placa.ruta().write_text("{roto", encoding="utf-8")
     assert placa.cargar(600, 500, 45)["zonas"] == []
-    placa.ruta().write_text(json.dumps({"ancho": 600}), encoding="utf-8")
-    assert placa.cargar(600, 500, 45)["zonas"] == []
+    placa.ruta().write_text(json.dumps({"ancho": 600, "largo": 500, "alto": 45, "creada": "",
+                                        "zonas": [{"x": 0, "y": 0, "ancho": 10, "largo": 10, "tirada": "V"}]}),
+                            encoding="utf-8")
+    vieja = placa.cargar_estado(600, 500, 45)
+    assert vieja["maquina"] is None and placa.tiradas(vieja["placa"]) == ["V"]
+
+
+def test_placa_de_la_web_y_subida():
+    m = {"id": "m1", "nombre": "CNC", "placa": {"id": "p1", "ancho": 600, "largo": 500, "alto": 45,
+         "puesta": "2026-10-22T10:00:00Z",
+         "tiradas": [{"id": "t1", "nombre": "L-01", "fecha": "2026-10-22T11:00:00Z",
+                      "zonas": [{"x": 0, "y": 0, "ancho": 100, "largo": 200}]}]}}
+    p = placa.desde_web(m)
+    assert p["id"] == "p1" and p["zonas"][0]["tiradaId"] == "t1" and placa.tiradas(p) == ["L-01"]
+    assert placa.desde_web({"id": "m2", "placa": None}) is None
+    # Una placa de este ordenador que se sube a una máquina sin placa: la placa y una operación por tirada.
+    local = placa.nueva(600, 500, 45)
+    placa.anadir_tirada(local, [(0, 0, 10, 10), (20, 0, 10, 10)], "A")
+    ops = placa.operaciones_para_subir(local)
+    assert [o["op"] for o in ops] == ["placa", "tirada"] and len(ops[1]["zonas"]) == 2
 
 
 def _pieza(nombre, ancho=60, largo=120):

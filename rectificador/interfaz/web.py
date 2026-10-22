@@ -114,6 +114,26 @@ class ClienteWeb:
     def marcar_confeccion(self, id_: str, material: str) -> dict:
         return self._pedir("POST", f"/pedidos/{id_}/confeccion", {"material": material})
 
+    # ------------------------------------------------------------------ máquinas CNC y su placa
+
+    def maquinas(self) -> list[dict]:
+        return self._pedir("GET", "/maquinas")["maquinas"]
+
+    def crear_maquina(self, nombre: str) -> dict:
+        return self._pedir("POST", "/maquinas", {"nombre": nombre})["maquina"]
+
+    def enviar_operacion(self, maquina_id: str, op: dict) -> dict:
+        """Una operación de la placa (placa nueva, tirada o deshacer). Devuelve la máquina actualizada."""
+        if op["op"] == "placa":
+            datos = {k: op[k] for k in ("id", "ancho", "largo", "alto")}
+            return self._pedir("POST", f"/maquinas/{maquina_id}/placa", datos)["maquina"]
+        if op["op"] == "tirada":
+            datos = {k: op[k] for k in ("id", "placaId", "nombre", "zonas")}
+            return self._pedir("POST", f"/maquinas/{maquina_id}/tiradas", datos)["maquina"]
+        if op["op"] == "anular":
+            return self._pedir("POST", f"/maquinas/{maquina_id}/tiradas/{op['tiradaId']}/anular", {})["maquina"]
+        raise ValueError(f"Operación desconocida: {op['op']}")
+
     # ------------------------------------------------------------------ materiales y ajustes
 
     def materiales(self) -> list[dict]:

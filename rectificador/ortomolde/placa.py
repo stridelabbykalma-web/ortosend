@@ -4,15 +4,20 @@ Las placas son del tamaño de la mesa de la CNC. Si una tirada solo ocupa una pa
 en lo que queda libre, siempre con el mismo origen (X0 Y0 = esquina delantera izquierda, el home de la
 CNC). Una zona se da por gastada al pulsar «▶ Inicio» en la tirada. Con «Placa nueva» se empieza de cero.
 
-Se guarda en un archivo del usuario (junto a los «Ajustes de la CNC»), así no se pierde al actualizar el
-programa. Las zonas van en mm desde el home: el rectángulo de cada pie con el margen de su ranura de
-contorno (la misma separación que entre dos pies de una tirada).
+Cada placa es de una máquina y se guarda en la web de Ortosend (así cualquier ordenador del taller la ve
+igual, aunque se cierre el programa). Aquí queda una copia en un archivo del usuario y, si no hay conexión,
+las operaciones pendientes de enviar (`pendientes`): se mandan solas cuando vuelve. Cada placa y tirada
+lleva un id propio, así reenviar no duplica nada en la web.
+
+Las zonas van en mm desde el home: el rectángulo de cada pie con el margen de su ranura de contorno (la
+misma separación que entre dos pies de una tirada).
 """
 
 from __future__ import annotations
 
 import json
 import math
+import uuid
 from datetime import datetime
 from pathlib import Path
 
@@ -23,26 +28,45 @@ def ruta() -> Path:
     return config.ruta_ajustes().with_name("placa_cnc.json")
 
 
+def _id() -> str:
+    return str(uuid.uuid4())
+
+
 def nueva(ancho: float, largo: float, alto: float) -> dict:
-    return {"ancho": float(ancho), "largo": float(largo), "alto": float(alto),
+    return {"id": _id(), "ancho": float(ancho), "largo": float(largo), "alto": float(alto),
             "creada": datetime.now().isoformat(timespec="minutes"), "zonas": []}
 
 
-def cargar(ancho: float, largo: float, alto: float) -> dict:
-    """La placa en uso; si no hay ninguna guardada (o el archivo está roto), una nueva de esa medida."""
+def _placa_valida(d: dict) -> dict:
+    zonas = [z for z in d["zonas"] if all(isinstance(z.get(k), (int, float)) for k in ("x", "y", "ancho", "largo"))]
+    return {"id": str(d.get("id") or _id()), "ancho": float(d["ancho"]), "largo": float(d["largo"]),
+            "alto": float(d["alto"]), "creada": str(d.get("creada", "")), "zonas": zonas}
+
+
+def cargar_estado(ancho: float, largo: float, alto: float) -> dict:
+    """{maquina: {id, nombre} | None, placa, pendientes}. Sin archivo (o roto): placa nueva, sin máquina."""
     try:
         d = json.loads(ruta().read_text(encoding="utf-8"))
-        zonas = [z for z in d["zonas"] if all(isinstance(z.get(k), (int, float)) for k in ("x", "y", "ancho", "largo"))]
-        return {"ancho": float(d["ancho"]), "largo": float(d["largo"]), "alto": float(d["alto"]),
-                "creada": str(d.get("creada", "")), "zonas": zonas}
-    except (OSError, ValueError, KeyError, TypeError):
-        return nueva(ancho, largo, alto)
+        if "placa" not in d:  # archivo de la 0.10.0: solo la placa
+            d = {"maquina": None, "placa": d, "pendientes": []}
+        maquina = d.get("maquina")
+        if maquina is not None and not (isinstance(maquina, dict) and maquina.get("id")):
+            maquina = None
+        pendientes = [op for op in d.get("pendientes") or [] if isinstance(op, dict) and op.get("op")]
+        return {"maquina": maquina, "placa": _placa_valida(d["placa"]), "pendientes": pendientes}
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        return {"maquina": None, "placa": nueva(ancho, largo, alto), "pendientes": []}
 
 
-def guardar(placa: dict) -> None:
+def guardar_estado(estado: dict) -> None:
     r = ruta()
     r.parent.mkdir(parents=True, exist_ok=True)
-    r.write_text(json.dumps(placa, indent=1, ensure_ascii=False), encoding="utf-8")
+    r.write_text(json.dumps(estado, indent=1, ensure_ascii=False), encoding="utf-8")
+
+
+def cargar(ancho: float, largo: float, alto: float) -> dict:
+    """Solo la placa en uso (copia de este ordenador)."""
+    return cargar_estado(ancho, largo, alto)["placa"]
 
 
 def misma_medida(placa: dict, ancho: float, largo: float, alto: float) -> bool:
@@ -51,12 +75,15 @@ def misma_medida(placa: dict, ancho: float, largo: float, alto: float) -> bool:
 
 
 def anadir_tirada(placa: dict, huellas_mm: list[tuple[float, float, float, float]], tirada: str) -> dict:
-    """Marca como gastadas las zonas (x, y, ancho, largo en mm) de los pies de una tirada."""
+    """Marca como gastadas las zonas (x, y, ancho, largo en mm) de los pies de una tirada. Devuelve la
+    operación para la web: {op: "tirada", id, placaId, nombre, zonas}."""
     fecha = datetime.now().isoformat(timespec="minutes")
-    for x, y, w, l in huellas_mm:
-        placa["zonas"].append({"x": round(x, 2), "y": round(y, 2), "ancho": round(w, 2), "largo": round(l, 2),
-                               "tirada": tirada, "fecha": fecha})
-    return placa
+    tid = _id()
+    zonas = [{"x": round(x, 2), "y": round(y, 2), "ancho": round(w, 2), "largo": round(l, 2)}
+             for x, y, w, l in huellas_mm]
+    for z in zonas:
+        placa["zonas"].append({**z, "tirada": tirada, "fecha": fecha, "tiradaId": tid})
+    return {"op": "tirada", "id": tid, "placaId": placa["id"], "nombre": tirada, "zonas": zonas}
 
 
 def tiradas(placa: dict) -> list[str]:
@@ -68,14 +95,45 @@ def tiradas(placa: dict) -> list[str]:
     return vistas
 
 
-def deshacer_ultima(placa: dict) -> str | None:
-    """Libera las zonas de la última tirada (si se pulsó Inicio y no se llegó a fresar). Devuelve su nombre."""
+def _clave(z: dict):
+    return z.get("tiradaId") or (z.get("tirada", ""), z.get("fecha", ""))
+
+
+def deshacer_ultima(placa: dict) -> tuple[str, str | None] | None:
+    """Libera las zonas de la última tirada (si se pulsó Inicio y no se llegó a fresar).
+    Devuelve (nombre, id de la tirada) o None si no había ninguna."""
     if not placa["zonas"]:
         return None
-    ultima = placa["zonas"][-1].get("tirada", "")
-    fecha = placa["zonas"][-1].get("fecha", "")
-    placa["zonas"] = [z for z in placa["zonas"] if (z.get("tirada", ""), z.get("fecha", "")) != (ultima, fecha)]
-    return ultima
+    ultima = placa["zonas"][-1]
+    clave = _clave(ultima)
+    placa["zonas"] = [z for z in placa["zonas"] if _clave(z) != clave]
+    return ultima.get("tirada", ""), ultima.get("tiradaId")
+
+
+def desde_web(m: dict) -> dict | None:
+    """La placa de una máquina tal como la devuelve la web (o None si aún no tiene)."""
+    p = m.get("placa")
+    if not p:
+        return None
+    zonas = [{**z, "tirada": t["nombre"], "fecha": t.get("fecha", "")[:16], "tiradaId": t["id"]}
+             for t in p.get("tiradas") or [] for z in t.get("zonas") or []]
+    return {"id": p["id"], "ancho": float(p["ancho"]), "largo": float(p["largo"]), "alto": float(p["alto"]),
+            "creada": p.get("puesta", "")[:16], "zonas": zonas}
+
+
+def operaciones_para_subir(placa: dict) -> list[dict]:
+    """Para una máquina que aún no tiene placa en la web: la placa de este ordenador y sus tiradas."""
+    ops = [{"op": "placa", "id": placa["id"], "ancho": placa["ancho"], "largo": placa["largo"], "alto": placa["alto"]}]
+    grupos: dict = {}
+    for z in placa["zonas"]:
+        grupos.setdefault(_clave(z), []).append(z)
+    for clave, zs in grupos.items():
+        tid = zs[0].get("tiradaId") or _id()
+        for z in zs:
+            z["tiradaId"] = tid
+        ops.append({"op": "tirada", "id": tid, "placaId": placa["id"], "nombre": zs[0].get("tirada", "") or "tirada",
+                    "zonas": [{k: z[k] for k in ("x", "y", "ancho", "largo")} for z in zs]})
+    return ops
 
 
 def zonas_celdas(placa: dict, paso: float) -> list[tuple[int, int, int, int]]:

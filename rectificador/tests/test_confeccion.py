@@ -51,6 +51,7 @@ class WebFalsa:
         self.archivos = {"/api/media/f1": (PNG, "image/png"), "/api/media/v1": (b"\x1aE\xdf\xa3", "video/webm"),
                          "/api/rx-pdf/c1": (b"%PDF-1.4 receta", "application/pdf")}
         self.peticiones = []
+        self.maquinas_cnc = {}  # id → {id, nombre, placas: [{id, ancho, largo, alto, tiradas: [...]}]}
         self.servidor = ThreadingHTTPServer(("127.0.0.1", 0), self._manejador())
         threading.Thread(target=self.servidor.serve_forever, daemon=True).start()
         self.url = f"http://127.0.0.1:{self.servidor.server_address[1]}"
@@ -105,6 +106,8 @@ class WebFalsa:
             return 401, {"error": "Email o contraseña incorrectos"}
         if cabeceras.get("Authorization") != f"Bearer {self.token}" or not self.token:
             return 401, {"error": "Sesión caducada: vuelve a entrar con tu usuario de taller"}
+        if ruta.startswith("/maquinas"):
+            return self._maquinas(metodo, ruta, cuerpo)
         orden = sorted(self.pedidos.values(), key=lambda p: {"fuera": 0, "ajustado": 1, "ok": 2}[p["plazo"]["nivel"]])
         if ruta == "/pedidos":
             return 200, {"pedidos": orden}
@@ -139,6 +142,43 @@ class WebFalsa:
                 del self.pedidos[id_]
                 return 200, {"ok": True, "numero": p["numero"], "estado": "CALIDAD"}
         return 404, {"error": "Caso no activo en taller"}
+
+    def _maquina_json(self, m):
+        p = m["placas"][-1] if m["placas"] else None
+        return {"id": m["id"], "nombre": m["nombre"], "placa": None if p is None else {
+            "id": p["id"], "ancho": p["ancho"], "largo": p["largo"], "alto": p["alto"], "puesta": "2026-10-22T10:00:00Z",
+            "tiradas": [t for t in p["tiradas"] if not t.get("anulada")]}}
+
+    def _maquinas(self, metodo, ruta, cuerpo):
+        """Como /api/taller/maquinas de la web (idempotente por id)."""
+        partes = ruta.strip("/").split("/")
+        if len(partes) == 1:
+            if metodo == "POST":
+                if any(m["nombre"] == cuerpo["nombre"] for m in self.maquinas_cnc.values()):
+                    return 409, {"error": "Ya hay una máquina con ese nombre"}
+                mid = f"maq{len(self.maquinas_cnc) + 1}"
+                self.maquinas_cnc[mid] = {"id": mid, "nombre": cuerpo["nombre"], "placas": []}
+                return 200, {"maquina": self._maquina_json(self.maquinas_cnc[mid])}
+            return 200, {"maquinas": [self._maquina_json(m) for m in self.maquinas_cnc.values()]}
+        m = self.maquinas_cnc.get(partes[1])
+        if m is None:
+            return 404, {"error": "Máquina no encontrada"}
+        if partes[2] == "placa":
+            if not any(p["id"] == cuerpo["id"] for p in m["placas"]):
+                m["placas"].append({**cuerpo, "tiradas": []})
+        elif partes[2] == "tiradas" and len(partes) == 3:
+            placa = next((p for p in m["placas"] if p["id"] == cuerpo["placaId"]), None)
+            if placa is None:
+                return 409, {"error": "Esa placa no es de esta máquina"}
+            if not any(t["id"] == cuerpo["id"] for p in m["placas"] for t in p["tiradas"]):
+                placa["tiradas"].append({"id": cuerpo["id"], "nombre": cuerpo["nombre"], "zonas": cuerpo["zonas"],
+                                         "fecha": "2026-10-22T11:00:00Z", "quien": "Toni Taller"})
+        elif partes[2] == "tiradas" and partes[4] == "anular":
+            for p in m["placas"]:
+                for t in p["tiradas"]:
+                    if t["id"] == partes[3]:
+                        t["anulada"] = True
+        return 200, {"maquina": self._maquina_json(m)}
 
     def _manejador(self):
         falsa = self
@@ -455,4 +495,56 @@ def test_ver_pedido_desde_fresado_y_confeccion(falsa, monkeypatch, stl_sintetico
     assert "c2" in v._expedientes
     v._expedientes["c2"].close()
     app.processEvents()
+    _limpiar(v)
+
+
+def test_placa_de_cada_maquina_en_la_web(falsa, monkeypatch, stl_sintetico):
+    """La placa se guarda en la web por máquina: sin conexión se apunta y se manda al volver; desde otro
+    ordenador se ve igual."""
+    from interfaz.tirada import VentanaTirada
+    from ortomolde import placa
+
+    app, v = _ventana(falsa, monkeypatch)
+    monkeypatch.setattr(VentanaTirada, "SINCRONO", True)
+    v.taller["calculo"]["rejilla"] = 1.0
+    v.abrir(str(stl_sintetico), esperar=True)
+    t = v.abrir_tirada()
+    assert "Solo en este ordenador" in t.texto_nube.text()
+    assert v.confeccion.entrar("taller@ortosend.es", "clave")
+    t.anadir_maquina("CNC taller")
+    maq = falsa.maquinas_cnc["maq1"]
+    assert t.estado["maquina"]["nombre"] == "CNC taller" and len(maq["placas"]) == 1  # su placa, subida
+    assert "guardada en la web" in t.texto_nube.text()
+    # Inicio: la tirada va a la web.
+    t.anadir_abierto()
+    t.calcular(esperar=True)
+    t.iniciar("L-01")
+    assert [x["nombre"] for x in maq["placas"][0]["tiradas"]] == ["L-01"]
+    # Sin conexión: se apunta aquí y se manda al volver (sin duplicar).
+    url = v.confeccion.web.url
+    v.confeccion.web.url = "http://127.0.0.1:9"
+    t.anadir_abierto()
+    t.calcular(esperar=True)
+    t.iniciar("L-02")
+    assert len(t.estado["pendientes"]) == 1 and "sin enviar" in t.texto_nube.text()
+    assert len(placa.cargar_estado(600, 500, 45)["pendientes"]) == 1  # guardado aunque se cierre el programa
+    v.confeccion.web.url = url
+    t.sincronizar()
+    t.sincronizar()
+    assert [x["nombre"] for x in maq["placas"][0]["tiradas"]] == ["L-01", "L-02"] and not t.estado["pendientes"]
+    zonas = len(t.placa["zonas"])
+    v.cnc_parar()
+    t.close()
+    # Otro ordenador (sin nada guardado): elige la máquina y ve la misma placa.
+    placa.ruta().unlink()
+    v.tirada = None
+    t2 = v.abrir_tirada()
+    t2.sincronizar()
+    assert [t2.combo_maquina.itemText(i) for i in range(t2.combo_maquina.count())][1:] == ["CNC taller"]
+    t2.elegir_maquina({"id": "maq1", "nombre": "CNC taller"})
+    assert len(t2.placa["zonas"]) == zonas and t2._usadas()
+    # Deshacer la última desde aquí: en la web queda anulada.
+    t2.deshacer_ultima_tirada()
+    assert [x["nombre"] for x in maq["placas"][0]["tiradas"] if not x.get("anulada")] == ["L-01"]
+    t2.close()
     _limpiar(v)

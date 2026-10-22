@@ -1,5 +1,15 @@
 # Novedades de Ortosend Taller
 
+## 0.11.0
+- **La placa de cada máquina, en la web**: en *Tirada → Placa en la CNC* se elige la **máquina** (con
+  **＋** se añade una). Lo fresado en su placa se guarda en la web de Ortosend, así se sigue igual aunque
+  se cierre el programa o se use otro ordenador del taller.
+- **Sin internet** se puede seguir trabajando: los cambios (Inicio, Deshacer, Placa nueva) se apuntan en el
+  ordenador y se mandan solos al volver la conexión, sin duplicar nada.
+- Para guardarla en la web hay que haber entrado en **Confección** con el usuario del taller. Sin máquina
+  elegida funciona como antes (solo en ese ordenador).
+- Necesita la actualización de la web de Ortosend (máquinas CNC).
+
 ## 0.10.0
 - **La placa de la CNC se aprovecha entre tiradas**: al pulsar **▶ Inicio** en una tirada, la zona de
   sus pies queda marcada como fresada en la placa. La siguiente tirada se coloca sola en lo que queda

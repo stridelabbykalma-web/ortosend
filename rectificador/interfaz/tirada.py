@@ -2,15 +2,16 @@
 
 from __future__ import annotations
 
-import traceback
-from pathlib import Path
-
 import tempfile
+import threading
+import traceback
+import uuid
+from pathlib import Path
 
 from PySide6.QtCore import QObject, Qt, QThread, QTimer, QUrl, Signal
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
-    QDialog, QDoubleSpinBox, QFileDialog, QFormLayout, QHBoxLayout, QListWidget,
+    QComboBox, QDialog, QDoubleSpinBox, QFileDialog, QFormLayout, QHBoxLayout, QInputDialog, QListWidget,
     QMessageBox, QPushButton, QVBoxLayout,
 )
 
@@ -24,6 +25,12 @@ from ortomolde.trabajo import pedido_de_ruta
 from interfaz import estilo
 from interfaz.estilo import C
 from interfaz.plancha_vista import VistaPlancha
+from interfaz.web import ErrorWeb
+
+
+class _Puente(QObject):
+    hecho = Signal(object, object)  # (función, resultado)
+    fallo = Signal(object, object)  # (función, error)
 
 
 def _con_pedido(piezas: list[cnc.Pieza], pedido: int | None) -> list[cnc.Pieza]:
@@ -112,8 +119,14 @@ class VentanaTirada(QDialog):
         izq = QVBoxLayout()
         izq.setSpacing(10)
         pl = self.taller["plancha"]
-        # La placa que hay ahora en la CNC (con lo ya fresado en tiradas anteriores).
-        self.placa = placa_mod.cargar(pl["ancho_x"], pl["largo_y"], pl["alto_z"])
+        # La placa que hay ahora en la CNC (con lo ya fresado en tiradas anteriores). Es de una máquina y se
+        # guarda en la web; aquí queda una copia y lo pendiente de enviar si no hay conexión.
+        self.estado = placa_mod.cargar_estado(pl["ancho_x"], pl["largo_y"], pl["alto_z"])
+        self.placa = self.estado["placa"]
+        self._puente = _Puente()
+        self._puente.hecho.connect(lambda f, r: f(r))
+        self._puente.fallo.connect(lambda f, e: f(e))
+        self._sincronizando = False
         self._lote_iniciado: str | None = None  # tras «Inicio»: estos pies ya están en marcha
         marco, lay_pl, _ = estilo.tarjeta("Plancha de escayola", "1")
         form = QFormLayout()
@@ -147,6 +160,21 @@ class VentanaTirada(QDialog):
         izq.addWidget(marco)
 
         marco, lay_placa, _ = estilo.tarjeta("Placa en la CNC")
+        fila = QHBoxLayout()
+        fila.addWidget(estilo.etiqueta("Máquina", "secundario", envolver=False))
+        self.combo_maquina = QComboBox()
+        self.combo_maquina.setToolTip("La CNC en la que se va a fresar: cada máquina tiene su placa (guardada en la web)")
+        self.combo_maquina.activated.connect(lambda i: self.elegir_maquina(self.combo_maquina.itemData(i)))
+        fila.addWidget(self.combo_maquina, 1)
+        self.boton_nueva_maquina = QPushButton("＋")
+        self.boton_nueva_maquina.setFixedWidth(34)
+        self.boton_nueva_maquina.setToolTip("Añadir una máquina CNC")
+        self.boton_nueva_maquina.clicked.connect(lambda: self.anadir_maquina())
+        fila.addWidget(self.boton_nueva_maquina)
+        lay_placa.addLayout(fila)
+        self.texto_nube = estilo.etiqueta("", "secundario")
+        self.texto_nube.setTextFormat(Qt.RichText)
+        lay_placa.addWidget(self.texto_nube)
         self.texto_placa = estilo.etiqueta("", "secundario")
         self.texto_placa.setTextFormat(Qt.RichText)
         lay_placa.addWidget(self.texto_placa)
@@ -237,11 +265,14 @@ class VentanaTirada(QDialog):
         lay.setSpacing(12)
         lay.addLayout(izq, 0)
         lay.addLayout(der, 1)
+        self._poner_maquinas()
         self._poner_plancha()
+        self.sincronizar()
 
     def showEvent(self, evento):
         super().showEvent(evento)
         estilo.barra_titulo_oscura(self)
+        self.sincronizar()  # lo que otro ordenador haya fresado en esta máquina
 
     def closeEvent(self, evento):
         if self._hilo is not None and self._hilo.isRunning():
@@ -314,16 +345,18 @@ class VentanaTirada(QDialog):
             if r != QMessageBox.Yes:
                 return
         self.placa = placa_mod.nueva(*self.plancha())
-        placa_mod.guardar(self.placa)
+        self._operacion({"op": "placa", "id": self.placa["id"], "ancho": self.placa["ancho"],
+                         "largo": self.placa["largo"], "alto": self.placa["alto"]})
         self._lote_iniciado = None
         self._invalidar()
         self._colocar(conservar=False)
 
     def deshacer_ultima_tirada(self):
-        nombre = placa_mod.deshacer_ultima(self.placa)
-        if nombre is None:
+        hecho = placa_mod.deshacer_ultima(self.placa)
+        if hecho is None:
             return
-        placa_mod.guardar(self.placa)
+        nombre, tirada_id = hecho
+        self._operacion({"op": "anular", "tiradaId": tirada_id} if tirada_id else None)
         self._lote_iniciado = None
         self._invalidar()
         self._colocar(conservar=True)
@@ -333,13 +366,183 @@ class VentanaTirada(QDialog):
         """«Inicio»: la zona de cada pie de esta tirada queda gastada en la placa."""
         if not self._placa_coincide():
             self.placa = placa_mod.nueva(*self.plancha())
+            self._operacion({"op": "placa", "id": self.placa["id"], "ancho": self.placa["ancho"],
+                             "largo": self.placa["largo"], "alto": self.placa["alto"]}, enviar=False)
         paso, m = self._paso(), self._margen()
         huellas = [tuple(v * paso for v in cnc.huella(p, m)) for p in self.piezas if p.colocada]
-        placa_mod.anadir_tirada(self.placa, huellas, lote)
-        placa_mod.guardar(self.placa)
+        self._operacion(placa_mod.anadir_tirada(self.placa, huellas, lote))
         self._lote_iniciado = lote
         self.vista.poner_zonas(self.placa["zonas"])
         self._texto_placa()
+
+    # ------------------------------------------------------------ la placa en la web (por máquina)
+
+    def _web(self):
+        conf = getattr(self.principal, "confeccion", None)
+        return getattr(conf, "web", None)
+
+    def _guardar_estado(self):
+        self.estado["placa"] = self.placa
+        placa_mod.guardar_estado(self.estado)
+
+    def _operacion(self, op: dict | None, enviar: bool = True):
+        """Apunta un cambio de la placa: se guarda en este ordenador y, si hay máquina, se manda a la web
+        (si no hay conexión queda pendiente y se manda solo cuando vuelve)."""
+        if op is not None and self.estado["maquina"]:
+            self.estado["pendientes"].append({**op, "maquina": self.estado["maquina"]["id"], "uid": str(uuid.uuid4())})
+        self._guardar_estado()
+        if enviar:
+            self.sincronizar()
+
+    def _en_segundo_plano(self, trabajo, listo, fallo):
+        def correr():
+            try:
+                r = trabajo()
+            except Exception as e:  # noqa: BLE001 - se le dice a la persona
+                self._puente.fallo.emit(fallo, e)
+                return
+            self._puente.hecho.emit(listo, r)
+
+        if self.SINCRONO:
+            correr()
+        else:
+            threading.Thread(target=correr, daemon=True).start()
+
+    SINCRONO = False  # en las pruebas, sin hilos
+
+    def sincronizar(self):
+        """Manda lo pendiente a la web y trae la placa de la máquina (la de la web manda)."""
+        web = self._web()
+        self._texto_nube()
+        if web is None or not web.token or self._sincronizando:
+            return
+        self._sincronizando = True
+        pendientes = list(self.estado["pendientes"])
+
+        def trabajo():
+            hechas, descartadas, sin_conexion = [], [], None
+            for op in pendientes:
+                try:
+                    web.enviar_operacion(op["maquina"], op)
+                    hechas.append(op["uid"])
+                except ErrorWeb as e:
+                    if e.status in (0, 401) or e.status >= 500:
+                        sin_conexion = e
+                        break
+                    descartadas.append((op["uid"], str(e)))  # la web no la acepta: no se reintenta
+            maquinas = web.maquinas() if sin_conexion is None else None
+            return hechas, descartadas, sin_conexion, maquinas
+
+        self._en_segundo_plano(trabajo, self._sincronizado, self._fallo_sincronizar)
+
+    def _fallo_sincronizar(self, e):
+        self._sincronizando = False
+        self._texto_nube(str(e))
+
+    def _sincronizado(self, r):
+        self._sincronizando = False
+        hechas, descartadas, sin_conexion, maquinas = r
+        quitar = set(hechas) | {u for u, _ in descartadas}
+        self.estado["pendientes"] = [op for op in self.estado["pendientes"] if op.get("uid") not in quitar]
+        if maquinas is not None:
+            self.estado["maquinas"] = [{"id": m["id"], "nombre": m["nombre"]} for m in maquinas]
+            actual = self.estado["maquina"]
+            m = next((x for x in maquinas if actual and x["id"] == actual["id"]), None)
+            if actual and m is None:
+                self.estado["maquina"] = None  # la máquina ya no existe en la web
+            elif m is not None and not self.estado["pendientes"]:
+                desde = placa_mod.desde_web(m)
+                if desde is None:
+                    # Máquina sin placa en la web: se sube la de este ordenador (con lo ya fresado).
+                    for op in placa_mod.operaciones_para_subir(self.placa):
+                        self.estado["pendientes"].append({**op, "maquina": m["id"], "uid": str(uuid.uuid4())})
+                    self._guardar_estado()
+                    self.sincronizar()
+                    return
+                antes = [(z["x"], z["y"]) for z in self.placa["zonas"]]
+                self.placa = desde
+                if not placa_mod.misma_medida(self.placa, *self.plancha()):
+                    for c, v in zip(self.cajas, (self.placa["ancho"], self.placa["largo"], self.placa["alto"])):
+                        c.blockSignals(True)
+                        c.setValue(v)
+                        c.blockSignals(False)
+                    antes = None
+                if antes != [(z["x"], z["y"]) for z in self.placa["zonas"]]:
+                    self._invalidar()
+                    self._colocar(conservar=True)
+        self._guardar_estado()
+        self._poner_maquinas()
+        aviso = (f"No se ha podido guardar en la web: {descartadas[-1][1]}" if descartadas else
+                 str(sin_conexion) if sin_conexion is not None else "")
+        self._texto_nube(aviso)
+
+    def _poner_maquinas(self):
+        self.combo_maquina.blockSignals(True)
+        self.combo_maquina.clear()
+        self.combo_maquina.addItem("— solo este ordenador —", None)
+        for m in self.estado.get("maquinas") or ([self.estado["maquina"]] if self.estado["maquina"] else []):
+            self.combo_maquina.addItem(m["nombre"], m)
+        actual = self.estado["maquina"]
+        i = next((k for k in range(self.combo_maquina.count())
+                  if actual and (self.combo_maquina.itemData(k) or {}).get("id") == actual["id"]), 0)
+        self.combo_maquina.setCurrentIndex(i)
+        self.combo_maquina.blockSignals(False)
+
+    def _texto_nube(self, aviso: str = ""):
+        web = self._web()
+        pend = len(self.estado["pendientes"])
+        if not self.estado["maquina"]:
+            texto = ("Elige la máquina para guardar su placa en la web (y verla igual desde cualquier ordenador)."
+                     if web is not None and web.token else
+                     "Solo en este ordenador. Para guardarla en la web por máquina, entra en <b>Confección</b> "
+                     "con tu usuario del taller.")
+        elif web is None or not web.token:
+            texto = (f"Máquina <b>{self.estado['maquina']['nombre']}</b>. Sin sesión: los cambios se guardan aquí "
+                     "y se mandarán a la web cuando entres en Confección.")
+        elif pend:
+            texto = f"⏳ {pend} cambio(s) sin enviar a la web: se mandarán solos al volver la conexión."
+        else:
+            texto = f"☁ Máquina <b>{self.estado['maquina']['nombre']}</b>: guardada en la web."
+        if aviso:
+            texto += f"<br><span style='color:{C['aviso']}'>{aviso}</span>"
+        self.texto_nube.setText(texto)
+
+    def elegir_maquina(self, maquina: dict | None):
+        """Cambiar de máquina: se usa su placa (la de la web)."""
+        actual = self.estado["maquina"]
+        if (maquina or {}).get("id") == (actual or {}).get("id"):
+            return
+        self.estado["maquina"] = {"id": maquina["id"], "nombre": maquina["nombre"]} if maquina else None
+        if maquina:  # mientras llega la de la web, sin zonas de la otra máquina
+            self.placa = placa_mod.nueva(*self.plancha())
+        self._lote_iniciado = None
+        self._guardar_estado()
+        self._invalidar()
+        self._colocar(conservar=True)
+        self.sincronizar()
+
+    def anadir_maquina(self, nombre: str | None = None):
+        web = self._web()
+        if web is None or not web.token:
+            QMessageBox.information(self, "Añadir máquina", "Para añadir una máquina, entra primero en "
+                                    "<b>Confección</b> con tu usuario del taller.")
+            return
+        if nombre is None:
+            nombre, ok = QInputDialog.getText(self, "Añadir máquina", "Nombre de la máquina CNC (p. ej. «CNC taller»):")
+            if not ok or not nombre.strip():
+                return
+
+        def listo(m):
+            # La placa de este ordenador (con lo ya fresado) pasa a ser la de la máquina nueva: al
+            # sincronizar se sube a la web.
+            self.estado.setdefault("maquinas", []).append({"id": m["id"], "nombre": m["nombre"]})
+            self.estado["maquina"] = {"id": m["id"], "nombre": m["nombre"]}
+            self._guardar_estado()
+            self._poner_maquinas()
+            self.sincronizar()
+
+        self._en_segundo_plano(lambda: web.crear_maquina(nombre.strip()), listo,
+                               lambda e: QMessageBox.warning(self, "Añadir máquina", str(e)))
 
     # ------------------------------------------------------------ colocación
 
@@ -348,6 +551,7 @@ class VentanaTirada(QDialog):
         self.vista.poner_plancha(ancho, largo, self._paso(), self._margen())
         self.vista.poner_zonas(self.placa["zonas"] if self._placa_coincide() else [])
         self._texto_placa()
+        self._texto_nube()
 
     def _colocar(self, conservar: bool = True):
         """Coloca los pies que no tienen sitio. Con `conservar`, los que ya están colocados no se mueven
