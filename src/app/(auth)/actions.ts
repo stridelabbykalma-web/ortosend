@@ -51,11 +51,13 @@ export async function loginAction(formData: FormData) {
   if (!user || !user.active || !user.passwordHash || !(await verifyPassword(parsed.data.password, user.passwordHash))) {
     redirect(loginUrl("Credenciales incorrectas"));
   }
+  // Cada puerta es solo para lo suyo: una cuenta del ámbito equivocado no
+  // entra ni se la reconduce a la otra entrada.
   if (ambito === "cliente" && user!.role !== "CLIENTE") {
-    redirect("/equipo?ok=" + encodeURIComponent("Tu cuenta es del equipo: esta es tu entrada. Vuelve a escribir tus credenciales."));
+    redirect(loginUrl("Esta entrada es solo para pacientes."));
   }
   if (ambito === "equipo" && user!.role === "CLIENTE") {
-    redirect("/login?error=" + encodeURIComponent("Esa cuenta es de paciente: entra desde la web de Ortosend."));
+    redirect(loginUrl("Esta entrada es solo para el equipo de clínicas y taller."));
   }
   await createSession(user!.id);
   // Continuidad del estudio: si el profesional entra desde otro dispositivo
