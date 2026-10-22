@@ -32,7 +32,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <span>
                 <a href="/legal/aviso-legal">Aviso legal</a> · <a href="/legal/privacidad">Privacidad</a> ·{" "}
                 <a href="/legal/terminos">Términos</a> · <a href="/legal/cookies">Cookies</a> ·{" "}
-                <a href="/equipo">Acceso del equipo</a>
+                <a href="/para-clinicas">Para clínicas</a>
               </span>
             </div>
           </div>
