@@ -5,12 +5,16 @@ import { redirect } from "next/navigation";
 import { loginAction } from "@/app/(auth)/actions";
 import { getSessionUser } from "@/lib/auth";
 import { Flash } from "@/components/ui";
+import { listaPedidos } from "@/lib/taller-pedidos";
+import { Refrescar } from "@/components/taller/refrescar";
+import { COLUMNAS_TALLER, PostIt, type PedidoResumen } from "@/components/taller/postits";
 
 export const dynamic = "force-dynamic";
 
-// Entrada del taller de fabricación y punto de instalación de su app: el
-// manifest del taller solo se enlaza desde aquí, igual que el de clínicas en
-// /equipo. Cada cosa tiene su propio sitio.
+// Entrada del taller de fabricación y su app (el manifest del taller solo se
+// enlaza desde aquí, igual que el de clínicas en /equipo). Sin sesión: la
+// entrada del taller. Con la sesión de una persona del taller: los pedidos como
+// post-its por columnas, en el orden en que deben salir (se actualiza sola).
 export const metadata: Metadata = {
   title: "Ortosend Taller — Acceso del taller",
   robots: { index: false },
@@ -23,12 +27,14 @@ export const viewport: Viewport = { themeColor: "#0e6e5c" };
 export default async function TallerPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; ok?: string; next?: string }>;
+  searchParams: Promise<{ error?: string; ok?: string; next?: string; col?: string }>;
 }) {
-  const { error, ok, next } = await searchParams;
+  const { error, ok, next, col } = await searchParams;
   const dest = next ? destinoSeguro(next, "") : "";
   const user = await getSessionUser();
-  if (user) redirect(user.role === "CLIENTE" ? "/panel" : dest || "/panel");
+  if (user && user.role !== "TALLER" && user.role !== "ADMIN") redirect("/panel");
+  if (user && dest && dest !== "/taller") redirect(dest);
+  if (user) return <TallerMovil nombre={user.name} col={col} ok={ok} />;
   return (
     <div className="wrap" style={{ maxWidth: 440 }}>
       <div className="sp2" />
@@ -42,7 +48,7 @@ export default async function TallerPage({
       <Flash error={error} ok={ok} />
       <form className="card" action={loginAction}>
         <input type="hidden" name="ambito" value="taller" />
-        {dest && <input type="hidden" name="next" value={dest} />}
+        <input type="hidden" name="next" value={dest || "/taller"} />
         <label>Email o móvil</label>
         <input name="identifier" autoComplete="username" required />
         <label>Contraseña</label>
@@ -84,5 +90,34 @@ export default async function TallerPage({
       </div>
       <div className="sp2" />
     </div>
+  );
+}
+
+async function TallerMovil({ nombre, col, ok }: { nombre: string; col?: string; ok?: string }) {
+  const pedidos = (await listaPedidos()) as PedidoResumen[];
+  const actual = COLUMNAS_TALLER.find(([k]) => k === col) ?? COLUMNAS_TALLER[0];
+  const visibles = pedidos.filter(actual[2]);
+  return (
+    <main className="wrap" style={{ maxWidth: 560, padding: "12px 12px 40px" }}>
+      <Refrescar segundos={20} />
+      <div className="row between">
+        <h2 style={{ margin: "4px 0" }}>Taller</h2>
+        <span className="tiny">{nombre}</span>
+      </div>
+      {ok && <div className="note g">{ok}</div>}
+      <div className="row" style={{ gap: 6, margin: "10px 0" }}>
+        {COLUMNAS_TALLER.map(([k, t, esta]) => (
+          <Link key={k} href={`/taller?col=${k}`} className={`btn ${k === actual[0] ? "pri" : ""}`} style={{ padding: "6px 10px" }}>
+            {t} · {pedidos.filter(esta).length}
+          </Link>
+        ))}
+      </div>
+      <div style={{ display: "grid", gap: 12 }}>
+        {visibles.length === 0 && <p className="muted">No hay pedidos en «{actual[1]}».</p>}
+        {visibles.map((p) => (
+          <PostIt key={p.id} p={p} />
+        ))}
+      </div>
+    </main>
   );
 }

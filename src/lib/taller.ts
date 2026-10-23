@@ -88,7 +88,7 @@ export function slaDe(kase: { payment: Pick<Payment, "paidAt"> | null; createdAt
 // --- Orden del tablero: qué debe salir antes ---
 // 1) los que hay que rehacer (incidencia de defecto abierta), 2) por semáforo del plazo
 // (fuera → ajustado → ok → sin pago), 3) el más antiguo primero. Lo usan el panel del
-// taller y la API del Rectificador, para que los dos muestren el mismo orden.
+// taller y la API dOrtosend Taller, para que los dos muestren el mismo orden.
 const SLA_ORDER: Record<Sla["nivel"], number> = { fuera: 0, ajustado: 1, ok: 2 };
 
 type ParaOrdenar = {
@@ -120,8 +120,7 @@ export function ordenTaller<T extends ParaOrdenar>(cs: T[]): T[] {
 // Material: cada capa gasta 1/paresPorPlancha de plancha (la mitad si es de un solo pie).
 // Fresado: minutos de CNC × coste por minuto + escayola de los moldes.
 // Mano de obra: minutos de confección × precio por hora.
-// El Rectificador (interfaz/web.py) calcula lo mismo para la vista previa: si se cambia
-// aquí, cambiarlo también allí.
+// Solo lo ve el administrador (el taller no ve costes).
 export type PiesCapa = "par" | "I" | "D";
 export type CapaHoja = { materialId: string; pies: PiesCapa; notas?: string; nombre?: string; cents?: number };
 export type MaterialCoste = { id: string; precioCents: number; paresPorPlancha: number };

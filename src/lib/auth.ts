@@ -172,7 +172,7 @@ export async function verifyResetToken(token: string): Promise<User | null> {
   }
 }
 
-// Sesión del Rectificador (programa del taller en el PC del taller): token de 30 días que
+// Sesión dOrtosend Taller (programa del taller en el PC del taller): token de 30 días que
 // el programa manda en la cabecera Authorization. Lleva la huella de la contraseña: si se
 // cambia la contraseña (o se desactiva el usuario) deja de valer al momento.
 export const APP_DAYS = 30;
