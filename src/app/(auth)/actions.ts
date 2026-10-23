@@ -16,9 +16,10 @@ import {
 import { audit, notifyEmail, notifyOwner, pushEvent, releaseAllBy, titularDe } from "@/lib/cases";
 import { isValidPhone, normalizeEmail, normalizeIdentifier, normalizePhone } from "@/lib/contacto";
 import { avisarContrasenaCambiada, enviarBienvenida, enviarRecuperacion, enviarVerificacionEmail } from "@/lib/cuenta";
-import { claveIp, limitar, origenPeticion } from "@/lib/rate-limit";
+import { claveCuenta, claveIp, limitar, origenPeticion } from "@/lib/rate-limit";
 import { destinoSeguro } from "@/lib/navegacion";
 import { CONSENT_VERSION } from "@/lib/legal";
+import { pareceBot } from "@/lib/antibot";
 
 const loginSchema = z.object({
   identifier: z.string().min(3),
@@ -46,6 +47,9 @@ export async function loginAction(formData: FormData) {
   if (!origen.sinPeticion && !(await limitar(claveIp("login", origen.ip), 10, 60)))
     redirect(loginUrl("Demasiados intentos. Espera un minuto."));
   const id = normalizeIdentifier(parsed.data.identifier.slice(0, 200));
+  // Y por cuenta: 20 intentos cada 15 minutos aunque vengan de muchas IP.
+  if (!origen.sinPeticion && !(await limitar(claveCuenta("login-cuenta", id), 20, 900)))
+    redirect(loginUrl("Demasiados intentos con esta cuenta. Espera 15 minutos o recupera la contraseña."));
   const user = await prisma.user.findFirst({
     where: { OR: [{ email: id }, { phone: id }] },
   });
@@ -238,8 +242,11 @@ export async function recoverAction(formData: FormData) {
   const origen = await origenPeticion();
   if (!origen.sinPeticion && !(await limitar(claveIp("recuperar", origen.ip), 5, 600)))
     redirect("/recuperar?error=" + encodeURIComponent("Demasiadas peticiones. Espera unos minutos."));
+  const bot = await pareceBot(formData);
+  if (bot) redirect("/recuperar?error=" + encodeURIComponent(bot));
   const id = normalizeIdentifier(String(formData.get("identifier") ?? "").slice(0, 200));
-  if (id.length >= 3) {
+  // Como mucho 3 emails de recuperación por hora a una misma cuenta (sin decir si existe).
+  if (id.length >= 3 && (origen.sinPeticion || (await limitar(claveCuenta("recuperar-cuenta", id), 3, 3600)))) {
     const user = await prisma.user.findFirst({ where: { OR: [{ email: id }, { phone: id }] } });
     if (user && user.active && user.email) await enviarRecuperacion(user);
   }

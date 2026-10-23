@@ -6,6 +6,7 @@ import { prisma } from "./db";
 import { auditar, exigirTratamientoPermitido } from "./alta";
 import { pushEvent } from "./cases";
 import { TALLER_STATES, costeConfeccion, type CapaHoja, type PiesCapa } from "./taller";
+import { contenidoCoincide, sinMetadatos } from "./archivos";
 
 // Error con el código HTTP que corresponde (la API lo devuelve tal cual; el panel lo
 // muestra como mensaje).
@@ -275,6 +276,7 @@ export async function registrarConsumo(caseId: string, user: Pick<User, "id" | "
   if (d.foto) {
     if (!FOTO_MIME.includes(d.foto.mime)) throw new ErrorTaller("La foto debe ser JPEG, PNG o WebP", 400);
     if (d.foto.bytes.length === 0 || d.foto.bytes.length > FOTO_MAX) throw new ErrorTaller("La foto debe ocupar menos de 4 MB", 413);
+    if (!contenidoCoincide(d.foto.bytes, d.foto.mime)) throw new ErrorTaller("La foto no es una imagen válida", 400);
   }
   const caducidad = d.caducidad && /^\d{4}-\d{2}-\d{2}$/.test(d.caducidad) ? new Date(`${d.caducidad}T00:00:00Z`) : null;
   // Sin código legible: el lote se identifica por material + nº de lote escrito a mano.
@@ -292,10 +294,11 @@ export async function registrarConsumo(caseId: string, user: Pick<User, "id" | "
     if (d.foto) {
       const capture = (await tx.capture.findUnique({ where: { caseId } })) ?? (await tx.capture.create({ data: { caseId } }));
       const a = await tx.mediaAsset.create({ data: { captureId: capture.id, kind: ETIQUETA_KIND, url: "" } });
-      await tx.mediaBlob.create({ data: { mediaId: a.id, mime: d.foto.mime, bytes: Buffer.from(d.foto.bytes) } });
+      const foto = sinMetadatos(d.foto.bytes, d.foto.mime); // sin GPS ni datos del móvil
+      await tx.mediaBlob.create({ data: { mediaId: a.id, mime: d.foto.mime, bytes: Buffer.from(foto) } });
       await tx.mediaAsset.update({
         where: { id: a.id },
-        data: { url: `/api/media/${a.id}`, sizeBytes: d.foto.bytes.length, meta: { mime: d.foto.mime }, confirmedAt: new Date() },
+        data: { url: `/api/media/${a.id}`, sizeBytes: foto.length, meta: { mime: d.foto.mime }, confirmedAt: new Date() },
       });
       fotoId = a.id;
     }
