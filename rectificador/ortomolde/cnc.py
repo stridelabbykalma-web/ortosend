@@ -31,7 +31,10 @@ import numpy as np
 from scipy import ndimage
 
 #: Distancia extra (mm) entre la silueta y el filo de la fresa en el contorno.
-HOLGURA_CONTORNO = 0.25
+HOLGURA_CONTORNO = 0.35  # 0,25 + lo que puede acercarse una cuerda al simplificar (TOL_CONTORNO)
+
+#: Desvío máximo (mm) al simplificar el contorno y el repaso de pared en tramos rectos.
+TOL_CONTORNO = 0.1
 #: Desvío máximo (mm) al simplificar las vueltas del desbaste en tramos rectos (deja sobrante igualmente).
 TOL_DESBASTE = 0.1
 
@@ -453,7 +456,9 @@ def _recorrido(campo: np.ndarray, nivel: float, x0: int, y0: int, paso: float) -
     area = np.sum(pts[:-1, 0] * pts[1:, 1] - pts[1:, 0] * pts[:-1, 1]) / 2
     if area > 0:  # antihorario → horario
         pts = pts[::-1]
-    return pts[_simplificar_xy(pts, 0.02)]
+    # Suave y en tramos largos: con trocitos de 1 mm la máquina se traba en las curvas.
+    pts = _suavizar_lazo(pts, paso, 0.5)
+    return pts[_simplificar_xy(pts, TOL_CONTORNO)]
 
 
 # ---------------------------------------------------------------------------
@@ -765,27 +770,38 @@ class TrabajoCNC:
         return float(self.zona.mean())
 
 
+def _entra_en_vertical(cfg: dict) -> bool:
+    """Con XPS (o sin hélice) la fresa baja en vertical a cada capa; la hélice o la rampa, solo en escayola."""
+    return cfg.get("material_clave") == "xps" or cfg.get("radio_helice", 0.0) <= 0
+
+
 def _contorno(w: _Escritor, pts: np.ndarray, H: float, suelo: float, cfg: dict) -> int:
-    """Rodea la silueta bajando en espiral `bajada_contorno` mm por vuelta hasta el suelo de la
-    ranura y da una última vuelta plana. Devuelve las vueltas."""
+    """Rodea la silueta POR CAPAS PLANAS: en cada nivel (`bajada_contorno` mm más abajo, el último en el
+    suelo de la ranura) baja en el punto de inicio y da una vuelta entera a esa altura. Bajar en espiral
+    dejaba marcas en la pared. Con escayola baja a cada capa en rampa por el propio anillo. Devuelve las
+    vueltas."""
     z_fin = -(H - suelo)
     baj = cfg["bajada_contorno"]
     niveles = [float(z) for z in np.arange(-baj, z_fin + 1e-6, -baj)]
     if not niveles or niveles[-1] > z_fin + 1e-6:
         niveles.append(z_fin)
+    avance = cfg.get("avance_contorno", cfg["avance_desbaste"])
     # Empezar por el punto más cercano a donde está la fresa.
     k = int(np.argmin(np.linalg.norm(pts[:-1] - w.pos[:2], axis=1)))
     anillo = np.vstack([pts[k:-1], pts[:k + 1]])
-    t = np.r_[0, np.cumsum(np.linalg.norm(np.diff(anillo, axis=0), axis=1))]
-    t = t / t[-1]
+    vertical = _entra_en_vertical(cfg)
     w.bajar_a(anillo[0, 0], anillo[0, 1], 0.0, 0.0)
     z0 = 0.0
-    for z1 in niveles + [z_fin]:
-        for (x, y), f in zip(anillo[1:], t[1:]):
-            w.corte(x, y, z0 + (z1 - z0) * f, cfg.get("avance_contorno", cfg["avance_desbaste"]))
+    for z1 in niveles:
+        if vertical:
+            w.corte(anillo[0, 0], anillo[0, 1], z1, cfg["avance_bajada"])
+            for x, y in anillo[1:]:
+                w.corte(x, y, z1, avance)
+        else:
+            _rampa_por(w, anillo, z0, z1, cfg.get("rampa_grados", 2.0), cfg["avance_entrada"], avance)
         z0 = z1
     w.subir()
-    return len(niveles) + 1
+    return len(niveles)
 
 
 def _pared(w: _Escritor, c: _Colocada, paso: float, H: float, cfg: dict) -> int:
@@ -838,7 +854,8 @@ def _waterline(campo: np.ndarray, nivel: float, x0: int, y0: int, paso: float) -
             pts = np.vstack([pts, pts[:1]])
         if np.sum(np.linalg.norm(np.diff(pts, axis=0), axis=1)) < 10:
             continue
-        out.append(pts[_simplificar_xy(pts, 0.05)])
+        pts = _suavizar_lazo(pts, paso, 0.5)
+        out.append(pts[_simplificar_xy(pts, TOL_CONTORNO)])
     return out
 
 
@@ -873,7 +890,7 @@ def _desbaste(w: _Escritor, punta, c: _Colocada, paso, H, cfg, radio) -> int:
     material = np.where(dentro, float(H), -np.inf)
     # Donde la bola llega a fuera de la silueta todavía hay escayola entera (el contorno va al final).
     al_borde = _cerca_del_borde(dentro, r)
-    radio_h = cfg.get("radio_helice", 0.0)
+    radio_h = 0.0 if _entra_en_vertical(cfg) else cfg.get("radio_helice", 0.0)
     rh = int(np.ceil(radio_h / paso))
     fondo_min = float(objetivo[dentro].min())
     baj = cfg["bajada_por_pasada"]
@@ -915,7 +932,7 @@ def _vaciar_zona(w: _Escritor, comp, d, jc, kc, objetivo, material, alto_cerca, 
     import contourpy
 
     s = cfg["paso_desbaste"]
-    radio_h = cfg.get("radio_helice", 0.0)
+    radio_h = 0.0 if _entra_en_vertical(cfg) else cfg.get("radio_helice", 0.0)
     grados = cfg.get("rampa_grados", 2.0)
     dmax = float(d[jc, kc])
     cx, cy = (c.x0 + kc) * paso, (c.y0 + jc) * paso

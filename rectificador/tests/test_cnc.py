@@ -432,3 +432,19 @@ def test_repaso_de_pared_quita_el_escalon(piezas_sinteticas, cfg):
             val = ndimage.map_coordinates(pt, [[pos["Y"]], [pos["X"]]], order=1)[0]
             peor = max(peor, float(val - (pos["Z"] + 40)))
     assert -9.0 < peor <= 0.3  # punta_pies lleva holgura: nunca por debajo (salvo redondeo)
+
+
+def test_contorno_y_desbaste_por_capas_planas(piezas_sinteticas, cfg):
+    """Con XPS: el contorno y el desbaste van por capas planas (bajar en vertical y vuelta a una sola
+    altura), nunca en espiral ni en rampa, aunque en los ajustes haya radio de hélice. Y las curvas del
+    contorno en tramos largos (con trocitos de 1 mm la máquina se traba)."""
+    t = cnc.generar(piezas_sinteticas("A"), 600, 500, 40, 1.0, 12.5, dict(cfg, radio_helice=4.0))
+    tramos = []
+    for fase, tipo, a, b in _por_fase(t.gcode):
+        if tipo != "G1" or fase not in ("Desbaste", "2D"):
+            continue
+        mueve_xy = abs(a["X"] - b["X"]) > 1e-6 or abs(a["Y"] - b["Y"]) > 1e-6
+        assert not (mueve_xy and abs(a["Z"] - b["Z"]) > 1e-6), (fase, a, b)
+        if fase == "2D" and mueve_xy:
+            tramos.append(np.hypot(b["X"] - a["X"], b["Y"] - a["Y"]))
+    assert len(tramos) > 50 and np.median(tramos) >= 2.0

@@ -1,5 +1,13 @@
 # Novedades de Ortosend Taller
 
+## 0.14.6
+- **El contorno va por capas planas**: baja en vertical a cada altura y da la vuelta entera plana (antes
+  bajaba en espiral y dejaba marcas en la pared). Con escayola baja a cada capa en rampa suave.
+- **El desbaste con XPS también**: siempre baja en vertical y vueltas planas, aunque en los ajustes haya
+  un radio de hélice (la hélice y la rampa quedan solo para escayola).
+- **Curvas sin trabarse**: el contorno y el repaso de pared van en tramos de unos 5 mm (antes ~1 mm en las
+  curvas, la máquina frenaba en cada uno). El contorno pasa de unos 5300 movimientos a unos 950 por par.
+
 ## 0.14.5
 - **Velocidad propia para el contorno** (en *Ajustes de la CNC → Velocidades → Contorno*). Es el corte más
   duro (la bola entera a 14 mm de hondo): con XPS va ahora a **3000 mm/min** (antes 5000, como el
