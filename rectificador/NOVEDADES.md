@@ -1,5 +1,11 @@
 # Novedades de Ortosend Taller
 
+## 0.14.3
+- **Desbaste más rápido en la máquina**: las vueltas del desbaste iban en trocitos de 0,7 mm en zigzag
+  (los escalones de la rejilla) y la CNC frenaba en cada uno (media de unos 1100 mm/min aunque pida 5000).
+  Ahora son curvas suaves en tramos largos: media de unos 2400 mm/min, el desbaste de un par pasa de unos
+  4 a menos de 2 min. Sigue sin tocar el molde (deja al menos 0,1 mm para el acabado).
+
 ## 0.14.2
 - Ventana **Tirada**: la columna de la izquierda se desplaza con la rueda del ratón si no cabe en la
   pantalla, así se llega siempre a *Calcular trayectorias*, *Guardar*, *Inicio* y *Ver mapa*.

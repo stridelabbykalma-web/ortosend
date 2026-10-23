@@ -32,6 +32,8 @@ from scipy import ndimage
 
 #: Distancia extra (mm) entre la silueta y el filo de la fresa en el contorno.
 HOLGURA_CONTORNO = 0.25
+#: Desvío máximo (mm) al simplificar las vueltas del desbaste en tramos rectos (deja sobrante igualmente).
+TOL_DESBASTE = 0.1
 
 
 # ---------------------------------------------------------------------------
@@ -596,6 +598,23 @@ def _simplificar(ys: np.ndarray, zs: np.ndarray, tol: float = 0.01) -> np.ndarra
     return np.array(keep)
 
 
+def _suavizar_lazo(pts: np.ndarray, paso: float, sigma_mm: float = 1.0) -> np.ndarray:
+    """Quita a una vuelta del desbaste los escalones de la rejilla (línea de nivel de una distancia
+    calculada en celdas): sin ellos se puede simplificar en tramos largos y la máquina va a su
+    velocidad en vez de frenar en cada escalón. Mueve la línea como mucho unas décimas de mm, menos
+    que el sobrante que deja el desbaste."""
+    if len(pts) < 5:
+        return pts
+    cerrada = np.linalg.norm(pts[0] - pts[-1]) < 1e-6
+    base = pts[:-1] if cerrada else pts
+    sigma = sigma_mm / paso
+    suave = ndimage.gaussian_filter1d(base, sigma, axis=0, mode="wrap" if cerrada else "nearest")
+    if cerrada:
+        return np.vstack([suave, suave[:1]])
+    suave[0], suave[-1] = pts[0], pts[-1]
+    return suave
+
+
 def _simplificar_xy(pts: np.ndarray, tol: float) -> np.ndarray:
     """Igual que `_simplificar` para una línea en el plano (distancia perpendicular)."""
     if len(pts) <= 2:
@@ -846,7 +865,8 @@ def _vaciar_zona(w: _Escritor, comp, d, jc, kc, objetivo, material, alto_cerca, 
         # Zona estrecha: entra en rampa por la primera vuelta (como el contorno), sin clavar la fresa.
         lazo = max(vueltas[0], key=len)
         vueltas[0] = [ln for ln in vueltas[0] if ln is not lazo]
-        pts = lazo[_simplificar_xy(lazo, 0.05)]
+        lazo = _suavizar_lazo(lazo, paso)
+        pts = lazo[_simplificar_xy(lazo, TOL_DESBASTE)]
         z_t = 0.0 if al_borde.any() and _toca(al_borde, pts, paso, c) else z_techo
         w.bajar_a(pts[0, 0], pts[0, 1], lib - H, lib - H, z_t)
         _rampa_por(w, pts, lib - H, nivel - H, grados, cfg["avance_entrada"], cfg["avance_desbaste"])
@@ -861,7 +881,8 @@ def _vaciar_zona(w: _Escritor, comp, d, jc, kc, objetivo, material, alto_cerca, 
             if np.linalg.norm(pts[0] - pts[-1]) < 1e-6:  # cerrada: empezar por el punto más cercano
                 i0 = int(np.argmin(cerca[q][:-1]))
                 pts = np.vstack([pts[i0:-1], pts[:i0 + 1]])
-            pts = pts[_simplificar_xy(pts, 0.05)]
+            pts = _suavizar_lazo(pts, paso)
+            pts = pts[_simplificar_xy(pts, TOL_DESBASTE)]
             _ir_a(w, pts[0], objetivo, comp, nivel, paso, H, c, cfg)
             for x, y in pts[1:]:
                 w.corte(x, y, nivel - H, cfg["avance_desbaste"])
