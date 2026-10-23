@@ -58,45 +58,77 @@ taco = 6.0
 # Salida directa para la CNC (Two Trees TTC 6050, archivo .nc por USB/tarjeta), con la misma
 # estrategia y formato que el ejemplo de Fusion del taller (molde_yeso.nc).
 # Origen del trabajo: X0 Y0 en la esquina DELANTERA IZQUIERDA de la plancha, Z0 en su cara de ARRIBA.
-# Velocidades para escayola celular (blanda): más rápidas que las del ejemplo de Fusion (2500 / 1500 / 800 / 3000
-# y capas de 3 mm). Si la máquina vibra o pierde pasos, bajarlas un 20 % en Ajustes de la CNC.
-material = "escayola celular"
-revoluciones = 10000         # rpm del cabezal
-avance_desbaste = 4000       # mm/min cortando en el contorno y el desbaste
-avance_entrada = 2000        # mm/min al entrar en el material y al cambiar de línea
-avance_bajada = 1000         # mm/min al bajar en vertical dentro del material
-avance_acabado = 4500        # mm/min en el acabado
+# Las velocidades y pasadas dependen del material: ver [materiales] más abajo (se elige en la app, en
+# «Ajustes de la CNC»). Aquí solo lo común a todos.
 avance_rapido = 3000         # mm/min (solo para estimar el tiempo; los G0 los hace la máquina)
 altura_seguridad = 15.0      # mm sobre la plancha para ir de un pie a otro (como Fusion)
 altura_paso = 2.0            # mm sobre la plancha para saltar dentro de un mismo pie
 rebaje_superior = 3.0        # mm por debajo de la cara de arriba queda lo más alto del pie: así toda la
                              # cara de arriba se fresa aunque la plancha no esté del todo plana
 # 1) Desbaste grande en cajeras por niveles planos (como Fusion), dentro de la silueta. Quita la carga primero.
-bajada_por_pasada = 5.0      # mm entre niveles del desbaste (Fusion: cada 3 mm; con escayola celular, 5)
-paso_desbaste = 7.0          # mm entre vueltas del desbaste (con la bola de 25 deja crestas de 0,5 mm)
-sobrante_desbaste = 0.5      # mm que deja el desbaste para el acabado
-# Entrada en el material del desbaste: en hélice (como Fusion), no clavando la fresa en vertical.
-radio_helice = 3.0           # mm de radio de la hélice (Fusion: ~3,1). 0 = bajar en vertical
-rampa_grados = 2.0           # inclinación de la hélice (Fusion: 2°): baja ~0,66 mm por vuelta
 # 2) Acabado en líneas paralelas a X.
-paso_acabado = 1.75          # mm entre líneas (con la bola de 25 deja crestas de 0,03 mm)
 # 3) Contorno, al final como en Fusion: rodea la silueta del pie (pared vertical, sin base plana
 #    alrededor). Deja suelo_contorno mm debajo: el molde sigue unido a la plancha.
 contorno = true
-bajada_contorno = 3.0        # mm que baja por cada vuelta
-suelo_contorno = 7.5         # mm de escayola que quedan debajo de la ranura (Fusion: 40 - 32,5)
+suelo_contorno = 7.5         # mm de material que quedan debajo de la ranura (Fusion: 40 - 32,5)
 suelo_minimo = 3.0           # si el pie es muy alto se deja menos suelo, pero nunca menos de esto
 # Disposición (los pies lo más juntos posible):
 margen_bloque = 0.0          # mm extra desde la ranura de cada pie al borde de la plancha
 separacion = 0.0             # mm extra entre las ranuras de dos pies vecinos
 permitir_giro = true         # girar pies 90° si así caben más
 
+# Material del molde. Cada uno con su grosor de plancha, velocidades y pasadas. Se elige en la app
+# («Ajustes de la CNC»); por defecto el de `por_defecto`.
+[materiales]
+por_defecto = "xps"
+
+[materiales.xps]
+# Espuma XPS: muy blanda. Se puede clavar la fresa en vertical y bajar casi todo el filo de la broca en
+# cada pasada (la bola de Ø25 corta 15 mm de altura: pasadas de 14). Si la máquina vibra o pierde pasos,
+# bajar las velocidades un 20 % en Ajustes de la CNC.
+nombre = "Espuma XPS"
+plancha_alto = 50.0          # mm de la placa
+revoluciones = 10000         # rpm del cabezal
+avance_desbaste = 5000       # mm/min cortando en el contorno y el desbaste
+avance_entrada = 3000        # mm/min al entrar en el material y al cambiar de línea
+avance_bajada = 2000         # mm/min al bajar en vertical dentro del material
+avance_acabado = 5000        # mm/min en el acabado
+bajada_por_pasada = 14.0     # mm entre niveles del desbaste (el filo corta 15 mm de altura)
+bajada_contorno = 14.0       # mm que baja por cada vuelta del contorno
+paso_desbaste = 10.0         # mm entre vueltas del desbaste (con la bola de 25 deja crestas de 1 mm)
+sobrante_desbaste = 0.5      # mm que deja el desbaste para el acabado
+radio_helice = 0.0           # 0 = entra en vertical (en XPS no pasa nada)
+rampa_grados = 2.0
+paso_acabado = 1.75          # mm entre líneas (con la bola de 25 deja crestas de 0,03 mm)
+rebaje_superior = 3.0
+altura_seguridad = 15.0
+
+[materiales.escayola_celular]
+# Escayola celular: más rápida que las del ejemplo de Fusion (2500 / 1500 / 800 / 3000 y capas de 3 mm),
+# con entrada en hélice para no clavar la fresa en el yeso.
+nombre = "Escayola celular"
+plancha_alto = 45.0
+revoluciones = 10000
+avance_desbaste = 4000
+avance_entrada = 2000
+avance_bajada = 1000
+avance_acabado = 4500
+bajada_por_pasada = 5.0
+bajada_contorno = 3.0
+paso_desbaste = 7.0
+sobrante_desbaste = 0.5
+radio_helice = 3.0
+rampa_grados = 2.0
+paso_acabado = 1.75
+rebaje_superior = 3.0
+altura_seguridad = 15.0
+
 [plancha]
 # Plancha de escayola para una tirada (varios moldes a la vez). Se puede cambiar en cada tirada.
 # Por defecto, la mesa de la Two Trees TTC 6050. Origen: esquina delantera izquierda, arriba.
 ancho_x = 600.0
 largo_y = 500.0
-alto_z = 45.0                # planchas de 45 mm (el molde mide 40 y se rebajan 3 mm arriba)
+alto_z = 50.0                # lo pone el material elegido (XPS: 50 mm; escayola: 45 mm)
 
 [web]
 # Web de Ortosend: de ahí salen los pedidos del taller (apartado «Confección»).

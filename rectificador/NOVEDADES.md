@@ -1,5 +1,14 @@
 # Novedades de Ortosend Taller
 
+## 0.12.0
+- **Espuma XPS** (material por defecto): placas de **50 mm**, la fresa entra en vertical y baja **14 mm
+  por pasada** (la broca corta 15 mm de altura), más rápido (5000 mm/min). Con un par real la tirada pasa
+  de unos 21 a unos **9 min**.
+- En *Ajustes de la CNC* se elige el **material**: Espuma XPS o Escayola celular (la de antes, con sus
+  valores). Al cambiarlo se ponen sus valores de fábrica.
+- Al cambiar de material, la siguiente **Placa nueva** de la ventana Tirada ya sale con su grosor.
+- Si la máquina vibra o pierde pasos con XPS, bajad las velocidades un 20 % en Ajustes de la CNC.
+
 ## 0.11.0
 - **La placa de cada máquina, en la web**: en *Tirada → Placa en la CNC* se elige la **máquina** (con
   **＋** se añade una). Lo fresado en su placa se guarda en la web de Ortosend, así se sigue igual aunque

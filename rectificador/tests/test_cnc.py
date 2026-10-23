@@ -356,8 +356,12 @@ def _bajadas_verticales(gcode, minimo=2.0):
                and a["Z"] - b["Z"] > minimo)
 
 
-def test_desbaste_entra_en_helice_como_fusion(piezas_sinteticas, cfg):
-    """Como el ejemplo de Fusion: el desbaste entra en el yeso bajando en hélice, no clavando la fresa."""
+def test_desbaste_entra_en_helice_como_fusion(piezas_sinteticas):
+    """Con escayola, como el ejemplo de Fusion: el desbaste entra en el yeso bajando en hélice, no clavando
+    la fresa."""
+    from ortomolde import config
+
+    cfg = config.cnc_de_fabrica("escayola_celular")
     vertical = cnc.generar(piezas_sinteticas("A"), 300, 400, 40, 1.0, 12.5, dict(cfg, radio_helice=0.0))
     helice = cnc.generar(piezas_sinteticas("A"), 300, 400, 40, 1.0, 12.5, cfg)
     assert _bajadas_verticales(helice.gcode) < 0.75 * _bajadas_verticales(vertical.gcode)
@@ -377,3 +381,26 @@ def test_toda_la_cara_de_arriba_se_fresa_sobre_cada_pie(piezas_sinteticas, cfg):
         s = p.silueta_girada()
         sil[p.y:p.y + s.shape[0], p.x:p.x + s.shape[1]] |= s
     assert sil.any() and t.altura[sil].max() <= 45 - cfg["rebaje_superior"] + 1e-6
+
+
+def test_materiales_xps_y_escayola(monkeypatch, tmp_path, piezas_sinteticas):
+    """Por defecto espuma XPS (placa de 50, pasadas de 14 mm = el filo de la broca, se clava en vertical);
+    la escayola sigue disponible con sus valores. Los cambios del usuario van sobre el material elegido."""
+    from ortomolde import config
+
+    monkeypatch.setenv("ORTOSEND_AJUSTES", str(tmp_path / "ajustes_taller.json"))
+    t = config.taller()
+    assert t["cnc"]["material"] == "Espuma XPS" and t["plancha"]["alto_z"] == 50
+    assert (t["cnc"]["bajada_por_pasada"], t["cnc"]["bajada_contorno"], t["cnc"]["radio_helice"]) == (14, 14, 0)
+    config.guardar_ajustes_cnc({"avance_acabado": 4000}, "escayola_celular")
+    t = config.taller()
+    assert t["cnc"]["material"] == "Escayola celular" and t["plancha"]["alto_z"] == 45
+    assert (t["cnc"]["bajada_por_pasada"], t["cnc"]["radio_helice"], t["cnc"]["avance_acabado"]) == (5, 3, 4000)
+    # Un archivo de antes de poder elegir material: eran cambios para la escayola, no se aplican al XPS.
+    (tmp_path / "ajustes_taller.json").write_text('{"cnc": {"avance_acabado": 2200}}', encoding="utf-8")
+    t = config.taller()
+    assert t["cnc"]["material"] == "Espuma XPS" and t["cnc"]["avance_acabado"] == 5000
+    # G-code con XPS: el material en la cabecera, pocos niveles y sin hélice.
+    tr = cnc.generar(piezas_sinteticas("A"), 300, 400, 50, 1.0, 12.5, t["cnc"])
+    assert "Espuma XPS" in tr.gcode
+    assert tr.resumen["capas_desbaste"] <= 3

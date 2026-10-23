@@ -344,6 +344,10 @@ class VentanaTirada(QDialog):
                                      "Toda la placa vuelve a estar libre para las próximas tiradas.")
             if r != QMessageBox.Yes:
                 return
+        # La placa nueva es del grosor del material elegido (XPS 50 mm, escayola 45 mm…).
+        self.cajas[2].blockSignals(True)
+        self.cajas[2].setValue(self.taller["plancha"]["alto_z"])
+        self.cajas[2].blockSignals(False)
         self.placa = placa_mod.nueva(*self.plancha())
         self._operacion({"op": "placa", "id": self.placa["id"], "ancho": self.placa["ancho"],
                          "largo": self.placa["largo"], "alto": self.placa["alto"]})

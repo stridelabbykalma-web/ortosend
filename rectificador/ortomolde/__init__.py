@@ -3,4 +3,4 @@
 No depende de la interfaz: se puede importar desde otros scripts del taller.
 """
 
-__version__ = "0.11.0"
+__version__ = "0.12.0"

@@ -1,14 +1,15 @@
-"""«Ajustes de la CNC»: revoluciones, velocidades y pasadas del fresado, cambiables desde la app.
+"""«Ajustes de la CNC»: el material del molde (espuma XPS, escayola…) y sus revoluciones, velocidades y
+pasadas, cambiables desde la app.
 
 Se guardan en un archivo del usuario (ver `config.ruta_ajustes`), así la actualización automática no los
-borra. Los de `config/taller.toml` son «los de fábrica»."""
+borra. Los de `config/taller.toml` son «los de fábrica» de cada material."""
 
 from __future__ import annotations
 
 import math
 
-from PySide6.QtWidgets import (QDialog, QDialogButtonBox, QDoubleSpinBox, QFormLayout, QHBoxLayout, QLabel,
-                               QMessageBox, QPushButton, QVBoxLayout)
+from PySide6.QtWidgets import (QComboBox, QDialog, QDialogButtonBox, QDoubleSpinBox, QFormLayout, QHBoxLayout,
+                               QLabel, QMessageBox, QPushButton, QVBoxLayout)
 
 from ortomolde import config
 
@@ -37,6 +38,10 @@ GRUPOS = (
 )
 
 
+#: Altura que corta la broca de bola (desde la punta).
+FILO = 15.0
+
+
 def cresta(radio: float, paso: float) -> float:
     """Altura del escalón que deja la fresa de bola entre dos líneas separadas `paso` mm."""
     medio = min(paso / 2, radio)
@@ -50,14 +55,23 @@ class DialogoAjustesCNC(QDialog):
         self.setMinimumWidth(480)
         self.taller = taller
         self.radio = taller["fresa"]["diametro"] / 2
-        self.fabrica = config.cnc_de_fabrica()
+        self.materiales = config.materiales()
+        self.material = taller["cnc"].get("material_clave") or config.material_actual()
+        self.fabrica = config.cnc_de_fabrica(self.material)
         cnc = taller["cnc"]
         lay = QVBoxLayout(self)
-        lay.addWidget(estilo.etiqueta(
-            f"Velocidades y pasadas del fresado ({cnc.get('material', 'escayola')}, fresa de bola "
-            f"Ø{2 * self.radio:g} mm). Los de fábrica son los del ejemplo de Fusion del taller. Lo que cambies "
-            "aquí se usa en las tiradas que calcules desde ahora y se conserva al actualizar el programa.",
-            "nota"))
+        fila = QHBoxLayout()
+        fila.addWidget(estilo.etiqueta("Material del molde", "secundario", envolver=False))
+        self.combo_material = QComboBox()
+        for clave, m in self.materiales.items():
+            self.combo_material.addItem(f"{m['nombre']} (placa de {m['plancha_alto']:g} mm)", clave)
+        self.combo_material.setCurrentIndex(max(0, self.combo_material.findData(self.material)))
+        self.combo_material.currentIndexChanged.connect(
+            lambda i: self.cambiar_material(self.combo_material.itemData(i)))
+        fila.addWidget(self.combo_material, 1)
+        lay.addLayout(fila)
+        self.nota = estilo.etiqueta("", "nota")
+        lay.addWidget(self.nota)
         self.cajas: dict[str, QDoubleSpinBox] = {}
         for titulo, paso, campos in GRUPOS:
             marco, lay_g, _ = estilo.tarjeta(titulo, paso)
@@ -94,8 +108,27 @@ class DialogoAjustesCNC(QDialog):
         botones.rejected.connect(self.reject)
         fila.addWidget(botones)
         lay.addLayout(fila)
+        self._poner_nota()
         self._refrescar()
         estilo.barra_titulo_oscura(self)
+
+    def _poner_nota(self):
+        m = self.materiales[self.material]
+        self.nota.setText(
+            f"Velocidades y pasadas para <b>{m['nombre']}</b> (fresa de bola Ø{2 * self.radio:g} mm, placa de "
+            f"{m['plancha_alto']:g} mm). Al cambiar de material se ponen sus valores de fábrica. Lo que cambies "
+            "aquí se usa en las tiradas que calcules desde ahora y se conserva al actualizar el programa.")
+
+    def cambiar_material(self, clave: str):
+        """Otro material: sus valores de fábrica en todos los campos."""
+        self.material = clave
+        self.fabrica = config.cnc_de_fabrica(clave)
+        self._poner_nota()
+        self.de_fabrica()
+        self._refrescar()
+
+    def es_escayola(self) -> bool:
+        return "escayola" in self.material
 
     def valores(self) -> dict:
         return {k: c.value() for k, c in self.cajas.items()}
@@ -115,16 +148,19 @@ class DialogoAjustesCNC(QDialog):
             f"{cresta(self.radio, v['paso_desbaste']):.2f} mm y el acabado de "
             f"{cresta(self.radio, v['paso_acabado']):.2f} mm (más separación = más rápido, menos liso).")
         avisos = []
-        if v["bajada_por_pasada"] > self.radio or v["bajada_contorno"] > self.radio:
-            avisos.append(f"Bajar más de {self.radio:g} mm de una vez (el radio de la fresa) puede romper la escayola.")
+        if self.es_escayola():
+            if v["bajada_por_pasada"] > self.radio or v["bajada_contorno"] > self.radio:
+                avisos.append(f"Bajar más de {self.radio:g} mm de una vez (el radio de la fresa) puede romper la escayola.")
+            if v["avance_bajada"] > v["avance_entrada"]:
+                avisos.append("La bajada en vertical suele ir más despacio que la entrada: si va rápido el yeso se desconcha.")
+            if v["radio_helice"] == 0:
+                avisos.append("Sin hélice, el desbaste clava la fresa en vertical al entrar en el yeso.")
+            elif v["rampa_grados"] > 5:
+                avisos.append("Con la hélice muy inclinada la fresa entra casi como en vertical (Fusion usa 2°).")
+        elif v["bajada_por_pasada"] > FILO or v["bajada_contorno"] > FILO:
+            avisos.append(f"La broca corta {FILO:g} mm de altura: bajar más en una pasada hace que roce sin filo.")
         if v["paso_desbaste"] > self.radio:
             avisos.append(f"Separar el desbaste más de {self.radio:g} mm deja demasiado material para el acabado.")
-        if v["avance_bajada"] > v["avance_entrada"]:
-            avisos.append("La bajada en vertical suele ir más despacio que la entrada: si va rápido el yeso se desconcha.")
-        if v["radio_helice"] == 0:
-            avisos.append("Sin hélice, el desbaste clava la fresa en vertical al entrar en el yeso.")
-        elif v["rampa_grados"] > 5:
-            avisos.append("Con la hélice muy inclinada la fresa entra casi como en vertical (Fusion usa 2°).")
         if v["rebaje_superior"] < 1:
             avisos.append("Con menos de 1 mm de rebaje, si la plancha no está del todo plana partes del pie "
                           "pueden quedar sin fresar.")
@@ -132,7 +168,7 @@ class DialogoAjustesCNC(QDialog):
             avisos.append("Sin sobrante, el acabado no quita las marcas del desbaste.")
         self.avisos.setText("<br>".join(estilo.html("⚠ " + a, "aviso") for a in avisos))
         self.avisos.setVisible(bool(avisos))
-        self.boton_fabrica.setEnabled(bool(self.cambios()) or bool(config.ajustes_cnc()))
+        self.boton_fabrica.setEnabled(bool(self.cambios()))
 
     def de_fabrica(self):
         for k, c in self.cajas.items():
@@ -141,9 +177,19 @@ class DialogoAjustesCNC(QDialog):
     def guardar(self):
         cambios = self.cambios()
         try:
-            config.guardar_ajustes_cnc(cambios)
+            config.guardar_ajustes_cnc(cambios, self.material)
         except OSError as e:
             QMessageBox.warning(self, "Ajustes de la CNC", f"No se han podido guardar:\n{e}")
             return
-        config.aplicar_ajustes_cnc(self.taller["cnc"], cambios)
+        alto_antes = self.taller["plancha"]["alto_z"]
+        config.aplicar_ajustes_cnc(self.taller["cnc"], cambios, self.material)
+        self.taller["plancha"]["alto_z"] = float(self.materiales[self.material]["plancha_alto"])
+        if abs(alto_antes - self.taller["plancha"]["alto_z"]) > 0.5 and self.AVISAR_PLACA:
+            QMessageBox.information(
+                self, "Ajustes de la CNC",
+                f"Las placas de {self.materiales[self.material]['nombre']} son de "
+                f"{self.taller['plancha']['alto_z']:g} mm: al ponerla en la CNC, pulsa <b>Placa nueva</b> en la "
+                "ventana Tirada (y pon ese alto).")
         self.accept()
+
+    AVISAR_PLACA = True  # en las pruebas, sin ventanas de aviso

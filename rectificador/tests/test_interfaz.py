@@ -555,9 +555,10 @@ def test_ajustes_cnc_desde_la_app(monkeypatch, tmp_path):
         d = app.activeModalWidget()
         assert isinstance(d, DialogoAjustesCNC)
         assert "0.03 mm" in d.info_crestas.text()
+        assert d.combo_material.currentData() == "xps"
         d.cajas["avance_acabado"].setValue(2200)
-        d.cajas["bajada_por_pasada"].setValue(14)
-        assert "romper" in d.avisos.text()
+        d.cajas["bajada_por_pasada"].setValue(20)
+        assert "filo" in d.avisos.text()  # XPS: más que lo que corta la broca
         d.cajas["bajada_por_pasada"].setValue(fabrica["bajada_por_pasada"])
         d.guardar()
 
@@ -576,6 +577,23 @@ def test_ajustes_cnc_desde_la_app(monkeypatch, tmp_path):
     assert v.ajustes_cnc() is True
     assert v.taller["cnc"]["avance_acabado"] == fabrica["avance_acabado"]
     assert v.taller["cnc"]["ajustes_propios"] is False and not ruta.exists()
+
+    # Cambiar a escayola: sus valores (capas de 5, hélice) y la placa de 45 mm.
+    monkeypatch.setattr(DialogoAjustesCNC, "AVISAR_PLACA", False)
+
+    def a_escayola():
+        d = app.activeModalWidget()
+        d.combo_material.setCurrentIndex(d.combo_material.findData("escayola_celular"))
+        assert d.cajas["bajada_por_pasada"].value() == 5 and d.cajas["radio_helice"].value() == 3
+        d.cajas["bajada_por_pasada"].setValue(14)
+        assert "romper" in d.avisos.text()
+        d.cajas["bajada_por_pasada"].setValue(5)
+        d.guardar()
+
+    QTimer.singleShot(200, a_escayola)
+    assert v.ajustes_cnc() is True
+    assert v.taller["cnc"]["material"] == "Escayola celular" and v.taller["plancha"]["alto_z"] == 45
+    assert config.material_actual() == "escayola_celular"
     v.close()
     v.deleteLater()
     app.processEvents()
@@ -595,7 +613,7 @@ def test_placa_de_la_cnc_entre_tiradas(stl_sintetico, monkeypatch, tmp_path):
     v.taller["calculo"]["rejilla"] = 1.0
     v.abrir(str(stl_sintetico), esperar=True)
     t = v.abrir_tirada()
-    assert t.plancha() == (600.0, 500.0, 45.0)  # la placa de la mesa de la CNC
+    assert t.plancha() == (600.0, 500.0, 50.0)  # la placa de la mesa de la CNC (XPS de 50 mm)
     assert "sin fresar" in t.texto_placa.text() and not t.boton_deshacer_placa.isEnabled()
     t.anadir_abierto()
     t.calcular(esperar=True)
