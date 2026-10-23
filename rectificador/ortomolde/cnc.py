@@ -782,7 +782,7 @@ def _contorno(w: _Escritor, pts: np.ndarray, H: float, suelo: float, cfg: dict) 
     z0 = 0.0
     for z1 in niveles + [z_fin]:
         for (x, y), f in zip(anillo[1:], t[1:]):
-            w.corte(x, y, z0 + (z1 - z0) * f, cfg["avance_desbaste"])
+            w.corte(x, y, z0 + (z1 - z0) * f, cfg.get("avance_contorno", cfg["avance_desbaste"]))
         z0 = z1
     w.subir()
     return len(niveles) + 1

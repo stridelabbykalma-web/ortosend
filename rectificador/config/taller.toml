@@ -93,7 +93,10 @@ por_defecto = "xps"
 nombre = "Espuma XPS"
 plancha_alto = 50.0          # mm de la placa
 revoluciones = 10000         # rpm del cabezal
-avance_desbaste = 5000       # mm/min cortando en el contorno y el desbaste
+avance_desbaste = 5000       # mm/min cortando en el desbaste (y el repaso de la pared)
+# El contorno es el corte más duro (la bola entera, 14 mm de hondo): más despacio para que la máquina no
+# pierda pasos ni la fresa ceda (si no, la pared sale con escalones en cada vuelta).
+avance_contorno = 3000
 avance_entrada = 3000        # mm/min al entrar en el material y al cambiar de línea
 avance_bajada = 2000         # mm/min al bajar en vertical dentro del material
 avance_acabado = 5000        # mm/min en el acabado
@@ -114,6 +117,7 @@ nombre = "Escayola celular"
 plancha_alto = 45.0
 revoluciones = 10000
 avance_desbaste = 4000
+avance_contorno = 4000
 avance_entrada = 2000
 avance_bajada = 1000
 avance_acabado = 4500

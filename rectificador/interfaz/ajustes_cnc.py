@@ -19,7 +19,8 @@ from . import estilo
 GRUPOS = (
     ("Cabezal", "1", (("revoluciones", "Revoluciones", " rpm", 0),)),
     ("Velocidades", "2", (
-        ("avance_desbaste", "Desbaste y contorno", " mm/min", 0),
+        ("avance_desbaste", "Desbaste", " mm/min", 0),
+        ("avance_contorno", "Contorno (la ranura alrededor del pie)", " mm/min", 0),
         ("avance_entrada", "Entrando en el material", " mm/min", 0),
         ("avance_bajada", "Bajando en vertical", " mm/min", 0),
         ("avance_acabado", "Acabado", " mm/min", 0),

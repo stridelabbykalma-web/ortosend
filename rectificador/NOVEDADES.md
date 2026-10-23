@@ -1,5 +1,11 @@
 # Novedades de Ortosend Taller
 
+## 0.14.5
+- **Velocidad propia para el contorno** (en *Ajustes de la CNC → Velocidades → Contorno*). Es el corte más
+  duro (la bola entera a 14 mm de hondo): con XPS va ahora a **3000 mm/min** (antes 5000, como el
+  desbaste). Si la pared de la ranura sale con escalones en cada vuelta, la máquina pierde pasos o la fresa
+  cede: bájala más (2000) o baja la *Bajada por vuelta* del contorno.
+
 ## 0.14.4
 - **Sin escalón en la pared del molde** (la rampa de delante y los lados): el acabado solo va por dentro del
   pie y, donde el borde cae mucho, la bola no llegaba abajo; el contorno cortaba en vertical más afuera y

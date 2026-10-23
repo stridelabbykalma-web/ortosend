@@ -18,6 +18,7 @@ CARPETA_CONFIG = Path(__file__).resolve().parent.parent / "config"
 CNC_EDITABLE: dict[str, tuple[float, float]] = {
     "revoluciones": (1000, 30000),
     "avance_desbaste": (100, 10000),
+    "avance_contorno": (100, 10000),
     "avance_entrada": (50, 10000),
     "avance_bajada": (20, 5000),
     "avance_acabado": (100, 10000),
