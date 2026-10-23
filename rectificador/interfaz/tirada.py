@@ -12,7 +12,7 @@ from PySide6.QtCore import QObject, Qt, QThread, QTimer, QUrl, Signal
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QComboBox, QDialog, QDoubleSpinBox, QFileDialog, QFormLayout, QHBoxLayout, QInputDialog, QListWidget,
-    QMessageBox, QPushButton, QVBoxLayout,
+    QFrame, QMessageBox, QPushButton, QScrollArea, QVBoxLayout, QWidget,
 )
 
 from ortomolde import cnc, mapa
@@ -194,6 +194,7 @@ class VentanaTirada(QDialog):
         self.lista = QListWidget()
         self.lista.currentRowChanged.connect(self._al_elegir_en_lista)
         self.lista.setMinimumWidth(330)
+        self.lista.setMinimumHeight(110)
         lay_pies.addWidget(self.lista, 1)
         fila = QHBoxLayout()
         for texto, accion, ic, ayuda in (
@@ -260,10 +261,20 @@ class VentanaTirada(QDialog):
         self.info.setObjectName("cifras")
         der.addWidget(self.info)
 
+        # La columna de la izquierda se desplaza con la rueda si no cabe en la pantalla (portátiles).
+        columna = QWidget()
+        izq.setContentsMargins(0, 0, 6, 0)
+        columna.setLayout(izq)
+        self.desplazable = QScrollArea()
+        self.desplazable.setWidget(columna)
+        self.desplazable.setWidgetResizable(True)
+        self.desplazable.setFrameShape(QFrame.NoFrame)
+        self.desplazable.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.desplazable.setMinimumWidth(columna.sizeHint().width() + 18)
         lay = QHBoxLayout(self)
         lay.setContentsMargins(12, 12, 12, 12)
         lay.setSpacing(12)
-        lay.addLayout(izq, 0)
+        lay.addWidget(self.desplazable, 0)
         lay.addLayout(der, 1)
         self._poner_maquinas()
         self._poner_plancha()

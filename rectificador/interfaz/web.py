@@ -44,7 +44,14 @@ class ClienteWeb:
                                           method=metodo)
         try:
             with urllib.request.urlopen(peticion, timeout=self.espera) as r:
-                return json.loads(r.read().decode("utf-8") or "{}")
+                tipo = r.headers.get("Content-Type", "")
+                texto = r.read().decode("utf-8", errors="replace")
+                if "html" in tipo or texto.lstrip().startswith("<"):
+                    # Una página en vez de datos: esa parte aún no está en la web publicada. Como un
+                    # fallo pasajero (503): lo pendiente se guarda y se manda cuando la web la tenga.
+                    raise ErrorWeb("La web de Ortosend aún no tiene esta parte: falta publicar su "
+                                   "actualización.", 503)
+                return json.loads(texto or "{}")
         except ValueError as e:
             raise ErrorWeb("La web ha contestado algo que no se entiende.", 0) from e
         except Exception as e:  # noqa: BLE001 - se traduce a un mensaje para la persona

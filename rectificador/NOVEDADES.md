@@ -1,5 +1,11 @@
 # Novedades de Ortosend Taller
 
+## 0.14.2
+- Ventana **Tirada**: la columna de la izquierda se desplaza con la rueda del ratón si no cabe en la
+  pantalla, así se llega siempre a *Calcular trayectorias*, *Guardar*, *Inicio* y *Ver mapa*.
+- Si la web de Ortosend aún no tiene publicada la parte de **máquinas CNC**, se dice así (antes: «la web
+  ha contestado algo que no se entiende»). Lo hecho se guarda y se manda cuando la web la tenga.
+
 ## 0.14.1
 - Los moldes de una tirada aún más juntos: entre dos moldes queda solo el hueco de la fresa (25 mm) más
   0,25 mm de holgura a cada lado (antes unos 27 mm). Se busca el sitio milímetro a milímetro.

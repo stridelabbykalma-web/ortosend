@@ -144,6 +144,8 @@ def test_ventana_tirada(stl_sintetico, tmp_path):
     app.processEvents()
     t.anadir_abierto()  # dos veces el mismo paciente: 4 pies
     assert t.lista.count() == 4
+    # En una pantalla baja la columna de la izquierda se desplaza: se llega a los botones de abajo.
+    assert t.desplazable.widget().isAncestorOf(t.boton_calcular)
     # Colocados y numerados al momento, antes de calcular nada.
     assert t.trabajo is None and not t.boton_guardar.isEnabled()
     numeros = sorted(int(t.lista.item(k).text().split(".")[0]) for k in range(4))
