@@ -13,12 +13,15 @@ export default async function BuscarPage({
   const { q = "", error, ok } = await searchParams;
   return (
     <div className="wrap">
-      <div className="sp2" />
-      <h2 style={{ textAlign: "center" }}>Clínicas asociadas cerca de ti</h2>
-      <div className="sp" />
-      <Flash error={error} ok={ok} />
-      <BuscadorVivo initialQuery={q} />
-      <div className="sp2" />
+      <div className="px-sec" style={{ paddingTop: 56 }}>
+        <div className="px-kicker" style={{ textAlign: "center" }}>Red de clínicas</div>
+        <h2 className="px-h2" style={{ textAlign: "center" }}>Clínicas asociadas cerca de ti</h2>
+        <Flash error={error} ok={ok} />
+        <div className="px-search" style={{ marginBottom: 0 }}>
+          <BuscadorVivo initialQuery={q} />
+        </div>
+        <div className="sp2" />
+      </div>
     </div>
   );
 }

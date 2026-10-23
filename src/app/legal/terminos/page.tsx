@@ -20,8 +20,9 @@ export default function Terminos() {
           estudio; <b>solo si firma la prescripción</b> se genera la posibilidad de compra. Si el
           tratamiento no está indicado, se te comunica y no pagas nada. (c) Con la prescripción
           firmada recibes un enlace de pago válido durante <b>30 días</b>; el pago se realiza
-          siempre a través de {EMPRESA.nombreComercial} (tarjeta o Bizum) — las clínicas nunca
-          cobran al paciente.
+          siempre a través de {EMPRESA.nombreComercial}, en la pasarela segura de <b>Stripe</b>{" "}
+          (tarjeta o Bizum) — las clínicas nunca cobran al paciente y nosotros no almacenamos los
+          datos de tu tarjeta.
         </p>
         <p>
           <b>3. Precio.</b> {PRICE_LABEL}, IVA incluido, precio único que comprende el estudio, la

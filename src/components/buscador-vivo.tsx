@@ -214,7 +214,7 @@ export function BuscadorVivo({ initialQuery = "" }: { initialQuery?: string }) {
           )}
           <div className="grid g3" style={{ marginTop: 10 }}>
             {data!.results.map((c) => (
-              <div className="card" key={c.id}>
+              <div className="card px-lift" key={c.id}>
                 <b style={{ fontFamily: "var(--font-sora)" }}>{c.name}</b>
                 <div className="muted">{c.address}</div>
                 <div className="tiny" style={{ margin: "6px 0" }}>

@@ -15,11 +15,15 @@ export default async function LoginPage({
   return (
     <div className="wrap" style={{ maxWidth: 400 }}>
       <div className="sp2" />
+      <div className="logo" style={{ fontSize: 28 }}>
+        orto<b>send</b>
+      </div>
+      <div className="sp" />
       <h2>Acceder</h2>
-      <div className="muted">Acceso de pacientes. El equipo de clínicas y taller entra desde su app.</div>
+      <div className="muted">Entra para seguir tu tratamiento, ver tu prescripción y gestionar tus citas.</div>
       <div className="sp" />
       <Flash error={error} ok={ok} />
-      <form className="card" action={loginAction}>
+      <form className="card px-lift" action={loginAction}>
         {dest && <input type="hidden" name="next" value={dest} />}
         <label>Email o móvil</label>
         <input name="identifier" autoComplete="username" required />
