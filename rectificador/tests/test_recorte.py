@@ -20,7 +20,7 @@ def plano():
 
 def test_delante_del_arco_queda_la_base(plano):
     r, X, Y, z, mascara = plano
-    rec = Recorte(adelanto=3.0, curvatura=1.0, flecha=10.0, posicion_vertice=0.35)
+    rec = Recorte(adelanto=3.0, curvatura=1.0, flecha=10.0, posicion_vertice=0.35, pendiente=0.0)
     z2 = aplicar(z, 3.0, REFS, rec, mascara, X, Y, 0.5)
     t, s = coordenadas_arco(REFS, X, Y)
     # 3 mm por delante de las cabezas (en t = 0 y t = 1 la parábola no sobresale).
@@ -41,8 +41,8 @@ def test_delante_del_arco_queda_la_base(plano):
 
 def test_adelanto_y_curvatura(plano):
     r, X, Y, z, mascara = plano
-    recto = aplicar(z, 3.0, REFS, Recorte(adelanto=0.0, curvatura=0.0), mascara, X, Y, 0.5)
-    adelantado = aplicar(z, 3.0, REFS, Recorte(adelanto=10.0, curvatura=0.0), mascara, X, Y, 0.5)
+    recto = aplicar(z, 3.0, REFS, Recorte(adelanto=0.0, curvatura=0.0, pendiente=0.0), mascara, X, Y, 0.5)
+    adelantado = aplicar(z, 3.0, REFS, Recorte(adelanto=10.0, curvatura=0.0, pendiente=0.0), mascara, X, Y, 0.5)
     assert (adelantado > 3.0).sum() > (recto > 3.0).sum()
     inactivo = aplicar(z, 3.0, REFS, Recorte(activo=False), mascara, X, Y, 0.5)
     assert np.array_equal(inactivo, z)
@@ -59,7 +59,7 @@ def test_linea_del_arco_dentro_del_pie(plano):
 def test_arco_pasa_por_delante_de_las_5_cabezas(plano):
     r, X, Y, z, mascara = plano
     refs = Referencias(dict(REFS.puntos, mtt2=(65.0, 238.0), mtt3=(80.0, 236.0), mtt4=(93.0, 226.0)))
-    rec = Recorte(adelanto=3.0)
+    rec = Recorte(adelanto=3.0, pendiente=0.0)
     z2 = aplicar(z, 3.0, refs, rec, mascara, X, Y, 0.5)
     e = refs.sistema().eje
     for k in ("mtt1", "mtt2", "mtt3", "mtt4", "mtt5"):
@@ -73,8 +73,43 @@ def test_arco_pasa_por_delante_de_las_5_cabezas(plano):
 def test_curvatura_cero_es_recto_aunque_haya_5_cabezas(plano):
     r, X, Y, z, mascara = plano
     refs5 = Referencias(dict(REFS.puntos, mtt2=(65.0, 238.0), mtt3=(80.0, 236.0)))
-    z2 = aplicar(z, 3.0, refs5, Recorte(adelanto=3.0, curvatura=0.0), mascara, X, Y, 0.5)
+    z2 = aplicar(z, 3.0, refs5, Recorte(adelanto=3.0, curvatura=0.0, pendiente=0.0), mascara, X, Y, 0.5)
     t, s = coordenadas_arco(refs5, X, Y)
     entre = (t > 0.05) & (t < 0.95) & mascara
     assert (z2[entre & (s < 2.0)] == 25.0).all()  # todo queda hasta 3 mm delante de la línea 1.º-5.º
     assert (z2[entre & (s > 4.0)] == 3.0).all()
+
+
+def test_pendiente_suave_hacia_delante(plano):
+    """Desde el arco el molde baja en rampa hasta la base en 10 mm (no una pared vertical)."""
+    r, X, Y, z, mascara = plano
+    rec = Recorte(adelanto=3.0, curvatura=0.0, pendiente=10.0)
+    z2 = aplicar(z, 3.0, REFS, rec, mascara, X, Y, 0.5)
+    t, s = coordenadas_arco(REFS, X, Y)
+    for tt in (0.2, 0.5, 0.8):
+        linea = (np.abs(t - tt) < 0.005) & mascara
+        orden = np.argsort(s[linea])
+        ss, zz = s[linea][orden], z2[linea][orden]
+        rampa = (ss > 3.0) & (ss < 13.0)
+        assert np.all(np.diff(zz[rampa]) <= 1e-9)  # siempre baja
+        assert zz[ss < 2.0].min() == pytest.approx(25.0)  # detrás del arco, intacto
+        assert zz[(ss > 7.5) & (ss < 8.5)].mean() == pytest.approx(14.0, abs=1.5)  # a media rampa, media altura
+        assert np.all(zz[ss > 13.5] == 3.0)  # pasados los 10 mm, la base
+        # Ningún escalón: entre dos celdas vecinas como mucho ~ π/2 · 22 mm / 10 mm · 0,5 mm.
+        assert np.abs(np.diff(zz[(ss > 2.0) & (ss < 14.0)])).max() < 2.0
+
+
+def test_pendiente_cero_es_corte_vertical(plano):
+    r, X, Y, z, mascara = plano
+    vertical = aplicar(z, 3.0, REFS, Recorte(adelanto=3.0, pendiente=0.0), mascara, X, Y, 0.5)
+    rampa = aplicar(z, 3.0, REFS, Recorte(adelanto=3.0, pendiente=10.0), mascara, X, Y, 0.5)
+    assert (rampa >= vertical).all()
+    assert (rampa > vertical + 1).sum() > 100
+    t, s = coordenadas_arco(REFS, X, Y)
+    detras = (s < 0) & (t >= 0) & (t <= 1)
+    assert np.array_equal(rampa[detras], vertical[detras])
+
+
+def test_proyecto_antiguo_sin_pendiente():
+    assert Recorte.de_dict({"activo": True, "adelanto": 15.0, "curvatura": 1.0, "flecha": 10.0,
+                            "posicion_vertice": 0.35}).pendiente == 10.0

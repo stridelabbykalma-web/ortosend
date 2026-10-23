@@ -56,14 +56,15 @@ def test_corte_a_15_mm_en_los_nuevos_y_los_guardados_como_estaban(stl_sintetico,
     for pie in p.pies:
         p.proponer_referencias(pie)
         assert pie.recorte.adelanto == 15.0
-    # Delante de la línea de 15 mm ya no hay molde; justo detrás, sí.
+    # Delante de la línea de 15 mm (más la pendiente de 10 mm) ya no hay molde; justo detrás, sí.
     pie = p.pies[0]
+    assert pie.recorte.pendiente == 10.0
     z = p.calcular().z
     X, Y = p.original.rejilla.malla()
     t, s = R.coordenadas_arco(pie.referencias, X, Y)
     linea = R._perfil(pie.referencias, pie.recorte)(t) + 15.0
     dentro = pie.mascara & (t > 0.1) & (t < 0.9)
-    assert (z[dentro & (s > linea + 2)] - p.fondo).max() < 1e-6
+    assert (z[dentro & (s > linea + 10 + 2)] - p.fondo).max() < 1e-6
     assert (z[dentro & (s < linea - 2) & (s > linea - 6)] - p.fondo).min() > 0.5
     # Un trabajo guardado con 3 mm se abre con 3 mm.
     for q in p.pies:

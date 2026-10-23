@@ -1,5 +1,13 @@
 # Novedades de Ortosend Taller
 
+## 0.13.0
+- **Pendiente delante de las cabezas**: el molde ya no termina en una pared vertical. Desde el arco baja en
+  una **rampa suave de 10 mm** hacia delante hasta la base (redondeada arriba y abajo), para que en la
+  máquina de vacío la lámina se apoye y la fuerza se reparta, y para que el borde no se rompa al fresar.
+- Se ve en el visor 3D y se cambia en el panel de cada pie: **Pendiente delante** (0 = corte vertical como
+  antes; más mm = rampa más tendida).
+- Los trabajos guardados antes se abren con la pendiente de 10 mm.
+
 ## 0.12.0
 - **Espuma XPS** (material por defecto): placas de **50 mm**, la fresa entra en vertical y baja **14 mm
   por pasada** (la broca corta 15 mm de altura), más rápido (5000 mm/min). Con un par real la tirada pasa
