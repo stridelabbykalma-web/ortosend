@@ -4,7 +4,7 @@ Escena en milímetros (1 unidad = 1 mm). La Y de la plancha va hacia arriba en p
 como se ve la máquina de frente), así que en la escena y_escena = largo − y.
 
 Cada pie es un `PieItem` que se arrastra entero y con suavidad: mientras se mueve solo se comprueba si
-cabe (comprobación de rectángulos, instantánea) y se colorea su halo verde o rojo. Al soltarlo se avisa a
+cabe (por la forma del pie, al momento) y se colorea su halo verde o rojo. Al soltarlo se avisa a
 la ventana, que decide si se queda ahí.
 """
 

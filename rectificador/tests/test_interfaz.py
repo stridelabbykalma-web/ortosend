@@ -162,7 +162,11 @@ def test_ventana_tirada(stl_sintetico, tmp_path):
         return vista.mapFromScene(x_mm, vista.largo - y_mm)
 
     origen = en_pantalla((p.x + nx / 2) * paso, (p.y + ny / 2) * paso)
-    destino_mm = (600 - 2 * m - nx * paso / 2 - 2, 500 - 2 * m - ny * paso / 2 - 2)
+    # El sitio libre más a la derecha y detrás (los pies van encajados por su forma: puede no ser la esquina).
+    libre = next((x, y) for x in range(int(600 / paso) - nx, -1, -5) for y in range(int(500 / paso) - ny, -1, -5)
+                 if abs(x - p.x) + abs(y - p.y) > 60  # con holgura: el ratón no cae justo en la celda
+                 and all(t._motivo(p, x + dx, y + dy, p.giro) is None for dx in (-6, 0, 6) for dy in (-6, 0, 6)))
+    destino_mm = ((libre[0] + nx / 2) * paso, (libre[1] + ny / 2) * paso)
     destino = en_pantalla(*destino_mm)
     vp = vista.viewport()
     QTest.mousePress(vp, Qt.LeftButton, Qt.NoModifier, origen)
@@ -177,7 +181,7 @@ def test_ventana_tirada(stl_sintetico, tmp_path):
     assert por_movimiento < 0.1  # suave: nada pesado mientras se arrastra
     QTest.mouseRelease(vp, Qt.LeftButton, Qt.NoModifier, destino)
     app.processEvents()
-    assert p.fija and abs((p.x + nx / 2) * paso - destino_mm[0]) <= 3 * paso
+    assert p.fija and abs((p.x + nx / 2) * paso - destino_mm[0]) <= 3 * paso, (libre, p.x, p.y, t.info.text())
     assert "puesto a mano" in "".join(t.lista.item(k).text() for k in range(t.lista.count()))
 
     # Encima de otro pie: se rechaza, vuelve a su sitio y los demás no se mueven.
