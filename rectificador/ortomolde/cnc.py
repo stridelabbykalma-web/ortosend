@@ -140,8 +140,13 @@ def margen_celdas(radio: float, paso: float, cfg: dict) -> int:
     sirve a los dos) pero nunca se come al vecino. Con el borde de la plancha el límite es lo de fuera
     de la ranura (el filo de la fresa): ver `margen_borde`."""
     dc = radio + HOLGURA_CONTORNO
-    m = max(dc, (dc + radio + 0.5) / 2) + cfg.get("separacion", 0.0) / 2
-    return int(np.ceil(m / paso))
+    m = dc + cfg.get("separacion", 0.0) / 2
+    celdas = int(np.ceil(m / paso - 1e-9))
+    # Dos moldes vecinos: (fresa + holgura) entre ellos. El radio justo se guarda para `zona` (la
+    # cuenta en celdas enteras, para recuadros y bordes, redondea hacia arriba). +0,75 celdas: en una
+    # rejilla dos zonas pueden no pisarse estando hasta √2 celdas más cerca de 2 × radio.
+    _RADIOS[celdas] = m / paso + 0.75
+    return celdas
 
 
 def margen_borde(radio: float, paso: float, cfg: dict) -> int:
@@ -160,6 +165,15 @@ def huella(p: Pieza, m: int, x: int | None = None, y: int | None = None,
     return x - m, y - m, nx + 2 * m, ny + 2 * m
 
 
+def _radio_zona(m: int) -> float:
+    """Radio (celdas) con que se ensancha la silueta en `zona`: el de `margen_celdas` sin redondear
+    hacia arriba (lo guarda `margen_celdas`), para que dos moldes queden tan juntos como deja la fresa."""
+    return _RADIOS.get(m, float(m))
+
+
+_RADIOS: dict[int, float] = {}
+
+
 def zona(p: Pieza, m: int, giro: int | None = None) -> np.ndarray:
     """Forma real que ocupa la pieza con su margen: la silueta (girada) ensanchada `m` celdas en
     redondo. Va en el recuadro de `huella` (su esquina es x - m, y - m). Dos piezas pueden ir donde
@@ -167,13 +181,13 @@ def zona(p: Pieza, m: int, giro: int | None = None) -> np.ndarray:
     otro…) y no como rectángulos."""
     g = p.giro if giro is None else giro
     sil = p.silueta_girada() if giro is None or g == p.giro else np.rot90(p.silueta, k=g)
-    clave = (g % 4, m, id(p.silueta), p.silueta.shape)
+    clave = (g % 4, m, _radio_zona(m), id(p.silueta), p.silueta.shape)
     cache = p.__dict__.setdefault("_zonas", {})
     if clave not in cache:
         con = np.pad(sil, m + 1, constant_values=False)
         d = ndimage.distance_transform_edt(~con)
         cache.clear() if len(cache) > 16 else None
-        cache[clave] = (d <= m + 1e-9)[1:-1, 1:-1]
+        cache[clave] = (d <= _radio_zona(m) + 1e-9)[1:-1, 1:-1]
     return cache[clave]
 
 
@@ -315,7 +329,21 @@ def _rellenar(piezas: list[Pieza], ocupado: np.ndarray, m: int, k: int, giros, h
             sitios[id(p)] = None
             continue
         _, x0, y0, g, z = mejor
-        ocupado[y0:y0 + z.shape[0], x0:x0 + z.shape[1]] |= z
+        # Afinar celda a celda (la rejilla gruesa deja hasta k celdas de más): acercarlo al origen
+        # mientras siga cabiendo de verdad.
+        a, b = z.shape
+
+        def cabe_en(x, y):
+            return x >= 0 and y >= 0 and not (ocupado[y:y + a, x:x + b] & z).any()
+
+        pasos = ((-1, 0), (0, -1)) if hacia == "derecha" else ((0, -1), (-1, 0))
+        movido = True
+        while movido:
+            movido = False
+            for dx, dy in pasos:
+                while cabe_en(x0 + dx, y0 + dy):
+                    x0, y0, movido = x0 + dx, y0 + dy, True
+        ocupado[y0:y0 + a, x0:x0 + b] |= z
         sitios[id(p)] = (x0 + m, y0 + m, g)
     return sitios
 

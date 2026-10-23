@@ -1,5 +1,9 @@
 # Novedades de Ortosend Taller
 
+## 0.14.1
+- Los moldes de una tirada aún más juntos: entre dos moldes queda solo el hueco de la fresa (25 mm) más
+  0,25 mm de holgura a cada lado (antes unos 27 mm). Se busca el sitio milímetro a milímetro.
+
 ## 0.14.0
 - **Los pies se colocan por su forma, no por su rectángulo**: entre dos moldes el límite es el recorrido de
   la fresa (la línea naranja del mapa), así dos vecinos pueden compartir la misma ranura y encajan (dedos
