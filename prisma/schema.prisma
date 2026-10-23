@@ -28,7 +28,7 @@ model User {
   email                  String?                 @unique
   phone                  String?                 @unique
   passwordHash           String? // null hasta activar cuenta (invitación Flujo B)
-  sessionEpoch Int     @default(0) // sube al cerrar sesión: revoca los tokens de todos los dispositivos
+  sessionEpoch           Int                     @default(0) // sube al cerrar sesión: revoca los tokens de todos los dispositivos
   role                   Role
   name                   String
   active                 Boolean                 @default(true)
@@ -500,7 +500,7 @@ model Case {
   rxRequestedBy    String? // User de la clínica que envió el estudio
   qcPhotoUrl       String? // foto obligatoria del par en calidad
   payLinkExpiresAt DateTime? // 30 días; recordatorios días 0/3/7/15
-  payReminderDay   Int             @default(0) // último recordatorio de pago enviado (día 3/7/15); reserva atómica del cron
+  payReminderDay   Int               @default(0) // último recordatorio de pago enviado (día 3/7/15); reserva atómica del cron
   incidents        Incident[]
   events           CaseEvent[]
   studySessions    StudySession[]
@@ -825,4 +825,46 @@ model ConsumoMaterial {
   motivoAnulacion String?
 
   @@index([caseId])
+}
+
+// Máquinas CNC del taller y la placa que tiene puesta cada una: así cualquier ordenador del taller
+// (Ortosend Taller) coloca la siguiente tirada en lo que queda libre de esa placa. Los ids de placa
+// y tirada los genera el programa (uuid), para poder reenviar sin duplicar si estaba sin conexión.
+model MaquinaCnc {
+  id        String     @id @default(cuid())
+  nombre    String     @unique
+  creadaPor String
+  createdAt DateTime   @default(now())
+  placas    PlacaCnc[]
+}
+
+// Cada placa puesta en una máquina («Placa nueva»). La actual es la última puesta.
+model PlacaCnc {
+  id        String        @id
+  maquinaId String
+  maquina   MaquinaCnc    @relation(fields: [maquinaId], references: [id])
+  anchoMm   Float
+  largoMm   Float
+  altoMm    Float
+  puestaAt  DateTime      @default(now())
+  puestaPor String
+  tiradas   TiradaPlaca[]
+
+  @@index([maquinaId, puestaAt])
+}
+
+// Tirada fresada en una placa («▶ Inicio»): las zonas que gasta (mm desde el origen de la máquina).
+// No se borra: si no se llegó a fresar se anula («Deshacer la última tirada»).
+model TiradaPlaca {
+  id         String    @id
+  placaId    String
+  placa      PlacaCnc  @relation(fields: [placaId], references: [id])
+  nombre     String
+  zonas      Json // [{x, y, ancho, largo}] en mm
+  creadaPor  String
+  createdAt  DateTime  @default(now())
+  anuladaAt  DateTime?
+  anuladaPor String?
+
+  @@index([placaId])
 }
