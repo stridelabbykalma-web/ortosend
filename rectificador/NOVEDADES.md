@@ -1,5 +1,12 @@
 # Novedades de Ortosend Taller
 
+## 0.14.4
+- **Sin escalón en la pared del molde** (la rampa de delante y los lados): el acabado solo va por dentro del
+  pie y, donde el borde cae mucho, la bola no llegaba abajo; el contorno cortaba en vertical más afuera y
+  entre los dos quedaba un escalón de material. Ahora, después del contorno, la fresa da un **repaso de la
+  pared**: vueltas pegadas al pie cada 5 mm de altura, de arriba abajo, que dejan la rampa limpia.
+- Comprobado punto a punto que la bola no toca el molde. Añade unos 2 min por par.
+
 ## 0.14.3
 - **Desbaste más rápido en la máquina**: las vueltas del desbaste iban en trocitos de 0,7 mm en zigzag
   (los escalones de la rejilla) y la CNC frenaba en cada uno (media de unos 1100 mm/min aunque pida 5000).

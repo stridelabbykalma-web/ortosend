@@ -361,6 +361,7 @@ class _Colocada:
     y1: int
     contorno: np.ndarray | None = None  # (n, 2) X, Y en mm: recorrido del centro de la fresa
     suelo: float = 0.0  # mm de escayola que quedan debajo de la ranura
+    pp: np.ndarray | None = None  # en la misma ventana: altura mínima de la punta para no tocar este pie
 
 
 def suelo_de(p: Pieza, alto: float, cfg: dict) -> float:
@@ -413,7 +414,7 @@ def componer(piezas: list[Pieza], ancho: float, largo: float, alto: float, paso:
             zona[wy0:wy1, wx0:wx1] |= cerca
         ventana[sil] = pie[sil]
         zona[wy0:wy1, wx0:wx1] |= sil
-        colocadas.append(_Colocada(p, sil, wx0, wx1, wy0, wy1, contorno, suelo))
+        colocadas.append(_Colocada(p, sil, wx0, wx1, wy0, wy1, contorno, suelo, pp))
     # Volver a poner cada pie encima por si la ranura de un vecino lo ha tocado (no debería).
     for c in colocadas:
         v = h[c.y0:c.y1, c.x0:c.x1]
@@ -787,6 +788,79 @@ def _contorno(w: _Escritor, pts: np.ndarray, H: float, suelo: float, cfg: dict) 
     return len(niveles) + 1
 
 
+def _pared(w: _Escritor, c: _Colocada, paso: float, H: float, cfg: dict) -> int:
+    """Repaso de la pared del molde, después del contorno: vueltas planas alrededor del pie cada
+    `paso_pared` mm de altura, de arriba abajo, cada una justo donde la bola toca el pie a esa altura.
+
+    El acabado solo va por dentro de la silueta: donde el borde cae mucho (la rampa de delante, los lados)
+    la bola se apoya arriba y no llega abajo, y el contorno corta en vertical más afuera. Entre los dos
+    quedaba un escalón de material; estas vueltas lo quitan. Devuelve las vueltas."""
+    paso_pared = float(cfg.get("paso_pared", 5.0))
+    if c.pp is None or paso_pared <= 0:
+        return 0
+    pp = c.pp
+    borde = c.sil & ~ndimage.binary_erosion(c.sil)
+    if not borde.any():
+        return 0
+    techo = min(float(pp[borde].max()), H - cfg.get("rebaje_superior", 0.0))
+    niveles = [float(z) for z in np.arange(c.suelo + paso_pared, techo, paso_pared)][::-1]
+    if niveles:
+        w.lineas.append(comentario(f"Repaso de la pared cada {paso_pared:g} mm"))
+    vueltas = 0
+    for z in niveles:
+        # Solo las vueltas por fuera del pie (las de dentro rodean hondonadas de la planta, ya acabadas).
+        lineas = [ln for ln in _waterline(np.maximum(pp, z - 1.0), z, c.x0, c.y0, paso)
+                  if _toca(~c.sil, ln, paso, c)]
+        while lineas:
+            pos = w.pos[:2]
+            q = int(np.argmin([np.linalg.norm(ln - pos, axis=1).min() for ln in lineas]))
+            pts = lineas.pop(q)
+            i0 = int(np.argmin(np.linalg.norm(pts[:-1] - pos, axis=1)))
+            pts = np.vstack([pts[i0:-1], pts[:i0 + 1]])
+            _ir_por_encima(w, pts[0], pp, z, c, paso, H, cfg)
+            for x, y in pts[1:]:
+                w.corte(x, y, z - H, cfg["avance_desbaste"])
+            vueltas += 1
+    w.subir()
+    return vueltas
+
+
+def _waterline(campo: np.ndarray, nivel: float, x0: int, y0: int, paso: float) -> list[np.ndarray]:
+    """Líneas cerradas (mm) donde `campo` vale `nivel`, sin las muy cortas, suavizadas y simplificadas."""
+    import contourpy
+
+    out = []
+    for ln in contourpy.contour_generator(z=campo).lines(nivel):
+        if len(ln) < 8:
+            continue
+        pts = np.column_stack([(ln[:, 0] + x0) * paso, (ln[:, 1] + y0) * paso])
+        if np.linalg.norm(pts[0] - pts[-1]) > 1e-6:
+            pts = np.vstack([pts, pts[:1]])
+        if np.sum(np.linalg.norm(np.diff(pts, axis=0), axis=1)) < 10:
+            continue
+        out.append(pts[_simplificar_xy(pts, 0.05)])
+    return out
+
+
+def _ir_por_encima(w: _Escritor, destino, pp: np.ndarray, z: float, c: _Colocada, paso: float, H: float,
+                   cfg: dict) -> None:
+    """Ir al principio de una vuelta del repaso: en línea recta si por el camino la bola no toca el pie
+    (`pp` ≤ z); si no, subiendo por encima de lo que toque."""
+    if w.pos[2] >= -1e-6:  # viene de arriba (sobre la plancha)
+        w.bajar_a(destino[0], destino[1], z - H, z - H)
+        return
+    a, b = w.pos[:2], np.asarray(destino, float)
+    n = max(2, int(np.linalg.norm(b - a) / (paso / 2)) + 1)
+    t = np.linspace(0, 1, n)
+    kk = np.clip(np.rint((a[0] + (b[0] - a[0]) * t) / paso).astype(int) - c.x0, 0, pp.shape[1] - 1)
+    jj = np.clip(np.rint((a[1] + (b[1] - a[1]) * t) / paso).astype(int) - c.y0, 0, pp.shape[0] - 1)
+    zl = float(max(pp[jj, kk].max(), z, w.pos[2] + H)) + 0.5
+    if zl > w.pos[2] + H + 0.5:
+        w.corte(a[0], a[1], zl - H, cfg["avance_entrada"])
+    w.corte(b[0], b[1], max(zl, z) - H, cfg["avance_entrada"])
+    w.corte(b[0], b[1], z - H, cfg["avance_bajada"])
+
+
 def _desbaste(w: _Escritor, punta, c: _Colocada, paso, H, cfg, radio) -> int:
     """Desbaste «grande» en cajeras, como el de Fusion: en niveles planos de Z (`bajada_por_pasada`). En cada
     nivel, cada zona que se puede vaciar (por encima del nivel y donde el molde queda más abajo) se recorre en
@@ -1094,7 +1168,8 @@ def generar(piezas: list[Pieza], ancho: float, largo: float, alto: float, paso: 
     t0 = w.tiempo
     for n, c in enumerate(orden, 1):
         if c.contorno is not None and cfg.get("contorno", True):
-            fase(c, n, "2D Contorneado", lambda c=c: vueltas_de.append(_contorno(w, c.contorno, H, c.suelo, cfg)))
+            fase(c, n, "2D Contorneado", lambda c=c: vueltas_de.append(_contorno(w, c.contorno, H, c.suelo, cfg)
+                                                                   + _pared(w, c, paso, H, cfg)))
     tiempos["contorno"] = w.tiempo - t0
     capas, lineas, vueltas = max(capas_de, default=0), sum(lineas_de), sum(vueltas_de)
     for n, c in enumerate(orden, 1):

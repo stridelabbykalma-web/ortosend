@@ -70,6 +70,10 @@ rebaje_superior = 3.0        # mm por debajo de la cara de arriba queda lo más 
 # 3) Contorno, al final como en Fusion: rodea la silueta del pie (pared vertical, sin base plana
 #    alrededor). Deja suelo_contorno mm debajo: el molde sigue unido a la plancha.
 contorno = true
+# Tras el contorno, repaso de la pared del molde: vueltas planas cada estos mm de altura que quitan el
+# escalón que dejan el acabado (no llega abajo donde el borde cae mucho) y el contorno (corta en vertical).
+# 0 = sin repaso.
+paso_pared = 5.0
 suelo_contorno = 7.5         # mm de material que quedan debajo de la ranura (Fusion: 40 - 32,5)
 suelo_minimo = 3.0           # si el pie es muy alto se deja menos suelo, pero nunca menos de esto
 # Disposición (los pies lo más juntos posible):

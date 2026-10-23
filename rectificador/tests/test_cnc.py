@@ -409,3 +409,26 @@ def test_materiales_xps_y_escayola(monkeypatch, tmp_path, piezas_sinteticas):
     tr = cnc.generar(piezas_sinteticas("A"), 300, 400, 50, 1.0, 12.5, t["cnc"])
     assert "Espuma XPS" in tr.gcode
     assert tr.resumen["capas_desbaste"] <= 3
+
+
+def test_repaso_de_pared_quita_el_escalon(piezas_sinteticas, cfg):
+    """Tras el contorno, vueltas cada `paso_pared` mm pegadas al pie: la bola nunca baja de donde toca el pie."""
+    sin = cnc.generar(piezas_sinteticas("A"), 600, 500, 40, 1.0, 12.5, dict(cfg, paso_pared=0.0))
+    con = cnc.generar(piezas_sinteticas("A"), 600, 500, 40, 1.0, 12.5, dict(cfg, paso_pared=5.0))
+    assert "Repaso de la pared" in con.gcode and "Repaso de la pared" not in sin.gcode
+    assert con.resumen["vueltas_contorno"] > sin.resumen["vueltas_contorno"]
+    from scipy import ndimage
+    pt = con.punta_pies
+    fase = None
+    pos = {"X": 0.0, "Y": 0.0, "Z": 15.0}
+    peor = -9.0
+    for linea in con.gcode.splitlines():
+        if linea.startswith("("):
+            fase = linea
+            continue
+        if linea.startswith("G1") and fase and "Repaso" in fase:
+            for eje, v in re.findall(r"([XYZ])(-?\d+\.?\d*)", linea):
+                pos[eje] = float(v)
+            val = ndimage.map_coordinates(pt, [[pos["Y"]], [pos["X"]]], order=1)[0]
+            peor = max(peor, float(val - (pos["Z"] + 40)))
+    assert -9.0 < peor <= 0.3  # punta_pies lleva holgura: nunca por debajo (salvo redondeo)
