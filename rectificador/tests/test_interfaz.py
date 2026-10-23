@@ -162,7 +162,7 @@ def test_ventana_tirada(stl_sintetico, tmp_path):
         return vista.mapFromScene(x_mm, vista.largo - y_mm)
 
     origen = en_pantalla((p.x + nx / 2) * paso, (p.y + ny / 2) * paso)
-    destino_mm = (600 - m - nx * paso / 2 - 2, 500 - m - ny * paso / 2 - 2)
+    destino_mm = (600 - 2 * m - nx * paso / 2 - 2, 500 - 2 * m - ny * paso / 2 - 2)
     destino = en_pantalla(*destino_mm)
     vp = vista.viewport()
     QTest.mousePress(vp, Qt.LeftButton, Qt.NoModifier, origen)

@@ -40,10 +40,13 @@ def test_colocacion_sin_solapes_y_dentro(piezas_sinteticas, cfg):
     ocupado = np.zeros((501, 601), int)
     for p in puestas:
         a, b = p.forma()
-        # Pie + su margen para el contorno, dentro de la plancha y sin pisar a otro.
-        assert p.x - m >= 0 and p.y - m >= 0 and p.x + b + m <= 601 and p.y + a + m <= 501
-        ocupado[p.y - m:p.y + a + m, p.x - m:p.x + b + m] += 1
+        # Pie + su margen para el contorno (su forma real) sin pisar a otro, y todo lo que corta la fresa
+        # (otro margen más) dentro de la plancha.
+        assert p.x - 2 * m >= 0 and p.y - 2 * m >= 0 and p.x + b + 2 * m <= 601 and p.y + a + 2 * m <= 501
+        ocupado[p.y - m:p.y + a + m, p.x - m:p.x + b + m] += cnc.zona(p, m)
     assert ocupado.max() == 1
+    # Encajan por su forma: más juntos que si fueran rectángulos (algún par de recuadros se pisa).
+    assert any(cnc._se_pisan(cnc.huella(p, m), cnc.huella(q, m)) for p in puestas for q in puestas if p is not q)
 
 
 def test_bola_nunca_se_come_el_molde():
@@ -143,7 +146,7 @@ def test_contorno_rodea_el_pie_sin_tocarlo(tirada, cfg):
             continue
         x, y, z = b["X"], b["Y"], b["Z"] + H
         i0, j0 = int(round(x / paso)), int(round(y / paso))
-        jj, ii = np.mgrid[max(j0 - r, 0):j0 + r + 1, max(i0 - r, 0):i0 + r + 1]
+        jj, ii = np.mgrid[max(j0 - r, 0):min(j0 + r + 1, alt.shape[0]), max(i0 - r, 0):min(i0 + r + 1, alt.shape[1])]
         d = np.hypot(ii * paso - x, jj * paso - y)
         m = d < R
         peor = max(peor, float((alt[jj[m], ii[m]] - (z + R - np.sqrt(R * R - d[m] ** 2))).max()))
@@ -155,22 +158,24 @@ def test_contorno_rodea_el_pie_sin_tocarlo(tirada, cfg):
 
 
 def test_capas_y_lineas_como_se_ha_pedido(tirada, cfg):
-    zs_desbaste, ys_acabado = set(), set()
+    zs_desbaste, ys_acabado = set(), []
     for fase, tipo, a, b in _por_fase(tirada.gcode):
         if fase == "Desbaste" and tipo == "G1":
             zs_desbaste.add(round(b["Z"], 3))
         if fase == "Paralelo" and tipo == "G1" and a["Y"] == b["Y"]:
-            ys_acabado.add(round(b["Y"], 3))
+            ys_acabado.append(round(b["Y"], 3))
     # Primera capa del desbaste a -5 mm.
     assert -cfg["bajada_por_pasada"] in zs_desbaste
     # Líneas del acabado paralelas a X, separadas paso_acabado (en una rejilla de 1 mm: 2 mm).
-    ys = np.array(sorted(ys_acabado))
-    assert np.median(np.diff(ys)) == pytest.approx(round(cfg["paso_acabado"]), abs=0.01)
+    # (líneas seguidas de un mismo pie: cada pie va a su altura en la plancha)
+    ys = np.array(ys_acabado)
+    saltos = np.abs(np.diff(ys))
+    assert np.median(saltos[saltos > 0]) == pytest.approx(round(cfg["paso_acabado"]), abs=0.01)
     assert tirada.tiempo_min > 0 and set(tirada.tiempos) >= {"contorno", "desbaste", "acabado"}
 
 
 def test_plancha_pequena_avisa_lo_que_no_cabe(piezas_sinteticas, cfg):
-    t = cnc.generar(piezas_sinteticas("A"), 200, 300, 40, 1.0, 12.5, cfg)
+    t = cnc.generar(piezas_sinteticas("A"), 230, 330, 40, 1.0, 12.5, cfg)
     assert len(t.piezas) == 1 and len(t.sobran) == 1
     assert any("No caben 1" in a for a in t.avisos)
 
@@ -223,7 +228,7 @@ def test_colocar_a_mano(piezas_sinteticas, cfg):
     assert "cerca" in cnc.cabe(a, piezas, 600, 500, paso, cfg, R, b.x + 5, b.y, a.giro)
     # Puesta a mano (girada 180°) en la esquina de detrás a la derecha: se respeta y las demás no la pisan.
     ny, nx = a.forma(2)
-    x, y = 600 - nx - m, 500 - ny - m
+    x, y = 600 - nx - 2 * m, 500 - ny - 2 * m
     assert cnc.cabe(a, [], 600, 500, paso, cfg, R, x, y, 2) is None
     a.x, a.y, a.giro, a.fija = x, y, 2, True
     avisos = []

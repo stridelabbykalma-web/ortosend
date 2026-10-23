@@ -135,25 +135,62 @@ def ajustar_alto(piezas: list[Pieza], alto: float, cfg: dict) -> list[str]:
 def margen_celdas(radio: float, paso: float, cfg: dict) -> int:
     """Celdas alrededor de cada silueta reservadas para el contorno.
 
-    Dos piezas vecinas quedan a 2 × margen: la fresa que rodea una no llega a la otra. Y el centro de
-    la fresa nunca sale de la plancha (X, Y ≥ 0)."""
+    Entre moldes el límite es el recorrido de la fresa (su centro): dos pies vecinos quedan, en su punto
+    más cercano, a 2 × margen, así el recorrido de uno puede coincidir con el del otro (la misma ranura
+    sirve a los dos) pero nunca se come al vecino. Con el borde de la plancha el límite es lo de fuera
+    de la ranura (el filo de la fresa): ver `margen_borde`."""
     dc = radio + HOLGURA_CONTORNO
     m = max(dc, (dc + radio + 0.5) / 2) + cfg.get("separacion", 0.0) / 2
     return int(np.ceil(m / paso))
 
 
+def margen_borde(radio: float, paso: float, cfg: dict) -> int:
+    """Celdas desde la zona de una pieza (`zona`) hasta el borde de la plancha: todo lo que corta la
+    fresa (hasta su filo de fuera, lo gris del mapa) queda dentro del área de trabajo."""
+    return int(round(cfg.get("margen_bloque", 0.0) / paso)) + margen_celdas(radio, paso, cfg)
+
+
 def huella(p: Pieza, m: int, x: int | None = None, y: int | None = None,
            giro: int | None = None) -> tuple[int, int, int, int]:
     """Rectángulo (x, y, ancho, largo) en celdas de la plancha que ocupa una pieza con su margen
-    para el contorno."""
+    para el contorno (el recuadro de `zona`)."""
     ny, nx = p.forma(giro)
     x = p.x if x is None else x
     y = p.y if y is None else y
     return x - m, y - m, nx + 2 * m, ny + 2 * m
 
 
+def zona(p: Pieza, m: int, giro: int | None = None) -> np.ndarray:
+    """Forma real que ocupa la pieza con su margen: la silueta (girada) ensanchada `m` celdas en
+    redondo. Va en el recuadro de `huella` (su esquina es x - m, y - m). Dos piezas pueden ir donde
+    sus zonas no se pisan: así encajan por su forma (dedos junto al talón, arco junto al borde de
+    otro…) y no como rectángulos."""
+    g = p.giro if giro is None else giro
+    sil = p.silueta_girada() if giro is None or g == p.giro else np.rot90(p.silueta, k=g)
+    clave = (g % 4, m, id(p.silueta), p.silueta.shape)
+    cache = p.__dict__.setdefault("_zonas", {})
+    if clave not in cache:
+        con = np.pad(sil, m + 1, constant_values=False)
+        d = ndimage.distance_transform_edt(~con)
+        cache.clear() if len(cache) > 16 else None
+        cache[clave] = (d <= m + 1e-9)[1:-1, 1:-1]
+    return cache[clave]
+
+
 def _se_pisan(a, b) -> bool:
     return a[0] < b[0] + b[2] and b[0] < a[0] + a[2] and a[1] < b[1] + b[3] and b[1] < a[1] + a[3]
+
+
+def _zonas_se_pisan(za: np.ndarray, ra, zb: np.ndarray | None, rb) -> bool:
+    """¿Se pisan dos zonas (zb None = rectángulo lleno) puestas en sus recuadros ra y rb?"""
+    if not _se_pisan(ra, rb):
+        return False
+    x0, y0 = max(ra[0], rb[0]), max(ra[1], rb[1])
+    x1, y1 = min(ra[0] + ra[2], rb[0] + rb[2]), min(ra[1] + ra[3], rb[1] + rb[3])
+    trozo_a = za[y0 - ra[1]:y1 - ra[1], x0 - ra[0]:x1 - ra[0]]
+    if zb is None:
+        return bool(trozo_a.any())
+    return bool((trozo_a & zb[y0 - rb[1]:y1 - rb[1], x0 - rb[0]:x1 - rb[0]]).any())
 
 
 def cabe(p: Pieza, otras: list[Pieza], ancho: float, largo: float, paso: float, cfg: dict, radio: float,
@@ -161,17 +198,20 @@ def cabe(p: Pieza, otras: list[Pieza], ancho: float, largo: float, paso: float, 
     """¿Cabe la pieza en esa posición (celdas) y giro? None si cabe; si no, el motivo.
 
     `usadas`: zonas de la placa ya fresadas en tiradas anteriores (x, y, ancho, largo en celdas)."""
-    borde = int(round(cfg.get("margen_bloque", 0.0) / paso))
+    borde = margen_borde(radio, paso, cfg)
     m = margen_celdas(radio, paso, cfg)
     W, L = int(round(ancho / paso)) + 1, int(round(largo / paso)) + 1
     r = huella(p, m, x, y, giro)
-    if r[0] < borde or r[1] < borde or r[0] + r[2] > W - borde or r[1] + r[3] > L - borde:
+    z = zona(p, m, giro)
+    filas, cols = np.flatnonzero(z.any(axis=1)), np.flatnonzero(z.any(axis=0))
+    if (not len(filas) or r[0] + cols[0] < borde or r[1] + filas[0] < borde
+            or r[0] + cols[-1] + 1 > W - borde or r[1] + filas[-1] + 1 > L - borde):
         return "se sale de la plancha (la fresa necesita sitio alrededor del pie)"
     for q in otras:
-        if q is not p and q.colocada and _se_pisan(r, huella(q, m)):
+        if q is not p and q.colocada and _zonas_se_pisan(z, r, zona(q, m), huella(q, m)):
             return f"queda demasiado cerca de {q.nombre} (las fresas de los dos se tocarían)"
     for u in usadas or []:
-        if _se_pisan(r, u):
+        if _zonas_se_pisan(z, r, None, u):
             return "esa parte de la placa ya está fresada (de una tirada anterior)"
     return None
 
@@ -179,23 +219,21 @@ def cabe(p: Pieza, otras: list[Pieza], ancho: float, largo: float, paso: float, 
 def colocar(piezas: list[Pieza], ancho: float, largo: float, paso: float, cfg: dict,
             radio: float, avisos: list[str] | None = None,
             usadas: list[tuple[int, int, int, int]] | None = None) -> list[Pieza]:
-    """Coloca las piezas en la plancha lo más juntas posible (MaxRects: mejor hueco por el lado
-    corto), girándolas 90° si cabe mejor. Las puestas a mano (`fija`) se dejan donde están si siguen
-    cabiendo; el resto se coloca alrededor. Las zonas `usadas` (ya fresadas en tiradas anteriores de la
-    misma placa) no se tocan. Devuelve las que NO caben."""
-    borde = int(round(cfg.get("margen_bloque", 0.0) / paso))
+    """Coloca las piezas en la plancha lo más juntas posible por su FORMA (no por su rectángulo): los
+    recorridos de la fresa de dos pies vecinos pueden coincidir, y lo que corta la fresa nunca pasa del
+    borde de la plancha. Cada pie, del más grande al más
+    pequeño, va en el sitio libre más cercano al origen; se prueban varias maneras (llenando primero
+    hacia la derecha o hacia detrás, y con los pies a lo largo, atravesados o de cualquier forma) y se
+    queda la que mete más pies en menos sitio. Las puestas a mano (`fija`) se dejan donde están si
+    siguen cabiendo; el resto se coloca alrededor. Las zonas `usadas` (ya fresadas en tiradas anteriores
+    de la misma placa) no se tocan. Devuelve las que NO caben."""
+    borde = margen_borde(radio, paso, cfg)
     m = margen_celdas(radio, paso, cfg)
-    W = int(round(ancho / paso)) + 1 - 2 * borde
-    L = int(round(largo / paso)) + 1 - 2 * borde
-    libres = [(0, 0, W, L)]  # (x, y, ancho, largo) en celdas
-    giros = (0, 1) if cfg.get("permitir_giro", True) else (0,)
-    sobran = []
-    fijas = []
-    for ux, uy, uw, ul in usadas or []:
-        libres = _partir(libres, (ux - borde, uy - borde, uw, ul))
+    W, L = int(round(ancho / paso)) + 1, int(round(largo / paso)) + 1
     for p in piezas:
         if not p.fija:
             p.x = p.y = None
+    fijas = []
     for p in piezas:
         if not p.fija:
             continue
@@ -209,50 +247,77 @@ def colocar(piezas: list[Pieza], ancho: float, largo: float, paso: float, cfg: d
                 avisos.append(f"{p.nombre} ya no cabe donde lo pusiste ({motivo}): se ha colocado solo.")
             continue
         fijas.append(p)
-        hx, hy, hw, hl = huella(p, m)
-        libres = _partir(libres, (hx - borde, hy - borde, hw, hl))
-    for p in sorted([q for q in piezas if not q.fija], key=lambda q: -q.h.size):
-        mejor = None
-        for g in giros:
-            ny, nx = p.forma(g)
-            w, l = nx + 2 * m, ny + 2 * m
-            for fx, fy, fw, fl in libres:
-                if w <= fw and l <= fl:
-                    clave = (min(fw - w, fl - l), fy, fx)
-                    if mejor is None or clave < mejor[0]:
-                        mejor = (clave, fx, fy, g, w, l)
-        if mejor is None:
+    k = max(1, int(round(2.0 / paso)))  # se busca sitio en saltos de ~2 mm
+    Wc, Lc = -(-W // k), -(-L // k)
+    ocupado = np.ones((Lc * k, Wc * k), bool)
+    ocupado[borde:L - borde, borde:W - borde] = False
+    for ux, uy, uw, ul in usadas or []:
+        ocupado[max(uy, 0):max(uy + ul, 0), max(ux, 0):max(ux + uw, 0)] = True
+    for p in fijas:
+        x, y, w, l = huella(p, m)
+        ocupado[y:y + l, x:x + w] |= zona(p, m)
+    sueltas = sorted([q for q in piezas if not q.fija], key=lambda q: -q.h.size)
+    if cfg.get("permitir_giro", True):
+        juegos = ((0, 2), (1, 3), (0, 1, 2, 3))
+    else:
+        juegos = ((0,),)
+    mejor = None
+    for giros in juegos:
+        for hacia in ("derecha", "detras"):
+            puestas = _rellenar(sueltas, ocupado, m, k, giros, hacia)
+            n = sum(1 for v in puestas.values() if v)
+            # Rectángulo desde el origen que hace falta para lo puesto: cuanto menor, más placa libre.
+            esquinas = [(x - m + zona(q, m, g).shape[1], y - m + zona(q, m, g).shape[0])
+                        for q in sueltas if puestas[id(q)] for x, y, g in [puestas[id(q)]]] or [(0, 0)]
+            clave = (-n, max(e[0] for e in esquinas) * max(e[1] for e in esquinas))
+            if mejor is None or clave < mejor[0]:
+                mejor = (clave, puestas)
+    sobran = []
+    for p in sueltas:
+        sitio = mejor[1][id(p)]
+        if sitio is None:
             sobran.append(p)
-            continue
-        _, fx, fy, g, w, l = mejor
-        p.x, p.y, p.giro = fx + borde + m, fy + borde + m, g
-        libres = _partir(libres, (fx, fy, w, l))
+        else:
+            p.x, p.y, p.giro = sitio
     return sobran
 
 
-def _partir(libres, r):
-    x, y, w, l = r
-    nuevos = []
-    for fx, fy, fw, fl in libres:
-        if x >= fx + fw or x + w <= fx or y >= fy + fl or y + l <= fy:
-            nuevos.append((fx, fy, fw, fl))
+def _rellenar(piezas: list[Pieza], ocupado: np.ndarray, m: int, k: int, giros, hacia: str) -> dict:
+    """Una manera de colocar: cada pieza en el primer sitio libre (lo más a la izquierda y luego lo más
+    delante, o al revés). Busca en una rejilla gruesa (bloques de k × k celdas, ocupado si lo está alguna
+    celda): lo que cabe en ella cabe seguro. Devuelve {id(pieza): (x, y, giro) o None}."""
+    from scipy.signal import fftconvolve
+
+    ocupado = ocupado.copy()
+    Lc, Wc = ocupado.shape[0] // k, ocupado.shape[1] // k
+    sitios: dict = {}
+    for p in piezas:
+        grueso = ocupado.reshape(Lc, k, Wc, k).any(axis=(1, 3)).astype(float)
+        mejor = None
+        for g in giros:
+            z = zona(p, m, g)
+            a, b = z.shape
+            zp = np.zeros((-(-a // k) * k, -(-b // k) * k), bool)
+            zp[:a, :b] = z
+            zg = zp.reshape(zp.shape[0] // k, k, zp.shape[1] // k, k).any(axis=(1, 3))
+            if zg.shape[0] > Lc or zg.shape[1] > Wc:
+                continue
+            libres = np.argwhere(fftconvolve(grueso, zg[::-1, ::-1].astype(float), mode="valid") < 0.5)
+            if not len(libres):
+                continue
+            derecha, detras = libres[:, 1] * k + b, libres[:, 0] * k + a
+            orden = np.lexsort((detras, derecha)) if hacia == "derecha" else np.lexsort((derecha, detras))
+            i = orden[0]
+            clave = (int(derecha[i]), int(detras[i])) if hacia == "derecha" else (int(detras[i]), int(derecha[i]))
+            if mejor is None or clave < mejor[0]:
+                mejor = (clave, int(libres[i, 1]) * k, int(libres[i, 0]) * k, g, z)
+        if mejor is None:
+            sitios[id(p)] = None
             continue
-        if x > fx:
-            nuevos.append((fx, fy, x - fx, fl))
-        if x + w < fx + fw:
-            nuevos.append((x + w, fy, fx + fw - x - w, fl))
-        if y > fy:
-            nuevos.append((fx, fy, fw, y - fy))
-        if y + l < fy + fl:
-            nuevos.append((fx, y + l, fw, fy + fl - y - l))
-    # Quitar los que quedan dentro de otros.
-    finales = []
-    for i, a in enumerate(nuevos):
-        dentro = any(j != i and a[0] >= b[0] and a[1] >= b[1] and a[0] + a[2] <= b[0] + b[2]
-                     and a[1] + a[3] <= b[1] + b[3] and (a != b or j < i) for j, b in enumerate(nuevos))
-        if not dentro and a[2] > 0 and a[3] > 0:
-            finales.append(a)
-    return finales
+        _, x0, y0, g, z = mejor
+        ocupado[y0:y0 + z.shape[0], x0:x0 + z.shape[1]] |= z
+        sitios[id(p)] = (x0 + m, y0 + m, g)
+    return sitios
 
 
 @dataclass
@@ -1019,7 +1084,7 @@ def plancha_minima(piezas: list[Pieza], paso: float, cfg: dict, maximo: tuple[fl
     puestas = [p for p in piezas if p.colocada]
     if not puestas:
         return maximo
-    extra = int(round(cfg.get("margen_bloque", 0.0) / paso)) + margen_celdas(radio, paso, cfg)
+    extra = margen_borde(radio, paso, cfg) + margen_celdas(radio, paso, cfg)
     x1 = max(p.x + p.forma()[1] for p in puestas) + extra
     y1 = max(p.y + p.forma()[0] for p in puestas) + extra
     return (x1 - 1) * paso, (y1 - 1) * paso

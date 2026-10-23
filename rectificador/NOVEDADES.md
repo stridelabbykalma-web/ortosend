@@ -1,5 +1,13 @@
 # Novedades de Ortosend Taller
 
+## 0.14.0
+- **Los pies se colocan por su forma, no por su rectángulo**: entre dos moldes el límite es el recorrido de
+  la fresa (la línea naranja del mapa), así dos vecinos pueden compartir la misma ranura y encajan (dedos
+  junto a talón, uno girado 180° junto a otro…). Caben más juntos y queda más placa libre.
+- **Con el borde de la plancha el límite es lo de fuera de la ranura** (lo gris): la fresa ya no asoma
+  por fuera del área de trabajo. *Margen bordes* añade distancia extra si hay topes o mordazas.
+- De todas las maneras de colocarlos se elige la que mete más pies ocupando menos sitio desde el origen.
+
 ## 0.13.0
 - **Bisel por delante de las cabezas**: el arco (línea roja del visor) es por donde se recortará la
   plantilla. Por delante de él el molde ahora **sigue 10 mm más bajando suave en línea recta (4 mm)** y ahí

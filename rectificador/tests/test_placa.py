@@ -68,10 +68,10 @@ def test_colocar_en_lo_libre_de_la_placa(taller):
     segunda = [_pieza(f"N{i}") for i in range(4)]
     assert cnc.colocar(segunda, 600, 500, paso, cfg, R, usadas=usadas) == []
     for p in segunda:
-        assert not any(cnc._se_pisan(cnc.huella(p, m), u) for u in usadas)
+        assert not any(cnc._zonas_se_pisan(cnc.zona(p, m), cnc.huella(p, m), None, u) for u in usadas)
     # A mano tampoco: encima de una zona usada no cabe.
     q = _pieza("Q")
-    motivo = cnc.cabe(q, [], 600, 500, paso, cfg, R, primera[0].x, primera[0].y, 0, usadas)
+    motivo = cnc.cabe(q, [], 600, 500, paso, cfg, R, primera[0].x, primera[0].y, primera[0].giro, usadas)
     assert "ya está fresada" in motivo
     # Si la placa está llena, se dice.
     llena = [(0, 0, 601, 501)]

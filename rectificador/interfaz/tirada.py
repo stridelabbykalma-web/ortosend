@@ -147,9 +147,9 @@ class VentanaTirada(QDialog):
         self.caja_margen.setDecimals(0)
         self.caja_margen.setSuffix(" mm")
         self.caja_margen.setValue(self.taller["cnc"].get("margen_bloque", 0.0))
-        self.caja_margen.setToolTip("Distancia mínima de la fresa al borde de la plancha.\n"
-                                    "Ponla si sujetas la plancha con topes o mordazas en los bordes\n"
-                                    "(con 0, la bola puede asomar hasta 12 mm por fuera del borde).")
+        self.caja_margen.setToolTip("Distancia mínima extra entre lo que corta la fresa y el borde de la plancha.\n"
+                                    "Con 0, la fresa (con su filo de fuera) llega justo al borde, sin salirse.\n"
+                                    "Súbela si sujetas la plancha con topes o mordazas en los bordes.")
         self.caja_margen.valueChanged.connect(self._cambiar_margen)
         form.addRow(estilo.etiqueta("Margen bordes", "secundario", envolver=False), self.caja_margen)
         lay_pl.addLayout(form)
