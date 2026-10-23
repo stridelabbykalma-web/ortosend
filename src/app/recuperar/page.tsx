@@ -18,7 +18,7 @@ export default async function RecuperarPage({
       <div className="sp" />
       <Flash error={error} ok={ok} />
       {!ok && (
-        <form className="card" action={recoverAction}>
+        <form className="card px-lift" action={recoverAction}>
           <p className="muted">
             Escribe el email o el móvil de tu cuenta y te enviaremos por email un enlace para crear una
             contraseña nueva.

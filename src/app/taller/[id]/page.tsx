@@ -22,7 +22,7 @@ export default async function PedidoMovil({
 }) {
   const user = await getSessionUser();
   const { id } = await params;
-  if (!user) redirect(`/equipo?next=/taller/${id}`);
+  if (!user) redirect(`/taller?next=/taller/${id}`);
   if (user.role !== "TALLER" && user.role !== "ADMIN") redirect("/panel");
   const { ok, error } = await searchParams;
   let p;

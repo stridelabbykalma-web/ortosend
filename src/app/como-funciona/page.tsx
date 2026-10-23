@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 const BLOQUES: [string, string][] = [
   [
     "El estudio",
@@ -9,7 +11,7 @@ const BLOQUES: [string, string][] = [
   ],
   [
     "El pago",
-    "Solo con la prescripción firmada recibes el enlace de pago: 199,99 €, con tarjeta o Bizum, siempre a través de Ortosend. Nunca pagarás nada en la clínica. El enlace es válido 30 días.",
+    "Solo con la prescripción firmada recibes el enlace de pago: 199,99 €, con tarjeta o Bizum, siempre a través de Ortosend en la pasarela segura de Stripe. Nunca pagarás nada en la clínica. El enlace es válido 30 días.",
   ],
   [
     "Tus plantillas",
@@ -20,18 +22,34 @@ const BLOQUES: [string, string][] = [
 export default function ComoFunciona() {
   return (
     <div className="wrap">
-      <div className="sp2" />
-      <h2>Cómo funciona Ortosend</h2>
-      <div className="sp" />
-      <div className="grid g2">
-        {BLOQUES.map(([t, d]) => (
-          <div className="card" key={t}>
-            <b>{t}</b>
-            <p className="muted" style={{ marginTop: 6 }}>
-              {d}
-            </p>
+      <div className="px-sec" style={{ paddingTop: 56 }}>
+        <div className="px-kicker">Paso a paso</div>
+        <h2 className="px-h2">Cómo funciona Ortosend</h2>
+        <div className="px-tl">
+          {BLOQUES.map(([t, d]) => (
+            <div className="px-tl-item" key={t}>
+              <div className="px-card-t">{t}</div>
+              <p className="muted" style={{ marginTop: 6, maxWidth: 680 }}>
+                {d}
+              </p>
+            </div>
+          ))}
+        </div>
+        <div className="sp2" />
+        <div className="px-cta-dark row between">
+          <div>
+            <b style={{ fontFamily: "var(--font-sora)", fontSize: 18, color: "#fff" }}>
+              Empieza por el estudio: gratis y sin compromiso
+            </b>
+            <div className="px-dim" style={{ marginTop: 4 }}>
+              Busca tu clínica asociada más cercana y elige la hora que te venga bien.
+            </div>
           </div>
-        ))}
+          <Link href="/buscar" className="btn">
+            Buscar clínica
+          </Link>
+        </div>
+        <div className="sp2" />
       </div>
     </div>
   );
