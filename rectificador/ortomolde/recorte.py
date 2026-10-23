@@ -2,9 +2,10 @@
 
 El molde termina en un arco que sigue la parábola metatarsal, `adelanto` mm por delante
 de las cabezas. Por delante del arco no queda nada: se vacía hasta la base plana
-(desaparecen los dedos). Desde el arco baja una pendiente suave de `pendiente` mm hacia
-delante hasta la base (no una pared vertical): al termoformar en la máquina de vacío la
-lámina se apoya en la rampa y la fuerza se reparte, sin romper el borde.
+(desaparecen los dedos). El arco es la línea por donde se recortará la plantilla; por
+delante de él el molde sigue `pendiente` mm más, bajando en un bisel recto y suave
+(`caida` mm en total), y ahí termina en pared vertical. Así, al termoformar en la máquina
+de vacío, la lámina se apoya en el bisel y la fuerza se reparte en el borde del recorte.
 
 Si están marcadas las cabezas del 2.º, 3.º y 4.º MTT, el arco pasa por delante de TODAS
 (curva suave por las 5 cabezas, sin pasarse entre ellas). Si no, se supone una parábola
@@ -31,13 +32,14 @@ class Recorte:
     curvatura: float = 1.0  # 0 = recto, 1 = parábola metatarsal, >1 más curvado
     flecha: float = 10.0  # mm, con curvatura 1
     posicion_vertice: float = 0.35
-    pendiente: float = 10.0  # mm hacia delante que tarda en bajar desde el arco hasta la base (0 = pared)
+    pendiente: float = 10.0  # mm que sigue el molde por delante del arco, en bisel (0 = pared en el arco)
+    caida: float = 4.0  # mm que baja el bisel en esos `pendiente` mm
 
     @classmethod
     def por_defecto(cls, clinicos: dict) -> "Recorte":
         c = clinicos["recorte_arco"]
         return cls(True, c["adelanto"], c["curvatura"], c.get("flecha", 10.0), c.get("posicion_vertice", 0.35),
-                   c.get("pendiente", 10.0))
+                   c.get("pendiente", 10.0), c.get("caida", 4.0))
 
     def a_dict(self) -> dict:
         return asdict(self)
@@ -141,8 +143,8 @@ def linea_del_arco(refs: Referencias, r: Recorte, mascara: np.ndarray, dx: float
 
 def aplicar(z: np.ndarray, fondo: float, refs: Referencias, r: Recorte, mascara: np.ndarray,
             X: np.ndarray, Y: np.ndarray, paso: float) -> np.ndarray:
-    """Vacía hasta la base todo lo que está por delante del arco en la zona de este pie, con una
-    rampa suave de `r.pendiente` mm que baja desde la altura del molde en el arco."""
+    """Vacía hasta la base lo que está por delante del arco en la zona de este pie, dejando
+    delante del arco un bisel de `r.pendiente` mm que baja `r.caida` mm."""
     if not r.activo or not refs.completas:
         return z
     zona_pie = ndimage.binary_dilation(mascara, iterations=int(round(10 / paso)))
@@ -155,12 +157,12 @@ def aplicar(z: np.ndarray, fondo: float, refs: Referencias, r: Recorte, mascara:
     cortado = fondo + (z - fondo) * queda
     if r.pendiente <= 0:
         return cortado
-    # Rampa: para cada punto por delante del arco, la altura del molde en el arco a su misma
-    # altura t (medida medio mm por detrás), bajando con forma de coseno (sin aristas arriba
-    # ni abajo) hasta la base a `pendiente` mm.
-    # Empieza una celda por detrás para tapar la transición del borde (sin muesca en el arco).
-    u = np.clip((s - limite) / r.pendiente, 0.0, None)
-    banda = zona_pie & (s > limite - paso) & (u < 1)
+    # Bisel: para cada punto por delante del arco, la altura del molde en el arco a su misma
+    # altura t (medida medio mm por detrás), bajando en línea recta `caida` mm hasta `pendiente`
+    # mm; allí pared vertical (con la misma transición de una celda). Empieza una celda por
+    # detrás del arco para tapar su transición (sin muesca en la línea).
+    fin = limite + r.pendiente
+    banda = zona_pie & (s > limite - paso) & (s < fin + paso)
     if not banda.any():
         return cortado
     m1 = np.array(refs.puntos["mtt1"], float)
@@ -172,6 +174,8 @@ def aplicar(z: np.ndarray, fondo: float, refs: Referencias, r: Recorte, mascara:
     filas = (py - Y[0, 0]) / (Y[1, 0] - Y[0, 0])
     cols = (px - X[0, 0]) / (X[0, 1] - X[0, 0])
     borde = ndimage.map_coordinates(z, [filas, cols], order=1, mode="nearest")
-    rampa = fondo + np.maximum(borde - fondo, 0.0) * 0.5 * (1 + np.cos(np.pi * u[banda]))
-    cortado[banda] = np.maximum(cortado[banda], rampa)
+    u = np.clip((s[banda] - limite[banda]) / r.pendiente, 0.0, 1.0)
+    alto = np.maximum(borde - r.caida * u - fondo, 0.0)
+    pared = np.clip((fin[banda] - s[banda]) / paso + 0.5, 0.0, 1.0)
+    cortado[banda] = np.maximum(cortado[banda], fondo + alto * pared)
     return cortado

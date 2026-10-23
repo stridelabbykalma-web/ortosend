@@ -80,29 +80,27 @@ def test_curvatura_cero_es_recto_aunque_haya_5_cabezas(plano):
     assert (z2[entre & (s > 4.0)] == 3.0).all()
 
 
-def test_pendiente_suave_hacia_delante(plano):
-    """Desde el arco el molde baja en rampa hasta la base en 10 mm (no una pared vertical)."""
+def test_bisel_por_delante_del_arco(plano):
+    """Por delante del arco el molde sigue 10 mm bajando 4 mm en línea recta, y ahí pared."""
     r, X, Y, z, mascara = plano
-    rec = Recorte(adelanto=3.0, curvatura=0.0, pendiente=10.0)
+    rec = Recorte(adelanto=3.0, curvatura=0.0, pendiente=10.0, caida=4.0)
     z2 = aplicar(z, 3.0, REFS, rec, mascara, X, Y, 0.5)
     t, s = coordenadas_arco(REFS, X, Y)
     for tt in (0.2, 0.5, 0.8):
         linea = (np.abs(t - tt) < 0.005) & mascara
         orden = np.argsort(s[linea])
         ss, zz = s[linea][orden], z2[linea][orden]
-        rampa = (ss > 3.0) & (ss < 13.0)
-        assert np.all(np.diff(zz[rampa]) <= 1e-9)  # siempre baja
         assert zz[ss < 2.0].min() == pytest.approx(25.0)  # detrás del arco, intacto
-        assert zz[(ss > 7.5) & (ss < 8.5)].mean() == pytest.approx(14.0, abs=1.5)  # a media rampa, media altura
-        assert np.all(zz[ss > 13.5] == 3.0)  # pasados los 10 mm, la base
-        # Ningún escalón: entre dos celdas vecinas como mucho ~ π/2 · 22 mm / 10 mm · 0,5 mm.
-        assert np.abs(np.diff(zz[(ss > 2.0) & (ss < 14.0)])).max() < 2.0
+        bisel = (ss > 3.5) & (ss < 12.5)
+        assert np.all(np.diff(zz[bisel]) <= 1e-9)  # siempre baja
+        assert zz[bisel] == pytest.approx(25.0 - 4.0 * (ss[bisel] - 3.0) / 10.0, abs=0.15)  # recto
+        assert np.all(zz[ss > 13.5] == 3.0)  # pasado el bisel, pared y base
 
 
 def test_pendiente_cero_es_corte_vertical(plano):
     r, X, Y, z, mascara = plano
     vertical = aplicar(z, 3.0, REFS, Recorte(adelanto=3.0, pendiente=0.0), mascara, X, Y, 0.5)
-    rampa = aplicar(z, 3.0, REFS, Recorte(adelanto=3.0, pendiente=10.0), mascara, X, Y, 0.5)
+    rampa = aplicar(z, 3.0, REFS, Recorte(adelanto=3.0, pendiente=10.0, caida=4.0), mascara, X, Y, 0.5)
     assert (rampa >= vertical).all()
     assert (rampa > vertical + 1).sum() > 100
     t, s = coordenadas_arco(REFS, X, Y)
@@ -113,3 +111,4 @@ def test_pendiente_cero_es_corte_vertical(plano):
 def test_proyecto_antiguo_sin_pendiente():
     assert Recorte.de_dict({"activo": True, "adelanto": 15.0, "curvatura": 1.0, "flecha": 10.0,
                             "posicion_vertice": 0.35}).pendiente == 10.0
+    assert Recorte().caida == 4.0

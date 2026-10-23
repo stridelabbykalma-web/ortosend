@@ -13,9 +13,11 @@ suavizado_borde = 8.0
 [recorte_arco]
 # El molde termina en un arco este número de mm por delante de las cabezas metatarsales (siguiendo su curva).
 adelanto = 15.0
-# Desde el arco el molde baja en una pendiente suave hasta la base, en estos mm hacia delante
-# (para que la lámina de la máquina de vacío reparta la fuerza). 0 = corte vertical.
+# Por delante del arco (la línea de recorte) el molde sigue estos mm en un bisel que baja suave,
+# y ahí termina en pared (la lámina de la máquina de vacío reparte la fuerza). 0 = pared en el arco.
 pendiente = 10.0
+# Lo que baja ese bisel (mm) de principio a fin.
+caida = 4.0
 # 1.0 = sigue la parábola metatarsal tal cual; 0 = recta; >1 = más curvada.
 curvatura = 1.0
 # Parábola metatarsal: cuánto sobresale (mm) el punto más adelantado (2.º-3.er MTT) por

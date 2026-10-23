@@ -179,10 +179,21 @@ class PanelPie(QFrame):
         self.pendiente.setSingleStep(1.0)
         self.pendiente.setDecimals(1)
         self.pendiente.setSuffix(" mm")
-        self.pendiente.setToolTip("Desde el arco el molde baja en rampa suave hasta la base en estos mm hacia "
-                                  "delante (reparte la fuerza en la máquina de vacío). 0 = corte vertical.")
+        self.pendiente.setToolTip("El molde sigue estos mm por delante del arco (la línea de recorte) en un "
+                                  "bisel suave, y ahí termina en pared. Reparte la fuerza en la máquina de "
+                                  "vacío. 0 = pared en el arco.")
         self.pendiente.valueChanged.connect(lambda v: self.ventana.cambiar_recorte(self.clave, pendiente=v))
         fila.addWidget(self.pendiente, 1)
+        fila.addSpacing(8)
+        fila.addWidget(estilo.etiqueta("Bajada", "secundario", envolver=False))
+        self.caida = QDoubleSpinBox()
+        self.caida.setRange(0.0, 20.0)
+        self.caida.setSingleStep(0.5)
+        self.caida.setDecimals(1)
+        self.caida.setSuffix(" mm")
+        self.caida.setToolTip("Lo que baja el bisel de delante, de la línea de recorte a la pared.")
+        self.caida.valueChanged.connect(lambda v: self.ventana.cambiar_recorte(self.clave, caida=v))
+        fila.addWidget(self.caida, 1)
         lay.addLayout(fila)
 
         separador = QFrame()
@@ -435,12 +446,13 @@ class PanelPie(QFrame):
         for b in self.grupo.buttons():
             b.setChecked(b.property("referencia") == activa)
         for w, valor in ((self.recortar, pie.recorte.activo), (self.adelanto, pie.recorte.adelanto),
-                         (self.curvatura, pie.recorte.curvatura), (self.pendiente, pie.recorte.pendiente)):
+                         (self.curvatura, pie.recorte.curvatura), (self.pendiente, pie.recorte.pendiente),
+                         (self.caida, pie.recorte.caida)):
             w.blockSignals(True)
             w.setChecked(valor) if isinstance(w, QCheckBox) else w.setValue(valor)
             w.blockSignals(False)
         listo = pie.referencias.completas
-        for w in (self.recortar, self.adelanto, self.curvatura, self.pendiente):
+        for w in (self.recortar, self.adelanto, self.curvatura, self.pendiente, self.caida):
             w.setEnabled(listo)
         self.recortar.setToolTip("" if listo else "Marca antes las 3 referencias de este pie.")
         self._actualizar_piezas(pie, listo)
