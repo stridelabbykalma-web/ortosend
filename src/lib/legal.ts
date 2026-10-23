@@ -18,7 +18,7 @@ export const EMPRESA = {
 // cuenta al propio paciente al cumplirlos.
 export const CONSENT_VERSION = "v3";
 
-export const FECHA_TEXTOS = "septiembre de 2026";
+export const FECHA_TEXTOS = "octubre de 2026";
 
 // Enlace que abre WhatsApp con «ALTA» ya escrito hacia el número de la empresa.
 export const enlaceAlta = () => `https://wa.me/${EMPRESA.whatsapp}?text=ALTA`;

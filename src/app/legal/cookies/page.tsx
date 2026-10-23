@@ -26,7 +26,13 @@ export default function Cookies() {
               <td>ortosend_session</td>
               <td>Propia · técnica (exenta de consentimiento)</td>
               <td>Mantener tu sesión iniciada de forma segura</td>
-              <td>30 días</td>
+              <td>30 días (pacientes); de sesión, máx. 12 h (personal)</td>
+            </tr>
+            <tr>
+              <td>ortosend_acceso</td>
+              <td>Propia · técnica (exenta de consentimiento)</td>
+              <td>Recordar el paso intermedio al crear tu contraseña en /acceso</td>
+              <td>15 minutos</td>
             </tr>
             <tr>
               <td>Preferencia de cookies</td>
@@ -50,8 +56,10 @@ export default function Cookies() {
           Google: policies.google.com/technologies/cookies.
         </p>
         <p>
-          No utilizamos cookies de publicidad ni de analítica de terceros. Si esto cambiara,
-          actualizaremos esta política y volveremos a pedirte consentimiento.
+          Las apps del equipo y del taller usan además almacenamiento local técnico del navegador
+          (un identificador aleatorio de dispositivo para continuar un estudio donde se dejó en
+          otro aparato). No utilizamos cookies de publicidad ni de analítica de terceros. Si esto
+          cambiara, actualizaremos esta política y volveremos a pedirte consentimiento.
         </p>
         <p className="tiny">Última actualización: {FECHA_TEXTOS}.</p>
       </div>

@@ -15,6 +15,13 @@ import { ListaConsentimientos } from "@/components/consent/lista";
 import { fmtd, fmtdt, PRICE_LABEL } from "@/lib/format";
 import { EDAD_MAYORIA_SALUD, HANDOVER_TOKEN_DAYS, fechaMayoria } from "@/lib/edad";
 
+const CANDADO = (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+    <rect x="4.5" y="10.5" width="15" height="10" rx="2.5" />
+    <path d="M8 10.5V7.5a4 4 0 0 1 8 0v3" />
+  </svg>
+);
+
 export async function PanelCliente({ user }: { user: User }) {
   const cases = await prisma.case.findMany({
     where: { patient: { ownerId: user.id } },
@@ -27,10 +34,16 @@ export async function PanelCliente({ user }: { user: User }) {
     return (
       <>
         <EmailSinConfirmar user={user} />
-        <div className="card">
-          <b>Aún no tienes ningún tratamiento</b>
+        <div className="card px-lift pc-case">
+          <div className="px-ico">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+              <rect x="3.5" y="5" width="17" height="15.5" rx="2.5" />
+              <path d="M3.5 9.5h17M8 3v4M16 3v4" />
+            </svg>
+          </div>
+          <b style={{ fontFamily: "var(--font-sora)", fontSize: 16 }}>Aún no tienes ningún tratamiento</b>
           <p className="muted" style={{ marginTop: 6 }}>
-            Reserva tu primera cita en una clínica asociada.
+            Reserva tu primera cita en una clínica asociada: el estudio es gratuito y sin compromiso.
           </p>
           <Link href="/buscar" className="btn pri" style={{ marginTop: 10 }}>
             Buscar clínica
@@ -43,7 +56,10 @@ export async function PanelCliente({ user }: { user: User }) {
   }
   return (
     <>
-      <h2>Hola, {user.name.split(" ")[0]}</h2>
+      <div className="pc-hola">
+        <h2>Hola, {user.name.split(" ")[0]}</h2>
+        <div className="muted">Aquí sigues tu tratamiento, tus citas y tus documentos.</div>
+      </div>
       <div className="sp" />
       <EmailSinConfirmar user={user} />
       {cases.map((c) => {
@@ -167,8 +183,8 @@ export async function PanelCliente({ user }: { user: User }) {
                     Ver prescripción (pide contraseña)
                   </Link>
                 </div>
-                <div className="card" style={{ marginTop: 12, background: "var(--paper)" }}>
-                  <b>Pago — {PRICE_LABEL}</b>
+                <div className="pc-pay">
+                  <div className="t">Pago — {PRICE_LABEL}</div>
                   <form action={payAction}>
                     <input type="hidden" name="caseId" value={c.id} />
                     <label>¿Dónde quieres recibirlas?</label>
@@ -178,10 +194,10 @@ export async function PanelCliente({ user }: { user: User }) {
                     </select>
                     <div className="sp" />
                     <button type="submit" className="pri wfull">
-                      Pagar {PRICE_LABEL} — tarjeta o Bizum
+                      Pagar {PRICE_LABEL}
                     </button>
-                    <div className="tiny muted" style={{ marginTop: 6 }}>
-                      Pago seguro con Stripe. Elegirás tarjeta o Bizum en la siguiente pantalla.
+                    <div className="pc-seguro">
+                      {CANDADO} Pago seguro con Stripe · elegirás tarjeta o Bizum en la siguiente pantalla
                     </div>
                   </form>
                 </div>
@@ -238,9 +254,9 @@ export async function PanelCliente({ user }: { user: User }) {
             break;
         }
         return (
-          <div className="card" key={c.id} style={{ marginBottom: 18 }}>
-            <div className="row between">
-              <b style={{ fontFamily: "var(--font-sora)" }}>
+          <div className="card px-lift pc-case" key={c.id} style={{ marginBottom: 18 }}>
+            <div className="pc-case-head">
+              <b>
                 Tratamiento #{c.number}
                 {variasPersonas && <span className="muted"> · {c.patient.name}</span>}
               </b>
@@ -279,7 +295,7 @@ function PersonasACargo({ menores }: { menores: { id: string; name: string; birt
       </div>
       <div className="sp" />
       {menores.map((m) => (
-        <form key={m.id} className="card" action={updatePatientContactAction} style={{ marginBottom: 12 }}>
+        <form key={m.id} className="card px-lift" action={updatePatientContactAction} style={{ marginBottom: 12 }}>
           <input type="hidden" name="patientId" value={m.id} />
           <div className="row between">
             <b>{m.name}</b>
@@ -336,8 +352,8 @@ function MisDatos({ user }: { user: User }) {
   return (
     <>
       <div className="sp2" />
-      <details className="card">
-        <summary style={{ cursor: "pointer", fontWeight: 600 }}>Mis datos de acceso</summary>
+      <details className="card px-lift pc-acc">
+        <summary>Mis datos de acceso</summary>
         <form action={updateMyAccountAction}>
           <div className="grid g2">
             <div>
@@ -375,8 +391,8 @@ async function MisConsentimientos({ user }: { user: User }) {
   });
   if (!pacientes.length) return null;
   return (
-    <details className="card" style={{ marginTop: 14 }}>
-      <summary style={{ cursor: "pointer", fontWeight: 600 }}>Mis consentimientos</summary>
+    <details className="card px-lift pc-acc" style={{ marginTop: 14 }}>
+      <summary>Mis consentimientos</summary>
       <div className="tiny" style={{ margin: "6px 0 10px" }}>
         Puedes retirar cualquiera en un clic. Tu historia clínica se conserva el tiempo que exige la ley, pero se
         detienen el tratamiento y las comunicaciones.

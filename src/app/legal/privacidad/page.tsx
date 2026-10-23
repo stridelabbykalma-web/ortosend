@@ -62,18 +62,22 @@ export default function Privacidad() {
           pueden consentir por sí mismos el tratamiento de sus datos.
         </p>
         <p>
-          <b>6. Destinatarios y encargados.</b> Tus datos se alojan en la Unión Europea
-          (Frankfurt). Prestadores que tratan datos por nuestra cuenta con contrato del art. 28
-          RGPD: <b>Vercel Inc.</b> (alojamiento de la aplicación) y <b>Neon Inc.</b> (base de
-          datos), ambos con infraestructura en la UE y garantías de transferencia (cláusulas
-          contractuales tipo / EU-U.S. Data Privacy Framework) para el soporte desde EE. UU.;
-          las <b>clínicas asociadas</b> donde se realiza tu estudio; y, cuando se activen, el
-          proveedor de pagos (Stripe), de mensajería (WhatsApp Business a través de un proveedor
-          autorizado — a Meta solo llega tu número y el aviso, nunca contenido clínico), de
-          almacenamiento de archivos clínicos (en región UE), de envíos y de email. El buscador de
-          la portada utiliza <b>Google Maps</b> (previa aceptación de cookies) y el geocodificador
-          de <b>OpenStreetMap/Nominatim</b>, que recibe únicamente la población o código postal
-          buscado, sin ningún dato que te identifique.
+          <b>6. Destinatarios y encargados.</b> Tus datos (incluidos los vídeos, fotos y escaneos
+          del estudio) se alojan en la Unión Europea (Frankfurt). Prestadores que tratan datos por
+          nuestra cuenta con contrato del art. 28 RGPD: <b>Vercel Inc.</b> (alojamiento de la
+          aplicación) y <b>Neon Inc.</b> (base de datos y archivos clínicos), ambos con
+          infraestructura en la UE y garantías de transferencia (cláusulas contractuales tipo /
+          EU-U.S. Data Privacy Framework) para el soporte desde EE. UU.; las{" "}
+          <b>clínicas asociadas</b> donde se realiza tu estudio; <b>Stripe Payments Europe, Ltd.</b>{" "}
+          (Irlanda), que procesa el pago en su pasarela segura — nosotros no almacenamos los datos
+          de tu tarjeta; <b>Resend, Inc.</b> (envío de emails del servicio desde su región UE);{" "}
+          <b>ManyChat, Inc.</b> (EE. UU., con cláusulas contractuales tipo), que gestiona los avisos
+          por WhatsApp junto a <b>Meta/WhatsApp</b> — a ellos solo llega tu número y el aviso
+          logístico, nunca contenido clínico; y, cuando se active el envío a domicilio por
+          mensajería, la empresa de transporte (que recibe únicamente nombre, dirección y teléfono
+          de contacto). El buscador de la portada utiliza <b>Google Maps</b> (previa aceptación de
+          cookies) y el geocodificador de <b>OpenStreetMap/Nominatim</b>, que recibe únicamente la
+          población o código postal buscado, sin ningún dato que te identifique.
         </p>
         <p>
           <b>7. Plazos de conservación.</b> La documentación clínica (estudio, prescripción) se

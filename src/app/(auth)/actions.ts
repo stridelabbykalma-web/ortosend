@@ -30,10 +30,11 @@ export async function loginAction(formData: FormData) {
     identifier: formData.get("identifier"),
     password: formData.get("password"),
   });
-  // Ámbito de la entrada: la web pública (/login) es solo para pacientes y
-  // /equipo es solo para el personal (clínicas, taller, administración).
-  const ambito = formData.get("ambito") === "equipo" ? "equipo" : "cliente";
-  const base = ambito === "equipo" ? "/equipo" : "/login";
+  // Ámbito de la entrada: la web pública (/login) es solo para pacientes,
+  // /equipo para las clínicas (y administración) y /taller para el taller.
+  const raw = String(formData.get("ambito") ?? "");
+  const ambito = raw === "equipo" || raw === "taller" ? raw : "cliente";
+  const base = { cliente: "/login", equipo: "/equipo", taller: "/taller" }[ambito];
   const next = String(formData.get("next") ?? "");
   // Solo rutas internas: "//" y "/\" son redirecciones a otros dominios.
   const dest = /^\/(?![\/\\])/.test(next) ? next : "/panel";
@@ -51,11 +52,19 @@ export async function loginAction(formData: FormData) {
   if (!user || !user.active || !user.passwordHash || !(await verifyPassword(parsed.data.password, user.passwordHash))) {
     redirect(loginUrl("Credenciales incorrectas"));
   }
+  // Cada puerta es solo para lo suyo: una cuenta del ámbito equivocado no
+  // entra ni se la reconduce (entre personal sí se le dice cuál es la suya).
   if (ambito === "cliente" && user!.role !== "CLIENTE") {
-    redirect("/equipo?ok=" + encodeURIComponent("Tu cuenta es del equipo: esta es tu entrada. Vuelve a escribir tus credenciales."));
+    redirect(loginUrl("Esta entrada es solo para pacientes."));
   }
   if (ambito === "equipo" && user!.role === "CLIENTE") {
-    redirect("/login?error=" + encodeURIComponent("Esa cuenta es de paciente: entra desde la web de Ortosend."));
+    redirect(loginUrl("Esta entrada es solo para el equipo de las clínicas."));
+  }
+  if (ambito === "equipo" && user!.role === "TALLER") {
+    redirect(loginUrl("El taller tiene su propia app: entra desde ortosend.es/taller."));
+  }
+  if (ambito === "taller" && user!.role !== "TALLER" && user!.role !== "ADMIN") {
+    redirect(loginUrl("Esta entrada es solo para el taller."));
   }
   await createSession(user!.id);
   // Continuidad del estudio: si el profesional entra desde otro dispositivo
