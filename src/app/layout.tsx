@@ -1,16 +1,15 @@
 import type { Metadata } from "next";
-import { Cormorant, Montserrat } from "next/font/google";
+import { Figtree } from "next/font/google";
 import "./globals.css";
 import { Nav } from "@/components/nav";
 import { AudioPrimer } from "@/components/audio-primer";
 import { CookieBanner } from "@/components/cookies";
 import { SoloWeb } from "@/components/solo-web";
 
-// Pareja tipográfica premium (skill ui-ux-pro-max): Cormorant para display,
-// Montserrat para todo lo demás. --font-sora queda como alias de Montserrat en
-// globals.css para no tocar sus decenas de usos.
-const display = Cormorant({ variable: "--font-display", subsets: ["latin"], weight: ["500", "600", "700"] });
-const sans = Montserrat({ variable: "--font-inter", subsets: ["latin"], weight: ["400", "500", "600", "700", "800"] });
+// Tipografía médica limpia (skill ui-ux-pro-max para healthcare): Figtree en
+// toda la app — pesos altos para display, normales para cuerpo y UI. Las
+// variables --font-display/--font-inter/--font-sora apuntan todas a ella.
+const sans = Figtree({ variable: "--font-inter", subsets: ["latin"], weight: ["400", "500", "600", "700", "800"] });
 
 export const metadata: Metadata = {
   title: "Ortosend — Plantillas a medida",
@@ -20,7 +19,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="es" className={`${display.variable} ${sans.variable}`}>
+    <html lang="es" className={`${sans.variable}`}>
       <body>
         <AudioPrimer />
         <SoloWeb>

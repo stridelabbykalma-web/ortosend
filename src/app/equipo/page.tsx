@@ -18,7 +18,7 @@ export const metadata: Metadata = {
   icons: { apple: "/apple-touch-icon.png" },
   appleWebApp: { capable: true, title: "Ortosend", statusBarStyle: "default" },
 };
-export const viewport: Viewport = { themeColor: "#1c1917" };
+export const viewport: Viewport = { themeColor: "#0e7490" };
 
 export default async function EquipoPage({
   searchParams,
