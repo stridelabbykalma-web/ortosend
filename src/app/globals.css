@@ -4,7 +4,7 @@
 :root {
   --ink: #17262e;
   --ink2: #4a5a63;
-  --mut: #8a968d;
+  --mut: #66756c;
   --teal: #0e6e5c;
   --teal-d: #0a5245;
   --teal-l: #e4f1ec;
@@ -26,7 +26,7 @@ body {
   font-family: var(--font-inter), system-ui, sans-serif;
   background: var(--paper);
   color: var(--ink);
-  font-size: 15px;
+  font-size: 16px;
   line-height: 1.55;
   margin: 0;
 }
@@ -35,6 +35,8 @@ a { color: var(--teal); text-decoration: none; }
 button, .btn {
   font-family: var(--font-inter), sans-serif;
   font-size: 14px;
+  min-height: 44px; /* objetivo táctil mínimo (WCAG/skill ui-ux-pro-max) */
+  align-content: center;
   cursor: pointer;
   border: 1px solid var(--line);
   background: #fff;
@@ -126,7 +128,7 @@ tr.click:hover { background: var(--paper); }
 .tcard.sla-ajustado { border-left: 4px solid var(--amber); }
 .tcard.sla-fuera { border-left: 4px solid var(--red); }
 .tcard.sla-ok { border-left: 4px solid var(--green); }
-button.mini { font-size: 12px; padding: 4px 10px; border-radius: 8px; }
+button.mini { font-size: 12px; padding: 4px 10px; border-radius: 8px; min-height: 0; }
 .tabs a .tabn { display: inline-block; margin-left: 6px; font-size: 11px; font-weight: 600; background: var(--teal-l); color: var(--teal-d); border-radius: 99px; padding: 1px 7px; }
 .checkline { display: flex; align-items: center; gap: 9px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; margin-bottom: 7px; font-size: 13.5px; }
 .checkline.ok { background: var(--green-l); border-color: #bfdcc0; color: var(--green); }
