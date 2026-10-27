@@ -15,10 +15,6 @@ export default async function LoginPage({
   return (
     <div className="wrap" style={{ maxWidth: 400 }}>
       <div className="sp2" />
-      <div className="logo" style={{ fontSize: 28 }}>
-        orto<b>send</b>
-      </div>
-      <div className="sp" />
       <h2>Acceder</h2>
       <div className="muted">Entra para seguir tu tratamiento, ver tu prescripción y gestionar tus citas.</div>
       <div className="sp" />

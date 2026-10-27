@@ -338,6 +338,10 @@ button, .btn, a {
 .nav { background: rgba(255, 255, 255, 0.92); backdrop-filter: saturate(1.1) blur(8px); }
 .nav .wrap { flex-wrap: nowrap; }
 .nav .links { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+.nav .links a { white-space: nowrap; }
+@media (max-width: 640px) {
+  .nav .links { gap: 12px; font-size: 13px; }
+}
 .nav .links::-webkit-scrollbar { display: none; }
 
 /* --- Hero verde bosque --- */
@@ -384,12 +388,14 @@ button, .btn, a {
   margin-bottom: -64px;
   color: var(--ink);
 }
-.px-trust { display: flex; gap: 10px 26px; flex-wrap: wrap; margin-top: 26px; color: var(--ink2); font-size: 13.5px; }
+.px-trust { display: flex; gap: 10px 26px; flex-wrap: wrap; margin: 4px 0 30px; color: var(--ink2); font-size: 13.5px; }
 .px-trust span { display: inline-flex; align-items: center; gap: 7px; }
 .px-trust svg { color: #047857; flex: none; }
 
 /* --- Secciones y tarjetas --- */
 .px-sec { padding-top: 96px; }
+/* En tablet los 4 pasos quedan 2×2 en vez de 4 columnas estrechas. */
+.px-sec .grid.g4 { grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
 .px-kicker {
   color: var(--teal);
   font-weight: 600;

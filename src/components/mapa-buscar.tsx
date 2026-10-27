@@ -186,7 +186,7 @@ export function MapaBuscar({
           height: 380,
           borderRadius: 14,
           border: "1px solid var(--line)",
-          background: "#efede6",
+          background: "#eef6f9",
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
@@ -217,7 +217,7 @@ export function MapaBuscar({
         border: "1px solid var(--line)",
         overflow: "hidden",
         zIndex: 0,
-        background: "#e8e6df",
+        background: "#e3eff4",
       }}
     />
   );
