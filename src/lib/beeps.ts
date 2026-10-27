@@ -100,13 +100,26 @@ export function primeBeeps() {
   if (!b || b.primed) return;
   playbackSession();
   for (const el of [b.start, b.stop]) {
+    // Doble cinturón para que el desbloqueo sea inaudible aunque la página
+    // ande ocupada: volumen a 0 durante el prime (iOS lo ignora, pero ahí el
+    // silencio inicial del WAV basta) y un pause de respaldo por temporizador
+    // dentro del tramo de silencio, por si el .then del play llega tarde.
+    const corta = () => {
+      el.pause();
+      el.currentTime = 0;
+      el.volume = 1;
+    };
+    el.volume = 0;
+    const respaldo = setTimeout(corta, BEEP_LEAD_MS - 60);
     el.play()
       .then(() => {
-        el.pause();
-        el.currentTime = 0;
+        clearTimeout(respaldo);
+        corta();
       })
       .catch(() => {
         // sin gesto válido todavía; se reintenta con el siguiente toque
+        clearTimeout(respaldo);
+        el.volume = 1;
         b.primed = false;
       });
   }

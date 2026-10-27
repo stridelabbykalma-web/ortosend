@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { Figtree } from "next/font/google";
 import "./globals.css";
 import { Nav } from "@/components/nav";
-import { AudioPrimer } from "@/components/audio-primer";
 import { CookieBanner } from "@/components/cookies";
 import { SoloWeb } from "@/components/solo-web";
 
@@ -21,7 +20,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="es" className={`${sans.variable}`}>
       <body>
-        <AudioPrimer />
         <SoloWeb>
           <Nav />
         </SoloWeb>

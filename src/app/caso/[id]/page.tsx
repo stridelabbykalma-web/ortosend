@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AudioPrimer } from "@/components/audio-primer";
 import { nombreCompleto } from "@/lib/nombre";
 import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
@@ -102,6 +103,9 @@ export default async function CasoPage({
     const pasoNum = paso ? Number(paso) || undefined : undefined;
     inner = (
       <>
+        {/* Desbloquea los pitidos del estudio con el primer toque: solo aquí,
+            donde hacen falta — en el resto de la web no debe sonar nada. */}
+        <AudioPrimer />
         <ContinuidadEstudio caseId={k.id} paso={pasoNum ?? 0} />
         <CapturaGuiada kase={k} paso={pasoNum} puedeRecetar={clinicaReceta} elegir={elegir === "1"} />
         {!pasoNum && <Historial events={k.events} />}
