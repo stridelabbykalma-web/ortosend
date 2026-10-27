@@ -5,9 +5,9 @@
   --ink: #17262e;
   --ink2: #4a5a63;
   --mut: #66756c;
-  --teal: #0e6e5c;
-  --teal-d: #0a5245;
-  --teal-l: #e4f1ec;
+  --teal: #a16207;
+  --teal-d: #8a5a06;
+  --teal-l: #f5ebd8;
   --paper: #f6f4ef;
   --card: #ffffff;
   --line: #e4e0d6;
@@ -68,7 +68,7 @@ label.chk input { width: auto; margin-top: 3px; }
 .wrap { max-width: 1080px; margin: 0 auto; padding: 0 20px; }
 .nav { background: #fff; border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 50; }
 .nav .wrap { display: flex; align-items: center; justify-content: space-between; height: 58px; }
-.logo { font-family: var(--font-sora); font-weight: 700; font-size: 19px; color: var(--ink); }
+.logo { font-family: var(--font-display); font-weight: 700; font-size: 21px; color: var(--ink); }
 .logo b { color: var(--teal); font-weight: 700; }
 .nav .links { display: flex; gap: 18px; align-items: center; font-size: 14px; flex-wrap: wrap; }
 .nav .links a { color: var(--ink2); }
@@ -314,15 +314,17 @@ label.chk.qc:has(input:checked) { background: var(--green-l); border-color: #bfd
 .wdays label:has(input:checked) { background: var(--teal); color: #fff; border-color: var(--teal); }
 .wdays input { display: none; }
 
+:root { --font-sora: var(--font-inter); } /* alias: la UI usa Montserrat */
+
 /* ============================================================
    Web pública (prefijo px-): capa ADITIVA del rediseño premium.
    No redefine ninguna clase compartida con el panel.
    ============================================================ */
 :root {
-  --bosque: #0b3a30;
-  --bosque2: #11493c;
-  --crema: #f3efe4;
-  --sand: #cfae72;
+  --bosque: #1c1917;
+  --bosque2: #2b2522;
+  --crema: #faf7f2;
+  --sand: #d9a954;
   --shadow-1: 0 1px 2px rgba(23, 38, 46, 0.05), 0 8px 24px rgba(23, 38, 46, 0.07);
   --shadow-2: 0 2px 6px rgba(23, 38, 46, 0.08), 0 18px 44px rgba(23, 38, 46, 0.14);
   --r-lg: 22px;
@@ -357,15 +359,16 @@ button, .btn, a {
   background-position: right -40px bottom -120px;
 }
 .px-hero h1 {
-  font-size: clamp(34px, 5vw, 56px);
-  line-height: 1.06;
-  letter-spacing: -0.5px;
+  font-family: var(--font-display);
+  font-size: clamp(40px, 5.6vw, 64px);
+  line-height: 1.04;
+  letter-spacing: 0;
   color: #fff;
-  font-weight: 800;
+  font-weight: 600;
   max-width: 680px;
   margin: 0;
 }
-.px-sub { color: #cfe0d8; font-size: 17px; max-width: 580px; margin: 18px 0 8px; }
+.px-sub { color: #e3dcd2; font-size: 17px; max-width: 580px; margin: 18px 0 8px; }
 .px-price { display: inline-flex; align-items: baseline; gap: 10px; margin: 6px 0 28px; }
 .px-price b { font-family: var(--font-sora); font-size: 30px; color: #fff; }
 .px-price span { color: var(--sand); font-size: 14px; }
@@ -379,7 +382,7 @@ button, .btn, a {
   margin-bottom: -64px;
   color: var(--ink);
 }
-.px-trust { display: flex; gap: 10px 26px; flex-wrap: wrap; margin-top: 26px; color: #b9d2c7; font-size: 13.5px; }
+.px-trust { display: flex; gap: 10px 26px; flex-wrap: wrap; margin-top: 26px; color: #c7bfb4; font-size: 13.5px; }
 .px-trust span { display: inline-flex; align-items: center; gap: 7px; }
 .px-trust svg { color: var(--sand); flex: none; }
 
@@ -393,7 +396,7 @@ button, .btn, a {
   font-size: 12px;
   font-family: var(--font-sora);
 }
-.px-h2 { font-size: clamp(24px, 3vw, 34px); letter-spacing: -0.3px; margin: 6px 0 22px; }
+.px-h2 { font-family: var(--font-display); font-size: clamp(28px, 3.4vw, 40px); font-weight: 600; letter-spacing: 0; margin: 6px 0 22px; }
 .px-lift { box-shadow: var(--shadow-1); border-color: transparent; }
 .px-lift:hover { transform: translateY(-3px); box-shadow: var(--shadow-2); }
 .px-step .n {
@@ -431,7 +434,7 @@ button, .btn, a {
   gap: 24px;
 }
 .px-band b { color: #fff; font-family: var(--font-sora); display: block; margin-bottom: 4px; }
-.px-dim { color: #b9d2c7; font-size: 13.5px; }
+.px-dim { color: #c7bfb4; font-size: 13.5px; }
 .px-cta-dark {
   background: var(--bosque);
   color: var(--crema);
@@ -477,14 +480,14 @@ button, .btn, a {
 }
 
 /* --- Pie premium --- */
-.px-footer { background: var(--bosque); color: #b9d2c7; margin-top: 96px; padding: 52px 0 26px; font-size: 13.5px; }
+.px-footer { background: var(--bosque); color: #c7bfb4; margin-top: 96px; padding: 52px 0 26px; font-size: 13.5px; }
 .px-footer .logo, .px-footer .logo b { color: var(--crema); }
 .px-footer a { color: var(--crema); }
 .px-footer a:hover { color: #fff; }
 .px-fcols { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 28px; margin-bottom: 34px; }
 .px-fcols nav { display: grid; gap: 8px; align-content: start; }
-.px-fcols .t { color: #8fb3a6; font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 4px; font-family: var(--font-sora); }
-.px-fbase { border-top: 1px solid rgba(243, 239, 228, 0.15); padding-top: 18px; display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; color: #8fb3a6; font-size: 12.5px; }
+.px-fcols .t { color: #a89d8f; font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 4px; font-family: var(--font-sora); }
+.px-fbase { border-top: 1px solid rgba(243, 239, 228, 0.15); padding-top: 18px; display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; color: #a89d8f; font-size: 12.5px; }
 
 @media (max-width: 720px) {
   .px-hero { padding: 46px 0 80px; border-radius: 0 0 18px 18px; }
@@ -502,7 +505,7 @@ button, .btn, a {
    Panel del cliente (prefijo pc-): capa ADITIVA sobre px-.
    Solo la usan PanelCliente y la vista del dueño en /caso/[id].
    ============================================================ */
-.pc-hola h2 { font-size: clamp(26px, 3.4vw, 34px); font-weight: 800; letter-spacing: -0.4px; margin: 0; }
+.pc-hola h2 { font-family: var(--font-display); font-size: clamp(30px, 3.8vw, 40px); font-weight: 600; letter-spacing: 0; margin: 0; }
 .pc-hola .muted { margin-top: 4px; }
 .pc-case { border-radius: var(--r-lg); padding: 24px; }
 .pc-case-head {
@@ -519,12 +522,12 @@ button, .btn, a {
   color: var(--crema); border-radius: 16px; padding: 22px; margin-top: 14px;
 }
 .pc-pay .t { font-family: var(--font-sora); color: #fff; font-size: 20px; margin-bottom: 6px; }
-.pc-pay label { color: #b9d2c7; }
+.pc-pay label { color: #c7bfb4; }
 .pc-pay select { background: rgba(255, 255, 255, 0.08); color: #fff; border-color: rgba(255, 255, 255, 0.25); }
 .pc-pay select option { color: var(--ink); background: #fff; }
 .pc-pay .pri { background: var(--crema); border-color: var(--crema); color: var(--bosque); font-weight: 700; }
 .pc-pay .pri:hover { background: #fff; }
-.pc-pay .pc-seguro { color: #b9d2c7; font-size: 12.5px; display: flex; align-items: center; gap: 7px; margin-top: 10px; }
+.pc-pay .pc-seguro { color: #c7bfb4; font-size: 12.5px; display: flex; align-items: center; gap: 7px; margin-top: 10px; }
 .pc-pay .pc-seguro svg { color: var(--sand); flex: none; }
 
 .pc-acc { border-radius: var(--r-lg); }
@@ -540,7 +543,7 @@ button, .btn, a {
 .pc-lock { max-width: 460px; border-radius: var(--r-lg); }
 .pc-doc { border-radius: var(--r-lg); padding: 28px; max-width: 760px; }
 .pc-doc-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; border-bottom: 2px solid var(--bosque); padding-bottom: 12px; margin-bottom: 18px; }
-.pc-doc-head h3 { margin: 0; }
+.pc-doc-head h3 { margin: 0; font-family: var(--font-display); font-size: 26px; font-weight: 600; }
 .pc-k { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--mut); font-family: var(--font-sora); margin-bottom: 2px; }
 .pc-doc-meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px 22px; margin-bottom: 8px; }
 .pc-doc-sec { margin: 14px 0; }

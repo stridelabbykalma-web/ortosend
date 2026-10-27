@@ -1,13 +1,16 @@
 import type { Metadata } from "next";
-import { Sora, Inter } from "next/font/google";
+import { Cormorant, Montserrat } from "next/font/google";
 import "./globals.css";
 import { Nav } from "@/components/nav";
 import { AudioPrimer } from "@/components/audio-primer";
 import { CookieBanner } from "@/components/cookies";
 import { SoloWeb } from "@/components/solo-web";
 
-const sora = Sora({ variable: "--font-sora", subsets: ["latin"], weight: ["400", "600", "700", "800"] });
-const inter = Inter({ variable: "--font-inter", subsets: ["latin"], weight: ["400", "500", "600"] });
+// Pareja tipográfica premium (skill ui-ux-pro-max): Cormorant para display,
+// Montserrat para todo lo demás. --font-sora queda como alias de Montserrat en
+// globals.css para no tocar sus decenas de usos.
+const display = Cormorant({ variable: "--font-display", subsets: ["latin"], weight: ["500", "600", "700"] });
+const sans = Montserrat({ variable: "--font-inter", subsets: ["latin"], weight: ["400", "500", "600", "700", "800"] });
 
 export const metadata: Metadata = {
   title: "Ortosend — Plantillas a medida",
@@ -17,7 +20,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="es" className={`${sora.variable} ${inter.variable}`}>
+    <html lang="es" className={`${display.variable} ${sans.variable}`}>
       <body>
         <AudioPrimer />
         <SoloWeb>
