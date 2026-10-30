@@ -107,3 +107,9 @@ export const MEDIA_LABEL: Record<string, string> = Object.fromEntries([
   [SCAN_KIND, "Escaneo de las espumas fenólicas"],
   ["foto_calidad", "Foto del par terminado (control de calidad)"],
 ]);
+
+// Fecha de caducidad de un lote: siempre con el año (31/12/2027).
+export function fmtCaducidad(d: Date | string | null | undefined) {
+  if (!d) return "";
+  return new Date(d).toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "UTC" });
+}

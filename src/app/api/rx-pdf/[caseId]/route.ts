@@ -2,9 +2,10 @@
 // Acceso: el personal que puede ver el caso (clínica del caso, recetador
 // central, taller, admin) con registro en AuditLog; el paciente titular, solo
 // con el token de lectura de 10 min (?t=…) que obtiene re-confirmando su
-// contraseña, igual que la vista web del documento.
+// contraseña, igual que la vista web del documento. El taller también desde Ortosend
+// Taller, con su token.
 import { NextResponse } from "next/server";
-import { getSessionUser } from "@/lib/auth";
+import { usuarioPeticion } from "@/lib/api-taller";
 import { prisma } from "@/lib/db";
 import { audit } from "@/lib/cases";
 import { esCentral } from "@/lib/rx-route";
@@ -15,7 +16,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(request: Request, { params }: { params: Promise<{ caseId: string }> }) {
   const { caseId } = await params;
-  const user = await getSessionUser();
+  const user = await usuarioPeticion(request);
   if (!user) return NextResponse.json({ error: "no autorizado" }, { status: 401 });
   const kase = await prisma.case.findUnique({
     where: { id: caseId },

@@ -1,7 +1,8 @@
-// Pedidos del taller tal como los ve el Rectificador (programa del taller): la lista en el
-// mismo orden que el tablero del panel y el detalle con la pauta por pie, la ficha técnica
-// y la hoja de confección. Solo lo necesario para fabricar (datos mínimos, RGPD).
-import type { Case, Clinic, HojaConfeccion, Incident, Patient, Payment, User } from "@prisma/client";
+// Pedidos del taller tal como los ve Ortosend Taller (programa del taller): la lista en el
+// mismo orden que el tablero del panel y el detalle con la pauta por pie, la ficha técnica,
+// la hoja de confección y el expediente (receta, vídeos y fotos, cuestionario y exploración),
+// lo mismo que el taller ve en la web. Cada consulta queda registrada (RGPD).
+import type { Case, Clinic, ConsumoMaterial, HojaConfeccion, Incident, LoteMaterial, Material, MediaAsset, Patient, Payment, Prescription, User } from "@prisma/client";
 import { prisma } from "./db";
 import { audit } from "./cases";
 import { nombreCompleto } from "./nombre";
@@ -9,6 +10,8 @@ import { PROD_STEPS, TALLER_STATES, fichaTecnica, ordenTaller, prodStepIndex, re
 import type { Questionnaire } from "./questionnaire";
 import type { Exam } from "./exploracion";
 import { ErrorTaller, ajustesTaller, materialesTaller } from "./taller-ops";
+import { tratamientoPermitido } from "./alta";
+import { escaneoJson, estudioJson, expedienteSecciones, recetaJson } from "./expediente-texto";
 
 type Fila = Case & { patient: Patient; clinic: Clinic; payment: Payment | null; incidents: Incident[] };
 
@@ -40,29 +43,59 @@ export async function listaPedidos() {
   return ordenTaller(casos).map(resumen);
 }
 
-function hojaJson(h: HojaConfeccion | null) {
+// Los costes (y el importe de cada capa) solo los ve el administrador: el taller no.
+function hojaJson(h: HojaConfeccion | null, verCostes = false) {
   if (!h) return null;
+  const capas = ((h.capas ?? []) as Record<string, unknown>[]).map((c) => {
+    if (verCostes) return c;
+    const { cents: _cents, ...resto } = c;
+    void _cents;
+    return resto;
+  });
   return {
     proceso: h.proceso,
-    capas: h.capas,
+    capas,
     notas: h.notas ?? "",
     minutosCnc: h.minutosCnc,
     minutosConfeccion: h.minutosConfeccion,
-    coste: {
-      materialCents: h.costeMaterialCents,
-      fresadoCents: h.costeFresadoCents,
-      manoObraCents: h.costeManoObraCents,
-      totalCents: h.costeTotalCents,
-    },
+    ...(verCostes
+      ? {
+          coste: {
+            materialCents: h.costeMaterialCents,
+            fresadoCents: h.costeFresadoCents,
+            manoObraCents: h.costeManoObraCents,
+            totalCents: h.costeTotalCents,
+          },
+        }
+      : {}),
     actualizadoPor: h.actualizadoPor,
     actualizado: h.updatedAt.toISOString(),
   };
 }
 
-export async function detallePedido(caseId: string, user: Pick<User, "id">) {
+export const veCostes = (user: Pick<User, "role">) => user.role === "ADMIN";
+
+// Material tal como lo ve quien no puede ver costes (sin precio ni rendimiento).
+export function materialSinCostes<T extends { precioCents: number; paresPorPlancha: number }>(m: T) {
+  const { precioCents: _p, paresPorPlancha: _r, ...resto } = m;
+  void _p;
+  void _r;
+  return resto;
+}
+
+export async function detallePedido(caseId: string, user: Pick<User, "id" | "role">) {
   const c = await prisma.case.findUnique({
     where: { id: caseId },
-    include: { patient: true, clinic: true, payment: true, incidents: true, capture: true, prescription: true, hoja: true },
+    include: {
+      patient: { include: { owner: { select: { name: true, phone: true, email: true } } } },
+      clinic: true,
+      payment: true,
+      incidents: true,
+      capture: { include: { media: true } },
+      prescription: true,
+      hoja: true,
+      consumos: { include: { lote: true, material: true }, orderBy: { createdAt: "asc" } },
+    },
   });
   if (!c || !TALLER_STATES.includes(c.state)) throw new ErrorTaller("Caso no activo en taller", 404);
   // Registro de accesos a datos de salud (RGPD), como al abrir la ficha en la web.
@@ -75,7 +108,57 @@ export async function detallePedido(caseId: string, user: Pick<User, "id">) {
     pies: [izq, dcho],
     pauta: c.prescription?.fabricationOrder ?? null,
     ficha: fichaTecnica(q, e, c),
-    hoja: hojaJson(c.hoja),
+    hoja: hojaJson(c.hoja, veCostes(user)),
+    materiales: c.consumos.map(consumoJson),
+    ...expedienteDe(c, q, e),
+  };
+}
+
+// Receta, capturas del estudio, cuestionario y exploración. Sin consentimientos en vigor no se
+// enseña nada clínico (igual que en la web).
+type ConExpediente = Fila & {
+  patient: Parameters<typeof escaneoJson>[1];
+  capture: { media: MediaAsset[] } | null;
+  prescription: Prescription | null;
+};
+
+function expedienteDe(c: ConExpediente, q: Questionnaire | null, e: Exam | null) {
+  if (!tratamientoPermitido(c.patient)) {
+    return {
+      receta: null,
+      estudio: null,
+      expediente: null,
+      escaneo: null,
+      aviso: "El paciente no tiene en vigor los consentimientos: no se puede ver su expediente.",
+    };
+  }
+  const media = c.capture?.media ?? [];
+  return {
+    diagnostico: c.prescription?.diagnosis ?? null,
+    receta: recetaJson(c.id, c.prescription),
+    estudio: estudioJson(media),
+    expediente: expedienteSecciones(q, e, c.reason),
+    escaneo: escaneoJson(c, c.patient, media, c.clinic.name),
+    aviso: null,
+  };
+}
+
+type ConsumoConLote = ConsumoMaterial & { lote: LoteMaterial; material: Material | null };
+
+// Material registrado en la plantilla (trazabilidad): qué, qué lote, para qué pie, quién y cuándo.
+export function consumoJson(c: ConsumoConLote) {
+  return {
+    id: c.id,
+    materialId: c.materialId,
+    material: c.material?.nombre ?? null,
+    lote: c.lote.lote,
+    caducidad: c.lote.caducidad ? c.lote.caducidad.toISOString().slice(0, 10) : null,
+    gtin: c.lote.gtin,
+    pies: c.pies,
+    foto: c.fotoId ? `/api/media/${c.fotoId}` : null,
+    quien: c.userName,
+    cuando: c.createdAt.toISOString(),
+    anulado: c.anuladoAt ? { cuando: c.anuladoAt.toISOString(), quien: c.anuladoPor, motivo: c.motivoAnulacion } : null,
   };
 }
 

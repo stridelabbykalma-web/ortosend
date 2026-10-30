@@ -1,14 +1,20 @@
-// Utilidades de la API del taller para el Rectificador (programa del taller): sesión por
+// Utilidades de la API del taller para Ortosend Taller (programa del taller): sesión por
 // token (cabecera Authorization: Bearer) solo para usuarios TALLER o ADMIN, y respuestas
 // JSON con el mensaje de error en español.
 import type { User } from "@prisma/client";
-import { verifyAppToken } from "./auth";
+import { getSessionUser, verifyAppToken } from "./auth";
 import { ErrorTaller } from "./taller-ops";
 
-export async function usuarioApp(req: Request): Promise<User> {
+// Quién pide: Ortosend Taller manda su token (cabecera Bearer); el navegador va con la sesión de la web.
+export async function usuarioPeticion(req: Request): Promise<User | null> {
   const cabecera = req.headers.get("authorization") ?? "";
   const token = cabecera.startsWith("Bearer ") ? cabecera.slice(7).trim() : "";
-  const user = token ? await verifyAppToken(token) : null;
+  return token ? verifyAppToken(token) : getSessionUser().catch(() => null);
+}
+
+// Solo personal del taller (o el administrador).
+export async function usuarioApp(req: Request): Promise<User> {
+  const user = await usuarioPeticion(req);
   if (!user) throw new ErrorTaller("Sesión caducada: vuelve a entrar con tu usuario de taller", 401);
   if (user.role !== "TALLER" && user.role !== "ADMIN") throw new ErrorTaller("Sin permiso", 403);
   return user;
