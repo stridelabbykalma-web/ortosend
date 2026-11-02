@@ -344,3 +344,26 @@ def test_descarga_1mtt_cerrada_y_abierta(proyecto):
     delante = (np.abs(v - cv) < 0.6) & (u > cu + 25) & pie.mascara
     assert np.abs(abierta[delante]).max() <= 0.05
     pz.sentido = "cerrada"
+
+
+def test_descarga_sesamoideos_revisada(proyecto):
+    """Hueco de 2 mm (20 × 14) centrado 5 mm por detrás de la 1.ª cabeza y 3 mm hacia dentro; cerrada o
+    abierta al borde interno."""
+    p = proyecto
+    pie = p.pies[0]
+    sis = pie.referencias.sistema()
+    X, Y = p.original.rejilla.malla()
+    u, v = sis.a_local(X, Y)
+    cu, cv = (float(c) for c in sis.a_local(*pie.referencias.puntos["mtt1"]))
+    cerrada, pz = _efecto(p, pie, "descarga_sesamoideos")
+    assert pz.revisada and pz.sentido == "cerrada" and pz.altura == 2.0
+    assert cerrada.max() == pytest.approx(2.0, abs=0.1)
+    j, i = np.unravel_index(np.argmax(np.where(cerrada > 1.99, -np.hypot(u - (cu - 5), v - (cv + 3)), -1e9)),
+                            cerrada.shape)
+    assert np.hypot(u[j, i] - (cu - 5), v[j, i] - (cv + 3)) < 1.5
+    linea = (np.abs(u - (cu - 5)) < 0.6) & pie.mascara
+    dentro = linea & (v > cv + 3 + 14) & (v < cv + 3 + 18)
+    assert np.abs(cerrada[dentro]).max() <= 0.05
+    abierta, _ = _efecto(p, pie, "descarga_sesamoideos", sentido="abierta")
+    assert abierta[dentro].min() == pytest.approx(2.0, abs=0.15)
+    pz.sentido = "cerrada"

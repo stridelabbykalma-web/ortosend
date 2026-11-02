@@ -261,8 +261,10 @@ class PanelPie(QFrame):
                          "molde) con la pared suave. «Cerrada»: un bolsillo. «Abierta al borde interno»: sigue igual "
                          "de honda hasta el borde interno de la plantilla (libera más el 1.er radio).",
         "descarga_5mtt": "Descarga bajo la cabeza del 5.º MTT: hueco en la plantilla (escayola añadida al molde).",
-        "descarga_sesamoideos": "Descarga de sesamoideos, bajo la 1.ª cabeza un poco por detrás: hueco en la "
-                                "plantilla (escayola añadida al molde).",
+        "descarga_sesamoideos": "Descarga de sesamoideos: hueco oval en la plantilla (escayola añadida al molde) "
+                                "bajo los sesamoideos, 5 mm por detrás de la 1.ª cabeza y algo hacia dentro. "
+                                "«Cerrada»: un bolsillo. «Abierta al borde interno»: sigue igual de honda hasta el "
+                                "borde interno.",
         "espolon": "Descarga del espolón (tubérculo medial del calcáneo): hueco en la plantilla.",
         "navicular": "Soporte bajo el escafoides: bulto en la plantilla (hueco en el molde).",
         "cuboides": "Soporte bajo el cuboides (columna lateral): bulto en la plantilla (hueco en el molde).",

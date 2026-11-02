@@ -73,10 +73,14 @@ profundidad = 2.0
 diametro = 20.0
 
 [descarga_sesamoideos]
-# Hueco bajo los sesamoideos (bajo la 1.ª cabeza, un poco por detrás).
+# Hueco oval en la plantilla bajo los sesamoideos (se añade escayola al molde), para plantilla rígida: más
+# pequeño y algo más atrás que la descarga del 1.er MTT, centrado 5 mm por detrás de la 1.ª cabeza y 3 mm
+# hacia dentro (sesamoideo medial). Fondo casi plano y pared suave de 6 mm, sin canto.
+# forma = "cerrada" (bolsillo) o "abierta" (sigue igual de hondo hasta el borde interno de la planta).
 profundidad = 2.0
-largo = 22.0
-ancho = 16.0
+largo = 20.0
+ancho = 14.0
+forma = "cerrada"
 
 [descarga_espolon]
 # Hueco bajo el tubérculo medial del calcáneo (espolón).

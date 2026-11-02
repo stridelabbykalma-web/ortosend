@@ -75,13 +75,16 @@ SENTIDOS = {
     "cuna_post": (("varo", "Supinadora (varo)"), ("valgo", "Pronadora (valgo)")),
     "cuna_ant": (("varo", "Varo"), ("valgo", "Valgo")),
     "descarga_1mtt": (("cerrada", "Cerrada"), ("abierta", "Abierta al borde interno")),
+    "descarga_sesamoideos": (("cerrada", "Cerrada"), ("abierta", "Abierta al borde interno")),
 }
 # Qué es la «altura» de cada pieza: (unidad, mínimo, máximo, paso).
 UNIDAD_ALTURA = {"cuna_ant": ("°", 0.0, 20.0, 1.0), "cuna_post": ("°", 0.0, 20.0, 1.0),
                  "expansion_talon": ("%", 0.0, 25.0, 1.0)}
 # Piezas con la forma revisada (pensadas para plantilla rígida: menos altura, subidas suaves). Un trabajo
 # guardado antes con una de estas piezas SIN usar la recibe nueva al abrirlo; las puestas salen igual.
-REVISADAS = ("oliva", "barra", "descarga_1mtt")
+REVISADAS = ("oliva", "barra", "descarga_1mtt", "descarga_sesamoideos")
+#: Descargas con hueco oval revisado (fondo casi plano, pared suave; cerrada o abierta al borde interno).
+DESCARGAS_OVALES = ("descarga_1mtt", "descarga_sesamoideos")
 #: Descargas revisadas: lo que sube la pared alrededor del hueco (mm), suave, sin canto.
 PARED_DESCARGA = 6.0
 #: Descarga 1.er MTT «abierta»: mm que sigue igual de honda hacia el borde interno más allá del óvalo.
@@ -173,6 +176,7 @@ def por_defecto(clinicos: dict) -> dict[str, Pieza]:
         piezas[tipo] = Pieza(tipo, altura=d.get("profundidad", d.get("altura", alto)), largo=d.get("largo", diam),
                              ancho=d.get("ancho", ancho if ancho is not None else diam))
     piezas["descarga_1mtt"].sentido = c("descarga_1mtt").get("forma", "cerrada")
+    piezas["descarga_sesamoideos"].sentido = c("descarga_sesamoideos").get("forma", "cerrada")
     f, cp, ca = c("canal_fascia"), c("cuna_posterior"), c("cuna_anterior")
     al, ex = c("alza_talon"), c("expansion_talon")
     piezas.update({
@@ -299,8 +303,13 @@ def _geometria_local(pieza: Pieza, refs: Referencias, mascara, dx, dy, cfg_ref,
         out.update(cu=float(cu), cv=float(cv), perfil=perfil)
     elif tipo in ("descarga_1mtt", "descarga_5mtt", "descarga_sesamoideos"):
         u, v = sis.a_local(*(m5 if tipo == "descarga_5mtt" else m1))
-        # Los sesamoideos quedan bajo la cabeza del 1.er MTT, un poco por detrás.
-        out.update(cu=float(u) - (4.0 if tipo == "descarga_sesamoideos" else 0.0), cv=float(v))
+        # Los sesamoideos quedan bajo la cabeza del 1.er MTT, un poco por detrás (revisada: 5 mm por detrás y
+        # 3 mm hacia dentro, sobre el sesamoideo medial, que es el que suele doler).
+        if tipo == "descarga_sesamoideos":
+            atras, dentro = (5.0, 3.0) if pieza.revisada else (4.0, 0.0)
+            out.update(cu=float(u) - atras, cv=float(v) + dentro)
+        else:
+            out.update(cu=float(u), cv=float(v))
     elif tipo == "navicular":
         u = 0.52 * L
         med, _ = _anchos(sis, mascara, dx, dy, u)
@@ -370,7 +379,8 @@ def cambio_altura(pieza: Pieza, refs: Referencias, mascara: np.ndarray, X: np.nd
         dz = (1.0 if pieza.sentido == "rebajar" else -1.0) * h * pu * pv
     elif tipo == "oliva" and pieza.gota:
         dz = -h * _gota(g["frente"] - u, v - cv, largo, ancho)
-    elif tipo in ("oliva", "navicular", "cuboides", "descarga_sesamoideos"):
+    elif tipo in ("oliva", "navicular", "cuboides", "descarga_sesamoideos") and not (
+            tipo in DESCARGAS_OVALES and pieza.revisada):
         forma = _campana(np.hypot((u - cu) / (largo / 2), (v - cv) / (ancho / 2)))
         dz = (1.0 if tipo == "descarga_sesamoideos" else -1.0) * h * forma
     elif tipo == "barra":
@@ -384,8 +394,8 @@ def cambio_altura(pieza: Pieza, refs: Referencias, mascara: np.ndarray, X: np.nd
             dz = -h * _perfil_barra(detras, largo)
         else:
             dz = -h * _campana(np.abs(ss - (g["perfil"](tt) - pieza.retraso)) / (largo / 2))
-    elif tipo == "descarga_1mtt" and pieza.revisada:
-        # Hueco oval bajo la 1.ª cabeza: fondo casi plano y pared suave de PARED_DESCARGA mm. «Abierta»: hacia
+    elif tipo in DESCARGAS_OVALES and pieza.revisada:
+        # Hueco oval bajo la 1.ª cabeza (o los sesamoideos): fondo casi plano y pared suave de PARED_DESCARGA mm. «Abierta»: hacia
         # dentro (v > cv) el fondo sigue igual de hondo ABIERTA_EXTRA mm más, hasta el borde de la planta
         # (la cabeza está a ~15-18 mm del borde interno); no baja por la pared del molde.
         dv_ = v - cv
@@ -516,12 +526,12 @@ def contorno(pieza: Pieza, refs: Referencias, mascara, dx, dy, cfg_ref, n: int =
         uu = np.concatenate([frente - ss, (frente - ss)[::-1]])
         vv = np.concatenate([cv + w, (cv - w)[::-1]])
         return _dentro_del_pie(*sis.a_global(uu, vv), mascara, dx, dy, cerrar=True)
-    if tipo in ("oliva", "navicular", "cuboides", "descarga_sesamoideos", "arco"):
-        uu, vv = cu + largo / 2 * np.cos(t), cv + ancho / 2 * np.sin(t)
-    elif tipo == "descarga_1mtt" and pieza.revisada:
+    if tipo in DESCARGAS_OVALES and pieza.revisada:
         uu, vv = cu + largo / 2 * np.cos(t), cv + ancho / 2 * np.sin(t)
         if pieza.sentido == "abierta":  # hacia dentro, ABIERTA_EXTRA mm más largo
             vv = np.where(np.sin(t) > 0, vv + ABIERTA_EXTRA, vv)
+    elif tipo in ("oliva", "navicular", "cuboides", "descarga_sesamoideos", "arco"):
+        uu, vv = cu + largo / 2 * np.cos(t), cv + ancho / 2 * np.sin(t)
     elif tipo in ("descarga_1mtt", "descarga_5mtt", "espolon"):
         uu, vv = cu + largo / 2 * np.cos(t), cv + largo / 2 * np.sin(t)
     elif tipo == "barra":
