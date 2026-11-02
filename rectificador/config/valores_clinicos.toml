@@ -59,9 +59,13 @@ largo = 70.0
 retraso = 5.0
 
 [descarga_1mtt]
-# Hueco en la plantilla bajo la cabeza del 1.er MTT (se añade escayola al molde).
-profundidad = 2.0
-diametro = 20.0
+# Hueco oval en la plantilla bajo la cabeza del 1.er MTT (se añade escayola al molde), para plantilla rígida:
+# fondo casi plano bajo la cabeza y pared suave de 6 mm alrededor, sin canto.
+# forma = "cerrada" (bolsillo) o "abierta" (sigue igual de hondo hasta el borde interno de la plantilla).
+profundidad = 2.5
+largo = 25.0
+ancho = 20.0
+forma = "cerrada"
 
 [descarga_5mtt]
 # Hueco en la plantilla bajo la cabeza del 5.º MTT (se añade escayola al molde).

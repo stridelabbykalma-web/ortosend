@@ -235,7 +235,7 @@ class PanelPie(QFrame):
                   ("retraso", "Borde delantero detrás de las cabezas", -10, 40)),
         "barra": (("largo", "Largo (a lo largo del pie)", 8, 120),
                   ("retraso", "Borde delantero detrás de las cabezas", -10, 40)),
-        "descarga_1mtt": (("largo", "Diámetro", 8, 45),),
+        "descarga_1mtt": (("largo", "Largo", 8, 45), ("ancho", "Ancho", 8, 40)),
         "descarga_5mtt": (("largo", "Diámetro", 8, 45),),
         "descarga_sesamoideos": (("largo", "Largo", 8, 45), ("ancho", "Ancho", 8, 40)),
         "espolon": (("largo", "Diámetro", 10, 50),),
@@ -257,7 +257,9 @@ class PanelPie(QFrame):
         "barra": "Barra metatarsal: bulto en la plantilla (hueco en el molde) en todo el antepié, de borde a "
                  "borde, por detrás de las cabezas y con el borde delantero curvado como ellas. Sube suave y baja "
                  "muy despacio hacia el talón (pensada para plantilla rígida).",
-        "descarga_1mtt": "Descarga bajo la cabeza del 1.er MTT: hueco en la plantilla (escayola añadida al molde).",
+        "descarga_1mtt": "Descarga bajo la cabeza del 1.er MTT: hueco oval en la plantilla (escayola añadida al "
+                         "molde) con la pared suave. «Cerrada»: un bolsillo. «Abierta al borde interno»: sigue igual "
+                         "de honda hasta el borde interno de la plantilla (libera más el 1.er radio).",
         "descarga_5mtt": "Descarga bajo la cabeza del 5.º MTT: hueco en la plantilla (escayola añadida al molde).",
         "descarga_sesamoideos": "Descarga de sesamoideos, bajo la 1.ª cabeza un poco por detrás: hueco en la "
                                 "plantilla (escayola añadida al molde).",

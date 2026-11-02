@@ -318,3 +318,29 @@ def test_trabajo_antiguo_oliva_sin_usar_sale_en_gota(proyecto, tmp_path):
     b_puesta, b_sin_usar = q.pies[0].piezas["barra"], q.pies[1].piezas["barra"]
     assert not b_puesta.revisada and b_puesta.largo == 20.0
     assert b_sin_usar.revisada and b_sin_usar.largo == 70.0 and b_sin_usar.altura == 3.0
+
+
+def test_descarga_1mtt_cerrada_y_abierta(proyecto):
+    """Hueco oval de 2,5 mm bajo la 1.ª cabeza (en el molde, escayola añadida). Cerrada: vuelve a 0 hacia
+    dentro. Abierta: sigue igual de honda 15 mm más hacia dentro (hasta el borde de la planta)."""
+    p = proyecto
+    pie = p.pies[0]
+    sis = pie.referencias.sistema()
+    X, Y = p.original.rejilla.malla()
+    u, v = sis.a_local(X, Y)
+    cu, cv = (float(c) for c in sis.a_local(*pie.referencias.puntos["mtt1"]))
+    cerrada, pz = _efecto(p, pie, "descarga_1mtt")
+    assert pz.revisada and pz.sentido == "cerrada" and pz.altura == 2.5
+    assert cerrada.max() == pytest.approx(2.5, abs=0.1)
+    linea = (np.abs(u - cu) < 0.6) & pie.mascara
+    hacia_dentro = linea & (v > cv + 17) & (v < cv + 22)
+    assert np.abs(cerrada[hacia_dentro]).max() <= 0.05  # cerrada: hacia dentro ya no hay hueco
+    abierta, _ = _efecto(p, pie, "descarga_1mtt", sentido="abierta")
+    assert abierta[hacia_dentro].min() == pytest.approx(2.5, abs=0.15)  # abierta: igual de honda más hacia dentro
+    lejos = (np.abs(u - cu) < 3) & (v > cv + 15 + 10 + 6 + 1)  # pasado el óvalo alargado: ya no hay hueco
+    assert np.abs(abierta[lejos]).max() <= 0.05 if lejos.any() else True
+    hacia_fuera = linea & (v < cv - 25)
+    assert np.abs(abierta[hacia_fuera]).max() <= 0.05  # hacia fuera se cierra igual
+    delante = (np.abs(v - cv) < 0.6) & (u > cu + 25) & pie.mascara
+    assert np.abs(abierta[delante]).max() <= 0.05
+    pz.sentido = "cerrada"

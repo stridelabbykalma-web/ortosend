@@ -1,5 +1,14 @@
 # Novedades de Ortosend Taller
 
+## 0.17.0
+- **Descarga del 1.er MTT nueva** (para plantilla rígida): hueco **oval de 25 × 20 mm y 2,5 mm** bajo la
+  1.ª cabeza, con el fondo casi plano y la pared suave alrededor (sin canto). Dos formas:
+  - **Cerrada**: un bolsillo bajo la cabeza.
+  - **Abierta al borde interno**: hacia dentro sigue igual de honda hasta el borde de la planta (libera
+    más el 1.er radio: sesamoiditis, hallux limitus funcional).
+- En el panel: Largo y Ancho (antes solo diámetro) y los botones Cerrada / Abierta.
+- Los trabajos guardados con la descarga antigua puesta salen igual; si no se usaba, ya sale la nueva.
+
 ## 0.16.0
 - Piezas pensadas para **plantilla rígida** (no se aplastan como el fieltro): más bajas y con subidas suaves.
 - **Barra metatarsal nueva**: en todo el antepié, de borde a borde, con el **borde delantero 5 mm por detrás

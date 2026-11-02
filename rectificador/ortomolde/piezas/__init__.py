@@ -74,13 +74,18 @@ SENTIDOS = {
     "skive": (("varo", "Varo · medial"), ("valgo", "Valgo · lateral")),
     "cuna_post": (("varo", "Supinadora (varo)"), ("valgo", "Pronadora (valgo)")),
     "cuna_ant": (("varo", "Varo"), ("valgo", "Valgo")),
+    "descarga_1mtt": (("cerrada", "Cerrada"), ("abierta", "Abierta al borde interno")),
 }
 # Qué es la «altura» de cada pieza: (unidad, mínimo, máximo, paso).
 UNIDAD_ALTURA = {"cuna_ant": ("°", 0.0, 20.0, 1.0), "cuna_post": ("°", 0.0, 20.0, 1.0),
                  "expansion_talon": ("%", 0.0, 25.0, 1.0)}
 # Piezas con la forma revisada (pensadas para plantilla rígida: menos altura, subidas suaves). Un trabajo
 # guardado antes con una de estas piezas SIN usar la recibe nueva al abrirlo; las puestas salen igual.
-REVISADAS = ("oliva", "barra")
+REVISADAS = ("oliva", "barra", "descarga_1mtt")
+#: Descargas revisadas: lo que sube la pared alrededor del hueco (mm), suave, sin canto.
+PARED_DESCARGA = 6.0
+#: Descarga 1.er MTT «abierta»: mm que sigue igual de honda hacia el borde interno más allá del óvalo.
+ABIERTA_EXTRA = 15.0
 _CORTES = ("skive", "cuna_post", "cuna_ant", "alza", "expansion_talon")  # llegan al borde del pie
 
 
@@ -167,6 +172,7 @@ def por_defecto(clinicos: dict) -> dict[str, Pieza]:
         diam = d.get("diametro", largo)
         piezas[tipo] = Pieza(tipo, altura=d.get("profundidad", d.get("altura", alto)), largo=d.get("largo", diam),
                              ancho=d.get("ancho", ancho if ancho is not None else diam))
+    piezas["descarga_1mtt"].sentido = c("descarga_1mtt").get("forma", "cerrada")
     f, cp, ca = c("canal_fascia"), c("cuna_posterior"), c("cuna_anterior")
     al, ex = c("alza_talon"), c("expansion_talon")
     piezas.update({
@@ -378,6 +384,17 @@ def cambio_altura(pieza: Pieza, refs: Referencias, mascara: np.ndarray, X: np.nd
             dz = -h * _perfil_barra(detras, largo)
         else:
             dz = -h * _campana(np.abs(ss - (g["perfil"](tt) - pieza.retraso)) / (largo / 2))
+    elif tipo == "descarga_1mtt" and pieza.revisada:
+        # Hueco oval bajo la 1.ª cabeza: fondo casi plano y pared suave de PARED_DESCARGA mm. «Abierta»: hacia
+        # dentro (v > cv) el fondo sigue igual de hondo ABIERTA_EXTRA mm más, hasta el borde de la planta
+        # (la cabeza está a ~15-18 mm del borde interno); no baja por la pared del molde.
+        dv_ = v - cv
+        if pieza.sentido == "abierta":
+            dv_ = np.where(dv_ > 0, np.maximum(dv_ - ABIERTA_EXTRA, 0.0), dv_)
+        a, b = largo / 2 + PARED_DESCARGA, ancho / 2 + PARED_DESCARGA
+        r = np.hypot((u - cu) / a, dv_ / b)
+        r0 = 0.6 * (largo / 2) / a
+        dz = h * (1.0 - _rampa((r - r0) / (1.0 - r0)))
     elif tipo in ("descarga_1mtt", "descarga_5mtt", "espolon"):
         dz = h * _campana(np.hypot(u - cu, v - cv) / (largo / 2))
     elif tipo == "canal_fascia":
@@ -501,6 +518,10 @@ def contorno(pieza: Pieza, refs: Referencias, mascara, dx, dy, cfg_ref, n: int =
         return _dentro_del_pie(*sis.a_global(uu, vv), mascara, dx, dy, cerrar=True)
     if tipo in ("oliva", "navicular", "cuboides", "descarga_sesamoideos", "arco"):
         uu, vv = cu + largo / 2 * np.cos(t), cv + ancho / 2 * np.sin(t)
+    elif tipo == "descarga_1mtt" and pieza.revisada:
+        uu, vv = cu + largo / 2 * np.cos(t), cv + ancho / 2 * np.sin(t)
+        if pieza.sentido == "abierta":  # hacia dentro, ABIERTA_EXTRA mm más largo
+            vv = np.where(np.sin(t) > 0, vv + ABIERTA_EXTRA, vv)
     elif tipo in ("descarga_1mtt", "descarga_5mtt", "espolon"):
         uu, vv = cu + largo / 2 * np.cos(t), cv + largo / 2 * np.sin(t)
     elif tipo == "barra":
