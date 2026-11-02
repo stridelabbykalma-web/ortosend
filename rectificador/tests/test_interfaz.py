@@ -297,7 +297,7 @@ def test_correcciones_desde_la_ventana(stl_sintetico):
     fila["altura"].setValue(3.0)
     assert pie.piezas["oliva"].altura == 3.0
     v.deshacer()
-    assert pie.piezas["oliva"].altura == 5.0
+    assert pie.piezas["oliva"].altura == 6.0
     v.deshacer()
     assert pie.piezas["oliva"].du == 0 and pie.piezas["oliva"].dv == 0
     v.deshacer()

@@ -255,3 +255,52 @@ def _molde_sin_piezas(p):
     for k, t in activas:
         p.pies[k].piezas[t].activa = True
     return z
+
+
+def test_oliva_en_gota_detras_de_las_cabezas(proyecto):
+    """Oliva retrocapital en gota: borde delantero 5 mm por detrás de las cabezas (2.ª–3.ª), pico de 6 mm a
+    un tercio del largo más atrás, más ancha delante que detrás. Una oliva guardada antes sale en óvalo."""
+    p = proyecto
+    pie = p.pies[0]
+    d, oliva = _efecto(p, pie, "oliva")
+    assert oliva.gota and oliva.altura == 6.0 and oliva.retraso == 5.0
+    sis = pie.referencias.sistema()
+    X, Y = p.original.rejilla.malla()
+    u, v = sis.a_local(X, Y)
+    largo, ancho = oliva.medidas(P.escala(pie.referencias, p.clinicos["referencias"]))
+    L = sis.largo
+    assert d.min() == pytest.approx(-6.0, abs=0.2)
+    j, i = np.unravel_index(np.argmin(d), d.shape)
+    assert u[j, i] == pytest.approx(L - 5.0 - largo / 3, abs=3.0)
+    assert np.abs(d[u > L - 5.0 + 0.5]).max() <= 0.05  # no llega a las cabezas
+    hondo = d < -0.3
+    ancho_delante = np.ptp(v[hondo & (np.abs(u - (L - 5 - largo / 4)) < 1)])
+    ancho_detras = np.ptp(v[hondo & (np.abs(u - (L - 5 - 3 * largo / 4)) < 1)])
+    assert ancho_delante > 1.5 * ancho_detras
+    viejo = P.Pieza.de_dict({"tipo": "oliva", "activa": True, "altura": 5.0, "largo": 25.0, "ancho": 20.0})
+    assert viejo.gota is False
+
+
+def test_trabajo_antiguo_oliva_sin_usar_sale_en_gota(proyecto, tmp_path):
+    from ortomolde import trabajo
+    p = proyecto
+    ruta = trabajo.guardar(p, tmp_path / "viejo.molde")
+    import json, zipfile
+    # Simular un trabajo de antes de la gota: olivas sin el campo `gota` (una puesta y otra sin usar).
+    with zipfile.ZipFile(ruta) as z:
+        nombres = z.namelist()
+        contenido = {n: z.read(n) for n in nombres}
+    clave = next(n for n in nombres if n.endswith(".json"))
+    datos = json.loads(contenido[clave])
+    for k, g in enumerate(datos["pies"]):
+        o = g["piezas"]["oliva"]
+        o.pop("gota", None)
+        o.update(activa=(k == 0), altura=5.0, largo=25.0, ancho=20.0, retraso=8.0)
+    contenido[clave] = json.dumps(datos).encode()
+    with zipfile.ZipFile(ruta, "w") as z:
+        for n, b in contenido.items():
+            z.writestr(n, b)
+    q = trabajo.abrir(ruta)
+    puesta, sin_usar = q.pies[0].piezas["oliva"], q.pies[1].piezas["oliva"]
+    assert puesta.activa and not puesta.gota and puesta.largo == 25.0  # la que estaba puesta, igual
+    assert sin_usar.gota and sin_usar.largo == 65.0  # la que no se usaba: la nueva

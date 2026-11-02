@@ -1,5 +1,14 @@
 # Novedades de Ortosend Taller
 
+## 0.15.0
+- **Oliva retrocapital en forma de gota**, como las comerciales: la parte ancha y redonda hacia las cabezas
+  y la punta hacia el talón. Por defecto **45 × 65 mm y 6 mm de alto**, con el **borde delantero 5 mm por
+  detrás de las cabezas** (nunca debajo de ellas) y el punto más alto un tercio más atrás (~27 mm); baja
+  suave a 0 en todo el borde. Se escala con la talla del pie como las demás piezas.
+- En el panel, «Borde delantero detrás de las cabezas» mueve la gota adelante o atrás.
+- Los trabajos guardados con la oliva antigua puesta salen igual que se hicieron; si no se usaba, al abrirlos
+  ya sale la nueva.
+
 ## 0.14.6
 - **El contorno va por capas planas**: baja en vertical a cada altura y da la vuelta entera plana (antes
   bajaba en espiral y dejaba marcas en la pared). Con escayola baja a cada capa en rampa suave.

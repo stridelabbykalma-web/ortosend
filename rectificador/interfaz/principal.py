@@ -231,7 +231,8 @@ class PanelPie(QFrame):
     # Qué se puede ajustar de cada pieza: (atributo, texto, mínimo, máximo[, unidad]).
     AJUSTES = {
         "arco": (("largo", "Largo", 20, 140), ("ancho", "Ancho", 10, 70)),
-        "oliva": (("largo", "Largo", 10, 50), ("ancho", "Ancho", 8, 40), ("retraso", "Detrás de las cabezas", -10, 40)),
+        "oliva": (("largo", "Largo", 15, 90), ("ancho", "Ancho", 10, 70),
+                  ("retraso", "Borde delantero detrás de las cabezas", -10, 40)),
         "barra": (("largo", "Ancho (a lo largo del pie)", 8, 50), ("retraso", "Detrás de las cabezas", -10, 40)),
         "descarga_1mtt": (("largo", "Diámetro", 8, 45),),
         "descarga_5mtt": (("largo", "Diámetro", 8, 45),),
@@ -249,8 +250,9 @@ class PanelPie(QFrame):
     AYUDAS = {
         "arco": "Relleno del arco interno. «Rebajar» añade escayola al arco del molde (la plantilla queda con "
                 "menos arco, relleno clásico); «Subir» la quita (más arco).",
-        "oliva": "Oliva retrocapital: bulto en la plantilla (hueco en el molde) entre 2.º y 3.er MTT, por detrás "
-                 "de las cabezas.",
+        "oliva": "Oliva retrocapital: bulto en forma de gota en la plantilla (hueco en el molde) entre 2.º y "
+                 "3.er MTT, la parte ancha hacia las cabezas y la punta hacia el talón. El borde delantero queda "
+                 "por detrás de las cabezas; el punto más alto, a un tercio del largo más atrás.",
         "barra": "Barra metatarsal: bulto transversal en la plantilla (hueco en el molde) bajo todas las cabezas "
                  "(1.ª a 5.ª), de borde a borde del pie, curvada como el recorte y por detrás de las cabezas.",
         "descarga_1mtt": "Descarga bajo la cabeza del 1.er MTT: hueco en la plantilla (escayola añadida al molde).",

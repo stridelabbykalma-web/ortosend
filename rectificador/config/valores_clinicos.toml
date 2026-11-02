@@ -37,13 +37,15 @@ largo = 70.0
 ancho = 35.0
 
 [oliva]
-# Oliva retrocapital (bulto en la plantilla = hueco en el molde): centrada entre 2.º y 3.er MTT,
-# por detrás de la línea metatarsal.
-altura = 5.0
-largo = 25.0
-ancho = 20.0
-# Distancia del centro de la oliva por detrás de las cabezas.
-retraso = 8.0
+# Oliva retrocapital (bulto en la plantilla = hueco en el molde) en forma de GOTA, como las comerciales:
+# la parte ancha y redonda delante, hacia las cabezas, y la punta hacia el talón. Centrada entre 2.º y
+# 3.er MTT. El punto más alto está a un tercio del largo desde el borde delantero y baja suave a 0 en todo
+# el borde.
+altura = 6.0
+largo = 65.0
+ancho = 45.0
+# Distancia del BORDE DELANTERO de la oliva por detrás de las cabezas (nunca debe quedar debajo de ellas).
+retraso = 5.0
 
 [barra_metatarsal]
 # Barra metatarsal (bulto transversal en la plantilla = hueco en el molde) bajo todas las cabezas

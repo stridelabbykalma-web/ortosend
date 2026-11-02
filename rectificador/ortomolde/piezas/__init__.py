@@ -94,6 +94,7 @@ class Pieza:
     sentido: str = "rebajar"  # ver SENTIDOS
     adaptar: bool = True  # largo y ancho para un pie medio, escalados a la medida de este pie
     angulo: float = 15.0  # skive: inclinación del plano de corte en el plano frontal (°)
+    gota: bool = True  # oliva: forma de gota (borde delantero a `retraso` mm de las cabezas); False = óvalo antiguo
 
     @property
     def nombre(self) -> str:
@@ -113,6 +114,7 @@ class Pieza:
     def de_dict(cls, d: dict) -> "Pieza":
         validos = {k: v for k, v in d.items() if k in cls.__dataclass_fields__}
         validos.setdefault("adaptar", False)  # trabajos guardados antes de existir: que salgan igual
+        validos.setdefault("gota", False)  # oliva guardada antes de la gota: el óvalo de entonces
         if validos.get("tipo") in SENTIDOS and validos.get("sentido") not in dict(SENTIDOS[validos["tipo"]]):
             validos["sentido"] = SENTIDOS[validos["tipo"]][0][0]
         return cls(**validos)
@@ -198,6 +200,28 @@ def _min_suave(x: np.ndarray, k: float = 1.0) -> np.ndarray:
     return (x - np.sqrt(x * x + k * k)) / 2
 
 
+def _gota_semiancho(s: np.ndarray, largo: float, ancho: float) -> np.ndarray:
+    """Semiancho (mm) de la oliva en gota a `s` mm por detrás de su borde delantero: semicírculo delante
+    y se estrecha hasta una punta redondeada en `s = largo` (hacia el talón). 0 fuera."""
+    r = ancho / 2
+    s = np.asarray(s, float)
+    delante = np.sqrt(np.clip(r * r - (s - r) ** 2, 0.0, None))
+    t = np.clip((s - r) / max(largo - r, 1e-6), 0.0, 1.0)
+    detras = r * np.clip(1 - t ** 1.6, 0.0, None) ** 0.85
+    w = np.where(s <= r, delante, detras)
+    return np.where((s >= 0) & (s <= largo), w, 0.0)
+
+
+def _gota(s: np.ndarray, v: np.ndarray, largo: float, ancho: float) -> np.ndarray:
+    """Forma de la oliva en gota (0 → 1): sube suave desde todo el borde hasta el pico, a un tercio del
+    largo desde delante. `s` mm por detrás del borde delantero, `v` mm de lado desde su eje."""
+    w = _gota_semiancho(s, largo, ancho)
+    lado = _campana(np.abs(v) / np.maximum(w, 1e-6)) * (w > 0)
+    sp = largo / 3
+    lon = np.where(s < sp, _campana((sp - s) / sp), _campana((s - sp) / (largo - sp)))
+    return lado * lon
+
+
 def centro(pieza: Pieza, refs: Referencias, mascara: np.ndarray, dx: float, dy: float,
            cfg_ref: dict, recorte: Recorte | None = None) -> tuple[float, float] | None:
     """Dónde va el centro de la pieza, en (x, y) del molde (para dibujarla y cogerla con el ratón)."""
@@ -238,6 +262,10 @@ def _geometria_local(pieza: Pieza, refs: Referencias, mascara, dx, dy, cfg_ref,
         p = np.array(sis.a_global(cu, 0))
         cv = _borde(mascara, dx, dy, p, sis.medial) - ancho / 3
         out.update(cu=cu, cv=cv)
+    elif tipo == "oliva" and pieza.gota:
+        # Borde delantero `retraso` mm por detrás de las cabezas (punto 2.ª–3.ª); el pico, un tercio más atrás.
+        frente = L - pieza.retraso
+        out.update(frente=frente, cu=frente - largo / 3, cv=0.0)
     elif tipo == "oliva":
         out.update(cu=L - pieza.retraso, cv=0.0)
     elif tipo == "barra":
@@ -318,6 +346,8 @@ def cambio_altura(pieza: Pieza, refs: Referencias, mascara: np.ndarray, X: np.nd
         pu = _campana(np.abs(u - cu) / (largo / 2))
         pv = _campana(np.abs(v - cv) / (ancho / 2 + ancho / 3))
         dz = (1.0 if pieza.sentido == "rebajar" else -1.0) * h * pu * pv
+    elif tipo == "oliva" and pieza.gota:
+        dz = -h * _gota(g["frente"] - u, v - cv, largo, ancho)
     elif tipo in ("oliva", "navicular", "cuboides", "descarga_sesamoideos"):
         forma = _campana(np.hypot((u - cu) / (largo / 2), (v - cv) / (ancho / 2)))
         dz = (1.0 if tipo == "descarga_sesamoideos" else -1.0) * h * forma
@@ -440,6 +470,13 @@ def contorno(pieza: Pieza, refs: Referencias, mascara, dx, dy, cfg_ref, n: int =
     largo, ancho = g["largo"], g["ancho"]
     tipo = pieza.tipo
     t = np.linspace(0, 2 * np.pi, n)
+    if tipo == "oliva" and pieza.gota:
+        ss = np.linspace(0.0, largo, n)
+        w = _gota_semiancho(ss, largo, ancho)
+        frente = g["frente"] + pieza.du
+        uu = np.concatenate([frente - ss, (frente - ss)[::-1]])
+        vv = np.concatenate([cv + w, (cv - w)[::-1]])
+        return _dentro_del_pie(*sis.a_global(uu, vv), mascara, dx, dy, cerrar=True)
     if tipo in ("oliva", "navicular", "cuboides", "descarga_sesamoideos", "arco"):
         uu, vv = cu + largo / 2 * np.cos(t), cv + ancho / 2 * np.sin(t)
     elif tipo in ("descarga_1mtt", "descarga_5mtt", "espolon"):
