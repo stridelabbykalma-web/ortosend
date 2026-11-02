@@ -233,7 +233,8 @@ class PanelPie(QFrame):
         "arco": (("largo", "Largo", 20, 140), ("ancho", "Ancho", 10, 70)),
         "oliva": (("largo", "Largo", 15, 90), ("ancho", "Ancho", 10, 70),
                   ("retraso", "Borde delantero detrás de las cabezas", -10, 40)),
-        "barra": (("largo", "Ancho (a lo largo del pie)", 8, 50), ("retraso", "Detrás de las cabezas", -10, 40)),
+        "barra": (("largo", "Largo (a lo largo del pie)", 8, 120),
+                  ("retraso", "Borde delantero detrás de las cabezas", -10, 40)),
         "descarga_1mtt": (("largo", "Diámetro", 8, 45),),
         "descarga_5mtt": (("largo", "Diámetro", 8, 45),),
         "descarga_sesamoideos": (("largo", "Largo", 8, 45), ("ancho", "Ancho", 8, 40)),
@@ -253,8 +254,9 @@ class PanelPie(QFrame):
         "oliva": "Oliva retrocapital: bulto en forma de gota en la plantilla (hueco en el molde) entre 2.º y "
                  "3.er MTT, la parte ancha hacia las cabezas y la punta hacia el talón. El borde delantero queda "
                  "por detrás de las cabezas; el punto más alto, a un tercio del largo más atrás.",
-        "barra": "Barra metatarsal: bulto transversal en la plantilla (hueco en el molde) bajo todas las cabezas "
-                 "(1.ª a 5.ª), de borde a borde del pie, curvada como el recorte y por detrás de las cabezas.",
+        "barra": "Barra metatarsal: bulto en la plantilla (hueco en el molde) en todo el antepié, de borde a "
+                 "borde, por detrás de las cabezas y con el borde delantero curvado como ellas. Sube suave y baja "
+                 "muy despacio hacia el talón (pensada para plantilla rígida).",
         "descarga_1mtt": "Descarga bajo la cabeza del 1.er MTT: hueco en la plantilla (escayola añadida al molde).",
         "descarga_5mtt": "Descarga bajo la cabeza del 5.º MTT: hueco en la plantilla (escayola añadida al molde).",
         "descarga_sesamoideos": "Descarga de sesamoideos, bajo la 1.ª cabeza un poco por detrás: hueco en la "

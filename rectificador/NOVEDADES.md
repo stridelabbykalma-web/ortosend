@@ -1,5 +1,14 @@
 # Novedades de Ortosend Taller
 
+## 0.16.0
+- Piezas pensadas para **plantilla rígida** (no se aplastan como el fieltro): más bajas y con subidas suaves.
+- **Barra metatarsal nueva**: en todo el antepié, de borde a borde, con el **borde delantero 5 mm por detrás
+  de las cabezas** y curvado como ellas. **3 mm de alto**, sube suave en los primeros 15 mm y baja muy
+  despacio hasta los **70 mm** (sin ningún canto). Antes era una franja de 20 mm, 5 de alto, simétrica.
+- **Oliva retrocapital a 3 mm** de alto (antes 6).
+- Los trabajos guardados con estas piezas puestas salen igual que se hicieron; si no se usaban, al abrirlos
+  ya salen las nuevas.
+
 ## 0.15.0
 - **Oliva retrocapital en forma de gota**, como las comerciales: la parte ancha y redonda hacia las cabezas
   y la punta hacia el talón. Por defecto **45 × 65 mm y 6 mm de alto**, con el **borde delantero 5 mm por

@@ -285,7 +285,7 @@ def test_correcciones_desde_la_ventana(stl_sintetico):
     fila["activa"].setChecked(True)  # como si se marcara la casilla
     assert pie.piezas["oliva"].activa
     hueco = antes - v.proyecto.calcular().z
-    assert hueco.max() > 3  # oliva = hueco en el molde
+    assert hueco.max() > 2.5  # oliva (3 mm) = hueco en el molde
     # Su bola se puede arrastrar en el 3D.
     clave = ("p0", "pieza:oliva")
     assert clave in v.visor.puntos_arrastrables
@@ -294,10 +294,10 @@ def test_correcciones_desde_la_ventana(stl_sintetico):
     v.soltar_referencia("p0", "pieza:oliva", x, y - 6)
     assert abs(np.hypot(pie.piezas["oliva"].du, pie.piezas["oliva"].dv) - 6) < 0.5
     # La altura con la casilla de números; y todo se deshace.
-    fila["altura"].setValue(3.0)
-    assert pie.piezas["oliva"].altura == 3.0
+    fila["altura"].setValue(2.0)
+    assert pie.piezas["oliva"].altura == 2.0
     v.deshacer()
-    assert pie.piezas["oliva"].altura == 6.0
+    assert pie.piezas["oliva"].altura == 3.0
     v.deshacer()
     assert pie.piezas["oliva"].du == 0 and pie.piezas["oliva"].dv == 0
     v.deshacer()
@@ -500,7 +500,7 @@ def test_nombres_y_correcciones_en_color(stl_sintetico):
     assert not v.leyenda_cambios.isVisibleTo(v)
     v.cambiar_pieza("p0", "oliva", activa=True)
     assert v.leyenda_cambios.isVisibleTo(v) and "Corrección (mm)" in v.visor._malla.point_data
-    assert v.visor._malla.point_data["Corrección (mm)"].min() < -3
+    assert v.visor._malla.point_data["Corrección (mm)"].min() < -2.5
     v.ver_cambios.setChecked(False)
     assert not v.leyenda_cambios.isVisibleTo(v)
     v.ver_cambios.setChecked(True)  # se deja como estaba

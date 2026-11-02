@@ -175,12 +175,19 @@ def test_barra_bajo_todas_las_cabezas_y_curvada_como_el_recorte(proyecto):
     d, barra = _efecto(p, pie, "barra")
     perfil = R._perfil(refs, pie.recorte)
     lejos_del_borde = ndimage_distancia(pie.mascara) > 10
-    # De la 1.ª a la 5.ª cabeza (y más allá), con la misma altura, y siguiendo la curva del recorte.
+    largo, _ = barra.medidas(P.escala(refs, p.clinicos["referencias"]))
+    subida = min(15.0, 0.22 * largo)
+    assert barra.revisada and barra.altura == 3.0 and barra.retraso == 5.0
+    # De la 1.ª a la 5.ª cabeza (y más allá), con la misma altura, y siguiendo la curva del recorte: el borde
+    # delantero `retraso` mm por detrás de las cabezas y lo más alto `subida` mm más atrás.
     for t0 in (0.0, 0.2, 0.5, 0.8, 1.0):
         sel = (np.abs(tt - t0) < 0.02) & lejos_del_borde
         k = np.argmin(d[sel])
+        frente = float(perfil(t0)) - barra.retraso
         assert -d[sel][k] == pytest.approx(barra.altura, abs=0.15), t0
-        assert ss[sel][k] == pytest.approx(float(perfil(t0)) - barra.retraso, abs=1.0), t0
+        assert ss[sel][k] == pytest.approx(frente - subida, abs=1.5), t0
+        assert np.abs(d[sel][ss[sel] > frente + 0.5]).max() <= 0.05, t0  # nada bajo las cabezas
+        assert np.abs(d[sel][ss[sel] < frente - largo - 0.5]).max() <= 0.05, t0  # termina a `largo` mm
     # Con el recorte recto, la barra también es recta (y con más curvatura, más curvada).
     curv = pie.recorte.curvatura
     try:
@@ -258,18 +265,18 @@ def _molde_sin_piezas(p):
 
 
 def test_oliva_en_gota_detras_de_las_cabezas(proyecto):
-    """Oliva retrocapital en gota: borde delantero 5 mm por detrás de las cabezas (2.ª–3.ª), pico de 6 mm a
+    """Oliva retrocapital en gota: borde delantero 5 mm por detrás de las cabezas (2.ª–3.ª), pico de 3 mm a
     un tercio del largo más atrás, más ancha delante que detrás. Una oliva guardada antes sale en óvalo."""
     p = proyecto
     pie = p.pies[0]
     d, oliva = _efecto(p, pie, "oliva")
-    assert oliva.gota and oliva.altura == 6.0 and oliva.retraso == 5.0
+    assert oliva.gota and oliva.altura == 3.0 and oliva.retraso == 5.0
     sis = pie.referencias.sistema()
     X, Y = p.original.rejilla.malla()
     u, v = sis.a_local(X, Y)
     largo, ancho = oliva.medidas(P.escala(pie.referencias, p.clinicos["referencias"]))
     L = sis.largo
-    assert d.min() == pytest.approx(-6.0, abs=0.2)
+    assert d.min() == pytest.approx(-3.0, abs=0.2)
     j, i = np.unravel_index(np.argmin(d), d.shape)
     assert u[j, i] == pytest.approx(L - 5.0 - largo / 3, abs=3.0)
     assert np.abs(d[u > L - 5.0 + 0.5]).max() <= 0.05  # no llega a las cabezas
@@ -295,7 +302,11 @@ def test_trabajo_antiguo_oliva_sin_usar_sale_en_gota(proyecto, tmp_path):
     for k, g in enumerate(datos["pies"]):
         o = g["piezas"]["oliva"]
         o.pop("gota", None)
+        o.pop("revisada", None)
         o.update(activa=(k == 0), altura=5.0, largo=25.0, ancho=20.0, retraso=8.0)
+        b = g["piezas"]["barra"]
+        b.pop("revisada", None)
+        b.update(activa=(k == 0), altura=5.0, largo=20.0, retraso=8.0)
     contenido[clave] = json.dumps(datos).encode()
     with zipfile.ZipFile(ruta, "w") as z:
         for n, b in contenido.items():
@@ -304,3 +315,6 @@ def test_trabajo_antiguo_oliva_sin_usar_sale_en_gota(proyecto, tmp_path):
     puesta, sin_usar = q.pies[0].piezas["oliva"], q.pies[1].piezas["oliva"]
     assert puesta.activa and not puesta.gota and puesta.largo == 25.0  # la que estaba puesta, igual
     assert sin_usar.gota and sin_usar.largo == 65.0  # la que no se usaba: la nueva
+    b_puesta, b_sin_usar = q.pies[0].piezas["barra"], q.pies[1].piezas["barra"]
+    assert not b_puesta.revisada and b_puesta.largo == 20.0
+    assert b_sin_usar.revisada and b_sin_usar.largo == 70.0 and b_sin_usar.altura == 3.0

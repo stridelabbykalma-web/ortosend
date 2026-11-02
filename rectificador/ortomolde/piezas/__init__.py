@@ -78,6 +78,9 @@ SENTIDOS = {
 # Qué es la «altura» de cada pieza: (unidad, mínimo, máximo, paso).
 UNIDAD_ALTURA = {"cuna_ant": ("°", 0.0, 20.0, 1.0), "cuna_post": ("°", 0.0, 20.0, 1.0),
                  "expansion_talon": ("%", 0.0, 25.0, 1.0)}
+# Piezas con la forma revisada (pensadas para plantilla rígida: menos altura, subidas suaves). Un trabajo
+# guardado antes con una de estas piezas SIN usar la recibe nueva al abrirlo; las puestas salen igual.
+REVISADAS = ("oliva", "barra")
 _CORTES = ("skive", "cuna_post", "cuna_ant", "alza", "expansion_talon")  # llegan al borde del pie
 
 
@@ -95,6 +98,7 @@ class Pieza:
     adaptar: bool = True  # largo y ancho para un pie medio, escalados a la medida de este pie
     angulo: float = 15.0  # skive: inclinación del plano de corte en el plano frontal (°)
     gota: bool = True  # oliva: forma de gota (borde delantero a `retraso` mm de las cabezas); False = óvalo antiguo
+    revisada: bool = True  # forma revisada para plantilla rígida (ver REVISADAS); False = la de antes
 
     @property
     def nombre(self) -> str:
@@ -115,6 +119,7 @@ class Pieza:
         validos = {k: v for k, v in d.items() if k in cls.__dataclass_fields__}
         validos.setdefault("adaptar", False)  # trabajos guardados antes de existir: que salgan igual
         validos.setdefault("gota", False)  # oliva guardada antes de la gota: el óvalo de entonces
+        validos.setdefault("revisada", False)  # pieza guardada antes de revisar su forma: la de entonces
         if validos.get("tipo") in SENTIDOS and validos.get("sentido") not in dict(SENTIDOS[validos["tipo"]]):
             validos["sentido"] = SENTIDOS[validos["tipo"]][0][0]
         return cls(**validos)
@@ -146,7 +151,8 @@ def por_defecto(clinicos: dict) -> dict[str, Pieza]:
                       sentido=a.get("sentido", "rebajar")),
         "oliva": Pieza("oliva", altura=o.get("altura", 5.0), largo=o.get("largo", 25.0), ancho=o.get("ancho", 20.0),
                        retraso=o.get("retraso", 8.0)),
-        "barra": Pieza("barra", altura=b.get("altura", 5.0), largo=b.get("ancho", 20.0), retraso=b.get("retraso", 8.0)),
+        "barra": Pieza("barra", altura=b.get("altura", 3.0), largo=b.get("largo", b.get("ancho", 70.0)),
+                       retraso=b.get("retraso", 5.0)),
         "skive": Pieza("skive", altura=s.get("altura", 4.0), largo=s.get("largo", 55.0),
                        sentido=s.get("sentido", "varo"), angulo=s.get("angulo", 15.0)),
     }
@@ -222,6 +228,15 @@ def _gota(s: np.ndarray, v: np.ndarray, largo: float, ancho: float) -> np.ndarra
     return lado * lon
 
 
+def _perfil_barra(s: np.ndarray, largo: float) -> np.ndarray:
+    """Barra metatarsal revisada (0 → 1 → 0) a `s` mm por detrás de su borde delantero: sube suave en
+    `subida` mm (15 en una barra de 70) y baja muy despacio hasta 0 en `s = largo`."""
+    subida = min(15.0, 0.22 * largo)
+    sube = _rampa(s / subida)
+    baja = 1.0 - _rampa((s - subida) / max(largo - subida, 1e-6))
+    return np.where(s < subida, sube, baja) * (s >= 0) * (s <= largo)
+
+
 def centro(pieza: Pieza, refs: Referencias, mascara: np.ndarray, dx: float, dy: float,
            cfg_ref: dict, recorte: Recorte | None = None) -> tuple[float, float] | None:
     """Dónde va el centro de la pieza, en (x, y) del molde (para dibujarla y cogerla con el ratón)."""
@@ -272,7 +287,8 @@ def _geometria_local(pieza: Pieza, refs: Referencias, mascara, dx, dy, cfg_ref,
         # Banda de borde a borde del pie, paralela al arco de las cabezas (la misma curva que el recorte),
         # `retraso` mm por detrás. El cuadradito va en medio (t = 0,5).
         perfil = recorte_mod._perfil(refs, recorte or Recorte())
-        medio = m1 + 0.5 * (m5 - m1) + sis.eje * (float(perfil(0.5)) - pieza.retraso)
+        atras = largo * 0.3 if pieza.revisada else 0.0  # revisada: `retraso` es el borde delantero
+        medio = m1 + 0.5 * (m5 - m1) + sis.eje * (float(perfil(0.5)) - pieza.retraso - atras)
         cu, cv = sis.a_local(medio[0], medio[1])
         out.update(cu=float(cu), cv=float(cv), perfil=perfil)
     elif tipo in ("descarga_1mtt", "descarga_5mtt", "descarga_sesamoideos"):
@@ -355,7 +371,13 @@ def cambio_altura(pieza: Pieza, refs: Referencias, mascara: np.ndarray, X: np.nd
         # Misma altura de lado a lado; a lo largo del pie, campana centrada en la curva del arco − retraso.
         xs, ys = sis.a_global(u, v)  # ya movida a mano
         tt, ss = recorte_mod.coordenadas_arco(refs, xs, ys)
-        dz = -h * _campana(np.abs(ss - (g["perfil"](tt) - pieza.retraso)) / (largo / 2))
+        if pieza.revisada:
+            # Borde delantero `retraso` mm por detrás de las cabezas; sube suave en ~15 mm y baja muy despacio
+            # hasta `largo` (sin ningún canto que se clave en una plantilla rígida).
+            detras = g["perfil"](tt) - pieza.retraso - ss
+            dz = -h * _perfil_barra(detras, largo)
+        else:
+            dz = -h * _campana(np.abs(ss - (g["perfil"](tt) - pieza.retraso)) / (largo / 2))
     elif tipo in ("descarga_1mtt", "descarga_5mtt", "espolon"):
         dz = h * _campana(np.hypot(u - cu, v - cv) / (largo / 2))
     elif tipo == "canal_fascia":
@@ -487,7 +509,10 @@ def contorno(pieza: Pieza, refs: Referencias, mascara, dx, dy, cfg_ref, n: int =
         tt = np.linspace(-0.8, 1.8, 3 * n)
         orillas = []
         for lado in (1, -1):
-            s = g["perfil"](tt) - pieza.retraso + lado * largo / 2
+            if pieza.revisada:  # del borde delantero a `largo` mm más atrás
+                s = g["perfil"](tt) - pieza.retraso - (0.0 if lado == 1 else largo)
+            else:
+                s = g["perfil"](tt) - pieza.retraso + lado * largo / 2
             px = m1[0] + tt * (m5[0] - m1[0]) + sis.eje[0] * s
             py = m1[1] + tt * (m5[1] - m1[1]) + sis.eje[1] * s
             u_, v_ = sis.a_local(px, py)

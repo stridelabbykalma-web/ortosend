@@ -147,10 +147,11 @@ def abrir(ruta: str | Path) -> Proyecto:
         pie.recorte = Recorte.de_dict(g["recorte"])
         pie.piezas = piezas_mod.por_defecto(clinicos)
         for k, v in g.get("piezas", {}).items():
-            if k == "oliva" and not v.get("activa") and "gota" not in v:
-                # Oliva de antes de la gota sin usar: la nueva, con las medidas de ahora (las que estaban
-                # puestas salen igual que se hicieron).
-                pie.piezas[k] = piezas_mod.por_defecto(config.valores_clinicos())["oliva"]
+            nueva = "revisada" in v or (k == "oliva" and "gota" in v)
+            if k in piezas_mod.REVISADAS and not v.get("activa") and not nueva:
+                # Pieza de antes de revisar su forma y sin usar: la nueva, con las medidas de ahora (las que
+                # estaban puestas salen igual que se hicieron).
+                pie.piezas[k] = piezas_mod.por_defecto(config.valores_clinicos())[k]
                 continue
             pie.piezas[k] = piezas_mod.Pieza.de_dict(v)
     from . import referencias as _ref

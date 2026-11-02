@@ -40,22 +40,23 @@ ancho = 35.0
 # Oliva retrocapital (bulto en la plantilla = hueco en el molde) en forma de GOTA, como las comerciales:
 # la parte ancha y redonda delante, hacia las cabezas, y la punta hacia el talón. Centrada entre 2.º y
 # 3.er MTT. El punto más alto está a un tercio del largo desde el borde delantero y baja suave a 0 en todo
-# el borde.
-altura = 6.0
+# el borde. Para plantilla RÍGIDA: baja (3 mm), no se aplasta como el fieltro de las comerciales (6-8 mm).
+altura = 3.0
 largo = 65.0
 ancho = 45.0
 # Distancia del BORDE DELANTERO de la oliva por detrás de las cabezas (nunca debe quedar debajo de ellas).
 retraso = 5.0
 
 [barra_metatarsal]
-# Barra metatarsal (bulto transversal en la plantilla = hueco en el molde) bajo todas las cabezas
-# (1.ª a 5.ª), de borde a borde del pie, curvada como el recorte (parábola metatarsal) y por detrás.
-# Misma altura de lado a lado.
-altura = 5.0
-# Ancho de la barra medido a lo largo del pie.
-ancho = 20.0
-# Distancia del centro de la barra por detrás de las cabezas.
-retraso = 8.0
+# Barra metatarsal (bulto en la plantilla = hueco en el molde) en todo el antepié, de borde a borde, por
+# detrás de las cabezas. El borde delantero sigue la curva de las cabezas (parábola metatarsal). Pensada
+# para plantilla RÍGIDA: baja (3 mm; las de fieltro son de 6-8 mm porque se aplastan), sube suave en los
+# primeros 15 mm y baja muy despacio hasta el final, sin ningún canto.
+altura = 3.0
+# Largo a lo largo del pie, del borde delantero a donde termina hacia el talón.
+largo = 70.0
+# Distancia del BORDE DELANTERO por detrás de las cabezas (nunca debajo de ellas).
+retraso = 5.0
 
 [descarga_1mtt]
 # Hueco en la plantilla bajo la cabeza del 1.er MTT (se añade escayola al molde).
