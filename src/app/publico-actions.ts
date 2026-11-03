@@ -12,7 +12,7 @@ import { notifyOwner, pushEvent, avisarPaciente } from "@/lib/cases";
 import { bookAppointment } from "@/lib/agenda-db";
 import { agendaErrorMessage, parseSlot, type SlotOk } from "@/lib/reserva-form";
 import { fmtdt } from "@/lib/format";
-import { isValidPhone, normalizeEmail, normalizePhone } from "@/lib/contacto";
+import { isValidDni, isValidPhone, normalizeDni, normalizeEmail, normalizePhone } from "@/lib/contacto";
 import { EDAD_MAYORIA_SALUD, esMenor, parseBirth } from "@/lib/edad";
 import { CONSENT_VERSION } from "@/lib/legal";
 import { enviarBienvenida } from "@/lib/cuenta";
@@ -53,6 +53,19 @@ export async function reservaAction(formData: FormData) {
   if (!isValidPhone(phone)) back("Móvil no válido");
   const birth = parseBirth(d.birth);
   if (d.birth && !birth) back("Fecha de nacimiento no válida");
+  const dni = normalizeDni(String(formData.get("dni") ?? "")) || null;
+  if (dni && !isValidDni(dni)) back("DNI/NIE no válido (revisa la letra)");
+  // Misma persona ya registrada (por DNI, o nombre + fecha de nacimiento): que entre a su cuenta.
+  const yaEsta = await prisma.patient.findFirst({
+    where: {
+      status: { in: ["PENDIENTE", "ACEPTADO"] },
+      OR: [
+        ...(dni ? [{ dni }] : []),
+        ...(birth ? [{ birthDate: birth, name: { equals: d.name.trim(), mode: "insensitive" as const } }] : []),
+      ],
+    },
+  });
+  if (yaEsta) back("Ya tienes perfil en Ortosend. Inicia sesión, o pide a tu clínica que te dé acceso, para reservar.");
   if (birth && esMenor(birth, now))
     back(
       `Si el paciente tiene menos de ${EDAD_MAYORIA_SALUD} años, la reserva debe hacerla su padre, madre o tutor: crea tu cuenta con tus datos y reserva para «otra persona a mi cargo», o inicia sesión si ya la tienes`
@@ -86,6 +99,7 @@ export async function reservaAction(formData: FormData) {
           ownerId: user.id,
           name: d.name.trim(),
           birthDate: birth,
+          dni,
           isMinor: false,
           consents,
         },

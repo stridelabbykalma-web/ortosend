@@ -10,7 +10,7 @@
 import { nombreCompleto } from "./nombre";
 import type { ConsentAction, ConsentInvitation, ConsentType, Patient, PatientStatus, Prisma, User } from "@prisma/client";
 import { prisma } from "./db";
-import { isValidPhone, normalizeEmail, normalizePhone } from "./contacto";
+import { isValidDni, normalizeDni, isValidPhone, normalizeEmail, normalizePhone } from "./contacto";
 import { EDAD_MAYORIA_SALUD, esMenor, parseBirth } from "./edad";
 import { CAMPOS, ETIQUETAS, FLUJOS, aE164, manychat } from "./manychat";
 import { ORDEN, OBLIGATORIOS, SLUG, ETIQUETA, esObligatorio } from "./consent/tipos";
@@ -43,6 +43,7 @@ export type DatosPreAlta = {
   telefono: string;
   email: string;
   fechaNacimiento: string;
+  dni: string;
   declaracion: boolean;
   tutorNombre: string;
   tutorTelefono: string;
@@ -57,6 +58,7 @@ export function leerPreAlta(f: FormData): DatosPreAlta {
     telefono: s("telefono"),
     email: s("email"),
     fechaNacimiento: s("fechaNacimiento"),
+    dni: s("dni"),
     declaracion: f.get("declaracion") === "on",
     tutorNombre: s("tutorNombre"),
     tutorTelefono: s("tutorTelefono"),
@@ -87,8 +89,10 @@ export async function crearPreAlta(pro: Profesional, d: DatosPreAlta): Promise<R
     if (!isValidPhone(tutorTelefono)) return { ok: false, error: "Móvil del tutor no válido" };
     if (tutorEmail && !tutorEmail.includes("@")) return { ok: false, error: "Email del tutor no válido" };
   }
+  const dni = normalizeDni(d.dni) || null;
+  if (dni && !isValidDni(dni)) return { ok: false, error: "El DNI/NIE del paciente no es válido (revisa la letra)" };
   const toPhone = menor ? tutorTelefono : telefono;
-  const duplicado = await buscarDuplicado(d, birth, email);
+  const duplicado = await buscarDuplicado(d, birth, dni);
   if (duplicado)
     return {
       ok: false,
@@ -110,6 +114,7 @@ export async function crearPreAlta(pro: Profesional, d: DatosPreAlta): Promise<R
       isMinor: menor,
       phone: telefono || null,
       email,
+      dni,
       status: "PENDIENTE",
       professionalId: pro.id,
       clinicId: pro.clinicId,
@@ -123,23 +128,20 @@ export async function crearPreAlta(pro: Profesional, d: DatosPreAlta): Promise<R
   return { ok: true, patient: (await prisma.patient.findUniqueOrThrow({ where: { id: patient.id } })), envio };
 }
 
-// El móvil puede compartirse entre pacientes (pareja, familia): la identidad es el email
-// o nombre + fecha de nacimiento, nunca el teléfono.
-async function buscarDuplicado(d: DatosPreAlta, birth: Date, email: string | null) {
+// La identidad es la persona (DNI/NIE; si no lo hay, nombre + apellidos + fecha de nacimiento),
+// nunca el móvil ni el email: pareja y familia comparten contacto.
+async function buscarDuplicado(d: DatosPreAlta, birth: Date, dni: string | null) {
   const completo = `${d.nombre} ${d.apellidos}`;
-  const porEmail = email
-    ? [{ email }, { owner: { is: { email } } }]
-    : [];
   return prisma.patient.findFirst({
     where: {
       status: { in: ["PENDIENTE", "ACEPTADO"] },
       OR: [
-        ...porEmail,
+        ...(dni ? [{ dni }] : []),
         {
           birthDate: birth,
           OR: [
-            { name: { equals: d.nombre, mode: "insensitive" }, lastName: { equals: d.apellidos, mode: "insensitive" } },
-            { name: { equals: completo, mode: "insensitive" } },
+            { name: { equals: d.nombre, mode: "insensitive" as const }, lastName: { equals: d.apellidos, mode: "insensitive" as const } },
+            { name: { equals: completo, mode: "insensitive" as const } },
           ],
         },
       ],

@@ -40,6 +40,7 @@ const datos = (over: Partial<DatosPreAlta> = {}): DatosPreAlta => ({
   telefono: nuevoTel(),
   email: "",
   fechaNacimiento: "1988-05-10",
+  dni: "",
   declaracion: true,
   tutorNombre: "",
   tutorTelefono: "",
@@ -504,12 +505,21 @@ describe("8. empezar escribiendo ALTA (sin ref, por el móvil)", () => {
 });
 
 describe("dos vías de entrada: web y profesional", () => {
-  it("no duplica a un paciente que ya se registró en la web (mismo email)", async () => {
+  it("no duplica a un paciente que ya se registró en la web (mismo DNI)", async () => {
     const owner = await prisma.user.create({ data: { role: "CLIENTE", name: "Pedro Web", phone: nuevoTel(), email: "pedro.web@test.com" } });
-    await prisma.patient.create({ data: { ownerId: owner.id, name: "Pedro Web", status: "ACEPTADO", birthDate: new Date("1980-01-01") } });
-    const r = await crearPreAlta(pro, datos({ nombre: "Pedro", apellidos: "Web", email: "pedro.web@test.com" }));
+    await prisma.patient.create({ data: { ownerId: owner.id, name: "Pedro Web", dni: "12345678Z", status: "ACEPTADO", birthDate: new Date("1980-01-01") } });
+    const r = await crearPreAlta(pro, datos({ nombre: "Pedro", apellidos: "Otro", dni: "12345678Z", fechaNacimiento: "1990-02-02" }));
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toMatch(/ya tiene perfil/);
+  });
+
+  it("pareja con el mismo móvil y email pero personas distintas: no es duplicado", async () => {
+    const tel = nuevoTel();
+    const a = await crearPreAlta(pro, datos({ nombre: "Ana", apellidos: "Pareja", telefono: tel, email: "casa@test.com", fechaNacimiento: "1985-01-01" }));
+    expect(a.ok).toBe(true);
+    await prisma.consentInvitation.updateMany({ where: { patientId: a.ok ? a.patient.id : "" }, data: { completedAt: new Date() } });
+    const b = await crearPreAlta(pro, datos({ nombre: "Luis", apellidos: "Pareja", telefono: tel, email: "casa@test.com", fechaNacimiento: "1983-06-06" }));
+    expect(b.ok).toBe(true);
   });
 
   it("no duplica por nombre y fecha de nacimiento", async () => {

@@ -316,7 +316,6 @@ botones de los documentos.
 Reglas comunes:
 - La cuenta se identifica por **email**; el móvil solo sirve para avisos y **puede repetirse** entre
   cuentas (pareja, familia). Ya no es único en `User`. Entrar con móvil solo funciona si es de una única cuenta.
-- El pre-alta rechaza duplicados: mismo email, o mismo nombre + apellidos + fecha de nacimiento que un
-  paciente pendiente/aceptado (p. ej. ya registrado en la web).
+- El pre-alta y el registro web rechazan duplicados por **persona**: mismo DNI/NIE (opcional en ambos formularios), o mismo nombre + apellidos + fecha de nacimiento que un paciente pendiente/aceptado. Email y móvil no cuentan: pareja y familia los comparten.
 - Un móvil solo puede tener **un alta por WhatsApp en curso** a la vez (ManyChat guarda un único `ref` por contacto).
 - En `/acceso`, un adulto con móvil compartido recibe su propia cuenta; un tutor con varios hijos reutiliza la suya.

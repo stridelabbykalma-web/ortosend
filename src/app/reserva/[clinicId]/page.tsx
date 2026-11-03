@@ -197,6 +197,10 @@ export default async function ReservaPage({
               <input name="birth" type="date" />
             </div>
             <div>
+              <label>DNI/NIE (opcional)</label>
+              <input name="dni" autoComplete="off" />
+            </div>
+            <div>
               <label>Motivo (opcional)</label>
               <select name="motivo" defaultValue="Dolor">
                 <option>Dolor</option>
