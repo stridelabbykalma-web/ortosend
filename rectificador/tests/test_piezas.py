@@ -367,3 +367,25 @@ def test_descarga_sesamoideos_revisada(proyecto):
     abierta, _ = _efecto(p, pie, "descarga_sesamoideos", sentido="abierta")
     assert abierta[dentro].min() == pytest.approx(2.0, abs=0.15)
     pz.sentido = "cerrada"
+
+
+def test_descarga_5mtt_cerrada_y_abierta(proyecto):
+    """Como la del 1.er MTT en espejo: hueco oval de 2 mm (22 × 18) bajo la 5.ª cabeza; «abierta» sigue igual
+    de honda 12 mm hacia el borde EXTERNO y hacia dentro se cierra igual."""
+    p = proyecto
+    pie = p.pies[0]
+    sis = pie.referencias.sistema()
+    X, Y = p.original.rejilla.malla()
+    u, v = sis.a_local(X, Y)
+    cu, cv = (float(c) for c in sis.a_local(*pie.referencias.puntos["mtt5"]))
+    cerrada, pz = _efecto(p, pie, "descarga_5mtt")
+    assert pz.revisada and pz.sentido == "cerrada" and (pz.largo, pz.ancho, pz.altura) == (22.0, 18.0, 2.0)
+    assert cerrada.max() == pytest.approx(2.0, abs=0.1)
+    linea = (np.abs(u - cu) < 0.6) & pie.mascara
+    fuera = linea & (v < cv - 13) & (v > cv - 15)
+    dentro = linea & (v > cv + 16) & (v < cv + 20)
+    assert np.abs(cerrada[fuera]).max() <= 0.05 and np.abs(cerrada[dentro]).max() <= 0.05
+    abierta, _ = _efecto(p, pie, "descarga_5mtt", sentido="abierta")
+    assert abierta[fuera].min() == pytest.approx(2.0, abs=0.15)  # sigue honda hacia el borde externo
+    assert np.abs(abierta[dentro]).max() <= 0.05  # hacia dentro se cierra igual
+    pz.sentido = "cerrada"

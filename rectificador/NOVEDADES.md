@@ -1,5 +1,11 @@
 # Novedades de Ortosend Taller
 
+## 0.19.0
+- **Descarga del 5.º MTT nueva** (para plantilla rígida): como la del 1.er MTT en espejo, hueco **oval de
+  22 × 18 mm y 2 mm** bajo la 5.ª cabeza, fondo casi plano y pared suave. **Cerrada** o **Abierta al borde
+  externo** (sigue igual de honda 12 mm hacia fuera, hasta el borde de la planta).
+- En el panel: Largo y Ancho (antes solo diámetro) y los botones Cerrada / Abierta.
+
 ## 0.18.0
 - **Descarga de sesamoideos nueva** (para plantilla rígida): hueco **oval de 20 × 14 mm y 2 mm**, centrado
   5 mm por detrás de la 1.ª cabeza y 3 mm hacia dentro (sesamoideo medial), con fondo casi plano y pared

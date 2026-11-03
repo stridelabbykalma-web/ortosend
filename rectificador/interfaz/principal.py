@@ -236,7 +236,7 @@ class PanelPie(QFrame):
         "barra": (("largo", "Largo (a lo largo del pie)", 8, 120),
                   ("retraso", "Borde delantero detrás de las cabezas", -10, 40)),
         "descarga_1mtt": (("largo", "Largo", 8, 45), ("ancho", "Ancho", 8, 40)),
-        "descarga_5mtt": (("largo", "Diámetro", 8, 45),),
+        "descarga_5mtt": (("largo", "Largo", 8, 45), ("ancho", "Ancho", 8, 40)),
         "descarga_sesamoideos": (("largo", "Largo", 8, 45), ("ancho", "Ancho", 8, 40)),
         "espolon": (("largo", "Diámetro", 10, 50),),
         "navicular": (("largo", "Largo", 10, 60), ("ancho", "Ancho", 8, 40)),
@@ -260,7 +260,9 @@ class PanelPie(QFrame):
         "descarga_1mtt": "Descarga bajo la cabeza del 1.er MTT: hueco oval en la plantilla (escayola añadida al "
                          "molde) con la pared suave. «Cerrada»: un bolsillo. «Abierta al borde interno»: sigue igual "
                          "de honda hasta el borde interno de la plantilla (libera más el 1.er radio).",
-        "descarga_5mtt": "Descarga bajo la cabeza del 5.º MTT: hueco en la plantilla (escayola añadida al molde).",
+        "descarga_5mtt": "Descarga bajo la cabeza del 5.º MTT: hueco oval en la plantilla (escayola añadida al "
+                         "molde) con la pared suave. «Cerrada»: un bolsillo. «Abierta al borde externo»: sigue "
+                         "igual de honda hasta el borde externo de la planta.",
         "descarga_sesamoideos": "Descarga de sesamoideos: hueco oval en la plantilla (escayola añadida al molde) "
                                 "bajo los sesamoideos, 5 mm por detrás de la 1.ª cabeza y algo hacia dentro. "
                                 "«Cerrada»: un bolsillo. «Abierta al borde interno»: sigue igual de honda hasta el "

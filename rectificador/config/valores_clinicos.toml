@@ -68,9 +68,13 @@ ancho = 20.0
 forma = "cerrada"
 
 [descarga_5mtt]
-# Hueco en la plantilla bajo la cabeza del 5.º MTT (se añade escayola al molde).
+# Hueco oval en la plantilla bajo la cabeza del 5.º MTT (se añade escayola al molde), para plantilla rígida:
+# como la del 1.er MTT en espejo, algo más pequeña. Fondo casi plano y pared suave de 6 mm, sin canto.
+# forma = "cerrada" (bolsillo) o "abierta" (sigue igual de hondo 12 mm hacia el borde externo).
 profundidad = 2.0
-diametro = 20.0
+largo = 22.0
+ancho = 18.0
+forma = "cerrada"
 
 [descarga_sesamoideos]
 # Hueco oval en la plantilla bajo los sesamoideos (se añade escayola al molde), para plantilla rígida: más
