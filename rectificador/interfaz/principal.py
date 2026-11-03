@@ -238,7 +238,7 @@ class PanelPie(QFrame):
         "descarga_1mtt": (("largo", "Largo", 8, 45), ("ancho", "Ancho", 8, 40)),
         "descarga_5mtt": (("largo", "Largo", 8, 45), ("ancho", "Ancho", 8, 40)),
         "descarga_sesamoideos": (("largo", "Largo", 8, 45), ("ancho", "Ancho", 8, 40)),
-        "espolon": (("largo", "Diámetro", 10, 50),),
+        "espolon": (("largo", "Largo", 10, 50), ("ancho", "Ancho", 8, 45)),
         "navicular": (("largo", "Largo", 10, 60), ("ancho", "Ancho", 8, 40)),
         "cuboides": (("largo", "Largo", 10, 60), ("ancho", "Ancho", 8, 40)),
         "canal_fascia": (("ancho", "Ancho", 6, 30),),

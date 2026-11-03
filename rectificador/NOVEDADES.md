@@ -1,5 +1,20 @@
 # Novedades de Ortosend Taller
 
+## 0.20.0
+- **Resto de piezas revisadas para plantilla rígida** (más suaves por defecto; todo se sigue pudiendo subir
+  en el panel):
+  - Cuña anterior y cuña posterior: **2°** (antes 4°).
+  - Relleno de arco: **2 mm** (antes 3).
+  - Soporte navicular y soporte cuboides: **2 mm, 40 × 28 mm** (antes 3 mm, 30 × 22): más tendidos.
+  - Canal de la fascia plantar: **2,5 mm de hondo, 18 de ancho** (antes 4 y 15).
+  - Skive de Kirby: **2 mm** (antes 4).
+  - Alza de talón: **3 mm** (antes 5).
+  - Descarga del espolón: **hueco oval de 25 × 20 mm y 2,5 mm**, con fondo casi plano y pared suave (antes
+    redondo de 3 mm).
+  - Expansión de talón: igual (10 %).
+- Los trabajos guardados con estas piezas puestas salen igual que se hicieron; las que no se usaban, al
+  abrirlos ya salen con los valores nuevos.
+
 ## 0.19.0
 - **Descarga del 5.º MTT nueva** (para plantilla rígida): como la del 1.er MTT en espejo, hueco **oval de
   22 × 18 mm y 2 mm** bajo la 5.ª cabeza, fondo casi plano y pared suave. **Cerrada** o **Abierta al borde

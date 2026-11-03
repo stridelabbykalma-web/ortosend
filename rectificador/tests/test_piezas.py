@@ -389,3 +389,37 @@ def test_descarga_5mtt_cerrada_y_abierta(proyecto):
     assert abierta[fuera].min() == pytest.approx(2.0, abs=0.15)  # sigue honda hacia el borde externo
     assert np.abs(abierta[dentro]).max() <= 0.05  # hacia dentro se cierra igual
     pz.sentido = "cerrada"
+
+
+ESPERADO_RIGIDA = {  # tipo: (altura por defecto, máximo efecto en el molde en mm o None)
+    "arco": (2.0, 2.0), "navicular": (2.0, 2.0), "cuboides": (2.0, 2.0), "canal_fascia": (2.5, 2.5),
+    "alza": (3.0, 3.0), "espolon": (2.5, 2.5), "skive": (2.0, None), "cuna_ant": (2.0, None),
+    "cuna_post": (2.0, None),
+}
+
+
+@pytest.mark.parametrize("tipo", sorted(ESPERADO_RIGIDA))
+def test_piezas_revisadas_para_plantilla_rigida(proyecto, tipo):
+    """Piezas 6–15 revisadas para plantilla rígida: valores más suaves y el efecto que toca."""
+    p = proyecto
+    pie = p.pies[0]
+    altura, maximo = ESPERADO_RIGIDA[tipo]
+    antes = pie.piezas[tipo]
+    pie.piezas[tipo] = P.por_defecto(p.clinicos)[tipo]  # otros tests la dejan cambiada
+    try:
+        d, pz = _efecto(p, pie, tipo)
+    finally:
+        pie.piezas[tipo] = antes
+    assert pz.revisada and pz.altura == altura
+    efecto = np.abs(d).max()
+    if maximo is not None:
+        assert efecto == pytest.approx(maximo, abs=0.2), tipo
+    elif tipo in ("cuna_ant", "cuna_post"):
+        # 2°: en un pie de ~100 mm de ancho, como mucho ~3,5 mm en el borde que sube
+        assert 0.5 < efecto <= np.tan(np.radians(2.0)) * 100 + 0.3
+    else:  # skive de 2 mm en la línea W/3: poco
+        assert 0.3 < efecto < 6.0
+    if tipo in ("navicular", "cuboides"):
+        assert (pz.largo, pz.ancho) == (40.0, 28.0)
+    if tipo == "espolon":
+        assert (pz.largo, pz.ancho) == (25.0, 20.0)

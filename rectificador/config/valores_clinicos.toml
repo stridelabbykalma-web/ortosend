@@ -27,11 +27,12 @@ flecha = 10.0
 posicion_vertice = 0.35
 
 [relleno_arco]
+# Para plantilla RÍGIDA: valores suaves (no se aplasta como el fieltro).
 # Relleno del arco interno. Altura en la PLANTILLA:
 #   sentido = "rebajar" (clásico): se añade escayola al arco del molde y la plantilla queda con menos arco.
 #   sentido = "subir": se quita escayola del molde y la plantilla queda con más arco.
 # Se cambia en cada paciente.
-altura = 3.0
+altura = 2.0
 sentido = "rebajar"
 largo = 70.0
 ancho = 35.0
@@ -87,52 +88,61 @@ ancho = 14.0
 forma = "cerrada"
 
 [descarga_espolon]
-# Hueco bajo el tubérculo medial del calcáneo (espolón).
-profundidad = 3.0
-diametro = 25.0
+# Hueco oval en la plantilla bajo el tubérculo medial del calcáneo (espolón), para plantilla rígida: fondo
+# casi plano y pared suave de 6 mm alrededor, sin canto (como las descargas del antepié).
+profundidad = 2.5
+largo = 25.0
+ancho = 20.0
 
 [soporte_navicular]
+# Para plantilla RÍGIDA: valores suaves (no se aplasta como el fieltro).
 # Bulto bajo el escafoides (se quita escayola del molde).
-altura = 3.0
-largo = 30.0
-ancho = 22.0
+altura = 2.0
+largo = 40.0
+ancho = 28.0
 
 [soporte_cuboides]
+# Para plantilla RÍGIDA: valores suaves (no se aplasta como el fieltro).
 # Bulto bajo el cuboides, columna lateral (se quita escayola del molde).
-altura = 3.0
-largo = 30.0
-ancho = 22.0
+altura = 2.0
+largo = 40.0
+ancho = 28.0
 
 [canal_fascia]
+# Para plantilla RÍGIDA: valores suaves (no se aplasta como el fieltro).
 # Surco en la plantilla para la fascia plantar, del tubérculo medial del calcáneo hasta ~10 mm por
 # detrás de la 1.ª cabeza (se añade una tira de escayola al molde).
-profundidad = 4.0
-ancho = 15.0
+profundidad = 2.5
+ancho = 18.0
 
 [skive]
+# Para plantilla RÍGIDA se empieza con 2 mm (4 y 6 mm si hace falta más).
 # Skive de Kirby: corte en plano inclinado `angulo` grados en el plano frontal. La profundidad (2, 4 o 6 mm)
 # se mide a 1/3 del ancho del talón desde el borde medial (varo) o lateral (valgo). Con 2 mm solo toca el
 # lado del corte; con 6 mm cruza toda la cazoleta. Va desde atrás hasta el borde anterior de la cazoleta.
-altura = 4.0
+altura = 2.0
 sentido = "varo"
 angulo = 15.0
 largo = 55.0
 
 [cuna_posterior]
+# Para plantilla RÍGIDA: valores suaves (no se aplasta como el fieltro). Hasta 6° si hace falta.
 # Cuña intrínseca de retropié (grados): varo = supinadora, valgo = pronadora. Zona del talón.
-grados = 4.0
+grados = 2.0
 sentido = "varo"
 largo = 60.0
 
 [cuna_anterior]
+# Para plantilla RÍGIDA: valores suaves (no se aplasta como el fieltro). Hasta 6° si hace falta.
 # Cuña intrínseca de antepié (grados), desde `largo` mm por detrás de las cabezas hacia delante.
-grados = 4.0
+grados = 2.0
 sentido = "varo"
 largo = 45.0
 
 [alza_talon]
+# Para plantilla RÍGIDA: valores suaves (no se aplasta como el fieltro).
 # Alza de talón: igual bajo el talón y rampa suave hasta `largo` mm desde atrás.
-altura = 5.0
+altura = 3.0
 largo = 120.0
 
 [expansion_talon]

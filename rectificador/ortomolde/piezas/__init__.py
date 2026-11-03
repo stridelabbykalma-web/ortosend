@@ -83,9 +83,10 @@ UNIDAD_ALTURA = {"cuna_ant": ("°", 0.0, 20.0, 1.0), "cuna_post": ("°", 0.0, 20
                  "expansion_talon": ("%", 0.0, 25.0, 1.0)}
 # Piezas con la forma revisada (pensadas para plantilla rígida: menos altura, subidas suaves). Un trabajo
 # guardado antes con una de estas piezas SIN usar la recibe nueva al abrirlo; las puestas salen igual.
-REVISADAS = ("oliva", "barra", "descarga_1mtt", "descarga_sesamoideos", "descarga_5mtt")
+REVISADAS = ("oliva", "barra", "descarga_1mtt", "descarga_sesamoideos", "descarga_5mtt", "cuna_ant", "arco",
+             "navicular", "cuboides", "canal_fascia", "skive", "cuna_post", "alza", "espolon")
 #: Descargas con hueco oval revisado (fondo casi plano, pared suave; cerrada o abierta al borde interno).
-DESCARGAS_OVALES = ("descarga_1mtt", "descarga_sesamoideos", "descarga_5mtt")
+DESCARGAS_OVALES = ("descarga_1mtt", "descarga_sesamoideos", "descarga_5mtt", "espolon")  # espolón: solo cerrada
 #: Descargas revisadas: lo que sube la pared alrededor del hueco (mm), suave, sin canto.
 PARED_DESCARGA = 6.0
 #: Descarga 1.er MTT «abierta»: mm que sigue igual de honda hacia el borde interno más allá del óvalo.
