@@ -11,9 +11,20 @@ import { SoloWeb } from "@/components/solo-web";
 const sans = Figtree({ variable: "--font-inter", subsets: ["latin"], weight: ["400", "500", "600", "700", "800"] });
 
 export const metadata: Metadata = {
-  title: "Ortosend — Plantillas a medida",
+  metadataBase: new URL("https://ortosend.es"),
+  title: { default: "Ortosend — Plantillas a medida", template: "%s — Ortosend" },
   description:
     "Estudio completo de la pisada en clínicas asociadas: escáner 3D, análisis de la marcha y baropodometría. Solo pagas si un profesional colegiado prescribe tu tratamiento.",
+  openGraph: {
+    type: "website",
+    locale: "es_ES",
+    siteName: "Ortosend",
+    title: "Ortosend — Plantillas a medida",
+    description:
+      "Estudio completo de la pisada en clínicas asociadas. Solo pagas si un profesional colegiado prescribe tu tratamiento.",
+    url: "/",
+  },
+  twitter: { card: "summary_large_image" },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -42,6 +53,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   <div className="t">Ortosend</div>
                   <a href="/como-funciona">Cómo funciona</a>
                   <a href="/buscar">Buscar clínica</a>
+                  <a href="/dolencias">Guías de dolencias</a>
                   <a href="/para-clinicas">Para clínicas</a>
                 </nav>
                 <nav>

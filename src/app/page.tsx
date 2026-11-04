@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { PRICE_LABEL } from "@/lib/format";
 import { BuscadorVivo } from "@/components/buscador-vivo";
+import { CtaMovil } from "@/components/cta-movil";
+import { DOLENCIAS } from "@/lib/dolencias";
 
 // Iconos lineales propios (trazo 1.5), sin librerías externas.
 const ICO = {
@@ -60,7 +62,7 @@ const FAQ: [string, string][] = [
   ],
   [
     "¿Pueden hacerse el estudio los niños?",
-    "Sí. Los estudios de menores de 16 años se gestionan desde la cuenta de su padre, madre o tutor, que recibe los avisos y autoriza el tratamiento. Al cumplir los 16, el paciente pasa a gestionar su propia cuenta.",
+    "Sí. Los estudios de menores de 16 años se gestionan desde la cuenta de su padre, madre o tutor, que recibe los avisos y autoriza el tratamiento. Al cumplir los 16, el paciente pasa a gestionar su propia cuenta. Y como el pie de un niño crece rápido, en menores de 14 años te avisamos cada 6 meses para revisar la plantilla en tu clínica (en adultos, la revisión es anual).",
   ],
   [
     "¿Y si no puedo ir a mi cita?",
@@ -73,8 +75,32 @@ const FAQ: [string, string][] = [
 ];
 
 export default function Home() {
+  const jsonLd = [
+    {
+      "@context": "https://schema.org",
+      "@type": "MedicalBusiness",
+      name: "Ortosend",
+      url: "https://ortosend.es",
+      email: "hola@ortosend.es",
+      description:
+        "Plantillas ortopédicas a medida con estudio completo de la pisada en clínicas asociadas y prescripción de profesionales colegiados.",
+      areaServed: "España",
+      priceRange: PRICE_LABEL,
+    },
+    {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      mainEntity: FAQ.map(([q, a]) => ({
+        "@type": "Question",
+        name: q,
+        acceptedAnswer: { "@type": "Answer", text: a },
+      })),
+    },
+  ];
   return (
     <>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      <CtaMovil />
       <div className="px-hero">
         <div className="wrap">
           <h1>
@@ -96,7 +122,7 @@ export default function Home() {
             <span>{ICO.check} Prescrito siempre por profesionales colegiados</span>
             <span>{ICO.check} Estudio gratuito y sin compromiso</span>
           </div>
-          <div className="px-search">
+          <div className="px-search" id="buscador-hero">
             <BuscadorVivo />
           </div>
         </div>
@@ -132,6 +158,52 @@ export default function Home() {
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+
+        <div className="px-sec">
+          <div className="px-kicker">Guías informativas</div>
+          <h2 className="px-h2">¿Qué te duele?</h2>
+          <div className="px-pills">
+            {DOLENCIAS.map((d) => (
+              <Link key={d.slug} href={`/dolencias/${d.slug}`} className="px-pill-link">
+                {d.nombre}
+              </Link>
+            ))}
+            <Link href="/dolencias" className="px-pill-link px-pill-mas">
+              Todas las guías →
+            </Link>
+          </div>
+          <div className="tiny muted" style={{ marginTop: 10 }}>
+            Información general, sin diagnóstico: tu caso lo valora siempre un profesional colegiado
+            en el estudio.
+          </div>
+        </div>
+
+        <div className="px-sec">
+          <div className="px-kicker">Compara</div>
+          <h2 className="px-h2">Lo mismo, por separado, cuesta bastante más</h2>
+          <div className="card px-lift px-ancla">
+            <div>
+              <div className="px-card-t">Por separado*</div>
+              <ul className="px-dol-ul">
+                <li>Estudio biomecánico de la pisada: 50–80 €</li>
+                <li>Plantillas a medida: 250–400 €</li>
+                <li>Ajustes y revisiones: según centro</li>
+              </ul>
+            </div>
+            <div className="px-ancla-vs">
+              <div className="px-card-t">Con Ortosend</div>
+              <div className="px-ancla-precio">{PRICE_LABEL}</div>
+              <div className="muted">
+                Estudio, prescripción colegiada, fabricación a medida, envío, guía de adaptación,
+                ajustes del periodo de adaptación y revisión anual. Todo incluido, y solo pagas si
+                se prescribe.
+              </div>
+            </div>
+          </div>
+          <div className="tiny muted" style={{ marginTop: 8 }}>
+            * Rangos orientativos habituales del mercado en España; varían según el centro.
           </div>
         </div>
 

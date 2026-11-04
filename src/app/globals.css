@@ -509,6 +509,51 @@ button, .btn, a {
   .px-lift:hover { transform: none; }
 }
 
+/* --- Guías de dolencias y bloques nuevos de la home (capa px-, aditiva) --- */
+.px-pills { display: flex; flex-wrap: wrap; gap: 10px; }
+.px-pill-link {
+  display: inline-flex; align-items: center; min-height: 44px; padding: 8px 18px;
+  border: 1px solid var(--line); border-radius: 999px; background: #fff;
+  font-weight: 600; font-size: 14.5px; color: var(--teal-d);
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.px-pill-link:hover { border-color: var(--teal); background: var(--teal-l); }
+.px-pill-mas { color: var(--mut); font-weight: 500; }
+
+.px-ancla { display: grid; grid-template-columns: 1fr 1.1fr; gap: 24px; padding: 26px; }
+.px-ancla-vs { border-left: 1px solid var(--line); padding-left: 24px; }
+.px-ancla-precio { font-family: var(--font-display); font-size: 34px; font-weight: 800; color: var(--teal-d); letter-spacing: -0.5px; margin: 6px 0 4px; }
+@media (max-width: 640px) {
+  .px-ancla { grid-template-columns: 1fr; }
+  .px-ancla-vs { border-left: 0; padding-left: 0; border-top: 1px solid var(--line); padding-top: 18px; }
+}
+
+.px-dol-card { display: block; }
+.px-dol-mas { margin-top: 10px; font-weight: 600; font-size: 14px; color: var(--teal-d); }
+.px-dol-p { max-width: 680px; }
+.px-dol-nota { max-width: 680px; margin-top: 14px; }
+.px-dol-ul { margin: 10px 0 0; padding-left: 18px; display: grid; gap: 8px; }
+.px-dol-ul li { color: var(--mut); }
+.px-dol-ul li::marker { color: var(--teal); }
+.px-dol-aviso { border-color: #e9c46a66; background: #fffdf5; }
+
+.px-cta-movil {
+  position: fixed; left: 50%; transform: translateX(-50%); bottom: 14px; z-index: 30;
+  display: none; align-items: center; min-height: 48px; padding: 10px 26px;
+  background: var(--bosque); color: #fff; border-radius: 999px; font-weight: 700; font-size: 15px;
+  box-shadow: 0 12px 32px rgba(13, 68, 86, 0.35);
+}
+@media (max-width: 640px) {
+  .px-cta-movil { display: inline-flex; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .px-cta-movil { animation: px-sube 0.22s ease-out; }
+  @keyframes px-sube {
+    from { opacity: 0; transform: translate(-50%, 10px); }
+    to { opacity: 1; transform: translate(-50%, 0); }
+  }
+}
+
 /* ============================================================
    Panel del cliente (prefijo pc-): capa ADITIVA sobre px-.
    Solo la usan PanelCliente y la vista del dueño en /caso/[id].
@@ -547,6 +592,9 @@ button, .btn, a {
 .pc-acc > summary::after { content: "+"; color: var(--teal); font-size: 20px; font-weight: 400; transition: transform 0.2s ease; flex: none; }
 .pc-acc[open] > summary::after { transform: rotate(45deg); }
 .pc-acc[open] > summary { margin-bottom: 10px; }
+
+.pc-adapt { margin-top: 14px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--teal-l); }
+.pc-adapt > b { font-family: var(--font-sora); }
 
 .pc-lock { max-width: 460px; border-radius: var(--r-lg); }
 .pc-doc { border-radius: var(--r-lg); padding: 28px; max-width: 760px; }
