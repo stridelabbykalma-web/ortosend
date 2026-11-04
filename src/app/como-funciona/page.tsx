@@ -46,15 +46,15 @@ export default function ComoFunciona() {
             <figure className="ox-band-img ox-drift" data-mv>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src="/img/marcha-muybridge.jpg"
-                alt="Secuencia fotográfica de un hombre caminando, Eadweard Muybridge, 1887"
+                src="/img/captura-movimiento.jpg"
+                alt="Estudio de captura de movimiento: la marcha convertida en un esqueleto digital"
                 className="ox-img"
-                width={1920}
-                height={560}
+                width={1600}
+                height={1071}
                 loading="lazy"
               />
               <figcaption className="ox-small" style={{ marginTop: 8 }}>
-                Muybridge, 1887: el primer análisis fotográfico de la marcha.
+                La marcha, convertida en datos: así se analiza hoy en un laboratorio de movimiento.
               </figcaption>
             </figure>
             <div className="ox-bloques" style={{ marginTop: 0 }}>
@@ -78,21 +78,21 @@ export default function ComoFunciona() {
             <figure className="ox-guia-fig ox-drift" data-mv>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src="/img/horma-madera.jpg"
-                alt="Horma de madera de zapatero, años 1930-1970 (Museums Victoria)"
+                src="/img/cnc-espuma.jpg"
+                alt="Fresadora CNC mecanizando un bloque de espuma técnica, como las de nuestro taller"
                 className="ox-img"
-                width={1100}
-                height={2446}
+                width={1600}
+                height={1200}
               />
             </figure>
             <figure className="ox-guia-mini" data-mv>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src="/img/horma-acuarela.jpg"
-                alt="Acuarela de una horma de zapato, Michael Fallon (1938)"
+                src="/img/rx-lateral.jpg"
+                alt="Radiografía lateral de un pie"
                 className="ox-img"
-                width={1024}
-                height={816}
+                width={1920}
+                height={962}
                 loading="lazy"
               />
             </figure>

@@ -16,14 +16,15 @@ export type Dolencia = {
   consulta: string[]; // señales para consultar a un médico/podólogo sin esperar
 };
 
-// Lámina de cada guía (imágenes reales de colecciones abiertas, en /public/img;
-// créditos en el pie). pos = object-position del recorte.
+// Lámina de cada guía: radiografías reales del pie (CC0, colecciones
+// abiertas; créditos en el pie de la web). pos = object-position del recorte,
+// apuntando a la zona de la dolencia.
 export const DOLENCIA_IMG: Record<string, { src: string; alt: string; pos?: string }> = {
-  "fascitis-plantar": { src: "/img/pie-marmol.jpg", alt: "Pie de mármol de la Venus de Milo", pos: "50% 55%" },
-  "espolon-calcaneo": { src: "/img/huesos-pie.jpg", alt: "Lámina anatómica de los huesos de la pierna y el pie", pos: "32% 60%" },
-  metatarsalgia: { src: "/img/huesos-pie.jpg", alt: "Lámina anatómica de los huesos de la pierna y el pie", pos: "68% 60%" },
-  "pie-plano-infantil": { src: "/img/pies-andando.jpg", alt: "Pies descalzos caminando", pos: "60% 50%" },
-  "juanete-hallux-valgus": { src: "/img/horma-acuarela.jpg", alt: "Acuarela de una horma de zapato (1938)", pos: "50% 45%" },
+  "fascitis-plantar": { src: "/img/rx-lateral.jpg", alt: "Radiografía lateral de un pie: el talón y el arco", pos: "72% 60%" },
+  "espolon-calcaneo": { src: "/img/rx-lateral.jpg", alt: "Radiografía lateral de un pie: la zona del talón", pos: "88% 70%" },
+  metatarsalgia: { src: "/img/rx-dorsoplantar.jpg", alt: "Radiografía dorsoplantar de un pie: los metatarsianos", pos: "50% 22%" },
+  "pie-plano-infantil": { src: "/img/rx-oblicua.jpg", alt: "Radiografía oblicua de un pie: el arco interno", pos: "50% 55%" },
+  "juanete-hallux-valgus": { src: "/img/rx-dorsoplantar.jpg", alt: "Radiografía dorsoplantar de un pie: el dedo gordo", pos: "18% 24%" },
 };
 
 export const DOLENCIAS: Dolencia[] = [

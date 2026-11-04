@@ -5,6 +5,7 @@ import { CtaMovil } from "@/components/cta-movil";
 import { Reveal } from "@/components/ox/reveal";
 import { PlatoEstudio } from "@/components/ox/plato-estudio";
 import { DolenciasLista } from "@/components/ox/dolencias-lista";
+import { MapaPresiones } from "@/components/ox/mapa-presiones";
 import { DOLENCIAS } from "@/lib/dolencias";
 
 // Recibo del proceso: la fila con «val» vacío solo lleva texto.
@@ -103,17 +104,9 @@ export default function Home() {
       {/* Escenario partido: la foto fija acompaña al hero, el recibo y las medidas */}
       <div className="ox-split">
         <div className="ox-stage">
-          <figure className="ox-drift">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/img/pie-marmol.jpg"
-              alt="Pie de mármol de la Venus de Milo, fragmento expuesto en museo"
-              className="ox-img"
-              width={1400}
-              height={2156}
-              fetchPriority="high"
-            />
-            <figcaption>Pie de la Venus de Milo · mármol, s. II a. C.</figcaption>
+          <figure className="ox-mapa" aria-label="Mapa de presiones plantares de los dos pies, con las zonas de carga y los datos del estudio (gráfico ilustrativo)">
+            <MapaPresiones modo="mapa" />
+            <figcaption>El mapa de presiones de tu pisada: la salida real del estudio</figcaption>
           </figure>
         </div>
 
@@ -232,11 +225,11 @@ export default function Home() {
               <figure className="ox-menu-fig ox-drift" data-mv>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src="/img/horma-acuarela.jpg"
-                  alt="Acuarela de una horma de zapato, Michael Fallon (1938)"
+                  src="/img/cnc-espuma.jpg"
+                  alt="Fresadora CNC de sobremesa mecanizando un bloque de espuma técnica"
                   className="ox-img"
-                  width={1024}
-                  height={816}
+                  width={1600}
+                  height={1200}
                   loading="lazy"
                 />
               </figure>
@@ -326,22 +319,22 @@ export default function Home() {
               <figure className="alta ox-drift">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src="/img/horma-madera.jpg"
-                  alt="Horma de madera de zapatero, años 1930-1970 (Museums Victoria)"
+                  src="/img/rx-oblicua.jpg"
+                  alt="Radiografía de un pie en proyección oblicua"
                   className="ox-img"
-                  width={1100}
-                  height={2446}
+                  width={1077}
+                  height={2029}
                   loading="lazy"
                 />
               </figure>
               <figure className="cuad">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src="/img/marcha-muybridge.jpg"
-                  alt="Secuencia de un hombre caminando, Eadweard Muybridge, 1887"
+                  src="/img/captura-movimiento.jpg"
+                  alt="Estudio de captura de movimiento: el esqueleto digital en pantalla"
                   className="ox-img"
-                  width={1920}
-                  height={560}
+                  width={1600}
+                  height={1071}
                   loading="lazy"
                   style={{ objectFit: "cover" }}
                 />

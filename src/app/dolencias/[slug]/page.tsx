@@ -79,15 +79,15 @@ export default async function DolenciaPage({ params }: { params: Promise<{ slug:
             <figure className="ox-band-img ox-drift" data-mv>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src="/img/marcha-muybridge.jpg"
-                alt="Secuencia de un hombre caminando, Eadweard Muybridge, 1887"
+                src="/img/captura-movimiento.jpg"
+                alt="Estudio de captura de movimiento: la marcha convertida en un esqueleto digital"
                 className="ox-img"
-                width={1920}
-                height={560}
+                width={1600}
+                height={1071}
                 loading="lazy"
               />
               <figcaption className="ox-small" style={{ marginTop: 8 }}>
-                En el estudio, tu marcha se graba y se mide; la valora un profesional colegiado.
+                En el estudio, tu marcha se graba y se analiza con visión artificial; la valora un profesional colegiado.
               </figcaption>
             </figure>
             <div className="ox-bloques" style={{ marginTop: 0 }}>
@@ -111,7 +111,7 @@ export default async function DolenciaPage({ params }: { params: Promise<{ slug:
             <figure className="ox-guia-fig ox-drift" data-mv>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={DOLENCIA_IMG[d.slug]?.src ?? "/img/huesos-pie.jpg"}
+                src={DOLENCIA_IMG[d.slug]?.src ?? "/img/rx-dorsoplantar.jpg"}
                 alt={DOLENCIA_IMG[d.slug]?.alt ?? ""}
                 className="ox-img"
                 style={DOLENCIA_IMG[d.slug]?.pos ? { objectPosition: DOLENCIA_IMG[d.slug].pos } : undefined}
@@ -122,11 +122,11 @@ export default async function DolenciaPage({ params }: { params: Promise<{ slug:
             <figure className="ox-guia-mini" data-mv>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src="/img/huesos-pie.jpg"
-                alt="Lámina anatómica: huesos de la pierna y del pie"
+                src="/img/cnc-espuma.jpg"
+                alt="Fresadora CNC mecanizando un bloque de espuma técnica"
                 className="ox-img"
-                width={1400}
-                height={1133}
+                width={1600}
+                height={1200}
                 loading="lazy"
               />
             </figure>

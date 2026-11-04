@@ -434,6 +434,9 @@ body:has(.oxp) { background: var(--ox-ground); }
 .ox-stage figure { margin: 0; height: 100%; position: relative; }
 .ox-stage .ox-img { height: 100%; }
 .ox-stage figcaption { position: absolute; left: 14px; bottom: 12px; font-size: 13px; color: #fff; background: rgba(15, 39, 48, 0.55); padding: 4px 12px; border-radius: 999px; }
+.ox-mapa { margin: 0; height: 100%; position: relative; border-radius: var(--ox-r); overflow: hidden; background: #0e3140; }
+.ox-mapa figcaption { position: absolute; left: 14px; bottom: 12px; font-size: 13px; color: #fff; background: rgba(15, 39, 48, 0.55); padding: 4px 12px; border-radius: 999px; }
+.ox-plate-svg { position: absolute; inset: 0; border-radius: var(--ox-r); overflow: hidden; background: #113c4c; }
 .ox-flow { min-width: 0; padding: 0 clamp(22px, 4.4vw, 72px); }
 .ox-flow > section { padding: clamp(72px, 12vh, 150px) 0 0; max-width: 620px; }
 .ox-flow > section:last-child { padding-bottom: clamp(72px, 12vh, 140px); }

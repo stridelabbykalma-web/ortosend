@@ -44,32 +44,32 @@ export default function DolenciasPage() {
             <figure className="ox-guia-fig ox-drift" data-mv>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src="/img/huesos-pie.jpg"
-                alt="Lámina anatómica de los huesos de la pierna y el pie"
+                src="/img/rx-dorsoplantar.jpg"
+                alt="Radiografía dorsoplantar de un pie"
                 className="ox-img"
-                width={1400}
-                height={1133}
+                width={1061}
+                height={2431}
               />
             </figure>
             <figure className="ox-guia-mini" data-mv>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src="/img/pies-andando.jpg"
-                alt="Pies descalzos caminando por el borde de una piscina"
+                src="/img/rx-lateral.jpg"
+                alt="Radiografía lateral de un pie"
                 className="ox-img"
-                width={1024}
-                height={683}
+                width={1920}
+                height={962}
                 loading="lazy"
               />
             </figure>
             <figure className="ox-guia-mini" data-mv>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src="/img/horma-acuarela.jpg"
-                alt="Acuarela de una horma de zapato, Michael Fallon (1938)"
+                src="/img/captura-movimiento.jpg"
+                alt="Estudio de captura de movimiento con el esqueleto digital en pantalla"
                 className="ox-img"
-                width={1024}
-                height={816}
+                width={1600}
+                height={1071}
                 loading="lazy"
               />
             </figure>

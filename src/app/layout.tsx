@@ -41,11 +41,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <figure className="ox-footer-foto">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src="/img/huellas-arena.jpg"
-                alt="Huellas de pasos en la arena de una playa"
+                src="/img/rx-lateral.jpg"
+                alt="Radiografía lateral de un pie"
                 className="ox-img"
-                width={1024}
-                height={576}
+                width={1920}
+                height={962}
                 loading="lazy"
               />
             </figure>
@@ -77,17 +77,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 <a href="/legal/privacidad">Privacidad</a> · <a href="/legal/terminos">Términos</a> ·{" "}
                 <a href="/legal/cookies">Cookies</a>
                 <p className="ox-credits">
-                  Imágenes: <a href="https://commons.wikimedia.org/w/index.php?curid=140094963">«Venus de Milo foot»</a>{" "}
-                  por Caeciliusinhorto (CC BY-SA 4.0) ·{" "}
-                  <a href="https://collections.museumsvictoria.com.au/items/1333096">«Shoe Last, Wooden»</a> Museums
-                  Victoria (CC BY 4.0) ·{" "}
-                  <a href="https://commons.wikimedia.org/w/index.php?curid=36665653">«A man walking», Muybridge 1887</a>{" "}
-                  Wellcome (CC BY 4.0) ·{" "}
-                  <a href="https://www.rawpixel.com/image/10081532/shoe-last-1938-michael-fallon">«Shoe Last», M. Fallon 1938</a>{" "}
-                  (CC0) · <a href="https://www.rawpixel.com/image/13967934/image-paper-person-skeleton">lámina anatómica</a>{" "}
-                  (CC0) · <a href="https://www.rawpixel.com/image/3298401/free-photo-image-beach-png-png-filtering">huellas en la arena</a>{" "}
-                  (CC0) · <a href="https://www.rawpixel.com/image/5968947/walking-feet">«Walking Feet»</a> (CC0). Muestran
-                  el mundo del pie y del oficio, no nuestras clínicas ni nuestro producto.
+                  Imágenes: radiografías del pie de{" "}
+                  <a href="https://commons.wikimedia.org/w/index.php?curid=61347913">Mikael Häggström, M.D.</a>{" "}
+                  (CC0, Wikimedia Commons) ·{" "}
+                  <a href="https://commons.wikimedia.org/w/index.php?curid=67570958">fresadora CNC</a> por Creative
+                  Tools (CC BY 2.0) ·{" "}
+                  <a href="https://commons.wikimedia.org/w/index.php?curid=99037953">captura de movimiento</a> por
+                  Raíssa Ruschel (CC BY 2.0). Muestran la tecnología del estudio y del taller, no nuestras clínicas.
+                  El mapa de presiones es un gráfico ilustrativo propio.
                 </p>
               </div>
             </div>
