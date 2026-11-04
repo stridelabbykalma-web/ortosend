@@ -61,14 +61,16 @@ export default function Image() {
               background: "#0e7490",
               color: "#ffffff",
               borderRadius: 999,
-              padding: "18px 36px",
-              fontSize: 36,
+              padding: "16px 34px",
+              fontSize: 32,
               fontWeight: 700,
+              whiteSpace: "nowrap",
+              flexShrink: 0,
             }}
           >
             {PRICE_LABEL} · todo incluido
           </div>
-          <div style={{ display: "flex", fontSize: 26, color: "#3f5b63" }}>
+          <div style={{ display: "flex", fontSize: 24, color: "#3f5b63", marginLeft: 28 }}>
             Solo pagas si un profesional colegiado lo prescribe
           </div>
         </div>
