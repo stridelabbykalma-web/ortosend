@@ -2,6 +2,7 @@
 // del estudio (vídeos y fotos con su análisis) y el cuestionario y la exploración. Es lo mismo que el
 // taller ve en la web («Expediente clínico completo»), con las mismas etiquetas.
 import type { Case, MediaAsset, Patient, Prescription, User } from "@prisma/client";
+import { textoPiezas, type PiezasMarcadas } from "./piezas-receta";
 import { titularDe } from "./cases";
 import { questionnaireLines, type Questionnaire } from "./questionnaire";
 import { examLines, type Exam } from "./exploracion";
@@ -22,6 +23,9 @@ export function recetaJson(caseId: string, rx: Prescription | null) {
     pauta: rx.fabricationOrder,
     pautaIzq: rx.orderLeft ?? null,
     pautaDcha: rx.orderRight ?? null,
+    // Piezas marcadas por el prescriptor ({I, D}: tipo → {valor, sentido}); el programa del taller las aplica.
+    piezas: (rx.piezas as PiezasMarcadas | null) ?? null,
+    piezasTexto: textoPiezas(rx.piezas as PiezasMarcadas | null) || null,
     pautaUso: rx.usageGuidelines,
     contacto: rx.contactNotes ?? null,
     pdf: rx.pdfBytes ? `/api/rx-pdf/${caseId}` : null,
