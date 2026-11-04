@@ -2,7 +2,8 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { PRICE_LABEL } from "@/lib/format";
-import { DOLENCIAS, dolencia } from "@/lib/dolencias";
+import { DOLENCIAS, DOLENCIA_IMG, dolencia } from "@/lib/dolencias";
+import { Reveal } from "@/components/ox/reveal";
 
 export function generateStaticParams() {
   return DOLENCIAS.map((d) => ({ slug: d.slug }));
@@ -19,16 +20,16 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   };
 }
 
-function Lista({ titulo, items, tono }: { titulo: string; items: string[]; tono?: "aviso" }) {
+function Bloque({ titulo, items }: { titulo: string; items: string[] }) {
   return (
-    <div className={`card px-lift px-dol-bloque${tono === "aviso" ? " px-dol-aviso" : ""}`}>
-      <div className="px-card-t">{titulo}</div>
-      <ul className="px-dol-ul">
+    <section data-mv>
+      <h3>{titulo}</h3>
+      <ul className="ox-ul">
         {items.map((s) => (
           <li key={s}>{s}</li>
         ))}
       </ul>
-    </div>
+    </section>
   );
 }
 
@@ -48,47 +49,88 @@ export default async function DolenciaPage({ params }: { params: Promise<{ slug:
   };
 
   return (
-    <div className="wrap">
+    <div className="oxp">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
-      <div className="px-sec">
-        <div className="px-kicker">
-          <Link href="/dolencias" style={{ color: "inherit" }}>
-            Guías informativas
-          </Link>
-        </div>
-        <h2 className="px-h2">{d.titulo}</h2>
-        {d.queEs.map((p) => (
-          <p className="muted px-dol-p" key={p.slice(0, 40)}>
-            {p}
-          </p>
-        ))}
-        <div className="note px-dol-nota">
-          Esta guía es información general, no un diagnóstico ni una recomendación de tratamiento
-          para tu caso. En el estudio —gratuito y sin compromiso— te explora el personal de la
-          clínica y tu caso lo valora siempre un profesional colegiado: solo si prescribe el
-          tratamiento se fabrica la plantilla, y solo entonces pagas.
-        </div>
-        <div className="sp" />
-        <div className="grid g2">
-          <Lista titulo="Cómo suele notarse" items={d.sintomas} />
-          <Lista titulo="En qué puede ayudar una plantilla a medida" items={d.ayuda} />
-          <Lista titulo="Qué NO hace una plantilla" items={d.noHace} />
-          <Lista titulo="Consulta a tu médico sin esperar si…" items={d.consulta} tono="aviso" />
-        </div>
-        <div className="sp" />
-        <div className="px-cta-dark row between">
+      <Reveal />
+      <div className="ox-wrap ox-page">
+        <div className="ox-guia">
           <div>
-            <b style={{ fontFamily: "var(--font-sora)", fontSize: 18, color: "#fff" }}>
-              ¿Te suena? Empieza por el estudio
-            </b>
-            <div className="px-dim" style={{ marginTop: 4 }}>
-              Estudio completo de la pisada en una clínica cerca de ti. {PRICE_LABEL} todo
-              incluido, y solo si un profesional colegiado lo prescribe.
+            <h1 className="ox-h2" data-mv>
+              {d.nombre}
+            </h1>
+            <p className="ox-lead" style={{ maxWidth: "30ch" }} data-mv>
+              Qué puede hacer una plantilla a medida, y qué no.
+            </p>
+            <div className="ox-prose" data-mv>
+              {d.queEs.map((p) => (
+                <p key={p.slice(0, 40)}>{p}</p>
+              ))}
+            </div>
+            <div className="ox-note" data-mv>
+              Esta guía es información general, no un diagnóstico ni una recomendación de
+              tratamiento para tu caso. En el estudio, gratuito y sin compromiso, te explora el
+              personal de la clínica y tu caso lo valora siempre un profesional colegiado: solo si
+              prescribe el tratamiento se fabrica la plantilla, y solo entonces pagas.
+            </div>
+            <div className="ox-bloques">
+              <Bloque titulo="Cómo suele notarse" items={d.sintomas} />
+              <Bloque titulo="En qué puede ayudar" items={d.ayuda} />
+            </div>
+            <figure className="ox-band-img ox-drift" data-mv>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/img/marcha-muybridge.jpg"
+                alt="Secuencia de un hombre caminando, Eadweard Muybridge, 1887"
+                className="ox-img"
+                width={1920}
+                height={560}
+                loading="lazy"
+              />
+              <figcaption className="ox-small" style={{ marginTop: 8 }}>
+                En el estudio, tu marcha se graba y se mide; la valora un profesional colegiado.
+              </figcaption>
+            </figure>
+            <div className="ox-bloques" style={{ marginTop: 0 }}>
+              <Bloque titulo="Qué no hace" items={d.noHace} />
+              <Bloque titulo="Ve antes al médico si…" items={d.consulta} />
+            </div>
+            <div style={{ marginTop: 72 }} data-mv>
+              <p className="ox-lead" style={{ maxWidth: "32ch" }}>
+                ¿Te suena? Empieza por el estudio: {PRICE_LABEL} todo incluido, y solo si un
+                profesional colegiado lo prescribe.
+              </p>
+              <div className="row" style={{ gap: 14 }}>
+                <Link href="/buscar" className="oxb acc">
+                  Buscar una clínica
+                </Link>
+                <Link href="/dolencias">Todas las guías</Link>
+              </div>
             </div>
           </div>
-          <Link href="/buscar" className="btn">
-            Buscar clínica
-          </Link>
+          <div>
+            <figure className="ox-guia-fig ox-drift" data-mv>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={DOLENCIA_IMG[d.slug]?.src ?? "/img/huesos-pie.jpg"}
+                alt={DOLENCIA_IMG[d.slug]?.alt ?? ""}
+                className="ox-img"
+                style={DOLENCIA_IMG[d.slug]?.pos ? { objectPosition: DOLENCIA_IMG[d.slug].pos } : undefined}
+                width={1400}
+                height={1867}
+              />
+            </figure>
+            <figure className="ox-guia-mini" data-mv>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/img/huesos-pie.jpg"
+                alt="Lámina anatómica: huesos de la pierna y del pie"
+                className="ox-img"
+                width={1400}
+                height={1133}
+                loading="lazy"
+              />
+            </figure>
+          </div>
         </div>
       </div>
     </div>

@@ -42,7 +42,7 @@ export async function PanelCliente({ user }: { user: User }) {
       <>
         <EmailSinConfirmar user={user} />
         <div className="card px-lift pc-case">
-          <div className="px-ico">
+          <div className="pc-glifo">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
               <rect x="3.5" y="5" width="17" height="15.5" rx="2.5" />
               <path d="M3.5 9.5h17M8 3v4M16 3v4" />

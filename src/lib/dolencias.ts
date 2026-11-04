@@ -16,6 +16,16 @@ export type Dolencia = {
   consulta: string[]; // señales para consultar a un médico/podólogo sin esperar
 };
 
+// Lámina de cada guía (imágenes reales de colecciones abiertas, en /public/img;
+// créditos en el pie). pos = object-position del recorte.
+export const DOLENCIA_IMG: Record<string, { src: string; alt: string; pos?: string }> = {
+  "fascitis-plantar": { src: "/img/pie-marmol.jpg", alt: "Pie de mármol de la Venus de Milo", pos: "50% 55%" },
+  "espolon-calcaneo": { src: "/img/huesos-pie.jpg", alt: "Lámina anatómica de los huesos de la pierna y el pie", pos: "32% 60%" },
+  metatarsalgia: { src: "/img/huesos-pie.jpg", alt: "Lámina anatómica de los huesos de la pierna y el pie", pos: "68% 60%" },
+  "pie-plano-infantil": { src: "/img/pies-andando.jpg", alt: "Pies descalzos caminando", pos: "60% 50%" },
+  "juanete-hallux-valgus": { src: "/img/horma-acuarela.jpg", alt: "Acuarela de una horma de zapato (1938)", pos: "50% 45%" },
+};
+
 export const DOLENCIAS: Dolencia[] = [
   {
     slug: "fascitis-plantar",

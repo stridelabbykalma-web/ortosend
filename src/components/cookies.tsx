@@ -56,8 +56,7 @@ export function CookieBanner() {
         right: 0,
         zIndex: 200,
         background: "#fff",
-        borderTop: "1px solid var(--line)",
-        boxShadow: "0 -4px 16px rgba(23,38,46,.08)",
+        boxShadow: "0 -10px 30px rgba(15, 39, 48, 0.12)",
         padding: "14px 20px",
       }}
     >

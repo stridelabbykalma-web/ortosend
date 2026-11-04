@@ -11,29 +11,29 @@ export default async function RecuperarPage({
 }) {
   const { error, ok } = await searchParams;
   return (
-    <div className="wrap" style={{ maxWidth: 420 }}>
-      <div className="sp2" />
-      <h2>Recuperar contraseña</h2>
-      <div className="sp" />
-      <Flash error={error} ok={ok} />
-      {!ok && (
-        <form className="card px-lift" action={recoverAction}>
-          <p className="muted">
-            Escribe el email o el móvil de tu cuenta y te enviaremos por email un enlace para crear una
-            contraseña nueva.
-          </p>
-          <label>Email o móvil</label>
-          <input name="identifier" autoComplete="username" required />
-          <div className="sp" />
-          <button type="submit" className="pri wfull">
-            Enviar enlace
-          </button>
-        </form>
-      )}
-      <div className="tiny" style={{ marginTop: 12 }}>
-        ¿No tienes email en tu cuenta o aún no la creaste? Entra en{" "}
-        <Link href="/acceso">ortosend.es/acceso</Link> con tu DNI y tu móvil: recibirás un código para
-        crear o restablecer tu contraseña.
+    <div className="oxp">
+      <div className="ox-wrap ox-page" style={{ maxWidth: 560, margin: "0 auto" }}>
+        <h1 className="ox-h2">Recuperar contraseña</h1>
+        <Flash error={error} ok={ok} />
+        {!ok && (
+          <form className="card" style={{ padding: 26 }} action={recoverAction}>
+            <p className="muted">
+              Escribe el email o el móvil de tu cuenta y te enviaremos por email un enlace para crear
+              una contraseña nueva.
+            </p>
+            <label>Email o móvil</label>
+            <input name="identifier" autoComplete="username" required />
+            <div className="sp" />
+            <button type="submit" className="pri wfull">
+              Enviar enlace
+            </button>
+          </form>
+        )}
+        <div className="tiny" style={{ marginTop: 14 }}>
+          ¿No tienes email en tu cuenta o aún no la creaste? Entra en{" "}
+          <Link href="/acceso">ortosend.es/acceso</Link> con tu DNI y tu móvil: recibirás un código
+          para crear o restablecer tu contraseña.
+        </div>
       </div>
     </div>
   );

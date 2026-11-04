@@ -2,59 +2,51 @@ import Link from "next/link";
 import { PRICE_LABEL } from "@/lib/format";
 import { BuscadorVivo } from "@/components/buscador-vivo";
 import { CtaMovil } from "@/components/cta-movil";
+import { Reveal } from "@/components/ox/reveal";
+import { PlatoEstudio } from "@/components/ox/plato-estudio";
+import { DolenciasLista } from "@/components/ox/dolencias-lista";
 import { DOLENCIAS } from "@/lib/dolencias";
 
-// Iconos lineales propios (trazo 1.5), sin librerías externas.
-const ICO = {
-  calendario: (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-      <rect x="3.5" y="5" width="17" height="15.5" rx="2.5" />
-      <path d="M3.5 9.5h17M8 3v4M16 3v4M8.5 14h2.5M13.5 14h2M8.5 17h2.5" />
-    </svg>
-  ),
-  escaner: (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-      <path d="M9.5 3.5c3 0 4.5 2.4 4.5 5.2 0 2.2-.9 3.4-.9 5.3 0 1.6.6 2.4.6 3.9 0 1.7-1.3 2.6-2.7 2.6-1.6 0-2.6-1.1-2.9-2.8-.4-2.3-1.6-3.2-1.6-6.3 0-4 1-7.9 3-7.9Z" />
-      <path d="M17 7h4M19 5v4" opacity=".9" />
-    </svg>
-  ),
-  firma: (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-      <path d="M4 20c3-.5 3.5-5 5.5-5s1 3 2.5 3 1.8-2 3-2 1 1.5 2.5 1.5H20" />
-      <path d="m13.5 10 5-5a1.77 1.77 0 1 1 2.5 2.5l-5 5-3.4.9.9-3.4Z" />
-    </svg>
-  ),
-  caja: (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M3.5 8 12 3.5 20.5 8v8L12 20.5 3.5 16V8Z" />
-      <path d="M3.5 8 12 12.5m0 0L20.5 8M12 12.5v8" />
-    </svg>
-  ),
-  check: (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="m4.5 12.5 5 5 10-11" />
-    </svg>
-  ),
-};
-
-const PASOS: [React.ReactNode, string, string, string][] = [
-  [ICO.calendario, "01", "Reserva tu cita", "Gratis y sin compromiso, en la clínica asociada que elijas."],
-  [ICO.escaner, "02", "Estudio completo", "Escaneo 3D de ambos pies, vídeos de tu marcha y presiones plantares. 45 minutos."],
-  [ICO.firma, "03", "Prescripción y pago", "Un profesional colegiado valida tu caso. Solo entonces pagas, online y de forma segura."],
-  [ICO.caja, "04", "Recibe tus plantillas", "En 5 días laborables, en casa o en tu clínica. Revisión anual incluida."],
+// Recibo del proceso: la fila con «val» vacío solo lleva texto.
+const RECIBO: [string, [string, string][]][] = [
+  ["Hoy", [["Reserva online en la clínica que elijas", "0 €"]]],
+  [
+    "El día de tu cita",
+    [
+      ["Escáner 3D de ambos pies", "45 min"],
+      ["Vídeos de tu marcha y presiones plantares", "incl."],
+      ["Exploración física con tests biomecánicos", "incl."],
+    ],
+  ],
+  [
+    "En 48 h laborables",
+    [
+      ["Valoración y firma de un profesional colegiado", "incl."],
+      ["Si no está indicado, no pagas nada", "0 €"],
+    ],
+  ],
+  [
+    "Tras tu pago",
+    [
+      ["Fabricación a medida en nuestro taller", "5 días"],
+      ["Envío a casa o recogida en tu clínica", "incl."],
+      ["Guía de adaptación y ajustes sin coste", "incl."],
+    ],
+  ],
 ];
 
-const INCLUYE: [string, string][] = [
-  ["Escáner 3D", "Molde digital exacto de ambos pies, sin escayolas ni esperas."],
-  ["Análisis de la marcha", "Vídeos de cómo caminas, analizados con apoyo de visión artificial y valorados por un profesional."],
-  ["Presiones plantares", "Baropodometría estática y dinámica: cómo pisas de verdad, paso a paso."],
-  ["Exploración completa", "Cuestionario clínico y exploración física con tests biomecánicos."],
+// Lo que deja medido el estudio (nombres reales; sin logos ni inventos).
+const MEDIMOS: [string, string[]][] = [
+  ["Escáner 3D", ["Molde digital de cada pie", "Longitud y anchura", "Altura del arco", "Talla real de calzado"]],
+  ["Marcha en vídeo", ["Ángulo de paso", "Apoyo del retropié", "Línea de progresión", "Cadencia"]],
+  ["Presiones plantares", ["Presiones pico por zona", "Reparto talón–antepié", "Tiempos de apoyo", "Huella estática y dinámica"]],
+  ["Exploración", ["Movilidad del tobillo", "Posición del calcáneo", "Tests biomecánicos", "Fórmula digital"]],
 ];
 
 const FAQ: [string, string][] = [
   [
     "¿Cuánto cuesta? ¿Hay sorpresas después?",
-    "El precio es único: 199,99 €, IVA incluido. Comprende el estudio, la prescripción, la fabricación a medida, el envío, la guía de adaptación y una revisión anual. El estudio en la clínica es gratuito: si el tratamiento no está indicado, no pagas nada.",
+    "El precio es único: 199,99 €, IVA incluido. Comprende el estudio, la prescripción, la fabricación a medida, el envío, la guía de adaptación y una revisión incluida. El estudio en la clínica es gratuito: si el tratamiento no está indicado, no pagas nada.",
   ],
   [
     "¿Cuándo y cómo pago?",
@@ -62,7 +54,7 @@ const FAQ: [string, string][] = [
   ],
   [
     "¿Pueden hacerse el estudio los niños?",
-    "Sí. Los estudios de menores de 16 años se gestionan desde la cuenta de su padre, madre o tutor, que recibe los avisos y autoriza el tratamiento. Al cumplir los 16, el paciente pasa a gestionar su propia cuenta. Y como el pie de un niño crece rápido, en menores de 14 años te avisamos cada 6 meses para revisar la plantilla en tu clínica (en adultos, la revisión es anual).",
+    "Sí. Los estudios de menores de 16 años se gestionan desde la cuenta de su padre, madre o tutor, que recibe los avisos y autoriza el tratamiento. Como el pie de un niño crece rápido, en menores de 14 te avisamos cada 6 meses para revisar la plantilla en tu clínica.",
   ],
   [
     "¿Y si no puedo ir a mi cita?",
@@ -71,6 +63,10 @@ const FAQ: [string, string][] = [
   [
     "¿Puedo devolver las plantillas?",
     "Al ser un producto sanitario fabricado a medida para ti, no existe derecho de desistimiento (art. 103.c de la Ley de Consumidores). A cambio: los ajustes del periodo de adaptación son sin coste, cualquier prueba que haya que repetir se repite gratis y tienes las garantías legales frente a defectos de fabricación.",
+  ],
+  [
+    "¿Tienes una clínica?",
+    "Únete a la red Ortosend: te cedemos el equipamiento del estudio y te enviamos pacientes de tu zona. Escríbenos desde la página Para clínicas y te contactamos.",
   ],
 ];
 
@@ -97,166 +93,275 @@ export default function Home() {
       })),
     },
   ];
+
   return (
-    <>
+    <div className="oxp">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      <Reveal />
       <CtaMovil />
-      <div className="px-hero">
-        <div className="wrap">
-          <h1>
-            Plantillas a medida,
-            <br />
-            sin sorpresas
-          </h1>
-          <p className="px-sub">
-            Estudio completo de la pisada en una clínica cerca de ti — escáner 3D, análisis de la
-            marcha y baropodometría. Solo pagas si un profesional colegiado prescribe tu
-            tratamiento.
+
+      {/* Escenario partido: la foto fija acompaña al hero, el recibo y las medidas */}
+      <div className="ox-split">
+        <div className="ox-stage">
+          <figure className="ox-drift">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/img/pie-marmol.jpg"
+              alt="Pie de mármol de la Venus de Milo, fragmento expuesto en museo"
+              className="ox-img"
+              width={1400}
+              height={2156}
+              fetchPriority="high"
+            />
+            <figcaption>Pie de la Venus de Milo · mármol, s. II a. C.</figcaption>
+          </figure>
+        </div>
+
+        <div className="ox-flow">
+          <section className="ox-hero" aria-label="Ortosend, plantillas a medida">
+            <p className="ox-lead" data-mv>
+              Plantillas a medida, con estudio clínico cerca de ti.
+            </p>
+            <p className="ox-sub" data-mv>
+              Escáner 3D, análisis de la marcha y presiones plantares en tu clínica asociada. Solo
+              pagas si un profesional colegiado prescribe tu tratamiento.
+            </p>
+            <div className="ox-heroname">
+              <h1 className="ox-name">ortosend</h1>
+            </div>
+            <div className="ox-busca" id="buscador-hero" data-mv style={{ ["--d" as string]: "0.1s" }}>
+              <div className="card">
+                <BuscadorVivo />
+              </div>
+            </div>
+          </section>
+
+          <section className="ox-recibo-sec" aria-labelledby="t-recibo">
+            <h2 className="ox-h2" id="t-recibo" data-mv>
+              Del estudio a tus pies
+            </h2>
+            <div className="ox-field" data-mv style={{ ["--d" as string]: "0.08s" }}>
+              <p>
+                El recorrido entero, con sus tiempos. El total solo existe si un profesional
+                colegiado firma tu prescripción.
+              </p>
+              <div className="ox-recibo">
+                {RECIBO.map(([cuando, filas]) => (
+                  <div key={cuando}>
+                    <h3>{cuando}</h3>
+                    {filas.map(([que, val]) => (
+                      <div className="ox-recibo-row" key={que}>
+                        <span className="que">{que}</span>
+                        <span className="dots" />
+                        <span className="val">{val}</span>
+                      </div>
+                    ))}
+                  </div>
+                ))}
+                <p className="ox-small" style={{ margin: "14px 0 12px" }}>
+                  Con revisión incluida: al año, o cada 6 meses en menores de 14.
+                </p>
+                <div className="ox-recibo-total">
+                  <span>Todo incluido, IVA incluido</span>
+                  <span className="val">{PRICE_LABEL}</span>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section aria-labelledby="t-medimos">
+            <h2 className="ox-h2" id="t-medimos" data-mv>
+              Lo que medimos
+            </h2>
+            <p data-mv>
+              El estudio deja tu pisada medida, no estimada. Estas son las medidas con las que el
+              profesional valora tu caso y el taller fabrica tu par.
+            </p>
+            <ul className="ox-names" data-mv style={{ ["--d" as string]: "0.08s" }}>
+              {MEDIMOS.map(([kind, items]) => (
+                <li key={kind}>
+                  <span className="kind">{kind}</span>
+                  {items.map((m) => (
+                    <span key={m} style={{ display: "block" }}>
+                      {m}
+                    </span>
+                  ))}
+                </li>
+              ))}
+            </ul>
+          </section>
+        </div>
+      </div>
+
+      {/* El estudio: plato cuadrado con pestañas */}
+      <section className="ox-plate" aria-labelledby="t-estudio">
+        <div className="ox-wrap">
+          <h2 className="ox-h2" id="t-estudio" data-mv>
+            El estudio, en 45 minutos
+          </h2>
+          <PlatoEstudio />
+        </div>
+      </section>
+
+      {/* Dolencias: foto fija + lista activa */}
+      <section className="ox-dol" aria-labelledby="t-dol">
+        <div className="ox-wrap">
+          <h2 className="ox-h2" id="t-dol" data-mv>
+            ¿Qué te duele?
+          </h2>
+          <p className="muted" style={{ maxWidth: "52ch", marginBottom: 34 }}>
+            Guías honestas, sin diagnóstico: qué puede hacer una plantilla a medida por cada
+            dolencia y qué no. Tu caso lo valora siempre un profesional colegiado en el estudio.
           </p>
-          <div className="px-price">
-            <b>{PRICE_LABEL}</b>
-            <span>precio único · todo incluido</span>
-          </div>
-          <div className="px-trust">
-            <span>{ICO.check} Producto sanitario a medida (Reglamento UE 2017/745)</span>
-            <span>{ICO.check} Prescrito siempre por profesionales colegiados</span>
-            <span>{ICO.check} Estudio gratuito y sin compromiso</span>
-          </div>
-          <div className="px-search" id="buscador-hero">
-            <BuscadorVivo />
-          </div>
+          <DolenciasLista dolencias={DOLENCIAS.map(({ slug, nombre, sintomas }) => ({ slug, nombre, sintomas }))} />
         </div>
-      </div>
+      </section>
 
-      <div className="wrap">
-        <div className="px-sec">
-          <div className="px-kicker">Así de simple</div>
-          <h2 className="px-h2">De la cita a tus plantillas en cuatro pasos</h2>
-          <div className="grid g4">
-            {PASOS.map(([ico, n, t, d]) => (
-              <div className="card px-lift px-step" key={n}>
-                <span className="n">PASO {n}</span>
-                <div className="px-ico">{ico}</div>
-                <div className="px-card-t">{t}</div>
-                <div className="muted" style={{ marginTop: 6 }}>
-                  {d}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="px-sec">
-          <div className="px-kicker">El estudio</div>
-          <h2 className="px-h2">Tecnología de clínica, mirada de especialista</h2>
-          <div className="grid g4">
-            {INCLUYE.map(([t, d]) => (
-              <div className="card px-lift" key={t}>
-                <div className="px-card-t">{t}</div>
-                <div className="muted" style={{ marginTop: 6 }}>
-                  {d}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="px-sec">
-          <div className="px-kicker">Guías informativas</div>
-          <h2 className="px-h2">¿Qué te duele?</h2>
-          <div className="px-pills">
-            {DOLENCIAS.map((d) => (
-              <Link key={d.slug} href={`/dolencias/${d.slug}`} className="px-pill-link">
-                {d.nombre}
-              </Link>
-            ))}
-            <Link href="/dolencias" className="px-pill-link px-pill-mas">
-              Todas las guías →
-            </Link>
-          </div>
-          <div className="tiny muted" style={{ marginTop: 10 }}>
-            Información general, sin diagnóstico: tu caso lo valora siempre un profesional colegiado
-            en el estudio.
-          </div>
-        </div>
-
-        <div className="px-sec">
-          <div className="px-kicker">Compara</div>
-          <h2 className="px-h2">Lo mismo, por separado, cuesta bastante más</h2>
-          <div className="card px-lift px-ancla">
+      {/* La carta: precios como un menú */}
+      <section className="ox-menu" aria-labelledby="t-carta">
+        <div className="ox-wrap">
+          <div className="ox-menu-grid">
             <div>
-              <div className="px-card-t">Por separado*</div>
-              <ul className="px-dol-ul">
-                <li>Estudio biomecánico de la pisada: 50–80 €</li>
-                <li>Plantillas a medida: 250–400 €</li>
-                <li>Ajustes y revisiones: según centro</li>
+              <h2 className="ox-h2" id="t-carta" data-mv>
+                La carta, sin letra pequeña
+              </h2>
+              <p className="muted" style={{ maxWidth: "26ch" }}>
+                Un único precio con todo dentro, frente a lo que cuesta por separado en el circuito
+                tradicional.
+              </p>
+              <figure className="ox-menu-fig ox-drift" data-mv>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/img/horma-acuarela.jpg"
+                  alt="Acuarela de una horma de zapato, Michael Fallon (1938)"
+                  className="ox-img"
+                  width={1024}
+                  height={816}
+                  loading="lazy"
+                />
+              </figure>
+            </div>
+            <div className="ox-menu-cols" data-mv>
+              <div className="ox-menu-group">
+                <h3>Con Ortosend — {PRICE_LABEL}</h3>
+                {[
+                  ["Estudio completo de la pisada", "incluido", "Escáner 3D, marcha, presiones y exploración, en tu clínica."],
+                  ["Prescripción colegiada", "incluida", "Firmada por podólogo o médico; sin firma, no pagas."],
+                  ["Par fabricado a medida", "incluido", "Cada pie con su molde, en nuestro taller, en 5 días laborables."],
+                  ["Envío y guía de adaptación", "incluidos", "A casa o a tu clínica, con pauta progresiva de 2-3 semanas."],
+                  ["Ajustes de adaptación", "sin coste", "Si algo molesta, tu clínica te cita y se ajusta."],
+                  ["Revisión incluida", "incluida", "Al año; cada 6 meses en menores de 14, porque el pie crece."],
+                ].map(([n, p, d]) => (
+                  <div className="ox-menu-item" key={n}>
+                    <div className="fila">
+                      <span>{n}</span>
+                      <span className="p">{p}</span>
+                    </div>
+                    <div className="des">{d}</div>
+                  </div>
+                ))}
+              </div>
+              <div className="ox-menu-group">
+                <h3>Por separado, de media</h3>
+                {[
+                  ["Estudio biomecánico", "50–80 €", "Precio orientativo habitual del mercado en España."],
+                  ["Plantillas a medida", "250–400 €", "Según materiales y centro."],
+                  ["Ajustes y revisiones", "según centro", "Con frecuencia, con coste aparte."],
+                ].map(([n, p, d]) => (
+                  <div className="ox-menu-item" key={n}>
+                    <div className="fila">
+                      <span>{n}</span>
+                      <span className="p">{p}</span>
+                    </div>
+                    <div className="des">{d}</div>
+                  </div>
+                ))}
+                <p className="ox-small">Rangos orientativos; varían según el centro.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* FAQ sobre campo oscuro */}
+      <section className="ox-faq" aria-labelledby="t-faq">
+        <div className="ox-wrap">
+          <div className="ox-faq-grid">
+            <div>
+              <h2 className="ox-h2" id="t-faq" data-mv>
+                Dudas frecuentes
+              </h2>
+              <ul className="ox-faq-facts" data-mv>
+                <li>
+                  <b>{PRICE_LABEL}</b> — precio único, IVA incluido
+                </li>
+                <li>
+                  <b>45 minutos</b> — dura el estudio, gratuito y sin compromiso
+                </li>
+                <li>
+                  <b>5 días laborables</b> — de tu pago a tus plantillas
+                </li>
               </ul>
-            </div>
-            <div className="px-ancla-vs">
-              <div className="px-card-t">Con Ortosend</div>
-              <div className="px-ancla-precio">{PRICE_LABEL}</div>
-              <div className="muted">
-                Estudio, prescripción colegiada, fabricación a medida, envío, guía de adaptación,
-                ajustes del periodo de adaptación y revisión anual. Todo incluido, y solo pagas si
-                se prescribe.
+              {FAQ.map(([q, a]) => (
+                <details key={q}>
+                  <summary>{q}</summary>
+                  <div className="resp">
+                    {a}
+                    {q.includes("clínica") && (
+                      <>
+                        {" "}
+                        <Link href="/para-clinicas">Para clínicas</Link>
+                      </>
+                    )}
+                  </div>
+                </details>
+              ))}
+              <div style={{ marginTop: 30 }}>
+                <Link href="/buscar" className="oxb light">
+                  Buscar una clínica
+                </Link>
               </div>
             </div>
-          </div>
-          <div className="tiny muted" style={{ marginTop: 8 }}>
-            * Rangos orientativos habituales del mercado en España; varían según el centro.
+            <div className="ox-faq-figs" data-mv>
+              <figure className="alta ox-drift">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/img/horma-madera.jpg"
+                  alt="Horma de madera de zapatero, años 1930-1970 (Museums Victoria)"
+                  className="ox-img"
+                  width={1100}
+                  height={2446}
+                  loading="lazy"
+                />
+              </figure>
+              <figure className="cuad">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/img/marcha-muybridge.jpg"
+                  alt="Secuencia de un hombre caminando, Eadweard Muybridge, 1887"
+                  className="ox-img"
+                  width={1920}
+                  height={560}
+                  loading="lazy"
+                  style={{ objectFit: "cover" }}
+                />
+              </figure>
+            </div>
           </div>
         </div>
+      </section>
 
-        <div className="px-sec">
-          <div className="px-band">
-            <div>
-              <b>Sin prescripción, no pagas</b>
-              <div className="px-dim">La decisión clínica siempre es de un profesional colegiado.</div>
-            </div>
-            <div>
-              <b>5 días laborables</b>
-              <div className="px-dim">De tu pago a tus plantillas, fabricadas en nuestro taller.</div>
-            </div>
-            <div>
-              <b>Revisión anual incluida</b>
-              <div className="px-dim">Y guía de adaptación progresiva de 2-3 semanas.</div>
-            </div>
-            <div>
-              <b>Repeticiones sin coste</b>
-              <div className="px-dim">Si una prueba del estudio debe repetirse, no pagas nada más.</div>
-            </div>
-          </div>
+      {/* Cierre casi vacío */}
+      <section className="ox-cta" aria-label="Empezar">
+        <div className="ox-wrap">
+          <h2>
+            Si el profesional no firma tu prescripción, el estudio no te cuesta <b>nada</b>.
+          </h2>
+          <Link href="/buscar" className="oxb acc">
+            Buscar una clínica cerca
+          </Link>
         </div>
-
-        <div className="px-sec">
-          <div className="px-kicker">Dudas frecuentes</div>
-          <h2 className="px-h2">Lo que nos preguntan antes de empezar</h2>
-          <div className="px-faq">
-            {FAQ.map(([q, a]) => (
-              <details key={q}>
-                <summary>{q}</summary>
-                <div className="px-a">{a}</div>
-              </details>
-            ))}
-          </div>
-        </div>
-
-        <div className="px-sec">
-          <div className="px-cta-dark row between">
-            <div>
-              <b style={{ fontFamily: "var(--font-sora)", fontSize: 18, color: "#fff" }}>
-                ¿Tienes una clínica?
-              </b>
-              <div className="px-dim" style={{ marginTop: 4 }}>
-                Únete a la red Ortosend: te cedemos el equipamiento y te enviamos pacientes.
-              </div>
-            </div>
-            <Link href="/para-clinicas" className="btn">
-              Asóciate
-            </Link>
-          </div>
-        </div>
-      </div>
-    </>
+      </section>
+    </div>
   );
 }

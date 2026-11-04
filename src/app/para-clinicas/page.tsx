@@ -1,5 +1,6 @@
 import { Flash } from "@/components/ui";
 import { solicitudClinicaAction } from "@/app/publico-actions";
+import { Reveal } from "@/components/ox/reveal";
 
 export const dynamic = "force-dynamic";
 
@@ -16,28 +17,29 @@ export default async function ParaClinicasPage({
 }) {
   const { error, ok } = await searchParams;
   return (
-    <div className="wrap" style={{ maxWidth: 860 }}>
-      <div className="px-sec" style={{ paddingTop: 56 }}>
-        <div className="px-kicker">Red de clínicas</div>
-        <h2 className="px-h2">Únete a la red Ortosend</h2>
-        <p className="muted" style={{ margin: "0 0 22px", maxWidth: 640 }}>
+    <div className="oxp">
+      <Reveal />
+      <div className="ox-wrap ox-page" style={{ maxWidth: 1100 }}>
+        <h1 className="ox-h2" data-mv>
+          Únete a la red Ortosend
+        </h1>
+        <p className="ox-lead" style={{ maxWidth: "36ch" }} data-mv>
           Te cedemos el equipamiento, formamos a tu equipo y te enviamos pacientes de tu zona. Tú
           haces el estudio; nosotros fabricamos, cobramos al paciente y te liquidamos mensualmente.
         </p>
-        <div className="grid g3">
+        <div className="ox-bloques" style={{ margin: "48px 0 64px" }}>
           {BENEFICIOS.map(([t, d]) => (
-            <div className="card px-lift" key={t}>
-              <div className="px-card-t">{t}</div>
-              <div className="muted" style={{ marginTop: 6 }}>
-                {d}
-              </div>
-            </div>
+            <section key={t} data-mv>
+              <h3>{t}</h3>
+              <p className="ox-prose">{d}</p>
+            </section>
           ))}
         </div>
-        <div className="sp2" />
-        <h3 style={{ marginBottom: 10 }}>Cuéntanos sobre tu clínica y te contactamos</h3>
+        <h3 style={{ fontFamily: "var(--font-display)", fontSize: 24, margin: "0 0 14px" }} data-mv>
+          Cuéntanos sobre tu clínica y te contactamos
+        </h3>
         <Flash error={error} ok={ok} />
-        <form className="card px-lift" style={{ maxWidth: 620 }} action={solicitudClinicaAction}>
+        <form className="card" style={{ maxWidth: 620, padding: 26 }} action={solicitudClinicaAction} data-mv>
           <label>Nombre de la clínica</label>
           <input name="name" required />
           <label>Población y código postal</label>
@@ -56,7 +58,6 @@ export default async function ParaClinicasPage({
             Enviar solicitud
           </button>
         </form>
-        <div className="sp2" />
       </div>
     </div>
   );
