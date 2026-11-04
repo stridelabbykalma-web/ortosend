@@ -1,8 +1,8 @@
 # Registro de actividades de tratamiento (art. 30 RGPD)
 
 > **BORRADOR** para revisión por asesoría jurídica. Refleja los tratamientos reales de la
-> plataforma Ortosend a fecha de septiembre de 2026. Responsable: [RAZÓN SOCIAL], NIF
-> [CIF], [DOMICILIO], contacto: hola@ortosend.com. DPD: [pendiente de designar].
+> plataforma Ortosend a fecha de noviembre de 2026. Responsable: [RAZÓN SOCIAL], NIF
+> [CIF], [DOMICILIO], contacto: hola@ortosend.es. DPD: [pendiente de designar].
 
 Común a todos los tratamientos: alojamiento en la UE (Frankfurt) con **Vercel Inc.**
 (aplicación; encargado — DPA vinculado al plan Pro) y **Neon/Databricks** (base de datos;
@@ -44,18 +44,25 @@ Data Privacy Framework.
 
 - **Finalidad**: cobro del tratamiento (precio único), facturación y contabilidad.
 - **Base**: ejecución de contrato y obligación legal (fiscal).
-- **Categorías**: importe, método, fecha, referencia del proveedor de pago. Los datos de
-  tarjeta **no** se tratan en la plataforma: [futuro] los gestiona Stripe como proveedor.
-- **Plazos**: los fiscales/mercantiles aplicables.
+- **Categorías**: importe, método, fecha, referencia del proveedor de pago
+  (`payment_intent`). Los datos de tarjeta **no** se tratan en la plataforma: los gestiona
+  **Stripe** (Stripe Payments Europe, Ltd.; DPA incorporado a sus términos; tarjeta y Bizum
+  en su pasarela, la plataforma solo recibe la confirmación firmada).
+- **Plazos**: documentación mercantil 6 años (art. 30 C. de Comercio); fiscal, 4 años.
 
 ## T4 — Comunicaciones del servicio (WhatsApp/email)
 
 - **Finalidad**: avisos operativos (cita, estudio, prescripción lista, recordatorios de
   pago d3/7/15, envío, entrega, adaptación, revisión anual).
 - **Base**: ejecución de contrato; consentimiento específico para el canal WhatsApp.
-- **Contenido**: exclusivamente aviso + enlace al panel; **nunca contenido clínico**.
-- **Destinatarios**: [futuro] proveedor de WhatsApp Business (Meta recibe número y aviso)
-  y proveedor de email; con DPA en su alta.
+- **Contenido**: exclusivamente aviso + enlace al panel; **nunca contenido clínico**
+  (lista cerrada de campos verificada en código: `src/lib/manychat.ts`).
+- **Destinatarios/encargados**: **ManyChat, Inc.** como plataforma del canal WhatsApp
+  (EE. UU.; SCC/DPF; recibe solo nombre, móvil, referencias opacas y campos logísticos
+  — fecha de cita, clínica, enlace) y, por debajo, WhatsApp/Meta como servicio de
+  mensajería; **Resend** para el email transaccional (DPA; recibe email, asunto y texto
+  del aviso). El consentimiento del canal WhatsApp se recoge con casilla propia y puede
+  retirarse (palabra clave BAJA o desde el panel).
 
 ## T5 — Captación (solicitudes de clínicas y lista de espera de zonas)
 
@@ -83,6 +90,7 @@ Data Privacy Framework.
 
 ---
 
-**Pendientes señalados**: designación de DPD y comunicación a la AEPD; EIPD (art. 35)
-previa al tratamiento real; altas de encargados futuros (Stripe, R2, WhatsApp BSP, email,
-envíos) con su DPA; plazos entre corchetes a validar por la asesoría.
+**Pendientes señalados**: designación de DPD y comunicación a la AEPD; EIPD (art. 35) —
+**borrador en `docs/legal/eipd.md`** a validar por la asesoría; alta de encargados futuros
+(almacenamiento de archivos clínicos, transportista de envíos) con su DPA; plazos entre
+corchetes a validar por la asesoría.

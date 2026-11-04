@@ -80,10 +80,14 @@ export default function Privacidad() {
           población o código postal buscado, sin ningún dato que te identifique.
         </p>
         <p>
-          <b>7. Plazos de conservación.</b> La documentación clínica (estudio, prescripción) se
-          conserva un mínimo de <b>5 años</b> conforme a la normativa de documentación clínica; los
-          datos de facturación, los plazos fiscales; el resto, mientras dure la relación y los
-          plazos de prescripción de responsabilidades. Después se suprimen o anonimizan.
+          <b>7. Plazos de conservación.</b> La documentación clínica del estudio se conserva un
+          mínimo de <b>5 años</b> desde la última asistencia (Ley 41/2002 de autonomía del
+          paciente; más si la normativa autonómica lo exige). La prescripción y la declaración de
+          producto a medida se conservan <b>10 años</b> desde la fabricación (Reglamento (UE)
+          2017/745 de productos sanitarios). La documentación de facturación, <b>6 años</b>{" "}
+          (Código de Comercio). El registro de tus consentimientos y el registro de accesos,
+          mientras puedan exigirse responsabilidades derivadas del tratamiento. El resto de datos,
+          mientras dure la relación. Cumplidos los plazos, se suprimen o anonimizan.
         </p>
         <p>
           <b>8. Seguridad.</b> Cifrado en tránsito, contraseñas cifradas, acceso restringido por
