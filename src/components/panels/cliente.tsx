@@ -3,6 +3,7 @@ import type { User } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { StatePill, Steps } from "@/components/ui";
 import {
+  adaptacionAction,
   cancelarCitaAction,
   payAction,
   resendHandoverAction,
@@ -25,7 +26,13 @@ const CANDADO = (
 export async function PanelCliente({ user }: { user: User }) {
   const cases = await prisma.case.findMany({
     where: { patient: { ownerId: user.id } },
-    include: { clinic: true, prescription: true, shipment: true, patient: true },
+    include: {
+      clinic: true,
+      prescription: true,
+      shipment: true,
+      patient: true,
+      incidents: { where: { type: "AJUSTE_POST_ENTREGA" }, orderBy: { createdAt: "desc" }, take: 1 },
+    },
     orderBy: { createdAt: "desc" },
   });
   const menores = await prisma.patient.findMany({ where: { ownerId: user.id, isMinor: true }, orderBy: { name: "asc" } });
@@ -242,8 +249,32 @@ export async function PanelCliente({ user }: { user: User }) {
                 <b>Entregadas — guía de adaptación</b>
                 <div className="muted">
                   Uso progresivo 2-3 semanas, con calzado cerrado. Vida útil orientativa: 2-4 años /
-                  ~800 km. Tu revisión anual queda programada — te avisaremos.
+                  ~800 km. Tu revisión incluida queda programada — te avisaremos.
                 </div>
+                {c.state === "ENTREGADO" &&
+                  (c.incidents[0] && !c.incidents[0].closedAt ? (
+                    <div className="note" style={{ marginTop: 12 }}>
+                      Ajuste solicitado: tu clínica te contactará para citarte (sin coste). Un
+                      profesional valorará las molestias que nos indicaste.
+                    </div>
+                  ) : (
+                    <div className="pc-adapt">
+                      <b>¿Qué tal va la adaptación?</b>
+                      <div className="muted tiny" style={{ margin: "4px 0 10px" }}>
+                        Si notas molestias pasadas 2-3 semanas, el ajuste es sin coste y lo valora
+                        tu clínica.
+                      </div>
+                      <form action={adaptacionAction} className="row">
+                        <input type="hidden" name="caseId" value={c.id} />
+                        <button type="submit" name="respuesta" value="bien" className="btn">
+                          Todo bien
+                        </button>
+                        <button type="submit" name="respuesta" value="ajuste" className="btn">
+                          Necesito un ajuste
+                        </button>
+                      </form>
+                    </div>
+                  ))}
                 <div className="row" style={{ marginTop: 10 }}>
                   <Link href={`/caso/${c.id}`} className="btn">
                     Mis documentos

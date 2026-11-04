@@ -203,18 +203,23 @@ export default async function CasoPage({
             </div>
             <div className="pc-doc-firma">
               <span className="tiny">
-                Documento clínico firmado electrónicamente · se conserva 5 años
+                Documento clínico firmado electrónicamente · se conserva 10 años
                 {k.prescription.pdfSha256 && (
                   <>
                     {" "}· Huella SHA-256: {k.prescription.pdfSha256.slice(0, 24)}…
                   </>
                 )}
               </span>
-              {k.prescription.pdfSha256 && (
-                <a className="btn pri" href={`/api/rx-pdf/${k.id}?t=${encodeURIComponent(doc!)}`} target="_blank" rel="noreferrer">
-                  Descargar PDF firmado
-                </a>
-              )}
+              <span className="row" style={{ gap: 8 }}>
+                <Link className="btn" href={`/caso/${k.id}/anexo-xiii`}>
+                  Declaración de producto a medida
+                </Link>
+                {k.prescription.pdfSha256 && (
+                  <a className="btn pri" href={`/api/rx-pdf/${k.id}?t=${encodeURIComponent(doc!)}`} target="_blank" rel="noreferrer">
+                    Descargar PDF firmado
+                  </a>
+                )}
+              </span>
             </div>
           </div>
         )}

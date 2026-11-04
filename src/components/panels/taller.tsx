@@ -50,7 +50,7 @@ export async function PanelTaller({ user, tab }: { user: User; tab?: string }) {
       orderBy: { createdAt: "asc" },
     }),
     prisma.incident.findMany({
-      where: { closedAt: null, type: { in: ["CAPTURA_INVALIDA", "REHACER_DEFECTO"] } },
+      where: { closedAt: null, type: { in: ["CAPTURA_INVALIDA", "REHACER_DEFECTO", "AJUSTE_POST_ENTREGA"] } },
       include: { case: { include: { patient: true, clinic: true } } },
       orderBy: { createdAt: "desc" },
     }),
@@ -378,7 +378,13 @@ export async function PanelTaller({ user, tab }: { user: User; tab?: string }) {
   // ---------- Incidencias ----------
   if (t === "incidencias") {
     const tipo = (x: string) =>
-      x === "CAPTURA_INVALIDA" ? "Captura inválida" : x === "REHACER_DEFECTO" ? "Rehacer por defecto" : x;
+      x === "CAPTURA_INVALIDA"
+        ? "Captura inválida"
+        : x === "REHACER_DEFECTO"
+          ? "Rehacer por defecto"
+          : x === "AJUSTE_POST_ENTREGA"
+            ? "Ajuste post-entrega"
+            : x;
     body = (
       <>
         <h3>Abiertas · {openIncidents.length}</h3>

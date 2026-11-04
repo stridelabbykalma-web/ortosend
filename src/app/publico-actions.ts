@@ -29,6 +29,16 @@ const reservaSchema = z.object({
   password: z.string().min(8, "La contraseña debe tener al menos 8 caracteres"),
 });
 
+// Autodeclaración del paciente al reservar (diabetes, herida/úlcera). Es solo
+// información que él mismo aporta: no clasifica el caso ni cambia el circuito;
+// queda en el motivo/notas para que la valore el profesional que prescribe.
+function declaraciones(formData: FormData): string | null {
+  const d: string[] = [];
+  if (formData.get("declaraDiabetes") === "on") d.push("diabetes diagnosticada");
+  if (formData.get("declaraHerida") === "on") d.push("herida o úlcera actual en los pies");
+  return d.length ? `El paciente declara: ${d.join(" y ")} (autodeclarado al reservar; valorar antes de prescribir)` : null;
+}
+
 // Visitante: alta de cuenta + paciente + caso + cita, todo en una transacción.
 export async function reservaAction(formData: FormData) {
   const back = (msg: string): never =>
@@ -58,6 +68,7 @@ export async function reservaAction(formData: FormData) {
   if (existing) back("Ya existe una cuenta con ese email o móvil. Inicia sesión para reservar.");
 
   const consentWhatsApp = formData.get("consentWhatsApp") === "on";
+  const declara = declaraciones(formData);
   const consents = {
     salud: { aceptado: true, fecha: now.toISOString(), version: CONSENT_VERSION, via: "web" },
     whatsapp: { aceptado: consentWhatsApp, fecha: now.toISOString(), version: CONSENT_VERSION },
@@ -91,7 +102,7 @@ export async function reservaAction(formData: FormData) {
           clinicId: d.clinicId,
           state: "CITA_RESERVADA",
           flow: "A",
-          reason: (d.motivo ?? "").trim() || null,
+          reason: [(d.motivo ?? "").trim(), declara].filter(Boolean).join(" · ") || null,
         },
       });
       const appt = await bookAppointment(tx, {
@@ -101,7 +112,8 @@ export async function reservaAction(formData: FormData) {
         professionalId: (slot as SlotOk).professionalId,
         kind: "ESTUDIO",
         source: "web",
-        notes: d.motivo ? `Motivo indicado al reservar: ${d.motivo}` : null,
+        notes:
+          [d.motivo ? `Motivo indicado al reservar: ${d.motivo}` : "", declara].filter(Boolean).join(". ") || null,
         mode: "online",
       });
       return { userId: user.id, caseId: kase.id, startsAt: appt.startsAt };
@@ -110,7 +122,11 @@ export async function reservaAction(formData: FormData) {
     back(agendaErrorMessage(e));
   }
 
-  await pushEvent(result!.caseId, `Cita reservada online (Flujo A) — ${fmtdt(result!.startsAt)}${d.motivo ? ` · motivo: ${d.motivo}` : ""}`, d.name);
+  await pushEvent(
+    result!.caseId,
+    `Cita reservada online (Flujo A) — ${fmtdt(result!.startsAt)}${d.motivo ? ` · motivo: ${d.motivo}` : ""}${declara ? ` · ${declara}` : ""}`,
+    d.name
+  );
   const owner = { id: result!.userId, name: d.name.trim(), email, phone };
   await notifyOwner(owner, consents, "cita_confirmada", {
     caseId: result!.caseId,
@@ -144,6 +160,7 @@ export async function reservaClienteAction(formData: FormData) {
   if (!clinic || clinic.status !== "ACTIVA" || !clinic.onlineBooking) back("Esta clínica no admite reservas online");
 
   const patientId = String(formData.get("patientId") ?? "");
+  const declara = declaraciones(formData);
   const now = new Date();
   let existente: { id: string; name: string } | null = null;
   let nuevo: { name: string; birth: Date | null; menor: boolean } | null = null;
@@ -193,7 +210,7 @@ export async function reservaClienteAction(formData: FormData) {
             },
           });
       const kase = await tx.case.create({
-        data: { patientId: patient.id, clinicId, state: "CITA_RESERVADA", flow: "A" },
+        data: { patientId: patient.id, clinicId, state: "CITA_RESERVADA", flow: "A", reason: declara },
       });
       const appt = await bookAppointment(tx, {
         clinicId,
@@ -203,6 +220,7 @@ export async function reservaClienteAction(formData: FormData) {
         kind: "ESTUDIO",
         source: "web",
         bookedBy: user!.id,
+        notes: declara,
         mode: "online",
       });
       return { caseId: kase.id, startsAt: appt.startsAt, patientId: patient.id, patientName: patient.name };
@@ -210,7 +228,11 @@ export async function reservaClienteAction(formData: FormData) {
   } catch (e) {
     back(agendaErrorMessage(e));
   }
-  await pushEvent(result!.caseId, `Cita reservada online desde la cuenta del cliente — ${fmtdt(result!.startsAt)}`, user!.name);
+  await pushEvent(
+    result!.caseId,
+    `Cita reservada online desde la cuenta del cliente — ${fmtdt(result!.startsAt)}${declara ? ` · ${declara}` : ""}`,
+    user!.name
+  );
   await avisarPaciente(result!.patientId, "cita_confirmada", {
     caseId: result!.caseId,
     clinica: clinic!.name,

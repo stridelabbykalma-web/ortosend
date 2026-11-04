@@ -148,6 +148,17 @@ export default async function ReservaPage({
                 <FechaNacimiento name="newBirth" />
               </div>
             </div>
+            <div className="tiny" style={{ marginTop: 12 }}>
+              Para preparar mejor el estudio (opcional e informativo; lo valorará el profesional):
+            </div>
+            <label className="chk">
+              <input type="checkbox" name="declaraDiabetes" /> El paciente tiene diabetes
+              diagnosticada por su médico.
+            </label>
+            <label className="chk">
+              <input type="checkbox" name="declaraHerida" /> Tiene actualmente una herida o úlcera
+              en los pies.
+            </label>
             <label className="chk">
               <input type="checkbox" name="consentSalud" required /> Consiento de forma explícita el
               tratamiento de los datos de salud del paciente para este estudio, incluida la grabación de
@@ -213,6 +224,17 @@ export default async function ReservaPage({
           </div>
           <label>Crea tu contraseña (para seguir tu tratamiento en tu panel)</label>
           <input name="password" type="password" minLength={8} required />
+          <div className="tiny" style={{ marginTop: 12 }}>
+            Para preparar mejor el estudio (opcional e informativo; lo valorará el profesional):
+          </div>
+          <label className="chk">
+            <input type="checkbox" name="declaraDiabetes" /> El paciente tiene diabetes
+            diagnosticada por su médico.
+          </label>
+          <label className="chk">
+            <input type="checkbox" name="declaraHerida" /> Tiene actualmente una herida o úlcera en
+            los pies.
+          </label>
           <label className="chk">
             <input type="checkbox" name="consentSalud" required /> Consiento de forma explícita el
             tratamiento de mis datos de salud para la prestación del servicio, incluida la

@@ -147,6 +147,32 @@ export function renderEmail(template: string, p: Payload): { subject: string; te
           str(p.paciente) ? `el perfil de ${str(p.paciente)}` : "tu perfil"
         }. Para entrar, crea tu contraseña aquí con tu DNI y tu móvil; te enviaremos un código por WhatsApp para confirmar que eres tú:\n\n${link(p)}${firma}`,
       };
+    case "adaptacion_d20":
+      return {
+        subject: `¿Qué tal van ${str(p.paciente) ? `las plantillas de ${str(p.paciente)}` : "tus plantillas"}?`,
+        text: `Hola ${str(p.nombre)},\n\nHace unas tres semanas que ${
+          str(p.paciente) ? `${str(p.paciente)} recibió sus plantillas` : "recibiste tus plantillas"
+        }: el periodo de adaptación ya debería estar completado.\n\n· Si todo va bien, no tienes que hacer nada (aunque nos encantará saberlo desde tu panel).\n· Si notas molestias o algo no encaja, dínoslo desde tu panel y tu clínica te citará para un ajuste SIN COSTE: forma parte del servicio.\n\n${link(
+          p
+        )}\n\nRecuerda: cualquier molestia la valora siempre un profesional.${firma}`,
+      };
+    case "revision_anual":
+      return {
+        subject: `Toca revisar ${str(p.paciente) ? `las plantillas de ${str(p.paciente)}` : "tus plantillas"} — revisión incluida`,
+        text: `Hola ${str(p.nombre)},\n\n${
+          str(p.nota) ||
+          "Ha pasado el tiempo recomendado desde la entrega y toca revisar las plantillas: comprobar el desgaste y que siguen haciendo su trabajo. La revisión está incluida en el precio que pagaste."
+        }\n\nReserva la revisión en tu clínica desde tu panel:\n\n${link(p)}${firma}`,
+      };
+    case "ajuste_solicitado":
+      return {
+        subject: `Ajuste solicitado — caso #${str(p.numero)}`,
+        text: `Hola,\n\nEl titular del caso #${str(p.numero)} (${str(
+          p.paciente
+        )}) indica molestias con sus plantillas tras el periodo de adaptación y pide un ajuste.\n\nContactadle para citarle (ajuste sin coste del periodo de adaptación). El caso está en vuestro panel.\n\n${link(
+          p
+        )}${firma}`,
+      };
     default:
       return {
         subject: `Aviso de ${EMPRESA.nombreComercial}`,

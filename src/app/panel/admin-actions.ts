@@ -54,10 +54,15 @@ export async function closeCaseAction(formData: FormData) {
   const caseId = String(formData.get("caseId"));
   const kase = await prisma.case.findUnique({ where: { id: caseId }, include: { patient: true } });
   if (!kase || kase.state !== "ENTREGADO") fail("/panel?tab=cas", "El caso no está entregado");
+  // En menores de 14 el pie crece: la revisión incluida se adelanta a los 6 meses.
+  const b = kase.patient.birthDate;
+  const catorce = b ? new Date(b) : null;
+  catorce?.setFullYear(catorce.getFullYear() + 14);
+  const menor14 = !!catorce && catorce > new Date();
   const annual = new Date();
-  annual.setFullYear(annual.getFullYear() + 1);
+  annual.setMonth(annual.getMonth() + (menor14 ? 6 : 12));
   await prisma.case.update({ where: { id: caseId }, data: { state: "CERRADO", annualReviewAt: annual } });
-  await pushEvent(caseId, "Caso cerrado tras seguimiento. Revisión anual programada", u.name);
+  await pushEvent(caseId, `Caso cerrado tras seguimiento. Revisión programada a ${menor14 ? "6 meses (menor de 14)" : "12 meses"}`, u.name);
   redirect("/panel?tab=cas");
 }
 

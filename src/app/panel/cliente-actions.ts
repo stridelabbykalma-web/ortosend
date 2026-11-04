@@ -6,7 +6,7 @@ import { prisma } from "@/lib/db";
 import { createDocToken } from "@/lib/doc-token";
 import { exigirTratamientoPermitido } from "@/lib/alta";
 import { hashPassword, requireRole, verifyPassword } from "@/lib/auth";
-import { audit, pushEvent, avisarPaciente } from "@/lib/cases";
+import { audit, pushEvent, avisarPaciente, notifyEmail } from "@/lib/cases";
 import { isValidPhone, normalizeEmail, normalizePhone } from "@/lib/contacto";
 import { enviarAvisoMayoria } from "@/lib/mayoria";
 import { avisarContrasenaCambiada, enviarVerificacionEmail } from "@/lib/cuenta";
@@ -174,6 +174,42 @@ export async function updateMyAccountAction(formData: FormData) {
 // Estados que admiten cita gestionada por el cliente: CITA_RESERVADA (estudio)
 // y DEVUELTO_CLINICA (repetir una prueba, sin coste).
 const CLIENT_BOOKABLE = ["CITA_RESERVADA", "DEVUELTO_CLINICA"];
+
+// Respuesta del titular al seguimiento de adaptación. El sistema solo registra
+// lo que el propio paciente declara: la valoración clínica es de su clínica.
+export async function adaptacionAction(formData: FormData) {
+  const caseId = String(formData.get("caseId"));
+  const { u, kase } = await myCase(caseId);
+  if (kase.state !== "ENTREGADO") fail("/panel", "Este tratamiento no está en periodo de adaptación");
+  const respuesta = formData.get("respuesta") === "ajuste" ? "ajuste" : "bien";
+  if (respuesta === "bien") {
+    await pushEvent(caseId, "Seguimiento de adaptación: el titular indica que todo va bien", u.name);
+    redirect("/panel?ok=" + encodeURIComponent("¡Genial! Gracias por contárnoslo. Disfruta de tus plantillas."));
+  }
+  // Un ajuste ya pedido y sin resolver no se duplica.
+  const abierto = await prisma.incident.findFirst({
+    where: { caseId, type: "AJUSTE_POST_ENTREGA", closedAt: null },
+  });
+  if (!abierto) {
+    await prisma.incident.create({
+      data: {
+        caseId,
+        type: "AJUSTE_POST_ENTREGA",
+        reason: "El titular indica molestias tras el periodo de adaptación y pide un ajuste (desde su panel)",
+        openedBy: u.name,
+      },
+    });
+    await pushEvent(caseId, "Seguimiento de adaptación: el titular pide un AJUSTE (sin coste)", u.name);
+    // Aviso por email al personal de la clínica del caso (sin contenido clínico).
+    const staff = await prisma.user.findMany({
+      where: { clinicId: kase.clinicId, role: { in: ["ADMIN_CLINICA", "PROFESIONAL"] }, email: { not: null } },
+      select: { email: true },
+    });
+    for (const s of staff.slice(0, 5))
+      await notifyEmail(s.email!, "ajuste_solicitado", { caseId, numero: kase.number, paciente: kase.patient.name, enlace: `/caso/${caseId}` });
+  }
+  redirect("/panel?ok=" + encodeURIComponent("Recibido: tu clínica te contactará para citarte. El ajuste no tiene coste."));
+}
 
 export async function reprogramarCitaAction(formData: FormData) {
   const caseId = String(formData.get("caseId"));

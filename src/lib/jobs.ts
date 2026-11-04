@@ -98,6 +98,48 @@ export async function runJobs() {
     await prisma.case.update({ where: { id: c.id }, data: { assignedTo: null, state: "EN_PRESCRIPCION" } });
     await pushEvent(c.id, "Sin actividad 7 días durante el contacto: el caso vuelve a la cola de prescripción", "sistema");
   }
+  // 3c) Seguimiento de adaptación (día ~20 tras la entrega): un solo aviso por
+  // caso, deduplicado por la Notification ya enviada (como los de pago). La
+  // ventana inferior (60 días) evita avisar de entregas antiguas al estrenar
+  // el job. El sistema solo pregunta; cualquier molestia la valora la clínica.
+  let adaptacion = 0;
+  const entregados = await prisma.case.findMany({
+    where: {
+      state: "ENTREGADO",
+      shipment: {
+        deliveredAt: { lte: new Date(now.getTime() - 20 * 24 * 3600 * 1000), gte: new Date(now.getTime() - 60 * 24 * 3600 * 1000) },
+      },
+    },
+    include: { patient: true },
+  });
+  for (const c of entregados) {
+    const already = await prisma.notification.findFirst({
+      where: { template: "adaptacion_d20", payload: { path: ["caseId"], equals: c.id } },
+    });
+    if (already) continue;
+    await avisarPaciente(c.patientId, "adaptacion_d20", {
+      caseId: c.id,
+      enlace: "/panel",
+      nota: "Tu periodo de adaptación ya debería estar completado. Si notas molestias, pide un ajuste sin coste desde tu panel.",
+    });
+    adaptacion++;
+  }
+  // 3d) Revisión incluida: cuando llega la fecha programada al cerrar el caso
+  // (12 meses; 6 en menores de 14, porque el pie crece). Un aviso por caso.
+  let revisiones = 0;
+  const porRevisar = await prisma.case.findMany({
+    where: { state: "CERRADO", annualReviewAt: { lte: now, gte: new Date(now.getTime() - 60 * 24 * 3600 * 1000) } },
+    include: { patient: true },
+  });
+  for (const c of porRevisar) {
+    const already = await prisma.notification.findFirst({
+      where: { template: "revision_anual", payload: { path: ["caseId"], equals: c.id } },
+    });
+    if (already) continue;
+    await avisarPaciente(c.patientId, "revision_anual", { caseId: c.id, enlace: "/panel" });
+    await pushEvent(c.id, "Aviso de revisión enviado al titular", "sistema");
+    revisiones++;
+  }
   // 4) Mayoría de edad (16 años): aviso al paciente para que tome el control de su cuenta.
   let mayoria = 0;
   const mayores = await prisma.patient.findMany({
@@ -115,5 +157,5 @@ export async function runJobs() {
   await limpiarRateLimit();
   // Emails que no salieron en su momento (proveedor sin configurar o caído).
   const emailsReintentados = await reintentarEmailsPendientes();
-  return { expired: expiredCases.length, reminders, citas, mayoria, invitaciones, caducadas, emailsReintentados };
+  return { expired: expiredCases.length, reminders, citas, adaptacion, revisiones, mayoria, invitaciones, caducadas, emailsReintentados };
 }

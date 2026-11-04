@@ -81,7 +81,10 @@ export default async function HojaPage({ params }: { params: Promise<{ id: strin
       <div className="sp2 noprint" />
       <div className="row between noprint" style={{ marginBottom: 14 }}>
         <Link href={`/caso/${k.id}`}>← Volver al caso</Link>
-        <Imprimir>Imprimir hoja y etiquetas</Imprimir>
+        <span className="row" style={{ gap: 12 }}>
+          <Link href={`/caso/${k.id}/anexo-xiii`}>Declaración Anexo XIII</Link>
+          <Imprimir>Imprimir hoja y etiquetas</Imprimir>
+        </span>
       </div>
       <div className="hoja-paper">
         <div className="row between">
