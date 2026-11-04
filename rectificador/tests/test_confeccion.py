@@ -77,7 +77,11 @@ class WebFalsa:
             receta={"prescriptor": "Dra. Receta", "colegiado": "4321", "firmada": "2026-10-15T10:00:00Z",
                     "valoracion": "Pronación marcada en apoyo", "diagnostico": "Pie plano valgo",
                     "pauta": "EVA con relleno de arco", "pautaIzq": "Skive medial 4 mm", "pautaDcha": None,
-                    "pautaUso": "Uso progresivo", "contacto": None, "pdf": f"/api/rx-pdf/{id_}"},
+                    "pautaUso": "Uso progresivo", "contacto": None, "pdf": f"/api/rx-pdf/{id_}",
+                    "piezas": {"I": {"skive": {"valor": 4, "sentido": "varo"}, "oliva": {"valor": 3}},
+                               "D": {"oliva": {"valor": 3}, "cuna_post": {"valor": 2, "sentido": "valgo"},
+                                     "pieza_que_no_existe": {"valor": 1}}},
+                    "piezasTexto": "Pie izquierdo: Oliva retrocapital 3 mm; Skive (Kirby) 4 mm (varo)."},
             estudio=[{"id": "v1", "tipo": "video", "etiqueta": "Marcha posterior (alejándose) — descalzo",
                       "url": "/api/media/v1", "mime": "video/webm", "segundos": 6,
                       "resumen": ["Retropié en apoyo: dcha. 9° · izq. 4° (+ eversión / − inversión)"]},
@@ -484,6 +488,19 @@ def test_ver_pedido_desde_fresado_y_confeccion(falsa, monkeypatch, stl_sintetico
     v.ver_pedido()
     exp = v._expedientes["c1"]
     assert "Skive medial 4 mm" in exp.texto_receta.toPlainText()
+    # Las piezas que el podólogo marcó en la receta: un botón las pone en el molde abierto (y se deshacen).
+    assert "Piezas marcadas para el taller" in exp.texto_receta.toPlainText()
+    assert exp.boton_piezas.isVisibleTo(exp)
+    exp.aplicar_piezas()
+    izq = next(p for p in v.proyecto.pies if p.lado == "izquierdo")
+    dcho = next(p for p in v.proyecto.pies if p.lado == "derecho")
+    assert izq.piezas["skive"].activa and izq.piezas["skive"].altura == 4 and izq.piezas["skive"].sentido == "varo"
+    assert izq.piezas["oliva"].activa and izq.piezas["oliva"].altura == 3 and not izq.piezas["cuna_post"].activa
+    assert dcho.piezas["cuna_post"].activa and dcho.piezas["cuna_post"].sentido == "valgo"
+    assert not dcho.piezas["skive"].activa
+    assert "Piezas de la receta puestas" in exp.aviso.text()
+    v.deshacer()
+    assert not any(p.activa for pie in v.proyecto.pies for p in pie.piezas.values())
     exp.close()
     v.caja_pedido.setText("999")
     v.ver_pedido()

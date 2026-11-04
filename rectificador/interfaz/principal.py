@@ -1749,6 +1749,26 @@ valores clínicos: <code>config/valores_clinicos.toml</code></p>""")
         if cambios.get("activa"):
             self.notificar(f"{pieza.nombre} puesta. Arrastra su cuadradito en el 3D para moverla.", "bien")
 
+    def aplicar_piezas_receta(self, piezas: dict) -> str:
+        """Pone en cada pie las piezas que marca la receta de la web ({"I": {...}, "D": {...}}). Se puede
+        deshacer. Devuelve un resumen para la persona."""
+        if not self.proyecto:
+            return "Abre antes el molde de este pedido."
+        self._guardar_estado()
+        clinicos = config.valores_clinicos()
+        hechas = []
+        for pie in self.proyecto.pies:
+            marcadas = (piezas or {}).get("I" if pie.lado == "izquierdo" else "D") or {}
+            nombres = piezas_mod.de_receta(pie.piezas, marcadas, clinicos)
+            if nombres:
+                hechas.append(f"pie {pie.lado}: {', '.join(nombres)}")
+        if not hechas:
+            return "La receta no marca piezas para los pies de este molde."
+        self._actualizar_todo()
+        texto = "Piezas de la receta puestas — " + " · ".join(hechas) + ". Revísalas (Deshacer las quita)."
+        self.notificar(texto, "bien")
+        return texto
+
     def _actualizar_todo(self):
         """Recalcula el molde y redibuja todo (tras cualquier cambio), con un solo redibujo."""
         with self.visor.lote():

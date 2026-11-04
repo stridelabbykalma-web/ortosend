@@ -70,7 +70,8 @@ def html_receta(d: dict) -> str:
     partes.append("<h3>Receta</h3>")
     filas = [("Diagnóstico", r.get("diagnostico")), ("Valoración", r.get("valoracion")),
              ("Pauta general", r.get("pauta")), ("Pie izquierdo", r.get("pautaIzq")),
-             ("Pie derecho", r.get("pautaDcha")), ("Pauta de uso (para el paciente)", r.get("pautaUso")),
+             ("Pie derecho", r.get("pautaDcha")), ("Piezas marcadas para el taller", r.get("piezasTexto")),
+             ("Pauta de uso (para el paciente)", r.get("pautaUso")),
              ("Notas de contacto", r.get("contacto"))]
     partes.append("<table cellspacing=0 cellpadding=4>" + "".join(
         f"<tr><td valign=top style='color:{C['secundario']}'>{_p(a)}</td><td>{_p(b)}</td></tr>"
@@ -142,6 +143,12 @@ class VentanaExpediente(QWidget):
         self.boton_pdf.setEnabled(False)
         self.boton_pdf.clicked.connect(self.abrir_pdf)
         fila.addWidget(self.boton_pdf)
+        self.boton_piezas = QPushButton("Aplicar las piezas de la receta")
+        self.boton_piezas.setToolTip("Pone en el molde abierto las piezas que el podólogo marcó en la receta para\n"
+                                     "cada pie, con sus valores. Luego se revisan; «Deshacer» las quita.")
+        self.boton_piezas.setVisible(False)
+        self.boton_piezas.clicked.connect(self.aplicar_piezas)
+        fila.addWidget(self.boton_piezas)
         fila.addStretch(1)
         lr.addLayout(fila)
         self.pestanas.addTab(receta, "Receta")
@@ -233,6 +240,7 @@ class VentanaExpediente(QWidget):
             self.aviso.setVisible(False)
         self.texto_receta.setHtml(html_receta(d))
         self.boton_pdf.setEnabled(bool((d.get("receta") or {}).get("pdf")))
+        self.boton_piezas.setVisible(bool((d.get("receta") or {}).get("piezas")))
         self.texto_expediente.setHtml(html_expediente(d))
         self.lista.clear()
         estudio = d.get("estudio") or []
@@ -250,6 +258,15 @@ class VentanaExpediente(QWidget):
         for fila, m in enumerate(estudio):
             if m.get("tipo") == "foto":
                 self._bajar(m["url"], lambda ruta, fila=fila: self._miniatura(fila, ruta), silencio=True)
+
+    def aplicar_piezas(self):
+        """Las piezas marcadas en la receta, al molde abierto en la ventana principal."""
+        piezas = ((self.detalle or {}).get("receta") or {}).get("piezas")
+        principal = self.parent()
+        if not piezas or not hasattr(principal, "aplicar_piezas_receta"):
+            return
+        self.aviso.setText(_p(principal.aplicar_piezas_receta(piezas)))
+        self.aviso.setVisible(True)
 
     # ---------------------------------------------------------------- archivos
 

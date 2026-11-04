@@ -1,5 +1,13 @@
 # Novedades de Ortosend Taller
 
+## 0.21.0
+- **Piezas de la receta al molde con un botón.** Si el podólogo marcó en la receta de la web las piezas de
+  cada pie (oliva, barra, descargas, cuñas, skive…), en **📋 Ver pedido → Receta** aparece **«Aplicar las
+  piezas de la receta»**: las pone en cada pie con sus valores. Luego se revisan; **Deshacer** las quita.
+- La receta muestra también la línea «Piezas marcadas para el taller».
+- Necesita la actualización de la web con las casillas de piezas en la receta. Las recetas ya firmadas
+  siguen igual (sin botón).
+
 ## 0.20.0
 - **Resto de piezas revisadas para plantilla rígida** (más suaves por defecto; todo se sigue pudiendo subir
   en el panel):

@@ -200,6 +200,29 @@ def por_defecto(clinicos: dict) -> dict[str, Pieza]:
     return {t: piezas[t] for t in TIPOS}
 
 
+def de_receta(piezas: dict[str, Pieza], marcadas: dict, clinicos: dict) -> list[str]:
+    """Pone en las piezas de un pie las que la receta de la web marca para él ({tipo: {valor, sentido?}}): con
+    la forma y medidas de ahora, activas, con la altura (mm, ° o %) y el tipo de la receta. Las que la receta no
+    nombra no se tocan. Devuelve los nombres de las puestas (los tipos desconocidos se ignoran)."""
+    nuevas = por_defecto(clinicos)
+    puestas = []
+    for tipo, m in (marcadas or {}).items():
+        if tipo not in nuevas or not isinstance(m, dict):
+            continue
+        p = nuevas[tipo]
+        try:
+            valor = float(m.get("valor", p.altura))
+        except (TypeError, ValueError):
+            valor = p.altura
+        p.activa = True
+        p.altura = valor
+        if tipo in SENTIDOS and m.get("sentido") in dict(SENTIDOS[tipo]):
+            p.sentido = m["sentido"]
+        piezas[tipo] = p
+        puestas.append(p.nombre)
+    return puestas
+
+
 def copiar(piezas: dict[str, Pieza]) -> dict[str, Pieza]:
     return {k: p.copia() for k, p in piezas.items()}
 
