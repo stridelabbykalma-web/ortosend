@@ -22,7 +22,7 @@ export const metadata: Metadata = {
   icons: { apple: "/apple-touch-icon.png" },
   appleWebApp: { capable: true, title: "Taller", statusBarStyle: "default" },
 };
-export const viewport: Viewport = { themeColor: "#0e6e5c" };
+export const viewport: Viewport = { themeColor: "#0e7490" };
 
 export default async function TallerPage({
   searchParams,

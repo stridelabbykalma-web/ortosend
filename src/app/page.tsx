@@ -91,13 +91,13 @@ export default function Home() {
             <b>{PRICE_LABEL}</b>
             <span>precio único · todo incluido</span>
           </div>
-          <div className="px-search">
-            <BuscadorVivo />
-          </div>
           <div className="px-trust">
             <span>{ICO.check} Producto sanitario a medida (Reglamento UE 2017/745)</span>
             <span>{ICO.check} Prescrito siempre por profesionales colegiados</span>
             <span>{ICO.check} Estudio gratuito y sin compromiso</span>
+          </div>
+          <div className="px-search">
+            <BuscadorVivo />
           </div>
         </div>
       </div>

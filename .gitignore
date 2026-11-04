@@ -48,3 +48,4 @@ next-env.d.ts
 # WASM de MediaPipe: en producción se sirve desde el CDN, aquí solo para pruebas locales
 public/mediapipe/wasm/
 
+__pycache__/
