@@ -2,6 +2,7 @@
 // y la ficha técnica de fabricación (lo que el taller necesita del expediente
 // sin leer todo el cuestionario clínico).
 import type { Case, CaseState, FabPhase, Payment, Prescription } from "@prisma/client";
+import { textoPiezas, type PiezasMarcadas } from "./piezas-receta";
 import type { Questionnaire } from "./questionnaire";
 import type { Exam } from "./exploracion";
 
@@ -214,7 +215,7 @@ export type TrabajoPie = {
 // Qué hay que hacer en cada pie: la prescripción manda (pauta por pie si la
 // hay; si no, la general) y del estudio salen alza, FPI y dolor de ese lado.
 export function trabajoPorPie(
-  rx: Pick<Prescription, "fabricationOrder" | "orderLeft" | "orderRight"> | null,
+  rx: (Pick<Prescription, "fabricationOrder" | "orderLeft" | "orderRight"> & { piezas?: Prescription["piezas"] }) | null,
   e: Exam | null | undefined,
   q?: Questionnaire | null
 ): [TrabajoPie, TrabajoPie] {
@@ -229,6 +230,11 @@ export function trabajoPorPie(
       if (e.dismetria === "Sí" && corto) datos.push(esCorto ? `Alza ${alza} (lado corto)` : "Sin alza");
       else datos.push(`Alza ${alza}`);
     }
+    // Piezas marcadas en la receta para este pie (las aplica el programa del taller).
+    const piezas = textoPiezas(rx?.piezas as PiezasMarcadas | null | undefined)
+      .split("\n")
+      .find((l) => l.startsWith(pie === "I" ? "Pie izquierdo" : "Pie derecho"));
+    if (piezas) datos.push(`Piezas: ${piezas.replace(/^Pie (izquierdo|derecho): /, "")}`);
     const fpi = pie === "I" ? e?.fpiIzq : e?.fpiDcho;
     if (fpi) datos.push(`FPI-6 ${fpi}`);
     const lado = (q?.lado ?? "").toLowerCase();

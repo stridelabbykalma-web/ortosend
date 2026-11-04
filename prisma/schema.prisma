@@ -577,6 +577,7 @@ model Prescription {
   fabricationOrder String // pauta de fabricación del par (→ hoja de trabajo)
   orderLeft        String? // trabajo específico del pie izquierdo (etiqueta I)
   orderRight       String? // trabajo específico del pie derecho (etiqueta D)
+  piezas           Json? // piezas marcadas para el taller por pie {I: {tipo: {valor, sentido?}}, D: {...}} (lib/piezas-receta)
   usageGuidelines  String // pauta de uso para el paciente
   contactNotes     String? // notas de llamadas al paciente
   pdfUrl           String? // ruta de descarga del PDF (/api/rx-pdf/[caseId])

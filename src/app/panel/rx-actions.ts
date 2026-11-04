@@ -11,6 +11,8 @@ import { PAY_LINK_DAYS } from "@/lib/states";
 import { PRICE_CENTS, MEDIA_LABEL } from "@/lib/format";
 import { CENTRAL_WHERE, REVISION_PREFIJO, esCentral } from "@/lib/rx-route";
 import { generarPdfPrescripcion } from "@/lib/rx-pdf";
+import { piezasDeFormulario, textoPiezas } from "@/lib/piezas-receta";
+import { Prisma } from "@prisma/client";
 import { nombreCompleto } from "@/lib/nombre";
 
 function fail(path: string, msg: string): never {
@@ -102,6 +104,9 @@ export async function signRxAction(formData: FormData) {
   const orderRight = String(formData.get("orderRight") ?? "").trim() || null;
   if (!fabricationOrder)
     fail(back, "La pauta de fabricación es obligatoria: es la orden de trabajo del taller");
+  // Piezas marcadas para el taller (opcional): el programa del taller las pone en el molde.
+  const piezas = piezasDeFormulario(formData);
+  const piezasTexto = textoPiezas(piezas);
   const expires = new Date(Date.now() + PAY_LINK_DAYS * 24 * 3600 * 1000);
   // PDF de la prescripción: se genera al firmar y queda inmutable con su huella.
   const firmadoEl = new Date();
@@ -115,7 +120,7 @@ export async function signRxAction(formData: FormData) {
     colegiado: profile.collegiateNum,
     valoracion: assessment,
     diagnostico: diagnosis,
-    pautaFabricacion: fabricationOrder,
+    pautaFabricacion: piezasTexto ? `${fabricationOrder}\n\nPiezas marcadas para el taller:\n${piezasTexto}` : fabricationOrder,
     pieIzquierdo: orderLeft,
     pieDerecho: orderRight,
     pautaUso: usageGuidelines,
@@ -130,6 +135,7 @@ export async function signRxAction(formData: FormData) {
     fabricationOrder,
     orderLeft,
     orderRight,
+    piezas: piezas ?? Prisma.DbNull,
     usageGuidelines,
     pdfUrl: `/api/rx-pdf/${caseId}`,
     pdfBytes,

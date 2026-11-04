@@ -137,7 +137,12 @@ describe("expediente del pedido (receta, vídeos y fotos, cuestionario y explora
     await prisma.case.update({ where: { id: casos.reciente }, data: { reason: "Dolor de talón al correr" } });
     await prisma.prescription.update({
       where: { caseId: casos.reciente },
-      data: { pdfBytes: Buffer.from("%PDF-1.4 receta"), pdfSha256: "abc", assessment: "Pronación marcada" },
+      data: {
+        pdfBytes: Buffer.from("%PDF-1.4 receta"),
+        pdfSha256: "abc",
+        assessment: "Pronación marcada",
+        piezas: { I: { oliva: { valor: 3 }, cuna_post: { valor: 2, sentido: "varo" } }, D: { oliva: { valor: 3 } } },
+      },
     });
     const captura = await prisma.capture.create({
       data: { caseId: casos.reciente, questionnaire: {}, physicalExam: {} },
@@ -181,6 +186,12 @@ describe("expediente del pedido (receta, vídeos y fotos, cuestionario y explora
       pautaIzq: "Skive medial 4 mm",
       pdf: `/api/rx-pdf/${casos.reciente}`,
     });
+    // Las piezas marcadas en la receta, para que el programa del taller las ponga en el molde.
+    expect(d.receta.piezas).toEqual({ I: { oliva: { valor: 3 }, cuna_post: { valor: 2, sentido: "varo" } }, D: { oliva: { valor: 3 } } });
+    expect(d.receta.piezasTexto).toBe(
+      "Pie izquierdo: Oliva retrocapital 3 mm; Cuña posterior 2° (varo).\nPie derecho: Oliva retrocapital 3 mm."
+    );
+    expect(d.pies[0].datos).toContain("Piezas: Oliva retrocapital 3 mm; Cuña posterior 2° (varo).");
     expect(d.estudio.map((m: { tipo: string }) => m.tipo)).toEqual(["video", "foto"]);
     expect(d.estudio[0]).toMatchObject({ url: `/api/media/${videoId}`, segundos: 6, mime: "video/webm" });
     expect(d.estudio[1].resumen.join(" ")).toMatch(/Helbing.*7° valgo/);
