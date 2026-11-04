@@ -13,6 +13,7 @@ import { reprogramarCitaAction } from "@/app/panel/cliente-actions";
 import { activeAppointmentOf } from "@/lib/agenda-db";
 import { fmtdt } from "@/lib/format";
 import { APPOINTMENT_KIND_LABEL } from "@/lib/agenda";
+import { AntiBot } from "@/components/antibot";
 
 export const dynamic = "force-dynamic";
 
@@ -230,6 +231,7 @@ export default async function ReservaPage({
           acceso, rectificación y supresión en la <a href="/legal/privacidad">política de privacidad</a>.
         </div>
         <div className="sp" />
+        <AntiBot />
         <button type="submit" className="pri wfull">
           Confirmar reserva gratuita
         </button>

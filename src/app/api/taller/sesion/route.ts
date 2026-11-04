@@ -6,7 +6,7 @@ import { audit } from "@/lib/cases";
 import { normalizeIdentifier } from "@/lib/contacto";
 import { cuerpo, responder } from "@/lib/api-taller";
 import { ErrorTaller } from "@/lib/taller-ops";
-import { claveIp, limitar, origenPeticion } from "@/lib/rate-limit";
+import { claveCuenta, claveIp, limitar, origenPeticion } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +20,8 @@ export async function POST(req: Request) {
     // Igual que la entrada del equipo en la web: email o móvil.
     const id = typeof e.email === "string" && e.email.trim().length >= 3 ? normalizeIdentifier(e.email) : "";
     const password = typeof e.password === "string" ? e.password : "";
+    if (id && !sinPeticion && !(await limitar(claveCuenta("taller-cuenta", id), 20, 900)))
+      throw new ErrorTaller("Demasiados intentos con esta cuenta. Espera 15 minutos.", 429);
     const user = id ? await prisma.user.findFirst({ where: { OR: [{ email: id }, { phone: id }] } }) : null;
     const ok = !!user?.passwordHash && user.active && (await verifyPassword(password, user.passwordHash));
     if (!user || !ok) throw new ErrorTaller("Email o contraseña incorrectos", 401);

@@ -30,7 +30,7 @@ export type NuevoRegistro = {
   actorUserId?: string | null;
   ip?: string | null;
   userAgent?: string | null;
-  channel: "whatsapp" | "web_alta" | "web_gestion" | "web_perfil" | "panel";
+  channel: "whatsapp" | "web_alta" | "web_reserva" | "web_gestion" | "web_perfil" | "panel";
   invitationId?: string | null;
   externalRef?: string | null;
 };
@@ -51,6 +51,27 @@ export function registrar(db: Db, r: NuevoRegistro) {
       invitationId: r.invitationId ?? null,
       externalRef: r.externalRef ?? null,
     },
+  });
+}
+
+// Consentimiento explícito de datos de salud marcado al reservar en la web: queda en el registro
+// inalterable como los de WhatsApp, con la versión del texto en vigor, la IP y el navegador.
+export async function registrarSaludReserva(
+  db: Db,
+  r: { patientId: string; actor: "paciente" | "tutor"; actorUserId: string; ip: string | null; userAgent: string | null }
+) {
+  const textos = await textosVigentes(db);
+  return registrar(db, {
+    patientId: r.patientId,
+    professionalId: null,
+    type: "DATOS_SALUD",
+    action: "ACEPTADO",
+    legalTextId: textos.DATOS_SALUD.id,
+    actor: r.actor,
+    actorUserId: r.actorUserId,
+    ip: r.ip,
+    userAgent: r.userAgent,
+    channel: "web_reserva",
   });
 }
 

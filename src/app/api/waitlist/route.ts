@@ -6,7 +6,9 @@ import { permitirPublico } from "@/lib/rate-limit";
 export async function POST(request: Request) {
   if (!(await permitirPublico("waitlist")))
     return NextResponse.json({ error: "Demasiadas peticiones. Espera un minuto." }, { status: 429 });
-  const body = (await request.json().catch(() => null)) as { zone?: string; contact?: string } | null;
+  const body = (await request.json().catch(() => null)) as { zone?: string; contact?: string; web_alternativa?: string } | null;
+  // Campo trampa: una persona no lo rellena.
+  if (body?.web_alternativa) return NextResponse.json({ ok: true });
   const contact = body?.contact?.trim().slice(0, 160);
   if (!contact) return NextResponse.json({ error: "Escribe un contacto" }, { status: 400 });
   await prisma.waitlistEntry.create({

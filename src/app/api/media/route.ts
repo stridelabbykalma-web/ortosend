@@ -3,6 +3,7 @@
 // persiste el archivo (prototipo: Postgres; producción: R2/S3 por fragmentos).
 import { tratamientoPermitido } from "@/lib/alta";
 import { NextResponse } from "next/server";
+import { contenidoCoincide, sinMetadatos } from "@/lib/archivos";
 import { prisma } from "@/lib/db";
 import { requireRole } from "@/lib/auth";
 import { audit, pushEvent } from "@/lib/cases";
@@ -88,7 +89,12 @@ export async function POST(req: Request) {
     // meta inválida: se ignora
   }
 
-  const bytes = new Uint8Array(await file.arrayBuffer());
+  const recibido = new Uint8Array(await file.arrayBuffer());
+  // El tipo lo dice el navegador: se comprueba con el contenido real. A las fotos se les quitan
+  // los metadatos (GPS, móvil…) antes de guardarlas.
+  if (!contenidoCoincide(recibido, mime))
+    return NextResponse.json({ error: "El archivo no es lo que dice ser (formato no válido)" }, { status: 400 });
+  const bytes = Buffer.from(sinMetadatos(recibido, mime));
   const asset = await prisma.$transaction(async (tx) => {
     const existing = await tx.mediaAsset.findFirst({ where: { captureId: capture.id, kind } });
     let assetId: string;
