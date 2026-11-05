@@ -53,9 +53,6 @@ export default function ComoFunciona() {
                 height={1071}
                 loading="lazy"
               />
-              <figcaption className="ox-small" style={{ marginTop: 8 }}>
-                La marcha, convertida en datos: así se analiza hoy en un laboratorio de movimiento.
-              </figcaption>
             </figure>
             <div className="ox-bloques" style={{ marginTop: 0 }}>
               {BLOQUES.slice(2).map(([t, d]) => (

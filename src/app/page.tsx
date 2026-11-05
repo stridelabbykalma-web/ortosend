@@ -110,7 +110,6 @@ export default function Home() {
         <div className="ox-stage">
           <figure className="ox-mapa" aria-label="Mapa de presiones plantares de los dos pies, con las zonas de carga y los datos del estudio (gráfico ilustrativo)">
             <MapaPresiones modo="mapa" />
-            <figcaption>El mapa de presiones de tu pisada: la salida real del estudio</figcaption>
           </figure>
         </div>
 

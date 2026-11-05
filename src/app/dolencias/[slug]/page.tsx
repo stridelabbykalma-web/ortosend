@@ -86,9 +86,6 @@ export default async function DolenciaPage({ params }: { params: Promise<{ slug:
                 height={1071}
                 loading="lazy"
               />
-              <figcaption className="ox-small" style={{ marginTop: 8 }}>
-                En el estudio, tu marcha se graba y se analiza con visión artificial; la valora un profesional colegiado.
-              </figcaption>
             </figure>
             <div className="ox-bloques" style={{ marginTop: 0 }}>
               <Bloque titulo="Qué no hace" items={d.noHace} />
