@@ -12,16 +12,27 @@ const sans = Figtree({ variable: "--font-inter", subsets: ["latin"], weight: ["3
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://ortosend.es"),
-  title: { default: "Ortosend — Plantillas a medida", template: "%s — Ortosend" },
+  title: {
+    default: "Ortosend — Plantillas a medida por 199,99 €",
+    template: "%s — Ortosend",
+  },
   description:
-    "Estudio completo de la pisada en clínicas asociadas: escáner 3D, análisis de la marcha y baropodometría. Solo pagas si un profesional colegiado prescribe tu tratamiento.",
+    "Plantillas ortopédicas a medida baratas de verdad: 199,99 € todo incluido, con estudio biomecánico completo (escáner 3D, análisis de la marcha y baropodometría) en clínicas asociadas. Solo pagas si un profesional colegiado prescribe tu tratamiento.",
+  keywords: [
+    "plantillas ortopédicas baratas",
+    "plantillas a medida precio",
+    "ortopedia barata",
+    "plantillas a medida baratas",
+    "estudio de la pisada",
+    "estudio biomecánico de la marcha",
+  ],
   openGraph: {
     type: "website",
     locale: "es_ES",
     siteName: "Ortosend",
-    title: "Ortosend — Plantillas a medida",
+    title: "Ortosend — Plantillas a medida por 199,99 €",
     description:
-      "Estudio completo de la pisada en clínicas asociadas. Solo pagas si un profesional colegiado prescribe tu tratamiento.",
+      "Plantillas ortopédicas a medida por 199,99 € todo incluido, con estudio biomecánico completo en una clínica cerca de ti. Solo pagas si un colegiado lo prescribe.",
     url: "/",
   },
   twitter: { card: "summary_large_image" },

@@ -50,6 +50,10 @@ const FAQ: [string, string][] = [
     "El precio es único: 199,99 €, IVA incluido. Comprende el estudio, la prescripción, la fabricación a medida, el envío, la guía de adaptación y una revisión incluida. El estudio en la clínica es gratuito: si el tratamiento no está indicado, no pagas nada.",
   ],
   [
+    "¿Por qué son tan baratas siendo a medida?",
+    "Porque el circuito es nuestro de punta a punta: la red de clínicas comparte el equipamiento, el taller es propio y no hay intermediarios. Por eso unas plantillas ortopédicas a medida con estudio clínico cuestan 199,99 € en vez de los 300-480 € habituales por separado. Baratas en precio, no en proceso: las pruebas y la firma colegiada son las mismas.",
+  ],
+  [
     "¿Cuándo y cómo pago?",
     "Solo después de que un podólogo o médico colegiado firme tu prescripción. Recibes un enlace válido 30 días y pagas online con tarjeta o Bizum, en la pasarela segura de Stripe. Nunca pagarás nada en la clínica.",
   ],
@@ -113,11 +117,12 @@ export default function Home() {
         <div className="ox-flow">
           <section className="ox-hero" aria-label="Ortosend, plantillas a medida">
             <p className="ox-lead" data-mv>
-              Plantillas a medida, con estudio clínico cerca de ti.
+              Plantillas a medida: {PRICE_LABEL} todo incluido.
             </p>
             <p className="ox-sub" data-mv>
-              Escáner 3D, análisis de la marcha y presiones plantares en tu clínica asociada. Solo
-              pagas si un profesional colegiado prescribe tu tratamiento.
+              Con estudio clínico completo en una clínica cerca de ti: escáner 3D, análisis de la
+              marcha y presiones plantares. Solo pagas si un profesional colegiado prescribe tu
+              tratamiento.
             </p>
             <div className="ox-heroname">
               <h1 className="ox-name">ortosend</h1>
