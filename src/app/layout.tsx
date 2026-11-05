@@ -13,7 +13,7 @@ const sans = Figtree({ variable: "--font-inter", subsets: ["latin"], weight: ["3
 export const metadata: Metadata = {
   metadataBase: new URL("https://ortosend.es"),
   title: {
-    default: "Ortosend — Plantillas a medida por 199,99 €",
+    default: "Ortosend — Plantillas a medida por solo 199,99 €",
     template: "%s — Ortosend",
   },
   description:
@@ -30,7 +30,7 @@ export const metadata: Metadata = {
     type: "website",
     locale: "es_ES",
     siteName: "Ortosend",
-    title: "Ortosend — Plantillas a medida por 199,99 €",
+    title: "Ortosend — Plantillas a medida por solo 199,99 €",
     description:
       "Plantillas ortopédicas a medida por 199,99 € todo incluido, con estudio biomecánico completo en una clínica cerca de ti. Solo pagas si un colegiado lo prescribe.",
     url: "/",

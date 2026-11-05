@@ -28,7 +28,7 @@ export function CtaMovil({ objetivo = "buscador-hero" }: { objetivo?: string }) 
   if (!pasado || enPie) return null;
   return (
     <Link href="/buscar" className="ox-cta-movil">
-      Buscar una clínica cerca
+      Reserva tu estudio gratis
     </Link>
   );
 }

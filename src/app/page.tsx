@@ -116,12 +116,14 @@ export default function Home() {
         <div className="ox-flow">
           <section className="ox-hero" aria-label="Ortosend, plantillas a medida">
             <p className="ox-lead" data-mv>
-              Plantillas a medida: {PRICE_LABEL} todo incluido.
+              Plantillas a medida por solo {PRICE_LABEL}.
+            </p>
+            <p className="ox-ancla-precio-hero" data-mv>
+              Todo incluido. Por separado te costarían <s>300–480 €</s>.
             </p>
             <p className="ox-sub" data-mv>
-              Con estudio clínico completo en una clínica cerca de ti: escáner 3D, análisis de la
-              marcha y presiones plantares. Solo pagas si un profesional colegiado prescribe tu
-              tratamiento.
+              El estudio clínico completo — escáner 3D, marcha y presiones — es <b>gratis</b> en tu
+              clínica más cercana. Solo pagas si un profesional colegiado prescribe tu tratamiento.
             </p>
             <div className="ox-heroname">
               <h1 className="ox-name">ortosend</h1>
@@ -130,6 +132,7 @@ export default function Home() {
               <div className="card">
                 <BuscadorVivo />
               </div>
+              <p className="ox-claims">Estudio gratis · Sin firma colegiada no pagas · Revisión incluida</p>
             </div>
           </section>
 
@@ -355,7 +358,7 @@ export default function Home() {
             Si el profesional no firma tu prescripción, el estudio no te cuesta <b>nada</b>.
           </h2>
           <Link href="/buscar" className="oxb acc">
-            Buscar una clínica cerca
+            Reservar mi estudio gratis
           </Link>
         </div>
       </section>
