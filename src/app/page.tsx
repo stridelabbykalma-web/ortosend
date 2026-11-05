@@ -116,7 +116,7 @@ export default function Home() {
         <div className="ox-flow">
           <section className="ox-hero" aria-label="Ortosend, plantillas a medida">
             <p className="ox-lead" data-mv>
-              Plantillas a medida por solo {PRICE_LABEL}.
+              Plantillas a medida por solo <span style={{ whiteSpace: "nowrap" }}>{PRICE_LABEL}</span>.
             </p>
             <p className="ox-ancla-precio-hero" data-mv>
               Todo incluido. Por separado te costarían <s>300–480 €</s>.
