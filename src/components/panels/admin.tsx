@@ -7,6 +7,8 @@ import {
   applicationSetAction,
   clinicStatusAction,
   closeCaseAction,
+  invitarTallerAction,
+  personalTallerAction,
   professionalApplicationAction,
   reactivatePayAction,
   runJobsAction,
@@ -17,6 +19,7 @@ const TABS: [string, string][] = [
   ["sol", "Solicitudes"],
   ["cli", "Clínicas"],
   ["usr", "Profesionales"],
+  ["tal", "Personal del taller"],
   ["cas", "Casos"],
   ["esp", "Lista de espera"],
   ["not", "Notificaciones"],
@@ -395,6 +398,94 @@ export async function PanelAdmin({ tab }: { tab?: string }) {
           ) : (
             <div className="muted">Vacía. Se llena cuando alguien busca una zona sin cobertura y deja su contacto.</div>
           )}
+        </div>
+      </>
+    );
+  }
+  if (t === "tal") {
+    const personal = await prisma.user.findMany({ where: { role: "TALLER" }, orderBy: [{ active: "desc" }, { name: "asc" }] });
+    body = (
+      <>
+        <h3>Personal del taller</h3>
+        <div className="muted">
+          Cada persona entra con su usuario (en el móvil: <b>/taller</b>; en el PC: Ortosend Taller). En cada material
+          registrado, paso u hoja queda quién lo hizo. Al darla de alta le llega una invitación para crear su
+          contraseña (72 h). Si alguien se va, dale de baja: no se borra, el historial sigue diciendo quién hizo cada cosa.
+        </div>
+        <div className="sp" />
+        <form action={invitarTallerAction} className="card">
+          <b style={{ fontFamily: "var(--font-sora)" }}>Dar de alta</b>
+          <div className="grid g3" style={{ marginTop: 8 }}>
+            <div>
+              <label>Nombre y apellidos</label>
+              <input name="nombre" required />
+            </div>
+            <div>
+              <label>Email</label>
+              <input name="email" type="email" required />
+            </div>
+            <div>
+              <label>Móvil</label>
+              <input name="telefono" inputMode="tel" required />
+            </div>
+          </div>
+          <div className="sp" />
+          <button type="submit" className="pri">
+            Crear cuenta y enviar invitación
+          </button>
+        </form>
+        <div className="sp" />
+        <div className="card" style={{ padding: 0, overflowX: "auto" }}>
+        <table>
+          <thead>
+            <tr>
+              <th>Nombre</th>
+              <th>Contacto</th>
+              <th>Estado</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {personal.map((u) => (
+              <tr key={u.id}>
+                <td>{u.name}</td>
+                <td className="tiny">
+                  {u.email}
+                  <br />
+                  {u.phone}
+                </td>
+                <td>
+                  {!u.active ? (
+                    <span className="pill n">De baja</span>
+                  ) : u.activatedAt || u.passwordHash ? (
+                    <span className="pill g">Activo</span>
+                  ) : (
+                    <span className="pill a">Invitado {u.invitedAt ? fmtd(u.invitedAt) : ""}</span>
+                  )}
+                </td>
+                <td>
+                  <form action={personalTallerAction} className="row">
+                    <input type="hidden" name="userId" value={u.id} />
+                    {u.active && !u.activatedAt && !u.passwordHash && (
+                      <button type="submit" name="accion" value="reinvitar">
+                        Reenviar invitación
+                      </button>
+                    )}
+                    {u.active ? (
+                      <button type="submit" name="accion" value="baja">
+                        Dar de baja
+                      </button>
+                    ) : (
+                      <button type="submit" name="accion" value="alta">
+                        Reactivar
+                      </button>
+                    )}
+                  </form>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
         </div>
       </>
     );
