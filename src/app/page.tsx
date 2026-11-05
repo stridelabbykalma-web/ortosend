@@ -119,7 +119,7 @@ export default function Home() {
               Plantillas a medida por solo <span style={{ whiteSpace: "nowrap" }}>{PRICE_LABEL}</span>.
             </p>
             <p className="ox-ancla-precio-hero" data-mv>
-              Todo incluido. Por separado te costarían <s>300–480 €</s>.
+              Todo incluido. <b>Ahórrate hasta 280 €</b> frente a una ortopedia tradicional.
             </p>
             <p className="ox-sub" data-mv>
               El estudio clínico completo — escáner 3D, marcha y presiones — es <b>gratis</b> en tu

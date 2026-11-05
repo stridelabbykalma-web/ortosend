@@ -445,8 +445,8 @@ body:has(.oxp) { background: var(--ox-ground); }
 .ox-hero { min-height: calc(100svh - 64px); display: flex; flex-direction: column; position: relative; padding-top: 9svh; }
 .ox-hero .ox-lead { max-width: 24ch; }
 .ox-hero .ox-sub { max-width: 44ch; color: var(--ox-ink2); margin-top: 10px; }
-.ox-ancla-precio-hero { font-size: 17px; font-weight: 600; margin: 10px 0 0; }
-.ox-ancla-precio-hero s { color: var(--ox-ink2); font-weight: 500; text-decoration-thickness: 2px; text-decoration-color: var(--teal); }
+.ox-ancla-precio-hero { font-size: 17px; font-weight: 500; margin: 10px 0 0; }
+.ox-ancla-precio-hero b { color: var(--teal-d); font-weight: 700; }
 .ox-claims { font-size: 14.5px; font-weight: 600; color: var(--ox-ink2); margin: 12px 2px 0; }
 .ox-heroname { position: relative; z-index: 2; margin: 5svh 0 4svh; pointer-events: none; }
 .ox-heroname .ox-name { font-size: clamp(76px, 11.5vw, 180px); margin-left: calc(-1 * clamp(80px, 11vw, 240px)); }
