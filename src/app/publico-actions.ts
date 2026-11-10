@@ -122,7 +122,7 @@ export async function reservaAction(formData: FormData) {
   } catch (e) {
     back(agendaErrorMessage(e));
   }
-  // Copia de la cita en el programa de la clínica (Docfav), si está conectado.
+  // Copia de la cita en el programa de agenda de la clínica, si tiene uno conectado que lo permita.
   await sincronizarCaso(result!.caseId);
 
   await pushEvent(

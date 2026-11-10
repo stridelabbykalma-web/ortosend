@@ -1,18 +1,26 @@
-// Tarjeta «Programa de gestión de la clínica» (Docfav) de la pestaña
-// Disponibilidad: conectar con la clave de API, elegir la clínica, enlazar cada
-// agenda de Ortosend con la de su profesional en Docfav, elegir el servicio y
-// ver el estado de la última lectura.
-import type { Clinic, User } from "@prisma/client";
+// Tarjeta «Programas de agenda de la clínica» de la pestaña Disponibilidad.
+// Una sección por programa registrado (src/lib/conector/registro.ts):
+// - con API (Docfav…): clave, cuenta, enlace de cada agenda con la de su
+//   profesional, servicio y opciones;
+// - calendario iCal (Google, Outlook, Apple u otro programa): enlace privado
+//   del calendario de cada agenda (solo lectura).
+import type { CalendarConnector, Clinic, ConnectorLink, User } from "@prisma/client";
 import { prisma } from "@/lib/db";
-import { clienteDe, explicarError, KIND_DOCFAV } from "@/lib/conector";
-import type { DfClinic, DfService } from "@/lib/conector/docfav";
+import { claveDe } from "@/lib/conector";
+import { PROVEEDORES } from "@/lib/conector/registro";
+import { descifrar } from "@/lib/secretos";
+import type { AgendaExterna, Cuenta, ProveedorApi, ProveedorIcal, Servicio } from "@/lib/conector/tipos";
 import {
-  conectarDocfavAction,
-  desconectarDocfavAction,
-  elegirClinicaDocfavAction,
-  guardarConectorAction,
+  conectarApiAction,
+  desconectarAction,
+  elegirCuentaAction,
+  guardarConectorApiAction,
+  guardarIcalAction,
   sincronizarConectorAction,
 } from "@/app/panel/conector-actions";
+
+type Conector = CalendarConnector & { links: ConnectorLink[] };
+type Agenda = { id: string | null; name: string };
 
 const hace = (d: Date | null) => {
   if (!d) return "nunca";
@@ -22,94 +30,75 @@ const hace = (d: Date | null) => {
   return d.toLocaleString("es-ES", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Europe/Madrid" });
 };
 
-export async function ClinicaConector({ clinic, user }: { clinic: Clinic; user: User }) {
-  const isAdmin = user.role === "ADMIN_CLINICA";
-  const c = await prisma.calendarConnector.findUnique({
-    where: { clinicId_kind: { clinicId: clinic.id, kind: KIND_DOCFAV } },
-    include: { links: true },
-  });
-  const pendientes = c
-    ? await prisma.appointment.count({ where: { clinicId: clinic.id, externalState: "error", status: { in: ["RESERVADA", "CONFIRMADA"] } } })
-    : 0;
-
-  // Profesionales de la clínica: personal no ve la configuración, solo el estado.
-  if (!isAdmin) {
-    return (
-      <div className="card" id="conector">
-        <b>Programa de gestión de la clínica</b>
-        <div className="muted" style={{ marginTop: 6 }}>
-          {c?.externalClinicId
-            ? `Conectado con Docfav (${c.externalClinicName}). Las horas ocupadas en Docfav no se ofrecen en Ortosend y las citas de Ortosend se apuntan en Docfav. Última lectura: ${hace(c.lastSyncAt)}.`
-            : "Sin conectar. El administrador de la clínica puede conectar Docfav desde aquí."}
-        </div>
-        {c?.externalClinicId && (
-          <form action={sincronizarConectorAction} style={{ marginTop: 10 }}>
-            <button type="submit">Leer Docfav ahora</button>
-          </form>
-        )}
+function Estado({ c }: { c: Conector }) {
+  return (
+    <>
+      <div className="tiny" style={{ marginTop: 8 }}>
+        {c.apiKeyHint && <>Clave {c.apiKeyHint} · </>}Última lectura: {hace(c.lastSyncAt)}
       </div>
-    );
-  }
+      {c.lastError && (
+        <div className="note a" style={{ marginTop: 6 }}>
+          {c.lastError}
+        </div>
+      )}
+    </>
+  );
+}
 
-  // Datos en vivo de Docfav para los selectores (solo si ya hay clínica elegida).
-  let clinicas: DfClinic[] = [];
-  let opciones: { id: string; label: string }[] = [];
-  let servicios: DfService[] = [];
+function Acciones({ c, nombre }: { c: Conector; nombre: string }) {
+  return (
+    <div className="row" style={{ marginTop: 10 }}>
+      <form action={sincronizarConectorAction}>
+        <input type="hidden" name="connectorId" value={c.id} />
+        <button type="submit">Leer {nombre} ahora</button>
+      </form>
+      <form action={desconectarAction}>
+        <input type="hidden" name="connectorId" value={c.id} />
+        <button type="submit" className="dang">
+          Desconectar
+        </button>
+      </form>
+    </div>
+  );
+}
+
+async function SeccionApi({ prov, c, clinic, agendas }: { prov: ProveedorApi; c: Conector | undefined; clinic: Clinic; agendas: Agenda[] }) {
+  let cuentas: Cuenta[] = [];
+  let opciones: AgendaExterna[] = [];
+  let servicios: Servicio[] = [];
   let errorVivo: string | null = null;
-  if (c) {
+  if (c?.apiKeyEnc) {
     try {
-      const api = clienteDe(c);
-      if (!c.externalClinicId) clinicas = await api.clinics();
-      else {
-        const [cals, staff, places, svcs] = await Promise.all([
-          api.staffCalendars(c.externalClinicId),
-          api.staff(c.externalClinicId),
-          api.places(c.externalClinicId),
-          api.services(c.externalClinicId),
+      const clave = claveDe(c)!;
+      if (!c.externalClinicId) cuentas = await prov.cuentas(clave);
+      else
+        [opciones, servicios] = await Promise.all([
+          prov.agendas(clave, c.externalClinicId),
+          prov.servicios ? prov.servicios(clave, c.externalClinicId).then((s) => s.filter((x) => x.active)) : Promise.resolve([] as Servicio[]),
         ]);
-        opciones = cals
-          .filter((x) => x.active)
-          .map((x) => ({
-            id: x.id,
-            label: `${staff.find((s) => s.id === x.staffId)?.fullname ?? "Profesional"} · ${places.find((p) => p.id === x.placeId)?.name ?? "—"}`,
-          }))
-          .sort((a, b) => a.label.localeCompare(b.label, "es"));
-        servicios = svcs.filter((s) => s.active).sort((a, b) => a.name.localeCompare(b.name, "es"));
-      }
     } catch (e) {
-      errorVivo = explicarError(e);
+      errorVivo = prov.explicarError(e);
     }
   }
-  const equipo = await prisma.user.findMany({
-    where: { clinicId: clinic.id, active: true, role: { in: ["PROFESIONAL", "ADMIN_CLINICA"] } },
-    select: { id: true, name: true },
-    orderBy: { name: "asc" },
-  });
-  const agendas = [{ id: null as string | null, name: "Agenda de la clínica (sala / equipo)" }, ...equipo];
+  const pendientes = c
+    ? await prisma.appointment.count({ where: { externalConnectorId: c.id, externalState: "error", status: { in: ["RESERVADA", "CONFIRMADA"] } } })
+    : 0;
   const enlazada = (pid: string | null) => c?.links.find((l) => l.professionalId === pid)?.externalCalendarId ?? "";
-  const porNombre = servicios.find(
-    (s) => s.name.localeCompare(c?.serviceName ?? "Ortosend", "es", { sensitivity: "base" }) === 0
-  );
+  const porNombre = servicios.find((s) => s.name.localeCompare(c?.serviceName ?? "Ortosend", "es", { sensitivity: "base" }) === 0);
+  servicios.sort((a, b) => a.name.localeCompare(b.name, "es"));
 
   return (
-    <div className="card" id="conector">
-      <div className="row between">
-        <b>Programa de gestión de la clínica: Docfav</b>
-        {c?.externalClinicId && <span className="pill g">Conectado</span>}
-      </div>
-      <div className="muted" style={{ marginTop: 6 }}>
-        Con Docfav conectado, Ortosend no ofrece las horas que ya están ocupadas en Docfav (citas, bloqueos y, si
-        quieres, fuera del horario de cada profesional) y apunta allí cada cita de Ortosend con la ficha del paciente,
-        creada con los datos de su cuenta si no existe. Docfav no envía recordatorios de esas citas: los manda Ortosend.
-      </div>
-
+    <details className="card" open={!!c} style={{ marginTop: 10 }}>
+      <summary style={{ cursor: "pointer" }}>
+        <b>{prov.nombre}</b> {c?.externalClinicId ? <span className="pill g">Conectado</span> : <span className="tiny">· lee la agenda y apunta las citas</span>}
+      </summary>
       {!c && (
-        <form action={conectarDocfavAction} style={{ marginTop: 12 }}>
-          <label>Clave de API de Docfav</label>
-          <input name="apiKey" type="password" autoComplete="off" placeholder="df_pk_…" required />
+        <form action={conectarApiAction} style={{ marginTop: 10 }}>
+          <input type="hidden" name="kind" value={prov.kind} />
+          <label>Clave de API de {prov.nombre}</label>
+          <input name="apiKey" type="password" autoComplete="off" required />
           <div className="tiny" style={{ marginTop: 6 }}>
-            En Docfav: Mi cuenta → API Keys → Crear. Permisos: Appointments (read y write), Clients (read y write),
-            Staff, Staff Calendars, Calendars, Schedules, Services, Clinics y User (read). Se guarda cifrada.
+            {prov.ayuda} Se guarda cifrada.
           </div>
           <div className="sp" />
           <button type="submit" className="pri">
@@ -117,32 +106,27 @@ export async function ClinicaConector({ clinic, user }: { clinic: Clinic; user: 
           </button>
         </form>
       )}
-
-      {c && (
-        <div className="tiny" style={{ marginTop: 10 }}>
-          Clave {c.apiKeyHint} · Última lectura: {hace(c.lastSyncAt)}
-          {pendientes > 0 && <> · <span style={{ color: "var(--red)" }}>{pendientes} cita{pendientes === 1 ? "" : "s"} sin apuntar en Docfav (ver Agenda)</span></>}
-        </div>
-      )}
-      {c?.lastError && (
-        <div className="note a" style={{ marginTop: 8 }}>
-          {c.lastError}
+      {c && <Estado c={c} />}
+      {pendientes > 0 && (
+        <div className="tiny" style={{ color: "var(--red)", marginTop: 4 }}>
+          {pendientes} cita{pendientes === 1 ? "" : "s"} sin apuntar en {prov.nombre} (ver Agenda)
         </div>
       )}
       {errorVivo && (
         <div className="note r" style={{ marginTop: 8 }}>
-          No se pudo consultar Docfav: {errorVivo}
+          No se pudo consultar {prov.nombre}: {errorVivo}
         </div>
       )}
 
-      {c && !c.externalClinicId && clinicas.length > 0 && (
-        <form action={elegirClinicaDocfavAction} style={{ marginTop: 12 }}>
-          <label>¿Qué clínica de Docfav es esta?</label>
+      {c && !c.externalClinicId && cuentas.length > 0 && (
+        <form action={elegirCuentaAction} style={{ marginTop: 12 }}>
+          <input type="hidden" name="kind" value={prov.kind} />
+          <label>¿Qué clínica de {prov.nombre} es esta?</label>
           <select name="externalClinicId" required defaultValue="">
             <option value="" disabled>
               Elige…
             </option>
-            {clinicas.map((x) => (
+            {cuentas.map((x) => (
               <option key={x.id} value={x.id}>
                 {x.name}
               </option>
@@ -156,11 +140,14 @@ export async function ClinicaConector({ clinic, user }: { clinic: Clinic; user: 
       )}
 
       {c?.externalClinicId && !errorVivo && (
-        <form action={guardarConectorAction} style={{ marginTop: 12 }}>
-          <b style={{ fontSize: 14 }}>Clínica de Docfav: {c.externalClinicName}</b>
+        <form action={guardarConectorApiAction} style={{ marginTop: 12 }}>
+          <input type="hidden" name="kind" value={prov.kind} />
+          <b style={{ fontSize: 14 }}>
+            Clínica de {prov.nombre}: {c.externalClinicName}
+          </b>
           <div className="muted" style={{ marginTop: 4 }}>
-            Enlaza cada agenda de Ortosend con la agenda de su profesional en Docfav. Sus citas en cualquier sitio
-            (centro, domicilio…) ocupan su agenda; las de Ortosend se apuntan en la agenda elegida.
+            Enlaza cada agenda de Ortosend con la agenda de su profesional en {prov.nombre} (la del centro). Sus citas en cualquier
+            sitio ocupan su agenda; las de Ortosend se apuntan en la agenda elegida.
           </div>
           {agendas.map((a) => (
             <div className="rule-row" key={a.id ?? "clinica"}>
@@ -169,76 +156,186 @@ export async function ClinicaConector({ clinic, user }: { clinic: Clinic; user: 
                 <option value="">Sin enlazar</option>
                 {opciones.map((o) => (
                   <option key={o.id} value={o.id}>
-                    {o.label}
+                    {o.nombre}
                   </option>
                 ))}
               </select>
             </div>
           ))}
           <div className="grid g2" style={{ marginTop: 6 }}>
-            <div>
-              <label>Servicio de Docfav para las citas de Ortosend</label>
-              <select name="serviceId" defaultValue={c.serviceId && servicios.some((s) => s.id === c.serviceId) && c.serviceId !== porNombre?.id ? c.serviceId : ""}>
-                <option value="">
-                  {porNombre ? `Automático: «${porNombre.name}»` : `Automático: el que se llame «${c.serviceName}» (no existe todavía)`}
-                </option>
-                {servicios.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name} ({s.minutes} min)
-                  </option>
-                ))}
-              </select>
-              <input type="hidden" name="serviceName" value={c.serviceName} />
-              {!porNombre && (
-                <div className="tiny" style={{ marginTop: 4, color: "var(--amber)" }}>
-                  Crea en Docfav un servicio activo llamado «{c.serviceName}», de {clinic.slotMinutes} min, asignado a los
-                  profesionales enlazados, o elige aquí otro servicio.
-                </div>
-              )}
-            </div>
+            {prov.servicios ? (
+              <div>
+                <label>Servicio de {prov.nombre} para las citas de Ortosend</label>
+                <select
+                  name="serviceId"
+                  defaultValue={c.serviceId && servicios.some((s) => s.id === c.serviceId) && c.serviceId !== porNombre?.id ? c.serviceId : ""}
+                >
+                  <option value="">{porNombre ? `Automático: «${porNombre.name}»` : `Automático: el que se llame «${c.serviceName}» (no existe todavía)`}</option>
+                  {servicios.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name} ({s.minutes} min)
+                    </option>
+                  ))}
+                </select>
+                <input type="hidden" name="serviceName" value={c.serviceName} />
+                {!porNombre && (
+                  <div className="tiny" style={{ marginTop: 4, color: "var(--amber)" }}>
+                    Crea en {prov.nombre} un servicio activo llamado «{c.serviceName}», de {clinic.slotMinutes} min y a 0 €, asignado a los
+                    profesionales enlazados, o elige aquí otro.
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div />
+            )}
             <div>
               <label>&nbsp;</label>
-              <label className="chk" style={{ margin: 0 }}>
-                <input type="checkbox" name="pushAppointments" defaultChecked={c.pushAppointments} /> Apuntar en Docfav las
-                citas de Ortosend
-              </label>
+              {prov.apuntar && (
+                <label className="chk" style={{ margin: 0 }}>
+                  <input type="checkbox" name="pushAppointments" defaultChecked={c.pushAppointments} /> Apuntar en {prov.nombre} las citas de
+                  Ortosend
+                </label>
+              )}
               <label className="chk">
-                <input type="checkbox" name="respectHours" defaultChecked={c.respectHours} /> No ofrecer horas fuera del
-                horario de trabajo que tiene cada profesional en Docfav
+                <input type="checkbox" name="respectHours" defaultChecked={c.respectHours} /> No ofrecer horas fuera del horario de trabajo
+                que tiene cada profesional en {prov.nombre}
               </label>
             </div>
           </div>
           <div className="sp" />
-          <div className="row">
-            <button type="submit" className="pri">
-              Guardar y leer Docfav
-            </button>
-          </div>
+          <button type="submit" className="pri">
+            Guardar y leer {prov.nombre}
+          </button>
         </form>
       )}
 
       {c && (
-        <div className="row" style={{ marginTop: 12 }}>
-          {c.externalClinicId && (
-            <form action={sincronizarConectorAction}>
-              <button type="submit">Leer Docfav ahora</button>
-            </form>
-          )}
-          <details>
+        <>
+          <Acciones c={c} nombre={prov.nombre} />
+          <details style={{ marginTop: 8 }}>
             <summary className="tiny" style={{ cursor: "pointer" }}>
-              Cambiar la clave o desconectar
+              Cambiar la clave
             </summary>
-            <form action={conectarDocfavAction} className="row" style={{ marginTop: 8 }}>
-              <input name="apiKey" type="password" autoComplete="off" placeholder="Nueva clave df_pk_…" style={{ maxWidth: 280 }} required />
+            <form action={conectarApiAction} className="row" style={{ marginTop: 8 }}>
+              <input type="hidden" name="kind" value={prov.kind} />
+              <input name="apiKey" type="password" autoComplete="off" placeholder="Nueva clave" style={{ maxWidth: 280 }} required />
               <button type="submit">Cambiar clave</button>
             </form>
-            <form action={desconectarDocfavAction} style={{ marginTop: 8 }}>
-              <button type="submit" className="dang">
-                Desconectar Docfav
-              </button>
-            </form>
           </details>
-        </div>
+        </>
+      )}
+    </details>
+  );
+}
+
+function SeccionIcal({ prov, c, agendas }: { prov: ProveedorIcal; c: Conector | undefined; agendas: Agenda[] }) {
+  const guardado = (pid: string | null) => {
+    const l = c?.links.find((x) => x.professionalId === pid);
+    if (!l?.secretEnc) return null;
+    try {
+      const u = new URL(descifrar(l.secretEnc));
+      return `${u.hostname}/…${u.pathname.slice(-6)}`;
+    } catch {
+      return "enlace guardado";
+    }
+  };
+  return (
+    <details className="card" open={!!c?.links.length} style={{ marginTop: 10 }}>
+      <summary style={{ cursor: "pointer" }}>
+        <b>{prov.nombre}</b>{" "}
+        {c?.links.length ? <span className="pill g">{c.links.length} calendario{c.links.length === 1 ? "" : "s"}</span> : <span className="tiny">· solo lectura</span>}
+      </summary>
+      <div className="muted" style={{ marginTop: 8 }}>
+        Para clínicas cuyo programa no se conecta por API. Lo ocupado en el calendario de cada profesional deja de ofrecerse en
+        Ortosend. No apunta las citas de Ortosend allí: para verlas en ese calendario, suscríbelo al enlace iCal de Ortosend (pestaña
+        Agenda).
+      </div>
+      <div className="tiny" style={{ marginTop: 6 }}>
+        {prov.ayuda}
+      </div>
+      {c && <Estado c={c} />}
+      <form action={guardarIcalAction} style={{ marginTop: 10 }}>
+        {agendas.map((a) => {
+          const g = guardado(a.id);
+          const k = a.id ?? "clinica";
+          return (
+            <div className="rule-row" key={k} style={{ flexWrap: "wrap" }}>
+              <span style={{ flex: "1 1 180px" }}>{a.name}</span>
+              <input
+                name={`ical_${k}`}
+                type="url"
+                inputMode="url"
+                autoComplete="off"
+                placeholder={g ? `Guardado: ${g} (pega otro para cambiarlo)` : "https://… o webcal://… (enlace iCal privado)"}
+                style={{ flex: "2 1 280px" }}
+              />
+              {g && (
+                <label className="chk" style={{ margin: 0 }}>
+                  <input type="checkbox" name={`quitar_${k}`} /> Quitar
+                </label>
+              )}
+            </div>
+          );
+        })}
+        <div className="sp" />
+        <button type="submit" className="pri">
+          Guardar y leer calendarios
+        </button>
+      </form>
+      {c && <Acciones c={c} nombre="los calendarios" />}
+    </details>
+  );
+}
+
+export async function ClinicaConector({ clinic, user }: { clinic: Clinic; user: User }) {
+  const isAdmin = user.role === "ADMIN_CLINICA";
+  const conectores = await prisma.calendarConnector.findMany({ where: { clinicId: clinic.id }, include: { links: true } });
+  const de = (kind: string) => conectores.find((c) => c.kind === kind);
+
+  if (!isAdmin) {
+    return (
+      <div className="card" id="conector">
+        <b>Programas de agenda de la clínica</b>
+        {conectores.length === 0 && <div className="muted" style={{ marginTop: 6 }}>Ninguno conectado. Lo configura el administrador de la clínica.</div>}
+        {conectores.map((c) => {
+          const p = PROVEEDORES.find((x) => x.kind === c.kind);
+          return (
+            <div key={c.id} style={{ marginTop: 8 }}>
+              <div className="muted">
+                {p?.nombre ?? c.kind}: {c.links.length} agenda{c.links.length === 1 ? "" : "s"} enlazada{c.links.length === 1 ? "" : "s"} · última
+                lectura {hace(c.lastSyncAt)}
+              </div>
+              <form action={sincronizarConectorAction} style={{ marginTop: 6 }}>
+                <input type="hidden" name="connectorId" value={c.id} />
+                <button type="submit">Leer ahora</button>
+              </form>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  const equipo = await prisma.user.findMany({
+    where: { clinicId: clinic.id, active: true, role: { in: ["PROFESIONAL", "ADMIN_CLINICA"] } },
+    select: { id: true, name: true },
+    orderBy: { name: "asc" },
+  });
+  const agendas: Agenda[] = [{ id: null, name: "Agenda de la clínica (sala / equipo)" }, ...equipo];
+
+  return (
+    <div className="card" id="conector">
+      <b>Programas de agenda de la clínica</b>
+      <div className="muted" style={{ marginTop: 6 }}>
+        Conecta el programa con el que la clínica lleva su agenda para no dar en Ortosend horas que ya están ocupadas allí. Con los
+        programas que tienen API, Ortosend además apunta allí sus citas con la ficha del paciente.
+      </div>
+      {PROVEEDORES.map((p) =>
+        p.modo === "api" ? (
+          <SeccionApi key={p.kind} prov={p} c={de(p.kind)} clinic={clinic} agendas={agendas} />
+        ) : (
+          <SeccionIcal key={p.kind} prov={p} c={de(p.kind)} agendas={agendas} />
+        )
       )}
     </div>
   );

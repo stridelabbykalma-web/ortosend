@@ -38,7 +38,7 @@ export type AppointmentLike = {
   status: string;
 };
 
-// Tramo ocupado en el programa de gestión de la clínica (Docfav…): ocupa toda
+// Tramo ocupado en un programa de agenda de la clínica (Docfav, iCal…): ocupa toda
 // la agenda en ese rato, sea cual sea su capacidad.
 export type BusyLike = {
   professionalId: string | null;

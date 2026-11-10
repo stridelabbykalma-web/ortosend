@@ -149,11 +149,51 @@ anterior.
 
 Probado en local sobre una base con `Slot` reales antes de aplicar la migración.
 
-## Conector con el programa de gestión de la clínica (Docfav)
+## Conectores con los programas de agenda de la clínica
+
+Ortosend se conecta con el programa en el que la clínica ya lleva su agenda, para no ofrecer
+horas que estén ocupadas allí y, si el programa lo permite, apuntar allí las citas de
+Ortosend. Se configura en **Disponibilidad → Programas de agenda de la clínica** (solo el
+administrador). Una clínica puede tener varios a la vez (uno por programa).
+
+**Arquitectura.** Cada programa es un *proveedor* con su adaptador (`src/lib/conector/
+proveedor-*.ts`), con el contrato de `tipos.ts`, registrado en `registro.ts`. La parte común
+(`index.ts`) lee la ocupación a `ExternalBusy`, comprueba el hueco en tiempo real al
+reservar y copia las citas, sin saber de ningún programa concreto. Dos tipos:
+
+| Tipo | Qué hace | Programas |
+|---|---|---|
+| API (clave de la clínica) | Lee la ocupación, comprueba el hueco al reservar, apunta, anula y marca «no vino» con la ficha del paciente | Docfav |
+| Calendario iCal (enlace privado por agenda) | Solo lee la ocupación | Google Calendar, Outlook/Microsoft 365, Apple iCloud y cualquier programa que publique su agenda en iCal |
+
+Para que la clínica vea las citas de Ortosend en Google u Outlook sin API, basta con
+suscribir ese calendario al enlace iCal de Ortosend (pestaña Agenda). Ojo: Google refresca
+los calendarios suscritos cada varias horas.
+
+**Añadir un programa con API** = escribir `proveedor-<programa>.ts` (cuentas, agendas,
+servicios, leer, comprobar, apuntar, cambiarEstado, explicarError) y añadirlo a
+`PROVEEDORES`. La pantalla, el cron, la agenda y las reservas lo usan sin más cambios.
+
+### Calendarios iCal
+
+- Cada agenda de Ortosend recibe el enlace iCal privado del calendario de su profesional
+  (se guarda cifrado). Se aceptan `https://` y `webcal://`.
+- El lector (`ical.ts`) entiende horas en UTC, con zona (IANA o nombres de Windows de
+  Outlook) o flotantes; días enteros; DTEND o DURATION; repeticiones RRULE diaria, semanal
+  con BYDAY, mensual por día o por «n-ésimo día de la semana» y anual, con INTERVAL, COUNT,
+  UNTIL, EXDATE y ocurrencias movidas (RECURRENCE-ID). Descarta lo anulado, lo marcado como
+  «libre» (por eso los festivos de Google no bloquean) y las citas de Ortosend (UID
+  `…@ortosend`) para no contarlas dos veces.
+- La descarga (`red.ts`) solo va por https a servidores públicos: rechaza localhost, IP,
+  redes privadas y metadatos de la nube, comprueba cada redirección y corta por tiempo
+  (15 s) y tamaño (10 MB).
+- Si un calendario falla al leerse, se conserva su ocupación anterior y queda el aviso en
+  la tarjeta: mejor eso que ofrecer horas que pueden estar ocupadas.
+
+### Docfav
 
 Si la clínica lleva su agenda en Docfav, puede conectarlo para trabajar con una sola agenda.
-Se configura en **Disponibilidad → Programa de gestión de la clínica** (solo el
-administrador de la clínica).
+Se configura en la sección Docfav de la tarjeta.
 
 **Qué hace**
 
@@ -197,6 +237,21 @@ el contrato de encargado, el registro de actividades y la política de privacida
 de Ortosend (moverla o anularla allí) no vuelven a Ortosend; la clínica debe hacerlos desde
 Ortosend. Docfav no ofrece webhooks, así que la lectura es periódica.
 
+### Otros programas: qué se puede integrar (investigación de noviembre de 2026)
+
+| Programa | Acceso para terceros | Vía en Ortosend |
+|---|---|---|
+| Doctoralia / Docplanner (y Clinic Cloud, de su grupo) | API solo para partners (acuerdo con Docplanner, OAuth) | Pedir acuerdo de partner |
+| Clinni, Nubimed, Ofimedic | Sin API pública; integraciones por acuerdo | Pedir acuerdo, o iCal si lo exportan |
+| Flowww | API V2 REST solo con plan Ultimate | Adaptador cuando una clínica lo tenga |
+| Cliniko, Timify, SimplyBook.me, Reservio | API pública con clave o token | Adaptador cuando una clínica lo use (hace falta cuenta real para probarlo) |
+| Google Calendar, Microsoft 365 | API con OAuth (exige registrar y verificar la app) | Hoy por iCal; OAuth si hace falta tiempo real o escribir |
+| Medigest, DriCloud, Tufisio, Proodoss, Koibox | No se encontró API | iCal si lo exportan, o agenda bloqueada a mano |
+
+No hay datos públicos de cuota de mercado en podología; la lista sale de comparativas de
+fabricantes. Para cualquier programa sin API ni iCal, la clínica puede reservar en él las
+franjas que dedica a Ortosend y publicar solo esas en Disponibilidad.
+
 ## Ficheros
 
 | Fichero | Qué hace |
@@ -215,12 +270,15 @@ Ortosend. Docfav no ofrece webhooks, así que la lectura es periódica.
 | `src/components/panels/clinica-agenda.tsx` | Pestaña Agenda |
 | `src/components/panels/clinica-disponibilidad.tsx` | Pestaña Disponibilidad |
 | `src/app/panel/admin-actions.ts` | Recordatorio 24 h en `runJobs` |
+| `src/lib/conector/tipos.ts` y `registro.ts` | Contrato de los programas y lista de los disponibles |
+| `src/lib/conector/proveedor-docfav.ts` | Adaptador de Docfav |
+| `src/lib/conector/proveedor-ical.ts`, `ical.ts`, `red.ts` | Adaptador iCal, lector de iCal y descarga segura de enlaces |
 | `src/lib/conector/docfav.ts` | Cliente de la API de Docfav (sustituible en los tests) |
 | `src/lib/conector/ocupacion.ts` | Ocupación de Docfav → tramos ocupados (puro) |
-| `src/lib/conector/index.ts` | Lectura, comprobación al reservar y copia de citas |
+| `src/lib/conector/index.ts` | Parte común: lectura, comprobación al reservar y copia de citas |
 | `src/lib/secretos.ts` | Cifrado de la clave de API |
-| `src/app/panel/conector-actions.ts` | Conectar, enlazar, leer, desconectar y reintentar |
-| `src/components/panels/clinica-conector.tsx` | Tarjeta de Docfav en Disponibilidad |
+| `src/app/panel/conector-actions.ts` | Conectar por clave o iCal, enlazar, leer, desconectar y reintentar |
+| `src/components/panels/clinica-conector.tsx` | Tarjeta «Programas de agenda de la clínica» en Disponibilidad |
 
 ## Pendiente / ideas
 

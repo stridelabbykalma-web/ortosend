@@ -55,10 +55,10 @@ export async function loadClinicAgenda(db: Db, clinicId: string, from: LocalDate
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     }),
-    // Ocupación del programa externo (Docfav…) de la última lectura
+    // Ocupación de los programas de agenda de la clínica (última lectura)
     db.externalBusy.findMany({
       where: { clinicId, connector: { active: true }, startsAt: { lt: endUtc }, endsAt: { gt: startUtc } },
-      select: { professionalId: true, startsAt: true, endsAt: true, kind: true, externalId: true },
+      select: { professionalId: true, startsAt: true, endsAt: true, kind: true, externalId: true, connectorId: true },
     }),
   ]);
   // Reglas de profesionales que ya no están en la clínica no cuentan.
@@ -152,7 +152,7 @@ export async function bookAppointment(tx: Prisma.TransactionClient, input: BookI
     },
     input.startsAt
   );
-  // Última palabra del programa externo de la clínica: si en Docfav ya está
+  // Última palabra del programa de agenda de la clínica: si allí ya está
   // ocupado (se citó a alguien después de la última lectura), se prueba con la
   // siguiente agenda que ofrezca esa hora.
   let slot: SlotOption | null = null;
