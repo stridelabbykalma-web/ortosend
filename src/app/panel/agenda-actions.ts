@@ -9,7 +9,8 @@ import type { AppointmentKind, User } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { requireRole } from "@/lib/auth";
 import { pushEvent, avisarPaciente } from "@/lib/cases";
-import { activeAppointmentOf, bookAppointment, cancelAppointment } from "@/lib/agenda-db";
+import { activeAppointmentOf, bookAppointment, cancelAppointment, TX_RESERVA } from "@/lib/agenda-db";
+import { sincronizarCaso } from "@/lib/conector";
 import { agendaErrorMessage, parseSlot, type SlotOk } from "@/lib/reserva-form";
 import { localToDateColumn, parseDateKey, parseHHMM, zonedToUtc } from "@/lib/agenda";
 import { fechaTextoLarga, fmtdt } from "@/lib/format";
@@ -89,12 +90,14 @@ export async function darCitaAction(formData: FormData) {
         mode: "staff",
         force,
         replaceAppointmentId: replace,
-      })
+      }),
+      TX_RESERVA
     );
   } catch (e) {
     const msg = agendaErrorMessage(e);
     fail(back, msg === "Esa hora acaba de ser reservada por otra persona. Elige otra." ? "Esa hora no está libre en el horario de la agenda. Elige otra o marca «fuera de horario»." : msg);
   }
+  await sincronizarCaso(caseId);
   const pro = appt!.professionalId ? await prisma.user.findUnique({ where: { id: appt!.professionalId }, select: { name: true } }) : null;
   await pushEvent(
     caseId,
@@ -128,6 +131,7 @@ export async function cancelarCitaClinicaAction(formData: FormData) {
   } catch (e) {
     fail(back, agendaErrorMessage(e));
   }
+  await sincronizarCaso(appt!.caseId);
   await pushEvent(
     appt!.caseId,
     noShow

@@ -38,6 +38,15 @@ export type AppointmentLike = {
   status: string;
 };
 
+// Tramo ocupado en el programa de gestión de la clínica (Docfav…): ocupa toda
+// la agenda en ese rato, sea cual sea su capacidad.
+export type BusyLike = {
+  professionalId: string | null;
+  startsAt: Date;
+  endsAt: Date;
+  kind?: string;
+};
+
 export type ClinicAgendaSettings = {
   timezone: string;
   slotMinutes: number;
@@ -57,6 +66,7 @@ export type AvailabilityInput = {
   rules: RuleLike[];
   exceptions: ExceptionLike[];
   appointments: AppointmentLike[];
+  busy?: BusyLike[]; // ocupación del programa externo de la clínica
   from: LocalDate;
   to: LocalDate; // inclusive
   // online: solo franjas `online`, con antelación mínima y horizonte (web y panel del cliente).
@@ -284,6 +294,7 @@ export function computeAvailability(input: AvailabilityInput): Map<string, SlotO
     input.professionalId === undefined ? true : r === input.professionalId
   );
   const active = appointments.filter(isActiveAppointment);
+  const external = input.busy ?? [];
 
   for (let day = input.from; compareDates(day, input.to) <= 0; day = addDays(day, 1)) {
     if (horizonEnd && compareDates(day, horizonEnd) > 0) break;
@@ -292,11 +303,13 @@ export function computeAvailability(input: AvailabilityInput): Map<string, SlotO
     for (const resource of resources) {
       const windows = windowsForDay(resource, day, rules, exceptions).filter((w) => mode === "staff" || w.online);
       const busy = active.filter((a) => a.professionalId === resource);
+      const blocked = external.filter((b) => b.professionalId === resource);
       for (const w of windows) {
         for (let t = w.startMin; t + clinic.slotMinutes <= w.endMin; t += clinic.slotMinutes) {
           const startsAt = zonedToUtc(day, t, tz);
           const endsAt = new Date(startsAt.getTime() + clinic.slotMinutes * 60000);
           if (startsAt < earliest) continue;
+          if (blocked.some((b) => overlaps(b, startsAt, endsAt))) continue;
           const taken = busy.filter((a) => overlaps(a, startsAt, endsAt)).length;
           if (taken >= w.capacity) continue;
           slots.push({ startsAt, endsAt, professionalId: resource });
@@ -314,24 +327,32 @@ export function findSlot(
   input: Omit<AvailabilityInput, "from" | "to">,
   startsAt: Date
 ): SlotOption | null {
+  return findSlots(input, startsAt)[0] ?? null;
+}
+
+// Todas las agendas que ofrecen esa hora, en orden de preferencia: primero las
+// personales y luego la de la clínica. Al reservar se prueban en este orden
+// (el programa externo puede tener ocupada la primera).
+export function findSlots(input: Omit<AvailabilityInput, "from" | "to">, startsAt: Date): SlotOption[] {
   const day = localParts(startsAt, input.clinic.timezone);
   const map = computeAvailability({ ...input, from: day, to: day });
-  const slots = map.get(dateKey(day)) ?? [];
-  const same = slots.filter((s) => s.startsAt.getTime() === startsAt.getTime());
-  if (!same.length) return null;
-  // Sin preferencia de profesional: primero una agenda personal, luego la de la clínica.
-  return same.find((s) => s.professionalId !== null) ?? same[0];
+  const same = (map.get(dateKey(day)) ?? []).filter((s) => s.startsAt.getTime() === startsAt.getTime());
+  return [...same.filter((s) => s.professionalId !== null), ...same.filter((s) => s.professionalId === null)];
 }
 
 // Hueco fuera de horario (solo personal de clínica, con «forzar»): basta con
 // que la agenda elegida no tenga otra cita solapada.
+// El programa externo sí cuenta salvo su «fuera de horario», que es justo lo
+// que el personal decide saltarse al forzar.
 export function isFreeIgnoringSchedule(
   appointments: AppointmentLike[],
   professionalId: string | null,
   startsAt: Date,
-  endsAt: Date
+  endsAt: Date,
+  busy: BusyLike[] = []
 ) {
-  return !appointments.some(
-    (a) => isActiveAppointment(a) && a.professionalId === professionalId && overlaps(a, startsAt, endsAt)
+  return (
+    !appointments.some((a) => isActiveAppointment(a) && a.professionalId === professionalId && overlaps(a, startsAt, endsAt)) &&
+    !busy.some((b) => b.kind !== "fuera_horario" && b.professionalId === professionalId && overlaps(b, startsAt, endsAt))
   );
 }

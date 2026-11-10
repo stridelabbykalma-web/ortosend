@@ -62,7 +62,13 @@ propios casos), registro de accesos a datos de salud y trazabilidad de acciones.
 
 ## 7. Subencargados y asistencia
 
-La Clínica **no subcontratará** el tratamiento. Asistirá a Ortosend en la respuesta a los
+La Clínica **no subcontratará** el tratamiento, con una única excepción autorizada: si
+conecta su **programa de gestión de agenda** a Ortosend (de momento, Docfav), Ortosend
+registrará en él, por cuenta de la Clínica, el nombre, teléfono y email del paciente y la
+fecha, hora y tipo de cada cita, **sin ningún contenido clínico**. La Clínica declara tener
+firmado con ese proveedor un contrato de encargo del art. 28 RGPD y garantiza que solo su
+personal accede a esos datos. La clave de acceso que entrega a Ortosend se guarda cifrada y
+puede revocarla en cualquier momento desde el propio programa. Asistirá a Ortosend en la respuesta a los
 derechos de los interesados (remitiéndole sin dilación cualquier solicitud recibida) y en la
 notificación de violaciones de seguridad, que comunicará a Ortosend **en un máximo de 24
 horas** desde que las conozca, con la información disponible.
@@ -70,7 +76,9 @@ horas** desde que las conozca, con la información disponible.
 ## 8. Fin del tratamiento
 
 Al terminar la relación, la Clínica devolverá a Ortosend y suprimirá cualquier dato que
-obrara fuera de la plataforma, y sus cuentas serán desactivadas. La documentación clínica se
+obrara fuera de la plataforma, salvo las fichas y citas de su programa de gestión que
+correspondan a pacientes que también lo sean de la propia Clínica, y sus cuentas serán
+desactivadas. La documentación clínica se
 conserva por Ortosend durante los plazos legales (mínimo 5 años).
 
 ## 9. Auditoría

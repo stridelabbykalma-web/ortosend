@@ -9,7 +9,8 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { createSession, getSessionUser, hashPassword } from "@/lib/auth";
 import { notifyOwner, pushEvent, avisarPaciente } from "@/lib/cases";
-import { bookAppointment } from "@/lib/agenda-db";
+import { bookAppointment, TX_RESERVA } from "@/lib/agenda-db";
+import { sincronizarCaso } from "@/lib/conector";
 import { agendaErrorMessage, parseSlot, type SlotOk } from "@/lib/reserva-form";
 import { fechaTextoLarga, fmtdt } from "@/lib/format";
 import { isValidPhone, normalizeEmail, normalizePhone } from "@/lib/contacto";
@@ -117,10 +118,12 @@ export async function reservaAction(formData: FormData) {
         mode: "online",
       });
       return { userId: user.id, caseId: kase.id, startsAt: appt.startsAt };
-    });
+    }, TX_RESERVA);
   } catch (e) {
     back(agendaErrorMessage(e));
   }
+  // Copia de la cita en el programa de la clínica (Docfav), si está conectado.
+  await sincronizarCaso(result!.caseId);
 
   await pushEvent(
     result!.caseId,
@@ -224,10 +227,11 @@ export async function reservaClienteAction(formData: FormData) {
         mode: "online",
       });
       return { caseId: kase.id, startsAt: appt.startsAt, patientId: patient.id, patientName: patient.name };
-    });
+    }, TX_RESERVA);
   } catch (e) {
     back(agendaErrorMessage(e));
   }
+  await sincronizarCaso(result!.caseId);
   await pushEvent(
     result!.caseId,
     `Cita reservada online desde la cuenta del cliente — ${fmtdt(result!.startsAt)}${declara ? ` · ${declara}` : ""}`,

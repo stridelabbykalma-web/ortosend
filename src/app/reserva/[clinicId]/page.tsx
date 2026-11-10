@@ -248,8 +248,10 @@ export default async function ReservaPage({
           </label>
         </div>
         <div className="tiny" style={{ marginTop: 10 }}>
-          Responsable: Ortosend. Finalidad: gestionar tu cita, estudio y tratamiento. Derechos de
-          acceso, rectificación y supresión en la <a href="/legal/privacidad">política de privacidad</a>.
+          Responsable: Ortosend. Finalidad: gestionar tu cita, estudio y tratamiento. Tu nombre,
+          contacto y la hora de la cita llegan a la clínica (y a su programa de agenda, si lo tiene
+          conectado) para que te atienda. Derechos de acceso, rectificación y supresión en la{" "}
+          <a href="/legal/privacidad">política de privacidad</a>.
         </div>
         <div className="sp" />
         <button type="submit" className="pri wfull">

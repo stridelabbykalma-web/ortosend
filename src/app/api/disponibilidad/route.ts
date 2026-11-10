@@ -7,6 +7,7 @@ import { prisma } from "@/lib/db";
 import { getSessionUser } from "@/lib/auth";
 import { addDays, compareDates, dateKey, parseDateKey, todayLocal } from "@/lib/agenda";
 import { agendaResources, availabilityOf, loadClinicAgenda } from "@/lib/agenda-db";
+import { asegurarOcupacionFresca } from "@/lib/conector";
 
 export const dynamic = "force-dynamic";
 
@@ -48,6 +49,8 @@ export async function GET(request: Request) {
   const proParam = searchParams.get("pro");
   const professionalId = !proParam ? undefined : proParam === "clinica" ? null : proParam;
 
+  // Ocupación del programa de la clínica (Docfav) al día antes de calcular.
+  await asegurarOcupacionFresca(clinicId);
   const agenda = await loadClinicAgenda(prisma, clinicId, from, to);
   const map = availabilityOf(agenda, from, to, mode, professionalId);
 

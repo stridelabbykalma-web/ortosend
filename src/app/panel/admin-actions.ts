@@ -103,7 +103,7 @@ export async function runJobsAction() {
   redirect(
     "/panel?ok=" +
       encodeURIComponent(
-        `Mantenimiento: ${res.expired} enlaces caducados, ${res.reminders} recordatorios de pago, ${res.citas} recordatorios de cita, ${res.mayoria} avisos de mayoría de edad, ${res.invitaciones} recordatorios de alta por WhatsApp, ${res.caducadas} altas caducadas, ${res.emailsReintentados} emails reintentados`
+        `Mantenimiento: ${res.expired} enlaces caducados, ${res.reminders} recordatorios de pago, ${res.citas} recordatorios de cita, ${res.mayoria} avisos de mayoría de edad, ${res.invitaciones} recordatorios de alta por WhatsApp, ${res.caducadas} altas caducadas, ${res.emailsReintentados} emails reintentados, ${res.conectores.lecturas} agendas de Docfav leídas`
       )
   );
 }

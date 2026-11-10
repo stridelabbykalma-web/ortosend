@@ -149,6 +149,54 @@ anterior.
 
 Probado en local sobre una base con `Slot` reales antes de aplicar la migración.
 
+## Conector con el programa de gestión de la clínica (Docfav)
+
+Si la clínica lleva su agenda en Docfav, puede conectarlo para trabajar con una sola agenda.
+Se configura en **Disponibilidad → Programa de gestión de la clínica** (solo el
+administrador de la clínica).
+
+**Qué hace**
+
+1. **Lee lo ocupado en Docfav** y no lo ofrece en Ortosend: las citas de cada profesional
+   en cualquier sitio (centro, domicilio…), sus reservas de tiempo y ausencias y, con la
+   opción «respetar horario», todo lo que queda fuera de su horario de trabajo en la agenda
+   enlazada. Se guarda en `ExternalBusy` y el motor lo resta como una cita que llena la
+   agenda. Se relee si la última lectura tiene más de 5 minutos al abrir el calendario o la
+   agenda, en el cron diario y con el botón «Leer Docfav ahora».
+2. **Comprueba el hueco en Docfav justo antes de reservar** (`check-availability`). Si se
+   citó a alguien allí después de la última lectura, prueba la siguiente agenda que ofrezca
+   esa hora o rechaza la reserva. Si Docfav no responde no se bloquea la reserva.
+3. **Apunta en Docfav cada cita de Ortosend** en la agenda enlazada, con el servicio
+   «Ortosend» (o el elegido), sin recordatorio de Docfav y con la nota
+   `Ortosend · caso #N · tipo`. La ficha del paciente se busca por móvil o email y nombre;
+   si no existe se crea con los datos de su cuenta (menores: nombre del menor y contacto del
+   tutor; si el email ya es de otra ficha, se crea sin email). Al anular, cambiar de hora o
+   marcar «no vino» en Ortosend se refleja en Docfav. Si algo falla, la cita queda en error
+   en la agenda con «Reintentar» y «Apuntar igualmente», y el cron lo reintenta.
+
+**Configuración**
+
+- Clave de API de Docfav (Mi cuenta → API Keys) con permisos Appointments read/write,
+  Clients read/write, Staff, Staff Calendars, Calendars, Schedules, Services, Clinics y User
+  read. Se guarda cifrada con AES-256-GCM (`CONNECTOR_SECRET`, o `AUTH_SECRET` si no
+  existe). Si esa variable cambia, hay que volver a introducir la clave.
+- Enlace de cada agenda de Ortosend con la agenda de su profesional en Docfav.
+- Servicio: crear en Docfav un servicio activo llamado «Ortosend» de la duración de la cita,
+  asignado a los profesionales enlazados, o elegir otro.
+
+**Diferencias de la API real con su documentación** (comprobadas en noviembre de 2026):
+crear una cita exige paciente; el estado «pending» no existe (son confirmed, unconfirmed y
+cancelled); solo valen servicios activos; en `available-slots` los campos `from`/`to`
+llevan la marca Z pero son hora local. Límite: 1.000 peticiones por hora y clave.
+
+**Protección de datos.** A Docfav solo llegan nombre, teléfono, email y fecha, hora y tipo
+de cita, nunca contenido clínico. Docfav actúa como subencargado de la clínica: recogido en
+el contrato de encargado, el registro de actividades y la política de privacidad.
+
+**No cubierto todavía.** Los cambios hechos directamente en Docfav sobre una cita que vino
+de Ortosend (moverla o anularla allí) no vuelven a Ortosend; la clínica debe hacerlos desde
+Ortosend. Docfav no ofrece webhooks, así que la lectura es periódica.
+
 ## Ficheros
 
 | Fichero | Qué hace |
@@ -167,6 +215,12 @@ Probado en local sobre una base con `Slot` reales antes de aplicar la migración
 | `src/components/panels/clinica-agenda.tsx` | Pestaña Agenda |
 | `src/components/panels/clinica-disponibilidad.tsx` | Pestaña Disponibilidad |
 | `src/app/panel/admin-actions.ts` | Recordatorio 24 h en `runJobs` |
+| `src/lib/conector/docfav.ts` | Cliente de la API de Docfav (sustituible en los tests) |
+| `src/lib/conector/ocupacion.ts` | Ocupación de Docfav → tramos ocupados (puro) |
+| `src/lib/conector/index.ts` | Lectura, comprobación al reservar y copia de citas |
+| `src/lib/secretos.ts` | Cifrado de la clave de API |
+| `src/app/panel/conector-actions.ts` | Conectar, enlazar, leer, desconectar y reintentar |
+| `src/components/panels/clinica-conector.tsx` | Tarjeta de Docfav en Disponibilidad |
 
 ## Pendiente / ideas
 
