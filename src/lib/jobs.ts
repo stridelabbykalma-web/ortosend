@@ -158,7 +158,7 @@ export async function runJobs() {
   await limpiarRateLimit();
   // Emails que no salieron en su momento (proveedor sin configurar o caído).
   const emailsReintentados = await reintentarEmailsPendientes();
-  // Programa de gestión de las clínicas (Docfav): relee la ocupación y reintenta
+  // Programas de agenda de las clínicas (Docfav, iCal…): relee la ocupación y reintenta
   // las citas que no se pudieron apuntar o anular allí.
   const conectores = await mantenimientoConectores().catch((e) => {
     console.error("[cron] conectores", e);

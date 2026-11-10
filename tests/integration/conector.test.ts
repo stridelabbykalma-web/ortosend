@@ -8,6 +8,7 @@ import { leerOcupacion, mantenimientoConectores, sincronizarCaso } from "@/lib/c
 import { availabilityOf, bookAppointment, cancelAppointment, loadClinicAgenda, TX_RESERVA, AgendaError } from "@/lib/agenda-db";
 import { addDays, dateKey, isoWeekday, todayLocal, zonedToUtc, type LocalDate } from "@/lib/agenda";
 import { cifrar } from "@/lib/secretos";
+import { usarDescargador } from "@/lib/conector/red";
 import { FakeDocfav } from "../fake-docfav";
 
 const TZ = "Europe/Madrid";
@@ -237,5 +238,75 @@ describe("ocupación de Docfav en la disponibilidad", () => {
     );
     // 09:00 la ocupa la cita de Ortosend; 10:30 la de Docfav en el domicilio.
     expect(horas).toEqual(["09:45", "11:15", "12:00"]);
+  });
+});
+
+describe("calendarios iCal (Google, Outlook, Apple u otro programa)", () => {
+  afterAll(() => usarDescargador(null));
+
+  it("lo ocupado en el calendario de cada profesional deja de ofrecerse; si un calendario falla se conserva lo anterior", async () => {
+    const { clinic, pro } = await escenario();
+    // Sin conector de Docfav en esta clínica: solo el calendario iCal.
+    await prisma.calendarConnector.deleteMany({ where: { clinicId: clinic.id } });
+    const ical = await prisma.calendarConnector.create({
+      data: {
+        clinicId: clinic.id,
+        kind: "ICAL",
+        links: {
+          create: [
+            {
+              professionalId: pro.id,
+              externalCalendarId: `ical:${pro.id}`,
+              externalPlaceId: "ical",
+              externalStaffId: `ical:${pro.id}`,
+              externalName: "Abraham · calendario google",
+              secretEnc: cifrar("https://calendar.google.com/calendar/ical/abraham/private-x/basic.ics"),
+            },
+          ],
+        },
+      },
+    });
+    const ev = (uid: string, ini: Date, fin: Date) =>
+      ["BEGIN:VEVENT", `UID:${uid}`, `DTSTART:${ini.toISOString().replace(/[-:]|\.\d{3}/g, "")}`, `DTEND:${fin.toISOString().replace(/[-:]|\.\d{3}/g, "")}`, "END:VEVENT"].join("\r\n");
+    let texto = ["BEGIN:VCALENDAR", ev("g1", a(630), a(690)), ev("cita9@ortosend", a(540), a(585)), "END:VCALENDAR"].join("\r\n");
+    const pedidos: string[] = [];
+    usarDescargador(async (url) => {
+      pedidos.push(url);
+      if (!texto) throw new Error("caído");
+      return texto;
+    });
+
+    expect(await leerOcupacion(ical.id)).toMatchObject({ ok: true, tramos: 1 });
+    expect(pedidos).toEqual(["https://calendar.google.com/calendar/ical/abraham/private-x/basic.ics"]);
+    const horas = async () =>
+      (availabilityOf(await loadClinicAgenda(prisma, clinic.id, LUNES, LUNES), LUNES, LUNES, "online", pro.id).get(dateKey(LUNES)) ?? []).map((s) =>
+        s.startsAt.toLocaleTimeString("es-ES", { timeZone: TZ, hour: "2-digit", minute: "2-digit" })
+      );
+    // 10:30–11:30 ocupado en Google: caen 10:30 y 11:15. La copia de Ortosend (UID @ortosend) no cuenta.
+    expect(await horas()).toEqual(["09:00", "09:45", "12:00"]);
+
+    // El calendario deja de responder: se conserva la ocupación anterior y queda el aviso.
+    texto = "";
+    expect(await leerOcupacion(ical.id)).toMatchObject({ ok: true });
+    expect(await horas()).toEqual(["09:00", "09:45", "12:00"]);
+    expect((await prisma.calendarConnector.findUniqueOrThrow({ where: { id: ical.id } })).lastError).toMatch(/Abraham · calendario google: caído/);
+  });
+
+  it("con iCal no se intenta apuntar la cita (solo lectura)", async () => {
+    const { clinic, pro } = await escenario();
+    await prisma.calendarConnector.deleteMany({ where: { clinicId: clinic.id } });
+    await prisma.calendarConnector.create({
+      data: {
+        clinicId: clinic.id,
+        kind: "ICAL",
+        links: { create: [{ professionalId: pro.id, externalCalendarId: "ical:x", externalPlaceId: "ical", externalStaffId: "ical:x", externalName: "x" }] },
+      },
+    });
+    const p = await paciente(clinic.id, { name: "Iris", phone: "633999010", email: "i10@conector.test" });
+    const k = await caso(clinic.id, p.id);
+    const appt = await reservar(clinic.id, k.id, a(540, addDays(LUNES, 3)));
+    await sincronizarCaso(k.id);
+    expect(await prisma.appointment.findUniqueOrThrow({ where: { id: appt.id } })).toMatchObject({ externalId: null, externalState: null });
+    expect(df.citas).toEqual([]);
   });
 });

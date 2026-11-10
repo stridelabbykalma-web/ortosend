@@ -241,7 +241,7 @@ export async function reprogramarCitaAction(formData: FormData) {
   } catch (e) {
     fail(back, agendaErrorMessage(e));
   }
-  // Anula en Docfav la cita anterior y apunta la nueva (si la clínica lo tiene conectado).
+  // Anula en el programa de la clínica la cita anterior y apunta la nueva (si lo tiene conectado).
   await sincronizarCaso(caseId);
   await pushEvent(
     caseId,

@@ -235,6 +235,7 @@ model Appointment {
   externalState  String? // creada | cancelada | no_presentado | borrada | sin_enlace
   externalError  String? // último error al sincronizarla (se reintenta en el cron)
   externalAt     DateTime? // última sincronización correcta
+  externalConnectorId String? // conector (programa) donde está la copia
   createdAt      DateTime          @default(now())
 
   @@index([clinicId, startsAt])
@@ -803,10 +804,10 @@ model CalendarConnector {
   id              String   @id @default(cuid())
   clinicId        String
   clinic          Clinic   @relation(fields: [clinicId], references: [id], onDelete: Cascade)
-  kind            String   // "DOCFAV"
+  kind            String   // programa: "DOCFAV" | "ICAL" (ver src/lib/conector/registro.ts)
   active          Boolean  @default(true)
-  apiKeyEnc       String   // clave de API cifrada (AES-256-GCM, ver src/lib/secretos.ts)
-  apiKeyHint      String   // últimos caracteres, para reconocerla en pantalla
+  apiKeyEnc       String?  // clave de API cifrada (AES-256-GCM, ver src/lib/secretos.ts); iCal no usa
+  apiKeyHint      String?  // últimos caracteres, para reconocerla en pantalla
   externalClinicId String? // clínica (back office) dentro del programa
   externalClinicName String?
   serviceName     String   @default("Ortosend") // servicio con el que se apuntan las citas
@@ -836,6 +837,7 @@ model ConnectorLink {
   externalPlaceId  String // sitio o gabinete (centro, domicilio…) de esa agenda
   externalStaffId  String // profesional en el programa: sus citas en CUALQUIER sitio ocupan la agenda
   externalName     String // nombre del profesional y del sitio, para pantalla
+  secretEnc        String? // iCal: enlace privado del calendario de esta agenda, cifrado
 
   @@unique([connectorId, externalCalendarId])
 }

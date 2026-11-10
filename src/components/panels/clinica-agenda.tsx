@@ -21,6 +21,7 @@ import {
 } from "@/lib/agenda";
 import { availabilityOf, loadClinicAgenda } from "@/lib/agenda-db";
 import { asegurarOcupacionFresca } from "@/lib/conector";
+import { proveedorDe } from "@/lib/conector/registro";
 import { cancelarCitaClinicaAction, darCitaAction, icalTokenAction } from "@/app/panel/agenda-actions";
 import { reintentarCitaExternaAction } from "@/app/panel/conector-actions";
 import { Calendario } from "@/components/reserva/calendario";
@@ -53,9 +54,19 @@ export async function ClinicaAgenda({
   const agenda = await loadClinicAgenda(prisma, clinic.id, monday, sunday);
   const proFilter = !pro ? undefined : pro === "clinica" ? null : pro;
   const free = availabilityOf(agenda, monday, sunday, "staff", proFilter);
-  // Ocupado en el programa de la clínica (Docfav): citas, bloqueos y ausencias
+  // Ocupado en los programas de agenda de la clínica: citas, bloqueos y ausencias
   // (lo de «fuera de horario» no se pinta: ya se ve en los huecos libres).
-  const conDocfav = await prisma.calendarConnector.count({ where: { clinicId: clinic.id, active: true, externalClinicId: { not: null } } });
+  const conectores = await prisma.calendarConnector.findMany({ where: { clinicId: clinic.id, active: true }, select: { id: true, kind: true } });
+  const corto = (connectorId: string | null | undefined) => {
+    const k = conectores.find((c) => c.id === connectorId)?.kind;
+    return (k && proveedorDe(k)?.corto) || "el programa de la clínica";
+  };
+  // ¿Algún programa conectado apunta las citas de Ortosend? (si no, no se muestra su estado)
+  const apuntan = conectores.filter((c) => {
+    const p = proveedorDe(c.kind);
+    return p?.modo === "api" && !!p.apuntar;
+  });
+  const destinoApunte = apuntan.length === 1 ? proveedorDe(apuntan[0].kind)!.corto : "el programa de la clínica";
   const ocupadoFuera = new Map<string, typeof agenda.busy>();
   for (const b of agenda.busy) {
     if (b.kind === "fuera_horario") continue;
@@ -183,14 +194,14 @@ export async function ClinicaAgenda({
                         Caso #{a.case.number} · <StatePill state={a.case.state} />
                       </div>
                       {a.notes && <div className="tiny">{a.notes}</div>}
-                      {conDocfav > 0 && !off && a.status !== "COMPLETADA" && (
+                      {apuntan.length > 0 && !off && a.status !== "COMPLETADA" && (
                         <div className="tiny">
-                          {a.externalState === "creada" && <span style={{ color: "var(--green)" }}>✓ Apuntada en Docfav</span>}
-                          {a.externalState === "enviando" && "Apuntándola en Docfav…"}
-                          {a.externalState === "sin_enlace" && "Agenda sin enlazar con Docfav (Disponibilidad)"}
+                          {a.externalState === "creada" && <span style={{ color: "var(--green)" }}>✓ Apuntada en {corto(a.externalConnectorId)}</span>}
+                          {a.externalState === "enviando" && `Apuntándola en ${destinoApunte}…`}
+                          {a.externalState === "sin_enlace" && `Agenda sin enlazar con ${destinoApunte} (Disponibilidad)`}
                           {a.externalState === "error" && (
                             <>
-                              <span style={{ color: "var(--red)" }}>No apuntada en Docfav: {a.externalError}</span>
+                              <span style={{ color: "var(--red)" }}>No apuntada en {destinoApunte}: {a.externalError}</span>
                               <form action={reintentarCitaExternaAction} className="row" style={{ gap: 6, marginTop: 4 }}>
                                 <input type="hidden" name="appointmentId" value={a.id} />
                                 <input type="hidden" name="back" value={back} />
@@ -237,11 +248,11 @@ export async function ClinicaAgenda({
                 );
               })}
               {fuera.map((b, j) => (
-                <div key={`ext${j}`} className="appt ext" title="Ocupado en Docfav: no se ofrece en Ortosend">
+                <div key={`ext${j}`} className="appt ext" title={`Ocupado en ${corto(b.connectorId)}: no se ofrece en Ortosend`}>
                   <span className="t">
                     {hora.format(b.startsAt)}–{hora.format(b.endsAt)}
                   </span>{" "}
-                  {b.kind === "ausencia" ? "Ausencia" : b.kind === "bloqueo" ? "Bloqueado" : "Ocupado"} en Docfav
+                  {b.kind === "ausencia" ? "Ausencia" : b.kind === "bloqueo" ? "Bloqueado" : "Ocupado"} en {corto(b.connectorId)}
                   <div className="who">{nombreAgenda(b.professionalId)}</div>
                 </div>
               ))}

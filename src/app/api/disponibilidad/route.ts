@@ -49,7 +49,7 @@ export async function GET(request: Request) {
   const proParam = searchParams.get("pro");
   const professionalId = !proParam ? undefined : proParam === "clinica" ? null : proParam;
 
-  // Ocupación del programa de la clínica (Docfav) al día antes de calcular.
+  // Ocupación de los programas de agenda de la clínica al día antes de calcular.
   await asegurarOcupacionFresca(clinicId);
   const agenda = await loadClinicAgenda(prisma, clinicId, from, to);
   const map = availabilityOf(agenda, from, to, mode, professionalId);

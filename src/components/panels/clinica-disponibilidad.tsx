@@ -122,7 +122,7 @@ export async function ClinicaDisponibilidad({ clinic, user }: { clinic: Clinic; 
       </div>
       <div className="sp" />
 
-      {/* --- Programa de gestión de la clínica (Docfav) --- */}
+      {/* --- Programas de agenda de la clínica (Docfav, calendarios iCal…) --- */}
       <ClinicaConector clinic={clinic} user={user} />
       <div className="sp" />
 
