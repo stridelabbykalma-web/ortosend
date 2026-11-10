@@ -109,6 +109,9 @@ export async function PanelTaller({ user, tab }: { user: User; tab?: string }) {
               </button>
             </form>
             <span className="tiny">O tira de una fase concreta desde su columna.</span>
+            <Link href="/taller" className="btn">
+              📱 Taller en el móvil (escanear materiales)
+            </Link>
           </div>
         )}
         <div className="sp" />

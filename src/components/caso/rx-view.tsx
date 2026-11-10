@@ -9,6 +9,7 @@ import {
 } from "@/app/panel/rx-actions";
 import { REVISION_PREFIJO } from "@/lib/rx-route";
 import { MEDIA_LABEL } from "@/lib/format";
+import { PIEZAS_RECETA } from "@/lib/piezas-receta";
 
 // Pruebas del protocolo que se pueden señalar al pedir repetición (su check se invalida).
 const PRUEBAS_REPETIBLES = Object.entries(MEDIA_LABEL).filter(([k]) => k !== "foto_calidad");
@@ -95,6 +96,63 @@ export function RxView({
             <textarea name="orderRight" rows={2} placeholder="Solo lo específico del derecho. Vacío = igual que la receta general." />
           </div>
         </div>
+        <details style={{ marginTop: 12 }}>
+          <summary style={{ cursor: "pointer", fontWeight: 600 }}>
+            Piezas para el taller (opcional): márcalas y el programa del taller las pone en el molde
+          </summary>
+          <div className="tiny muted" style={{ margin: "6px 0" }}>
+            Valores pensados para plantilla rígida. Marca en qué pie va cada una; el técnico las revisa al
+            hacer el molde. Lo que escribas arriba sigue siendo la receta.
+          </div>
+          <table className="tiny" style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead>
+              <tr style={{ textAlign: "left" }}>
+                <th>Pieza</th>
+                <th style={{ textAlign: "center" }}>Izq.</th>
+                <th style={{ textAlign: "center" }}>Dcho.</th>
+                <th>Valor</th>
+                <th>Tipo</th>
+              </tr>
+            </thead>
+            <tbody>
+              {PIEZAS_RECETA.map((p) => (
+                <tr key={p.tipo} style={{ borderTop: "1px solid var(--line, #e5e7eb)" }}>
+                  <td>{p.nombre}</td>
+                  <td style={{ textAlign: "center" }}>
+                    <input type="checkbox" name={`pz_${p.tipo}_I`} aria-label={`${p.nombre} pie izquierdo`} />
+                  </td>
+                  <td style={{ textAlign: "center" }}>
+                    <input type="checkbox" name={`pz_${p.tipo}_D`} aria-label={`${p.nombre} pie derecho`} />
+                  </td>
+                  <td>
+                    <input
+                      name={`pz_${p.tipo}_valor`}
+                      type="number"
+                      step="0.5"
+                      min={p.min}
+                      max={p.max}
+                      defaultValue={p.defecto}
+                      style={{ width: 70 }}
+                      aria-label={`${p.nombre}: valor en ${p.unidad}`}
+                    />{" "}
+                    {p.unidad}
+                  </td>
+                  <td>
+                    {p.sentidos && (
+                      <select name={`pz_${p.tipo}_sentido`} defaultValue={p.sentidos[0][0]} aria-label={`${p.nombre}: tipo`}>
+                        {p.sentidos.map(([valor, texto]) => (
+                          <option key={valor} value={valor}>
+                            {texto}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </details>
         <label>Pauta de uso para el paciente</label>
         <textarea
           name="usageGuidelines"

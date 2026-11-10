@@ -1,5 +1,5 @@
 // Operaciones del taller sobre un caso, compartidas por el panel web (server actions)
-// y por la API del Rectificador (programa del taller): mismas guardas, mismo registro
+// y por la API dOrtosend Taller (programa del taller): mismas guardas, mismo registro
 // de auditoría y mismos eventos en el historial del caso.
 import type { Prisma, User } from "@prisma/client";
 import { prisma } from "./db";
@@ -44,12 +44,21 @@ export async function marcarMecanizado(caseId: string, user: Pick<User, "id" | "
 }
 
 // Confección terminada (trazabilidad del material) → control de calidad.
-export async function marcarConfeccion(caseId: string, user: Pick<User, "id" | "name">, material: string) {
+export async function marcarConfeccion(caseId: string, user: Pick<User, "id" | "name">, material = "") {
   const kase = await casoParaEditar(caseId, user);
   if (kase.state !== "FABRICACION" || kase.fabPhase !== "CONFECCION")
     throw new ErrorTaller("El caso no está en confección");
-  const mat = material.trim();
-  if (!mat) throw new ErrorTaller("Registra el material/lote para trazabilidad", 400);
+  // Trazabilidad: sin los materiales registrados (foto del código de barras de cada plancha) no se termina.
+  const consumos = await prisma.consumoMaterial.findMany({
+    where: { caseId, anuladoAt: null },
+    include: { lote: true, material: true },
+    orderBy: { createdAt: "asc" },
+  });
+  if (consumos.length === 0)
+    throw new ErrorTaller("Registra antes los materiales usados (foto del código de barras de cada plancha)", 409);
+  const mat =
+    material.trim() ||
+    [...new Set(consumos.map((c) => `${c.material?.nombre ?? "Material"} lote ${c.lote.lote}`))].join(", ");
   await prisma.case.update({
     where: { id: kase.id },
     data: { state: "CALIDAD", material: mat, openBy: null, openAt: null },
@@ -191,13 +200,16 @@ export function limpiarMaterial(entrada: unknown): DatosMaterial {
 
 // Guarda el catálogo entero tal como llega del programa. Los materiales que ya no
 // vienen se desactivan (no se borran: hojas antiguas pueden usarlos).
-export async function guardarMateriales(entrada: unknown) {
+// Sin `conPrecios` (el taller) no se tocan precio ni rendimiento: los nuevos quedan a 0 hasta que el
+// administrador los ponga.
+export async function guardarMateriales(entrada: unknown, { conPrecios = true } = {}) {
   if (!Array.isArray(entrada)) throw new ErrorTaller("Se esperaba una lista de materiales", 400);
   const lista = entrada.map(limpiarMaterial);
   const vistos = new Set<string>();
   await prisma.$transaction(async (tx) => {
     for (const m of lista) {
-      const { id, ...datos } = m;
+      const { id, precioCents, paresPorPlancha, ...resto } = m;
+      const datos = conPrecios ? { ...resto, precioCents, paresPorPlancha } : resto;
       if (id && (await tx.material.findUnique({ where: { id } }))) {
         await tx.material.update({ where: { id }, data: datos });
         vistos.add(id);
@@ -226,4 +238,96 @@ export async function guardarAjustes(entrada: unknown) {
     minutosConfeccion: ent(e.minutosConfeccion, "minutos de confección", 24 * 60),
   };
   return prisma.ajustesTaller.upsert({ where: { id: "taller" }, create: { id: "taller", ...data }, update: data });
+}
+
+// ---------------------------------------------------------------- trazabilidad de materiales
+
+export const ETIQUETA_KIND = "etiqueta_material";
+const FOTO_MAX = 4 * 1024 * 1024;
+const FOTO_MIME = ["image/jpeg", "image/png", "image/webp"];
+
+export type DatosConsumo = {
+  codigo: string; // texto leído del código de barras ("" si no se pudo leer)
+  lote: string;
+  caducidad?: string | null; // AAAA-MM-DD
+  gtin?: string | null;
+  materialId: string;
+  pies?: string;
+  foto?: { bytes: Uint8Array; mime: string } | null;
+};
+
+// Lote ya conocido por su código de barras (para rellenar el formulario al escanear).
+export async function buscarLote(codigo: string) {
+  const c = codigo.trim();
+  if (!c) return null;
+  return prisma.loteMaterial.findUnique({ where: { codigo: c }, include: { material: true } });
+}
+
+// Registra el material usado en una plantilla: el lote (se da de alta la primera vez), la foto de la
+// etiqueta, para qué pie, quién y cuándo. Queda también en el historial del caso.
+export async function registrarConsumo(caseId: string, user: Pick<User, "id" | "name">, d: DatosConsumo) {
+  const kase = await casoParaEditar(caseId, user);
+  const lote = (d.lote ?? "").trim().slice(0, 80);
+  if (!lote) throw new ErrorTaller("Falta el nº de lote", 400);
+  const material = await prisma.material.findUnique({ where: { id: d.materialId ?? "" } });
+  if (!material) throw new ErrorTaller("Elige el material", 400);
+  const pies = ["par", "I", "D"].includes(d.pies ?? "") ? (d.pies as string) : "par";
+  if (d.foto) {
+    if (!FOTO_MIME.includes(d.foto.mime)) throw new ErrorTaller("La foto debe ser JPEG, PNG o WebP", 400);
+    if (d.foto.bytes.length === 0 || d.foto.bytes.length > FOTO_MAX) throw new ErrorTaller("La foto debe ocupar menos de 4 MB", 413);
+  }
+  const caducidad = d.caducidad && /^\d{4}-\d{2}-\d{2}$/.test(d.caducidad) ? new Date(`${d.caducidad}T00:00:00Z`) : null;
+  // Sin código legible: el lote se identifica por material + nº de lote escrito a mano.
+  const codigo = (d.codigo ?? "").trim().slice(0, 300) || `manual:${material.id}:${lote.toUpperCase()}`;
+  const consumo = await prisma.$transaction(async (tx) => {
+    const existente = await tx.loteMaterial.findUnique({ where: { codigo } });
+    const loteMat =
+      existente ??
+      (await tx.loteMaterial.create({
+        data: { codigo, lote, gtin: d.gtin?.trim() || null, caducidad, materialId: material.id, creadoPor: user.name },
+      }));
+    if (existente && !existente.materialId)
+      await tx.loteMaterial.update({ where: { id: existente.id }, data: { materialId: material.id } });
+    let fotoId: string | null = null;
+    if (d.foto) {
+      const capture = (await tx.capture.findUnique({ where: { caseId } })) ?? (await tx.capture.create({ data: { caseId } }));
+      const a = await tx.mediaAsset.create({ data: { captureId: capture.id, kind: ETIQUETA_KIND, url: "" } });
+      await tx.mediaBlob.create({ data: { mediaId: a.id, mime: d.foto.mime, bytes: Buffer.from(d.foto.bytes) } });
+      await tx.mediaAsset.update({
+        where: { id: a.id },
+        data: { url: `/api/media/${a.id}`, sizeBytes: d.foto.bytes.length, meta: { mime: d.foto.mime }, confirmedAt: new Date() },
+      });
+      fotoId = a.id;
+    }
+    return tx.consumoMaterial.create({
+      data: { caseId, loteId: loteMat.id, materialId: material.id, pies, fotoId, userId: user.id, userName: user.name },
+      include: { lote: true, material: true },
+    });
+  });
+  const pie = pies === "par" ? "par" : pies === "I" ? "pie izquierdo" : "pie derecho";
+  await pushEvent(kase.id, `Material registrado: ${material.nombre} · lote ${consumo.lote.lote} (${pie})`, user.name);
+  return consumo;
+}
+
+// Un registro equivocado no se borra: se anula con el motivo (queda constancia).
+export async function anularConsumo(consumoId: string, user: Pick<User, "id" | "name">, motivo: string) {
+  const c = await prisma.consumoMaterial.findUnique({ where: { id: consumoId }, include: { lote: true, material: true } });
+  if (!c) throw new ErrorTaller("Registro no encontrado", 404);
+  if (c.anuladoAt) throw new ErrorTaller("Ese registro ya estaba anulado");
+  const m = motivo.trim().slice(0, 300);
+  if (!m) throw new ErrorTaller("Indica por qué se anula", 400);
+  await casoParaEditar(c.caseId, user);
+  await prisma.consumoMaterial.update({
+    where: { id: c.id },
+    data: { anuladoAt: new Date(), anuladoPor: user.name, motivoAnulacion: m },
+  });
+  await pushEvent(c.caseId, `Registro de material anulado: ${c.material?.nombre ?? ""} · lote ${c.lote.lote} — ${m}`, user.name);
+}
+
+export async function consumosDe(caseId: string) {
+  return prisma.consumoMaterial.findMany({
+    where: { caseId },
+    include: { lote: true, material: true },
+    orderBy: { createdAt: "asc" },
+  });
 }

@@ -2,6 +2,7 @@
 // y la ficha técnica de fabricación (lo que el taller necesita del expediente
 // sin leer todo el cuestionario clínico).
 import type { Case, CaseState, FabPhase, Payment, Prescription } from "@prisma/client";
+import { textoPiezas, type PiezasMarcadas } from "./piezas-receta";
 import type { Questionnaire } from "./questionnaire";
 import type { Exam } from "./exploracion";
 
@@ -88,7 +89,7 @@ export function slaDe(kase: { payment: Pick<Payment, "paidAt"> | null; createdAt
 // --- Orden del tablero: qué debe salir antes ---
 // 1) los que hay que rehacer (incidencia de defecto abierta), 2) por semáforo del plazo
 // (fuera → ajustado → ok → sin pago), 3) el más antiguo primero. Lo usan el panel del
-// taller y la API del Rectificador, para que los dos muestren el mismo orden.
+// taller y la API dOrtosend Taller, para que los dos muestren el mismo orden.
 const SLA_ORDER: Record<Sla["nivel"], number> = { fuera: 0, ajustado: 1, ok: 2 };
 
 type ParaOrdenar = {
@@ -120,8 +121,7 @@ export function ordenTaller<T extends ParaOrdenar>(cs: T[]): T[] {
 // Material: cada capa gasta 1/paresPorPlancha de plancha (la mitad si es de un solo pie).
 // Fresado: minutos de CNC × coste por minuto + escayola de los moldes.
 // Mano de obra: minutos de confección × precio por hora.
-// El Rectificador (interfaz/web.py) calcula lo mismo para la vista previa: si se cambia
-// aquí, cambiarlo también allí.
+// Solo lo ve el administrador (el taller no ve costes).
 export type PiesCapa = "par" | "I" | "D";
 export type CapaHoja = { materialId: string; pies: PiesCapa; notas?: string; nombre?: string; cents?: number };
 export type MaterialCoste = { id: string; precioCents: number; paresPorPlancha: number };
@@ -215,7 +215,7 @@ export type TrabajoPie = {
 // Qué hay que hacer en cada pie: la prescripción manda (pauta por pie si la
 // hay; si no, la general) y del estudio salen alza, FPI y dolor de ese lado.
 export function trabajoPorPie(
-  rx: Pick<Prescription, "fabricationOrder" | "orderLeft" | "orderRight"> | null,
+  rx: (Pick<Prescription, "fabricationOrder" | "orderLeft" | "orderRight"> & { piezas?: Prescription["piezas"] }) | null,
   e: Exam | null | undefined,
   q?: Questionnaire | null
 ): [TrabajoPie, TrabajoPie] {
@@ -230,6 +230,11 @@ export function trabajoPorPie(
       if (e.dismetria === "Sí" && corto) datos.push(esCorto ? `Alza ${alza} (lado corto)` : "Sin alza");
       else datos.push(`Alza ${alza}`);
     }
+    // Piezas marcadas en la receta para este pie (las aplica el programa del taller).
+    const piezas = textoPiezas(rx?.piezas as PiezasMarcadas | null | undefined)
+      .split("\n")
+      .find((l) => l.startsWith(pie === "I" ? "Pie izquierdo" : "Pie derecho"));
+    if (piezas) datos.push(`Piezas: ${piezas.replace(/^Pie (izquierdo|derecho): /, "")}`);
     const fpi = pie === "I" ? e?.fpiIzq : e?.fpiDcho;
     if (fpi) datos.push(`FPI-6 ${fpi}`);
     const lado = (q?.lado ?? "").toLowerCase();
