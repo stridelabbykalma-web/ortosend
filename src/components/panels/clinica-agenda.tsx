@@ -20,7 +20,9 @@ import {
   fmtMin,
 } from "@/lib/agenda";
 import { availabilityOf, loadClinicAgenda } from "@/lib/agenda-db";
+import { asegurarOcupacionFresca } from "@/lib/conector";
 import { cancelarCitaClinicaAction, darCitaAction, icalTokenAction } from "@/app/panel/agenda-actions";
+import { reintentarCitaExternaAction } from "@/app/panel/conector-actions";
 import { Calendario } from "@/components/reserva/calendario";
 
 const DIA_LARGO = ["", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"];
@@ -47,9 +49,22 @@ export async function ClinicaAgenda({
   const sunday = addDays(monday, 6);
   const back = `/panel?tab=agenda&semana=${dateKey(monday)}${pro ? `&pro=${pro}` : ""}`;
 
+  await asegurarOcupacionFresca(clinic.id);
   const agenda = await loadClinicAgenda(prisma, clinic.id, monday, sunday);
   const proFilter = !pro ? undefined : pro === "clinica" ? null : pro;
   const free = availabilityOf(agenda, monday, sunday, "staff", proFilter);
+  // Ocupado en el programa de la clínica (Docfav): citas, bloqueos y ausencias
+  // (lo de «fuera de horario» no se pinta: ya se ve en los huecos libres).
+  const conDocfav = await prisma.calendarConnector.count({ where: { clinicId: clinic.id, active: true, externalClinicId: { not: null } } });
+  const ocupadoFuera = new Map<string, typeof agenda.busy>();
+  for (const b of agenda.busy) {
+    if (b.kind === "fuera_horario") continue;
+    if (proFilter !== undefined && b.professionalId !== proFilter) continue;
+    const k = dateKey(localParts(b.startsAt, tz));
+    ocupadoFuera.set(k, [...(ocupadoFuera.get(k) ?? []), b]);
+  }
+  const nombreAgenda = (pid: string | null) =>
+    pid === null ? "Clínica" : (agenda.staff.find((s) => s.id === pid)?.name.split("(")[0].trim() ?? "Profesional");
 
   const weekStart = zonedToUtc(monday, 0, tz);
   const weekEnd = zonedToUtc(addDays(sunday, 1), 0, tz);
@@ -143,6 +158,7 @@ export async function ClinicaAgenda({
         {days.map((d, i) => {
           const k = dateKey(d);
           const list = byDay.get(k) ?? [];
+          const fuera = (ocupadoFuera.get(k) ?? []).sort((x, y) => x.startsAt.getTime() - y.startsAt.getTime());
           const libres = free.get(k)?.length ?? 0;
           return (
             <div key={k} className={`week-day ${k === dateKey(today) ? "today" : ""}`}>
@@ -167,6 +183,28 @@ export async function ClinicaAgenda({
                         Caso #{a.case.number} · <StatePill state={a.case.state} />
                       </div>
                       {a.notes && <div className="tiny">{a.notes}</div>}
+                      {conDocfav > 0 && !off && a.status !== "COMPLETADA" && (
+                        <div className="tiny">
+                          {a.externalState === "creada" && <span style={{ color: "var(--green)" }}>✓ Apuntada en Docfav</span>}
+                          {a.externalState === "enviando" && "Apuntándola en Docfav…"}
+                          {a.externalState === "sin_enlace" && "Agenda sin enlazar con Docfav (Disponibilidad)"}
+                          {a.externalState === "error" && (
+                            <>
+                              <span style={{ color: "var(--red)" }}>No apuntada en Docfav: {a.externalError}</span>
+                              <form action={reintentarCitaExternaAction} className="row" style={{ gap: 6, marginTop: 4 }}>
+                                <input type="hidden" name="appointmentId" value={a.id} />
+                                <input type="hidden" name="back" value={back} />
+                                <button type="submit" style={{ fontSize: 12, padding: "4px 8px" }}>
+                                  Reintentar
+                                </button>
+                                <button type="submit" name="forzar" value="1" className="warn" style={{ fontSize: 12, padding: "4px 8px" }}>
+                                  Apuntar igualmente
+                                </button>
+                              </form>
+                            </>
+                          )}
+                        </div>
+                      )}
                       <Link href={`/caso/${a.case.id}`} className="btn" style={{ fontSize: 12, padding: "5px 10px" }}>
                         Abrir caso
                       </Link>
@@ -198,6 +236,15 @@ export async function ClinicaAgenda({
                   </details>
                 );
               })}
+              {fuera.map((b, j) => (
+                <div key={`ext${j}`} className="appt ext" title="Ocupado en Docfav: no se ofrece en Ortosend">
+                  <span className="t">
+                    {hora.format(b.startsAt)}–{hora.format(b.endsAt)}
+                  </span>{" "}
+                  {b.kind === "ausencia" ? "Ausencia" : b.kind === "bloqueo" ? "Bloqueado" : "Ocupado"} en Docfav
+                  <div className="who">{nombreAgenda(b.professionalId)}</div>
+                </div>
+              ))}
               <div className="free">{libres ? `${libres} hueco${libres === 1 ? "" : "s"} libre${libres === 1 ? "" : "s"}` : "Sin huecos libres"}</div>
             </div>
           );

@@ -711,3 +711,5 @@ body:has(.oxp) .nav { position: static; }
   .pc-case { padding: 18px; }
   .pc-doc { padding: 20px; }
 }
+/* Ocupado en el programa de la clínica (Docfav): informativo, no clicable */
+.appt.ext { border-left-color: #9aa5a0; background: #f1f1ee; color: var(--ink2); font-size: 11.5px; }

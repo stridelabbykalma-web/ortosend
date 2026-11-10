@@ -25,7 +25,9 @@ Data Privacy Framework.
   automatizado orientativo (puntos de pose, ángulos, informe preliminar — decisión final
   siempre humana), baropodometría, escaneo de espumas, prescripción.
 - **Destinatarios/encargados**: clínica asociada donde se realiza el estudio (contrato art.
-  28); taller de fabricación (accede solo a la orden de trabajo, no a la historia);
+  28) y, si la clínica lo conecta, su programa de gestión de agenda (Docfav) como
+  subencargado autorizado: solo nombre, teléfono, email y fecha/hora/tipo de cita, sin
+  contenido clínico; taller de fabricación (accede solo a la orden de trabajo, no a la historia);
   [futuro] almacenamiento de archivos clínicos en región UE.
 - **Plazos**: documentación clínica ≥ 5 años; resto, duración de la relación + plazos de
   prescripción.

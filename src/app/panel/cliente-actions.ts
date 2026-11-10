@@ -10,7 +10,8 @@ import { audit, pushEvent, avisarPaciente, notifyEmail } from "@/lib/cases";
 import { isValidPhone, normalizeEmail, normalizePhone } from "@/lib/contacto";
 import { enviarAvisoMayoria } from "@/lib/mayoria";
 import { avisarContrasenaCambiada, enviarVerificacionEmail } from "@/lib/cuenta";
-import { activeAppointmentOf, bookAppointment, cancelAppointment } from "@/lib/agenda-db";
+import { activeAppointmentOf, bookAppointment, cancelAppointment, TX_RESERVA } from "@/lib/agenda-db";
+import { sincronizarCaso } from "@/lib/conector";
 import { agendaErrorMessage, parseSlot, type SlotOk } from "@/lib/reserva-form";
 import { crearSesionCheckout, stripeConfigurado } from "@/lib/stripe";
 import { fechaTextoLarga, fmtdt } from "@/lib/format";
@@ -233,12 +234,15 @@ export async function reprogramarCitaAction(formData: FormData) {
         bookedBy: u.id,
         mode: "online",
         replaceAppointmentId: actual?.id ?? null,
-      })
+      }),
+      TX_RESERVA
     );
     startsAt = appt.startsAt;
   } catch (e) {
     fail(back, agendaErrorMessage(e));
   }
+  // Anula en Docfav la cita anterior y apunta la nueva (si la clínica lo tiene conectado).
+  await sincronizarCaso(caseId);
   await pushEvent(
     caseId,
     actual
@@ -265,6 +269,7 @@ export async function cancelarCitaAction(formData: FormData) {
   if (!actual) fail("/panel", "No hay ninguna cita activa");
   const reason = String(formData.get("reason") ?? "").trim() || null;
   await cancelAppointment(prisma, actual!.id, u.id, reason);
+  await sincronizarCaso(caseId);
   await pushEvent(caseId, `Cita del ${fmtdt(actual!.startsAt)} anulada por el cliente${reason ? `: ${reason}` : ""}`, u.name);
   await avisarPaciente(kase.patientId, "cita_cancelada", {
     caseId,

@@ -7,7 +7,7 @@ import {
   ACTIVE_APPOINTMENT_STATUSES,
   addDays,
   computeAvailability,
-  findSlot,
+  findSlots,
   isFreeIgnoringSchedule,
   localParts,
   localToDateColumn,
@@ -17,7 +17,13 @@ import {
   type SlotOption,
 } from "./agenda";
 
+import { huecoLibreFuera } from "./conector";
+
 type Db = Prisma.TransactionClient | typeof prisma;
+
+// Las reservas consultan el programa externo de la clínica dentro de la
+// transacción: necesitan más margen que los 5 s por defecto de Prisma.
+export const TX_RESERVA = { timeout: 25_000, maxWait: 10_000 } as const;
 
 export class AgendaError extends Error {
   constructor(message: string) {
@@ -36,7 +42,7 @@ export async function loadClinicAgenda(db: Db, clinicId: string, from: LocalDate
   // Margen de un día a cada lado por el desfase entre UTC y la hora local.
   const startUtc = localToDateColumn(addDays(from, -1));
   const endUtc = localToDateColumn(addDays(to, 2));
-  const [rules, exceptions, appointments, staff] = await Promise.all([
+  const [rules, exceptions, appointments, staff, busy] = await Promise.all([
     db.availabilityRule.findMany({ where: { clinicId } }),
     db.availabilityException.findMany({
       where: { clinicId, startsOn: { lte: localToDateColumn(to) }, endsOn: { gte: localToDateColumn(from) } },
@@ -49,12 +55,17 @@ export async function loadClinicAgenda(db: Db, clinicId: string, from: LocalDate
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     }),
+    // Ocupación del programa externo (Docfav…) de la última lectura
+    db.externalBusy.findMany({
+      where: { clinicId, connector: { active: true }, startsAt: { lt: endUtc }, endsAt: { gt: startUtc } },
+      select: { professionalId: true, startsAt: true, endsAt: true, kind: true, externalId: true },
+    }),
   ]);
   // Reglas de profesionales que ya no están en la clínica no cuentan.
   const staffIds = new Set(staff.map((s) => s.id));
   const validRules = rules.filter((r) => r.professionalId === null || staffIds.has(r.professionalId));
   const validExceptions = exceptions.filter((x) => x.professionalId === null || staffIds.has(x.professionalId));
-  return { clinic, rules: validRules, exceptions: validExceptions, appointments, staff };
+  return { clinic, rules: validRules, exceptions: validExceptions, appointments, staff, busy };
 }
 
 // Nombre legible de una agenda.
@@ -81,6 +92,7 @@ export function availabilityOf(
     rules: agenda.rules,
     exceptions: agenda.exceptions,
     appointments: agenda.appointments,
+    busy: agenda.busy,
     from,
     to,
     mode,
@@ -128,23 +140,34 @@ export async function bookAppointment(tx: Prisma.TransactionClient, input: BookI
   const agenda = await loadClinicAgenda(tx, input.clinicId, day, day);
   if (input.startsAt.getTime() % 60000 !== 0) throw new AgendaError("Hora no válida");
 
-  let slot: SlotOption | null = findSlot(
+  const candidatos = findSlots(
     {
       clinic: agenda.clinic,
       rules: agenda.rules,
       exceptions: agenda.exceptions,
       appointments: agenda.appointments,
+      busy: agenda.busy,
       mode: input.mode,
       professionalId: input.professionalId,
     },
     input.startsAt
   );
+  // Última palabra del programa externo de la clínica: si en Docfav ya está
+  // ocupado (se citó a alguien después de la última lectura), se prueba con la
+  // siguiente agenda que ofrezca esa hora.
+  let slot: SlotOption | null = null;
+  for (const cand of candidatos) {
+    if (await huecoLibreFuera(tx, input.clinicId, cand)) {
+      slot = cand;
+      break;
+    }
+  }
   if (!slot && input.force && input.mode === "staff") {
     const professionalId = input.professionalId ?? null;
     const endsAt = new Date(input.startsAt.getTime() + agenda.clinic.slotMinutes * 60000);
     if (professionalId && !agenda.staff.some((s) => s.id === professionalId)) throw new AgendaError("Profesional no válido");
-    if (!isFreeIgnoringSchedule(agenda.appointments, professionalId, input.startsAt, endsAt))
-      throw new AgendaError("Esa agenda ya tiene una cita a esa hora");
+    if (!isFreeIgnoringSchedule(agenda.appointments, professionalId, input.startsAt, endsAt, agenda.busy))
+      throw new AgendaError("Esa agenda ya tiene una cita a esa hora (en Ortosend o en el programa de la clínica)");
     slot = { startsAt: input.startsAt, endsAt, professionalId };
   }
   if (!slot) throw new AgendaError("NO_DISPONIBLE");

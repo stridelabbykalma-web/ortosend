@@ -9,6 +9,7 @@ import { nacimientoLimiteMayoria } from "./edad";
 import { enviarAvisoMayoria } from "./mayoria";
 import { caducarVencidas, enviarRecordatorios, reintentarConfirmaciones } from "./alta";
 import { limpiarRateLimit } from "./rate-limit";
+import { mantenimientoConectores } from "./conector";
 
 export async function runJobs() {
   const now = new Date();
@@ -157,5 +158,11 @@ export async function runJobs() {
   await limpiarRateLimit();
   // Emails que no salieron en su momento (proveedor sin configurar o caído).
   const emailsReintentados = await reintentarEmailsPendientes();
-  return { expired: expiredCases.length, reminders, citas, adaptacion, revisiones, mayoria, invitaciones, caducadas, emailsReintentados };
+  // Programa de gestión de las clínicas (Docfav): relee la ocupación y reintenta
+  // las citas que no se pudieron apuntar o anular allí.
+  const conectores = await mantenimientoConectores().catch((e) => {
+    console.error("[cron] conectores", e);
+    return { lecturas: 0, copias: 0 };
+  });
+  return { expired: expiredCases.length, reminders, citas, adaptacion, revisiones, mayoria, invitaciones, caducadas, emailsReintentados, conectores };
 }

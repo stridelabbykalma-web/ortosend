@@ -105,6 +105,7 @@ model Clinic {
   onlineBooking            Boolean                   @default(true) // publica su agenda en la web
   patientPicksPro          Boolean                   @default(false) // el paciente puede elegir profesional
   calendarToken            String?                   @unique // suscripción iCal de toda la clínica
+  calendarConnectors       CalendarConnector[] // programa de gestión externo (Docfav…)
   availabilityRules        AvailabilityRule[]
   availabilityExceptions   AvailabilityException[]
   appointments             Appointment[]
@@ -229,6 +230,11 @@ model Appointment {
   cancelledBy    String?
   cancelReason   String?
   reminderSentAt DateTime? // recordatorio 24 h encolado
+  // Copia en el programa de gestión de la clínica (Docfav…), ver src/lib/conector
+  externalId     String? // id de la cita en el programa externo
+  externalState  String? // creada | cancelada | no_presentado | borrada | sin_enlace
+  externalError  String? // último error al sincronizarla (se reintenta en el cron)
+  externalAt     DateTime? // última sincronización correcta
   createdAt      DateTime          @default(now())
 
   @@index([clinicId, startsAt])
@@ -282,6 +288,7 @@ model Patient {
   consentInvitations ConsentInvitation[]
   consentLogs        ConsentLog[]
   accessCodes        AccessCode[]
+  externalRefs       PatientExternalRef[] // ficha del paciente en el programa de la clínica
 }
 
 // Estado del alta iniciada por el profesional. Los pacientes del Flujo A y los
@@ -785,4 +792,80 @@ model AjustesTaller {
   minutosCnc          Int      @default(30) // por defecto en una hoja nueva
   minutosConfeccion   Int      @default(45)
   updatedAt           DateTime @updatedAt
+}
+
+// ---------- Conector con el programa de gestión de la clínica ----------
+// Una clínica puede conectar su programa de agenda (de momento Docfav). Ortosend
+// lee lo que ya está ocupado allí (citas, bloqueos y horario de trabajo) para no
+// ofrecer esas horas, y apunta allí sus propias citas para que la clínica trabaje
+// con una sola agenda. Ver src/lib/conector y docs/sistema-de-citas.md.
+model CalendarConnector {
+  id              String   @id @default(cuid())
+  clinicId        String
+  clinic          Clinic   @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  kind            String   // "DOCFAV"
+  active          Boolean  @default(true)
+  apiKeyEnc       String   // clave de API cifrada (AES-256-GCM, ver src/lib/secretos.ts)
+  apiKeyHint      String   // últimos caracteres, para reconocerla en pantalla
+  externalClinicId String? // clínica (back office) dentro del programa
+  externalClinicName String?
+  serviceName     String   @default("Ortosend") // servicio con el que se apuntan las citas
+  serviceId       String?  // id del servicio encontrado (o elegido a mano)
+  respectHours    Boolean  @default(true) // fuera del horario de trabajo del programa no se ofrecen horas
+  pushAppointments Boolean @default(true) // apuntar en el programa las citas de Ortosend
+  syncedFrom      DateTime? // rango cubierto por la última lectura
+  syncedTo        DateTime?
+  lastSyncAt      DateTime?
+  syncingAt       DateTime? // marca de «leyendo ahora» (evita lecturas simultáneas)
+  lastError       String?
+  createdAt       DateTime @default(now())
+  links           ConnectorLink[]
+  busy            ExternalBusy[]
+  patientRefs     PatientExternalRef[]
+
+  @@unique([clinicId, kind])
+}
+
+// Qué agenda de Ortosend corresponde a cada agenda de profesional del programa.
+model ConnectorLink {
+  id               String            @id @default(cuid())
+  connectorId      String
+  connector        CalendarConnector @relation(fields: [connectorId], references: [id], onDelete: Cascade)
+  professionalId   String? // null = agenda de la clínica
+  externalCalendarId String // agenda del profesional en un sitio (staff calendar): ahí se apuntan las citas
+  externalPlaceId  String // sitio o gabinete (centro, domicilio…) de esa agenda
+  externalStaffId  String // profesional en el programa: sus citas en CUALQUIER sitio ocupan la agenda
+  externalName     String // nombre del profesional y del sitio, para pantalla
+
+  @@unique([connectorId, externalCalendarId])
+}
+
+// Tramos ocupados en el programa externo (copia de la última lectura). El motor
+// de disponibilidad los resta como si fueran citas que llenan la agenda.
+model ExternalBusy {
+  id             String            @id @default(cuid())
+  connectorId    String
+  connector      CalendarConnector @relation(fields: [connectorId], references: [id], onDelete: Cascade)
+  clinicId       String
+  professionalId String? // agenda de Ortosend afectada (null = agenda de la clínica)
+  startsAt       DateTime
+  endsAt         DateTime
+  kind           String // cita | bloqueo | ausencia | fuera_horario
+  externalId     String?
+
+  @@index([clinicId, startsAt])
+  @@index([connectorId, startsAt])
+}
+
+// Ficha del paciente en el programa externo de cada clínica (para no duplicarla).
+model PatientExternalRef {
+  id          String            @id @default(cuid())
+  patientId   String
+  patient     Patient           @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  connectorId String
+  connector   CalendarConnector @relation(fields: [connectorId], references: [id], onDelete: Cascade)
+  externalId  String
+  createdAt   DateTime          @default(now())
+
+  @@unique([patientId, connectorId])
 }

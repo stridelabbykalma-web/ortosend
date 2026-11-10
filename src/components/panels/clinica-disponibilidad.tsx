@@ -14,6 +14,8 @@ import {
   todayLocal,
 } from "@/lib/agenda";
 import { availabilityOf, loadClinicAgenda, resourceName } from "@/lib/agenda-db";
+import { asegurarOcupacionFresca } from "@/lib/conector";
+import { ClinicaConector } from "./clinica-conector";
 import {
   addExceptionAction,
   addRuleAction,
@@ -26,6 +28,7 @@ export async function ClinicaDisponibilidad({ clinic, user }: { clinic: Clinic; 
   const isAdmin = user.role === "ADMIN_CLINICA";
   const today = todayLocal(clinic.timezone);
   const previewEnd = addDays(today, 13);
+  await asegurarOcupacionFresca(clinic.id);
   const agenda = await loadClinicAgenda(prisma, clinic.id, today, previewEnd);
   const exceptions = await prisma.availabilityException.findMany({
     where: { clinicId: clinic.id, endsOn: { gte: localToDateColumn(today) } },
@@ -117,6 +120,10 @@ export async function ClinicaDisponibilidad({ clinic, user }: { clinic: Clinic; 
           </div>
         )}
       </div>
+      <div className="sp" />
+
+      {/* --- Programa de gestión de la clínica (Docfav) --- */}
+      <ClinicaConector clinic={clinic} user={user} />
       <div className="sp" />
 
       {/* --- Horario semanal --- */}

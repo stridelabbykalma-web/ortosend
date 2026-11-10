@@ -68,7 +68,10 @@ export default function Privacidad() {
           aplicación) y <b>Neon Inc.</b> (base de datos y archivos clínicos), ambos con
           infraestructura en la UE y garantías de transferencia (cláusulas contractuales tipo /
           EU-U.S. Data Privacy Framework) para el soporte desde EE. UU.; las{" "}
-          <b>clínicas asociadas</b> donde se realiza tu estudio; <b>Stripe Payments Europe, Ltd.</b>{" "}
+          <b>clínicas asociadas</b> donde se realiza tu estudio — si tu clínica gestiona su agenda con
+          un programa conectado a Ortosend (por ejemplo <b>Docfav</b>), en él se registran tu nombre,
+          teléfono, email y la fecha y hora de tu cita, nunca contenido clínico, para que la clínica
+          tenga una sola agenda; <b>Stripe Payments Europe, Ltd.</b>{" "}
           (Irlanda), que procesa el pago en su pasarela segura — nosotros no almacenamos los datos
           de tu tarjeta; <b>Resend, Inc.</b> (envío de emails del servicio desde su región UE);{" "}
           <b>ManyChat, Inc.</b> (EE. UU., con cláusulas contractuales tipo), que gestiona los avisos
