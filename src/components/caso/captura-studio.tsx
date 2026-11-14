@@ -529,7 +529,8 @@ export function CapturaStudio({
             // Zoom real de la cámara
             let target = caps.min;
             if (rec && pts.length >= 4) {
-              const hFrac = Math.max(...pts.map((q) => q.y)) - Math.min(...pts.map((q) => q.y));
+              // alto del cuerpo con margen para la coronilla (la nariz es el punto más alto del modelo)
+              const hFrac = (Math.max(...pts.map((q) => q.y)) - Math.min(...pts.map((q) => q.y))) * 1.15;
               if (hFrac > 0.02) {
                 // zona muerta alrededor del tamaño objetivo: el zoom no "caza"
                 const fuera = hFrac < ZOOM_FILL - 0.06 || hFrac > ZOOM_FILL + 0.06;
@@ -564,7 +565,11 @@ export function CapturaStudio({
             let tw = srcW, th = srcH, tx = 0, ty = 0;
             if (rec && pts.length >= 4) {
               const xs = pts.map((q) => q.x), ys = pts.map((q) => q.y);
-              const bh = (Math.max(...ys) - Math.min(...ys)) * srcH;
+              // margen por encima de la nariz (coronilla) y bajo los pies para no cortar la cabeza
+              const span = Math.max(...ys) - Math.min(...ys);
+              const topY = Math.min(...ys) - 0.12 * span;
+              const botY = Math.max(...ys) + 0.03 * span;
+              const bh = (botY - topY) * srcH;
               // zona muerta: si ya ocupa aprox. el objetivo, se mantiene el tamaño
               const fillNow = cur.h > 0 ? bh / cur.h : 0;
               const fuera = fillNow < ZOOM_FILL - 0.06 || fillNow > ZOOM_FILL + 0.06;
@@ -572,7 +577,7 @@ export function CapturaStudio({
               tw = th * aspect;
               if (tw > srcW) { tw = srcW; th = tw / aspect; }
               const cx = ((Math.max(...xs) + Math.min(...xs)) / 2) * srcW;
-              const cy = ((Math.max(...ys) + Math.min(...ys)) / 2) * srcH;
+              const cy = ((topY + botY) / 2) * srcH;
               tx = Math.min(srcW - tw, Math.max(0, cx - tw / 2));
               ty = Math.min(srcH - th, Math.max(0, cy - th / 2));
             } else if (rec && now - lastSeenRef.current < 1500 && followRectRef.current) {
