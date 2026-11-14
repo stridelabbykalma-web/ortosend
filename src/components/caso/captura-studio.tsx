@@ -112,6 +112,19 @@ function toOriginal(p: { x: number; y: number }, r: Rot): { x: number; y: number
 // > 0 si la persona está cabeza arriba en el frame analizado, < 0 si está
 // invertida. Suma de pares (arriba, abajo) visibles: cadera→tobillo, rodilla→
 // tobillo, tobillo→talón.
+// Eje del cuerpo cadera → tobillo en el frame analizado. Si el modelo detecta a
+// la persona TUMBADA (eje horizontal) es que el móvil está girado 90°: el
+// modelo la encuentra igualmente, así que la búsqueda por "sin detección" no
+// saltaría nunca y hay que corregir la rotación por el propio eje.
+function bodyAxis(lms: NormalizedLandmark[]): { dx: number; dy: number } | null {
+  const vis = (i: number) => lms[i]?.visibility ?? 0;
+  if (Math.min(vis(L_HIP), vis(R_HIP)) < 0.5 || Math.min(vis(L_ANKLE), vis(R_ANKLE)) < 0.4) return null;
+  return {
+    dx: (lms[L_ANKLE].x + lms[R_ANKLE].x - lms[L_HIP].x - lms[R_HIP].x) / 2,
+    dy: (lms[L_ANKLE].y + lms[R_ANKLE].y - lms[L_HIP].y - lms[R_HIP].y) / 2,
+  };
+}
+
 function uprightScore(lms: NormalizedLandmark[]): number {
   const vis = (i: number) => lms[i]?.visibility ?? 0;
   const pares: [number, number][] = [
@@ -144,22 +157,35 @@ function evalChecks(lms: NormalizedLandmark[] | undefined): Checks {
     persona &&
     Math.min(vis(L_ANKLE), vis(R_ANKLE)) > 0.4 &&
     Math.min(lms[L_HIP].y, lms[R_HIP].y) > 0.02 && // caderas dentro por arriba
-    feetY < 0.98; // pies sin cortar por abajo
-  // Orientación por la anchura de caderas respecto a la pierna: de perfil las
-  // caderas se superponen; de frente o de espaldas se abren (~0,3 de la pierna).
-  const hipDx = Math.abs(lms[L_HIP].x - lms[R_HIP].x);
-  const perfil = persona && legLen > 0 && hipDx < 0.15 * legLen;
-  const abierto = persona && legLen > 0 && hipDx > 0.22 * legLen;
+    feetY < 0.98 && // pies sin cortar por abajo
+    legLen > 0.12; // pierna con tamaño real: descarta poses colapsadas (p. ej. solo piernas muy cerca)
+  // Orientación, calibrada con vídeos reales de personas andando (relación con la
+  // longitud de la pierna): de frente o de espaldas las caderas de MediaPipe se
+  // separan ~0,10-0,15 y los hombros ~0,20-0,29, con poca diferencia de
+  // profundidad (z) entre ambos lados (<0,16); de perfil las caderas se superponen
+  // (<0,06, hombros <0,11) y la diferencia de z se dispara (>0,5).
+  const hipDx = Math.abs(lms[L_HIP].x - lms[R_HIP].x) / (legLen || 1);
+  const hipDz = Math.abs(lms[L_HIP].z - lms[R_HIP].z) / (legLen || 1);
+  const shouldersOk = Math.min(vis(L_SHOULDER), vis(R_SHOULDER)) > 0.5 && Math.min(lms[L_SHOULDER].y, lms[R_SHOULDER].y) > 0;
+  const shDx = shouldersOk ? Math.abs(lms[L_SHOULDER].x - lms[R_SHOULDER].x) / (legLen || 1) : 0;
+  const escala = persona && legLen > 0.12;
+  const perfil = escala && (hipDz > 0.32 || (hipDx < 0.05 && (!shouldersOk || shDx < 0.12)));
+  const abierto = escala && !perfil && (hipDx > 0.06 || shDx > 0.15);
   // z de MediaPipe: menor = más cerca de la cámara. En perfil, el lado del
   // paciente que da a la cámara tiene la cadera (y el hombro, si se ve) con z
   // más pequeña. Los índices "L/R" son el lado izquierdo/derecho del paciente.
-  const shouldersOk = Math.min(vis(L_SHOULDER), vis(R_SHOULDER)) > 0.5;
   const zL = shouldersOk ? (lms[L_SHOULDER].z + lms[L_HIP].z) / 2 : lms[L_HIP].z;
   const zR = shouldersOk ? (lms[R_SHOULDER].z + lms[R_HIP].z) / 2 : lms[R_HIP].z;
   const sideMargin = 0.02;
   // De frente o de espaldas: la imagen no está espejada, así que de frente la
-  // cadera izquierda del paciente cae a la derecha de la imagen (x mayor).
+  // cadera izquierda del paciente cae a la derecha de la imagen (x mayor). Como
+  // segundo voto, de frente los dedos quedan claramente más abajo que el talón
+  // en la imagen (más cerca de la cámara); de espaldas, a la misma altura o más
+  // arriba. Si los dos votos se contradicen no se afirma ninguna orientación.
   const izqEnDerechaImagen = lms[L_HIP].x > lms[R_HIP].x;
+  const dedosBajoTalon =
+    ((lms[L_FOOT].y - lms[L_HEEL].y + (lms[R_FOOT].y - lms[R_HEEL].y)) / 2) / (legLen || 1);
+  const votoFrente = (izqEnDerechaImagen ? 1 : -1) + (dedosBajoTalon > 0.06 ? 1 : dedosBajoTalon < -0.02 ? -1 : 0);
   // Pies (fotos de cerca). Desde atrás los dedos quedan tapados por el talón y
   // desde delante el talón queda tapado por el pie, así que solo se exige lo que
   // realmente se ve en cada vista: tobillos + talones (posterior) o tobillos +
@@ -180,8 +206,8 @@ function evalChecks(lms: NormalizedLandmark[] | undefined): Checks {
     perfil,
     lado_dcho: perfil && zR < zL - sideMargin,
     lado_izq: perfil && zL < zR - sideMargin,
-    de_frente: abierto && izqEnDerechaImagen,
-    de_espaldas: abierto && !izqEnDerechaImagen,
+    de_frente: abierto && votoFrente > 0,
+    de_espaldas: abierto && votoFrente < 0,
     pies_visibles: piesVisibles,
     pies_de_cerca: piesVisibles && footSpan > 0.3 && feetBottom < 0.97,
     // Orientación por el lado en que cae cada pie (MediaPipe etiqueta izquierdo/
@@ -276,7 +302,7 @@ export function CapturaStudio({
   const autoRecordRef = useRef<() => void>(() => {});
   const lastLmsRef = useRef<NormalizedLandmark[] | null>(null); // últimos puntos detectados
   // Rotación del frame para el análisis y la foto (ver drawRotated)
-  const rotRef = useRef<{ r: Rot; missingSince: number; flipVotes: number }>({ r: 0, missingSince: 0, flipVotes: 0 });
+  const rotRef = useRef<{ r: Rot; missingSince: number; flipVotes: number; sideVotes: number }>({ r: 0, missingSince: 0, flipVotes: 0, sideVotes: 0 });
   const rotCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const [rotation, setRotation] = useState<Rot>(0);
   // Zoom de seguimiento (marchas en el eje del pasillo). "camara": zoom real de
@@ -293,6 +319,8 @@ export function CapturaStudio({
   const followRectRef = useRef<{ x: number; y: number; w: number; h: number } | null>(null);
   const followCanvasRef = useRef<HTMLCanvasElement>(null);
   const lastSeenRef = useRef(0);
+  // Traza de depuración (solo con ?studioDebug=1): estado por frame en window.__studioLog
+  const debugRef = useRef<boolean | null>(null);
   // Trayectoria de puntos guardada con el vídeo (análisis de marcha)
   const trackRef = useRef<MarchaFrame[]>([]);
   const trackLastRef = useRef(0);
@@ -447,16 +475,33 @@ export function CapturaStudio({
           }
         } else {
           rot.missingSince = 0;
-          if (uprightScore(lms) < 0) {
-            rot.flipVotes++;
-            if (rot.flipVotes >= 4 && phaseRef.current === "live") {
-              rot.r = ((rot.r + 180) % 360) as Rot;
+          const axis = bodyAxis(lms);
+          if (axis && Math.abs(axis.dx) > 1.5 * Math.abs(axis.dy) && Math.abs(axis.dx) > 0.08) {
+            // Persona tumbada en el frame: móvil girado 90°. Con los pies hacia la
+            // derecha del frame analizado hay que girar 90° en sentido horario
+            // (la derecha pasa abajo); hacia la izquierda, 270°.
+            rot.sideVotes++;
+            if (rot.sideVotes >= 4 && phaseRef.current === "live") {
+              rot.r = ((rot.r + (axis.dx > 0 ? 90 : 270)) % 360) as Rot;
+              rot.sideVotes = 0;
               rot.flipVotes = 0;
               okHistRef.current = [];
               setRotation(rot.r);
-              lms = undefined; // este frame estaba invertido: no se evalúa
+              lms = undefined; // este frame estaba tumbado: no se evalúa
             }
-          } else rot.flipVotes = 0;
+          } else {
+            rot.sideVotes = 0;
+            if (uprightScore(lms) < 0) {
+              rot.flipVotes++;
+              if (rot.flipVotes >= 4 && phaseRef.current === "live") {
+                rot.r = ((rot.r + 180) % 360) as Rot;
+                rot.flipVotes = 0;
+                okHistRef.current = [];
+                setRotation(rot.r);
+                lms = undefined; // este frame estaba invertido: no se evalúa
+              }
+            } else rot.flipVotes = 0;
+          }
         }
         // Zoom de seguimiento. ANTES de grabar no se toca el zoom: con la imagen
         // acercada el modelo no detecta bien a la persona y los checks fallan.
@@ -567,6 +612,30 @@ export function CapturaStudio({
         if (stable !== stableOkRef.current) {
           stableOkRef.current = stable;
           setStableOk(stable);
+        }
+        if (debugRef.current === null)
+          debugRef.current = typeof location !== "undefined" && new URLSearchParams(location.search).has("studioDebug");
+        if (debugRef.current) {
+          const w = window as unknown as { __studioLog?: object[] };
+          const log = (w.__studioLog ??= []);
+          if (log.length < 6000) {
+            const fr = followRectRef.current;
+            const lp = lms;
+            log.push({
+              t: Math.round(performance.now()),
+              phase: phaseRef.current,
+              rot: rot.r,
+              lms: !!lms,
+              ok,
+              stable,
+              zoom: Math.round(zoomCurRef.current * 1000) / 1000,
+              rect: fr ? { x: Math.round(fr.x), y: Math.round(fr.y), w: Math.round(fr.w), h: Math.round(fr.h) } : null,
+              src: { w: video.videoWidth, h: video.videoHeight },
+              checks: c,
+              // puntos crudos (hombros, caderas, rodillas, tobillos, talones, dedos) para calibrar
+              pts: lp ? [0, 11, 12, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32].map((i) => [i, +lp[i].x.toFixed(4), +lp[i].y.toFixed(4), +lp[i].z.toFixed(4), +(lp[i].visibility ?? 0).toFixed(3)]) : null,
+            });
+          }
         }
         if (!stable) armedRef.current = true;
         else if (armedRef.current && phaseRef.current === "live" && guide.checks.length > 0) {
@@ -738,7 +807,7 @@ export function CapturaStudio({
     el.srcObject = stream;
     await el.play();
     lastVideoTimeRef.current = -1;
-    rotRef.current = { r: 0, missingSince: 0, flipVotes: 0 };
+    rotRef.current = { r: 0, missingSince: 0, flipVotes: 0, sideVotes: 0 };
     setRotation(0);
     // Con permiso concedido, las etiquetas de las cámaras ya son legibles
     try {
