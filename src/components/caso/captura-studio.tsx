@@ -510,7 +510,10 @@ export function CapturaStudio({
         // paciente ocupe el máximo posible del cuadro; si se pierde, se abre
         // despacio. Al volver al directo se vuelve al plano general.
         if (followRef.current && guide.followZoom && ["live", "countdown", "recording"].includes(phaseRef.current)) {
-          const pts = lms?.filter((q) => (q.visibility ?? 0) > 0.4) ?? [];
+          // Puntos visibles, recortados al cuadro: el modelo sitúa pies o cabeza
+          // fuera del borde (y > 1) y eso hincharía la caja e impediría acercar.
+          const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
+          const pts = (lms?.filter((q) => (q.visibility ?? 0) > 0.4) ?? []).map((q) => ({ x: clamp01(q.x), y: clamp01(q.y) }));
           if (pts.length >= 4) lastSeenRef.current = now;
           const rec = phaseRef.current === "recording";
           const dt = Math.min(0.1, zoomLastTickRef.current ? (now - zoomLastTickRef.current) / 1000 : 0.033);
