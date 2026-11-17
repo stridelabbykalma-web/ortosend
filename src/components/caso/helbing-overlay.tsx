@@ -34,7 +34,11 @@ function Pierna({
   const ex = tx + ((tx - fx) / len) * w * 0.03;
   const ey = ty + ((ty - fy) / len) * w * 0.03;
   const col = COLOR[p.lado];
-  const textX = Math.min(Math.max(tx + w * 0.02, fs), w - fs * 4);
+  // Rótulo hacia fuera de cada pierna (izq. a la izquierda del talón, dcha. a la
+  // derecha) para que no se pisen cuando los pies están juntos.
+  const izq = label.startsWith("izq");
+  const textX = izq ? Math.max(tx - w * 0.02, fs * 0.5) : Math.min(tx + w * 0.02, w - fs * 0.5);
+  const anchor = izq ? "end" : "start";
   return (
     <g>
       {/* referencia vertical por el talón */}
@@ -43,7 +47,7 @@ function Pierna({
       <line x1={fx} y1={fy} x2={ex} y2={ey} stroke={col} strokeWidth={sw} strokeLinecap="round" strokeDasharray={dash} />
       <circle cx={fx} cy={fy} r={sw * 1.4} fill={col} />
       <circle cx={tx} cy={ty} r={sw * 1.4} fill={col} />
-      <text x={textX} y={fy + (ty - fy) * (fila === 0 ? 0.35 : 0.75)} fill="#fff" fontSize={fs} fontWeight={700} stroke="rgba(0,0,0,.7)" strokeWidth={fs * 0.18} paintOrder="stroke" fontFamily="system-ui, sans-serif">
+      <text x={textX} y={fy + (ty - fy) * (fila === 0 ? 0.35 : 0.75)} textAnchor={anchor} fill="#fff" fontSize={fs} fontWeight={700} stroke="rgba(0,0,0,.7)" strokeWidth={fs * 0.18} paintOrder="stroke" fontFamily="system-ui, sans-serif">
         {medida} {label} {p.deg.toLocaleString("es-ES")}° {p.lado}
         {p.aprox ? " ≈" : ""}
         {p.manual ? " ✎" : ""}
