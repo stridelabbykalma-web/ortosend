@@ -122,7 +122,14 @@ despliega automáticamente.
   expediente reproduce el vídeo con los puntos superpuestos, y el apartado «Análisis de la
   marcha» de la exploración (que va después de los vídeos) se rellena solo con ese informe
   (patrón de pisada, ángulo de paso, retropié en apoyo y observaciones con las cifras); el
-  profesional lo revisa y completa contacto inicial y despegue. Todo etiquetado como orientativo. La grabación es real (MediaRecorder) y la
+  profesional lo revisa y completa contacto inicial y despegue. Todo etiquetado como orientativo.
+  Los checks de orientación (de frente, de espaldas, perfil) están **calibrados con vídeos reales**
+  de personas andando (caderas, hombros y profundidad entre lados respecto a la longitud de la
+  pierna) y el estudio corrige solo el móvil girado 90° o boca abajo. Las fotos de los pies se hacen
+  con el botón (o solas si el modelo reconoce los dos pies); como el modelo de pose es de cuerpo
+  entero y en fotos de solo pies suele fallar, las líneas de Helbing y Perthes solo se calculan si
+  los puntos son creíbles y, si no, el profesional las **marca a mano con seis toques** sobre la
+  foto (pantorrilla, parte alta del talón y apoyo del talón de cada pierna). La grabación es real (MediaRecorder) y la
   subida va a `/api/media`, que guarda el archivo (Postgres en el prototipo; R2/S3 en
   producción) y solo entonces confirma el check verde; `/api/media/[id]` lo sirve con el mismo
   control de acceso que el expediente y registro RGPD. El modelo (5,8 MB) va en `public/`; el
@@ -208,6 +215,11 @@ despliega automáticamente.
 
 Todo el ciclo de vida está verificado con un E2E de navegador real (reserva → captura →
 prescripción → pago → taller → entrega → cierre, más cola central, guardas y captación).
+El estudio de captura tiene además su **batería con vídeos reales** (`tests/estudio-captura/`):
+Chromium con cámara falsa alimentada por clips de personas andando, recorriendo login, caso,
+detección, arranque automático, zoom, grabación, subida e informe; incluye escenarios negativos
+(sin persona, orientación equivocada, perfil, pies cortados), móvil girado 90°/180°/270° y el
+marcado manual del retropié. Ver su README para ejecutarla.
 
 ## Puesta en marcha (desarrollo)
 

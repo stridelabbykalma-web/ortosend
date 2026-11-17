@@ -51,3 +51,7 @@ public/mediapipe/wasm/
 __pycache__/
 .taste-skill/
 assets/
+
+# Batería del estudio de captura (clips descargados y resultados)
+/tests/estudio-captura/clips/
+/tests/estudio-captura/out/

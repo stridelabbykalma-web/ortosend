@@ -70,7 +70,7 @@ const ANTERIOR_TIPS = (calzado: string, seg: number) => [
   "Basta con que se vea de la cintura a los pies: al acercarse a la cámara la cabeza puede quedar fuera; lo importante es la pierna y la reacción del cuerpo.",
   "Piernas descubiertas de la rodilla para abajo (pantalón corto o remangado por encima de la rodilla): hay que ver la pierna y la reacción del cuerpo al andar. Lo comprueba el profesional; la app no lo valida.",
   "Móvil en trípode, en horizontal, a la altura de la cadera, en el eje del pasillo.",
-  `El paciente parte a 4-6 m, de frente a la cámara, y camina recto hacia ella, ${calzado}; se detiene justo antes de salir del plano.`,
+  `El paciente parte a 4-6 m (no más lejos: de lejos el modelo no lo reconoce y no arranca), de frente a la cámara, y camina recto hacia ella, ${calzado}; se detiene justo antes de salir del plano.`,
   "Antes de grabar, que se coloque de frente en el punto de salida: el estudio comprueba la orientación.",
   `Grabación fija de ${seg} s: al menos 3 pasos completos viniendo hacia la cámara. Si sobra tiempo, vuelve al punto de salida por fuera del plano y repite.`,
   "Zoom de seguimiento: antes de grabar la imagen queda en plano general (así el modelo detecta bien al paciente lejano). En cuanto arranca la grabación la app acerca la imagen de forma progresiva, sin tirones, para que ocupe el máximo del cuadro, y la va abriendo a medida que se acerca (zoom de la cámara si el móvil lo permite; si no, recorte digital). Se puede desactivar en el panel.",
@@ -105,9 +105,9 @@ export const CAPTURE_GUIDES: Record<string, CaptureGuide> = {
     tips: [
       "Paciente de pie, en carga, descalzo, pies paralelos al ancho de caderas.",
       "Móvil bajo, a la altura de los tobillos, a 40-60 cm por detrás y perpendicular al talón: los dos talones y el tercio inferior de la pierna llenando el encuadre, sin cortar los pies.",
-      "La foto se dispara sola, al instante, en cuanto la app ve los dos pies de cerca y desde atrás: mantén el móvil quieto.",
+      "Pulsa «Hacer la foto» con el encuadre listo y el móvil quieto. Si la app reconoce los dos pies de cerca y desde atrás, también dispara sola.",
       "Da igual cómo esté el móvil (derecho, de lado o boca abajo con la cámara pegada al suelo): la app endereza la imagen sola. Si hay poca luz, enciende la linterna en el panel.",
-      "Sobre esta foto la app traza la línea de Helbing (tendón de Aquiles) y el ángulo del calcáneo de la regla de Perthes, con sus grados y valgo/varo, para el prescriptor y el taller. Cámara nivelada y los dos talones apoyados.",
+      "Sobre esta foto se trazan la línea de Helbing (tendón de Aquiles) y el ángulo del calcáneo de la regla de Perthes, con sus grados y valgo/varo, para el prescriptor y el taller. Si los puntos automáticos no son fiables (lo habitual en fotos de solo pies), se marcan a mano con seis toques: pantorrilla, parte alta del talón y apoyo del talón de cada pierna. Cámara nivelada y los dos talones apoyados.",
     ],
   },
   foto_anterior: {
@@ -117,7 +117,7 @@ export const CAPTURE_GUIDES: Record<string, CaptureGuide> = {
     tips: [
       "Paciente de pie, en carga, descalzo, pies paralelos al ancho de caderas.",
       "Móvil bajo, a la altura de los tobillos, a 40-60 cm por delante: dedos, antepié y tobillos de los dos pies llenando el encuadre, sin cortar los pies.",
-      "La foto se dispara sola, al instante, en cuanto la app ve los dos pies de cerca y desde delante: mantén el móvil quieto.",
+      "Pulsa «Hacer la foto» con el encuadre listo y el móvil quieto. Si la app reconoce los dos pies de cerca y desde delante, también dispara sola.",
       "Da igual cómo esté el móvil (derecho, de lado o boca abajo con la cámara pegada al suelo): la app endereza la imagen sola. Si hay poca luz, enciende la linterna en el panel.",
     ],
   },
@@ -129,5 +129,5 @@ export function durationLabel(kind: string): string {
   if (!g) return "";
   return g.mode === "video"
     ? `${g.seconds} s de grabación`
-    : "disparo automático al ver los dos pies de cerca, sin cuenta atrás";
+    : "foto con el botón (o automática si reconoce los dos pies de cerca)";
 }

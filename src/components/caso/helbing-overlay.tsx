@@ -46,6 +46,7 @@ function Pierna({
       <text x={textX} y={fy + (ty - fy) * (fila === 0 ? 0.35 : 0.75)} fill="#fff" fontSize={fs} fontWeight={700} stroke="rgba(0,0,0,.7)" strokeWidth={fs * 0.18} paintOrder="stroke" fontFamily="system-ui, sans-serif">
         {medida} {label} {p.deg.toLocaleString("es-ES")}° {p.lado}
         {p.aprox ? " ≈" : ""}
+        {p.manual ? " ✎" : ""}
       </text>
     </g>
   );

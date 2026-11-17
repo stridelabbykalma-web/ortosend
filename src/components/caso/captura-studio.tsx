@@ -14,7 +14,7 @@ import {
   type CheckId,
 } from "@/lib/capture-guide";
 import { BEEP_LEAD_MS, playBeep, primeBeeps } from "@/lib/beeps";
-import { computeHelbing, computePerthes, helbingResumen, type Helbing } from "@/lib/helbing";
+import { computeHelbing, computeManual, computePerthes, helbingResumen, type Helbing, type MarcasManuales } from "@/lib/helbing";
 import { HelbingOverlay } from "@/components/caso/helbing-overlay";
 import { MARCHA_IDX, analizarMarcha, type MarchaFrame, type MarchaInforme, type MarchaTrack } from "@/lib/marcha";
 import { InformeMarcha } from "@/components/caso/video-analizado";
@@ -231,7 +231,20 @@ function pickVideoMime(): string {
   return "";
 }
 
+const isVideoKind = (kind: string) => CAPTURE_GUIDES[kind]?.mode === "video";
+
 type Phase = "init" | "live" | "countdown" | "recording" | "review" | "uploading";
+
+// Marcado manual del retropié sobre la foto posterior: 3 toques por pierna.
+// Vista desde atrás: la pierna derecha del paciente queda a la DERECHA de la imagen.
+const MARCAS_PASOS: { pierna: "dcha" | "izq"; punto: "pantorrilla" | "tobillo" | "talon"; texto: string }[] = [
+  { pierna: "dcha", punto: "pantorrilla", texto: "Pierna DERECHA (a la derecha de la imagen): toca el centro de la pantorrilla" },
+  { pierna: "dcha", punto: "tobillo", texto: "Pierna derecha: toca la parte alta del talón (donde entra el tendón de Aquiles)" },
+  { pierna: "dcha", punto: "talon", texto: "Pierna derecha: toca el apoyo del talón en el suelo" },
+  { pierna: "izq", punto: "pantorrilla", texto: "Pierna IZQUIERDA (a la izquierda de la imagen): toca el centro de la pantorrilla" },
+  { pierna: "izq", punto: "tobillo", texto: "Pierna izquierda: toca la parte alta del talón (donde entra el tendón de Aquiles)" },
+  { pierna: "izq", punto: "talon", texto: "Pierna izquierda: toca el apoyo del talón en el suelo" },
+];
 
 type Review = {
   blob: Blob;
@@ -242,6 +255,8 @@ type Review = {
   validSeconds: number | null; // tiempo acumulado con todos los checks en verde
   helbing?: Helbing | null; // foto posterior: línea de Helbing calculada al disparar
   perthes?: Helbing | null; // foto posterior: ángulo del calcáneo (regla de Perthes)
+  w?: number; // tamaño de la foto en píxeles (para el marcado manual)
+  h?: number;
   marcha?: { track: MarchaTrack; informe: MarchaInforme } | null; // vídeos posterior/anterior
 };
 
@@ -270,6 +285,8 @@ export function CapturaStudio({
   const [elapsed, setElapsed] = useState(0);
   const [countdown, setCountdown] = useState(0);
   const [review, setReview] = useState<Review | null>(null);
+  // Marcado manual en curso (foto posterior): puntos tocados, en coordenadas 0-1
+  const [marcado, setMarcado] = useState<[number, number][] | null>(null);
   const [uploadErr, setUploadErr] = useState<string | null>(null);
 
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -475,8 +492,13 @@ export function CapturaStudio({
           }
         } else {
           rot.missingSince = 0;
+          // Solo se corrige la rotación con una pose creíble (cadera → tobillo de
+          // tamaño real). En fotos de solo pies el modelo colapsa los puntos y no
+          // se puede deducir nada: la imagen se deja como la da la cámara y el
+          // profesional puede girarla en la revisión.
           const axis = bodyAxis(lms);
-          if (axis && Math.abs(axis.dx) > 1.5 * Math.abs(axis.dy) && Math.abs(axis.dx) > 0.08) {
+          const poseReal = !!axis && Math.hypot(axis.dx, axis.dy) > 0.12;
+          if (poseReal && axis && Math.abs(axis.dx) > 1.5 * Math.abs(axis.dy)) {
             // Persona tumbada en el frame: móvil girado 90°. Con los pies hacia la
             // derecha del frame analizado hay que girar 90° en sentido horario
             // (la derecha pasa abajo); hacia la izquierda, 270°.
@@ -491,7 +513,7 @@ export function CapturaStudio({
             }
           } else {
             rot.sideVotes = 0;
-            if (uprightScore(lms) < 0) {
+            if (poseReal && uprightScore(lms) < 0) {
               rot.flipVotes++;
               if (rot.flipVotes >= 4 && phaseRef.current === "live") {
                 rot.r = ((rot.r + 180) % 360) as Rot;
@@ -1072,6 +1094,8 @@ export function CapturaStudio({
           validSeconds: null,
           helbing,
           perthes,
+          w: c.width,
+          h: c.height,
         });
         setPhase("review");
       },
@@ -1087,6 +1111,60 @@ export function CapturaStudio({
   useEffect(() => {
     takePhotoRef.current = takePhoto;
   }, [takePhoto]);
+
+  // Toque sobre la foto en el modo de marcado manual
+  const onMarca = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      if (!marcado || !review?.w || !review?.h) return;
+      const r = e.currentTarget.getBoundingClientRect();
+      const x = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
+      const y = Math.min(1, Math.max(0, (e.clientY - r.top) / r.height));
+      const pts: [number, number][] = [...marcado, [x, y]];
+      if (pts.length < MARCAS_PASOS.length) {
+        setMarcado(pts);
+        return;
+      }
+      const m: MarcasManuales = {};
+      MARCAS_PASOS.forEach((paso, i) => {
+        const leg = (m[paso.pierna] ??= { pantorrilla: [0, 0], tobillo: [0, 0], talon: [0, 0] });
+        leg[paso.punto] = pts[i];
+      });
+      const res = computeManual(m, review.w, review.h);
+      setReview({ ...review, helbing: res.helbing, perthes: res.perthes });
+      setMarcado(null);
+    },
+    [marcado, review]
+  );
+
+  // Girar la foto 90° en la revisión (fotos de solo pies: el modelo no puede
+  // deducir la orientación y la imagen queda como la dio la cámara).
+  const girarFoto = useCallback(() => {
+    if (!review || isVideoKind(kind)) return;
+    const img = new Image();
+    img.onload = () => {
+      const c = document.createElement("canvas");
+      c.width = img.naturalHeight;
+      c.height = img.naturalWidth;
+      const ctx = c.getContext("2d");
+      if (!ctx) return;
+      ctx.translate(c.width / 2, c.height / 2);
+      ctx.rotate(Math.PI / 2);
+      ctx.drawImage(img, -img.naturalWidth / 2, -img.naturalHeight / 2);
+      c.toBlob(
+        (blob) => {
+          if (!blob) return;
+          const url = URL.createObjectURL(blob);
+          if (reviewUrlRef.current) URL.revokeObjectURL(reviewUrlRef.current);
+          reviewUrlRef.current = url;
+          setMarcado(null);
+          setReview({ ...review, blob, url, w: c.width, h: c.height, helbing: null, perthes: null });
+        },
+        "image/jpeg",
+        0.85
+      );
+    };
+    img.src = review.url;
+  }, [kind, review]);
 
   const upload = useCallback(async () => {
     if (!review) return;
@@ -1125,6 +1203,7 @@ export function CapturaStudio({
   }, [caseId, close, guide.seconds, kind, nextHref, poseState, review, router]);
 
   const retake = useCallback(() => {
+    setMarcado(null);
     clearTimers();
     // Vuelve a exigir ~1 s estable en verde antes de arrancar solo otra vez
     okHistRef.current = [];
@@ -1138,6 +1217,8 @@ export function CapturaStudio({
 
   if (!guide) return null;
   const isVideo = guide.mode === "video";
+  const fotoW = review?.w ?? 0; // tamaño de la foto para el marcado manual
+  const fotoH = review?.h ?? 0;
   const remaining = Math.max(0, guide.seconds - elapsed);
 
   if (!open)
@@ -1223,9 +1304,39 @@ export function CapturaStudio({
           </div>
 
           {phase === "review" && review && (
-            <div className={`studio-stage ${review.helbing && review.perthes ? "dual" : ""}`}>
+            <div className={`studio-stage ${!marcado && review.helbing && review.perthes ? "dual" : ""}`}>
               {isVideo ? (
                 <video src={review.url} controls playsInline />
+              ) : marcado && review.w && review.h ? (
+                // Marcado manual: 6 toques sobre la foto (3 por pierna)
+                <div className="studio-photo">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={review.url} alt="Marca los puntos del retropié" draggable={false} />
+                  <svg className="helbing" viewBox={`0 0 ${fotoW} ${fotoH}`} preserveAspectRatio="none" aria-hidden>
+                    {marcado.map(([x, y], i) => (
+                      <g key={i}>
+                        {i % 3 > 0 && (
+                          <line
+                            x1={marcado[i - 1][0] * fotoW}
+                            y1={marcado[i - 1][1] * fotoH}
+                            x2={x * fotoW}
+                            y2={y * fotoH}
+                            stroke="#f0a848"
+                            strokeWidth={Math.max(2, fotoW * 0.006)}
+                          />
+                        )}
+                        <circle cx={x * fotoW} cy={y * fotoH} r={Math.max(4, fotoW * 0.012)} fill="#f0a848" stroke="#fff" strokeWidth={Math.max(1, fotoW * 0.003)} />
+                      </g>
+                    ))}
+                  </svg>
+                  <div className="studio-mark" onClick={onMarca} role="button" aria-label="Marcar punto" />
+                  <div className="studio-mark-tip">
+                    <b>
+                      Toque {marcado.length + 1} de {MARCAS_PASOS.length}:
+                    </b>{" "}
+                    {MARCAS_PASOS[marcado.length].texto}
+                  </div>
+                </div>
               ) : review.helbing || review.perthes ? (
                 // De la única foto salen dos imágenes: Helbing y Perthes por separado
                 <>
@@ -1363,19 +1474,15 @@ export function CapturaStudio({
                 )}
                 {phase === "live" && !isVideo && (
                   <>
-                    <button
-                      type="button"
-                      className={allOk ? "pri wfull" : "wfull"}
-                      onClick={takePhoto}
-                    >
-                      {allOk ? "📷 Hacer la foto ahora" : "📷 Hacer la foto sin comprobar"}
+                    <button type="button" className="pri wfull studio-shutter" onClick={takePhoto}>
+                      📷 Hacer la foto
                     </button>
-                    {poseState === "activo" && guide.checks.length > 0 && (
-                      <div className="tiny" style={{ marginTop: 6 }}>
-                        Se dispara sola cuando ve los dos pies de cerca. Si no consigue detectarlos
-                        (poca luz, calcetines, encuadre muy cerrado), usa el botón.
-                      </div>
-                    )}
+                    <div className="tiny" style={{ marginTop: 6 }}>
+                      Pulsa cuando el encuadre esté bien. Si la app reconoce los dos pies de cerca,
+                      también dispara sola.
+                      {kind === "foto_posterior" &&
+                        " Las líneas de Helbing y Perthes se calculan solas si los puntos son fiables; si no, se marcan con seis toques sobre la foto."}
+                    </div>
                   </>
                 )}
                 {phase === "countdown" && (
@@ -1425,11 +1532,28 @@ export function CapturaStudio({
                     </div>
                   )
                 )}
-                {kind === "foto_posterior" && (
+                {kind === "foto_posterior" && marcado && (
+                  <div className="note" style={{ marginTop: 8 }}>
+                    <b>Marcado a mano.</b> Toca sobre la foto los tres puntos de cada pierna
+                    (pantorrilla, parte alta del talón y apoyo del talón). Con los seis toques se
+                    trazan la línea de Helbing y la regla de Perthes con sus grados.
+                    <div className="row" style={{ marginTop: 8 }}>
+                      <button type="button" onClick={() => setMarcado(marcado.slice(0, -1))} disabled={marcado.length === 0}>
+                        ↶ Deshacer
+                      </button>
+                      <button type="button" onClick={() => setMarcado(null)}>
+                        Cancelar
+                      </button>
+                    </div>
+                  </div>
+                )}
+                {kind === "foto_posterior" && !marcado && (
                   <div className={`note ${review.helbing || review.perthes ? "" : "a"}`} style={{ marginTop: 8 }}>
                     {review.helbing || review.perthes ? (
                       <>
-                        <b>Retropié</b> (orientativo, con los puntos de pose):
+                        <b>Retropié</b> (orientativo
+                        {review.helbing?.dcha?.manual || review.helbing?.izq?.manual ? ", marcado a mano" : ", con los puntos de pose"}
+                        ):
                         {review.helbing && (
                           <>
                             <br />
@@ -1445,9 +1569,23 @@ export function CapturaStudio({
                         <br />
                         De esta única foto salen las dos imágenes (Helbing y Perthes); se guardan
                         con ella y las verán prescriptor y taller.
+                        <div style={{ marginTop: 8 }}>
+                          <button type="button" className="wfull" onClick={() => setMarcado([])}>
+                            ✎ Corregir los puntos a mano
+                          </button>
+                        </div>
                       </>
                     ) : (
-                      "No se han podido calcular las líneas del retropié (no se detectaron tobillos y talones al disparar). La foto se guarda igual; repite si quieres que salgan."
+                      <>
+                        Los puntos de pose de esta foto no son fiables, así que las líneas del
+                        retropié no se han calculado. Márcalas a mano con seis toques (lo normal en
+                        fotos de solo pies) o sube la foto sin líneas.
+                        <div style={{ marginTop: 8 }}>
+                          <button type="button" className="pri wfull" onClick={() => setMarcado([])}>
+                            ✎ Marcar los puntos a mano
+                          </button>
+                        </div>
+                      </>
                     )}
                   </div>
                 )}
@@ -1469,6 +1607,11 @@ export function CapturaStudio({
                   <button type="button" onClick={retake}>
                     ↺ Repetir
                   </button>
+                  {!isVideo && !marcado && (
+                    <button type="button" onClick={girarFoto} title="Girar la foto 90°">
+                      ⟳ Girar
+                    </button>
+                  )}
                   <button
                     type="button"
                     className="pri"
