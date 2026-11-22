@@ -7,6 +7,7 @@ import { prisma } from "@/lib/db";
 import { requireRole } from "@/lib/auth";
 import { auditar, crearPreAlta, leerPreAlta, puedeVerFicha, reenviar, revocar, tratamientoPermitido } from "@/lib/alta";
 import { enviarAcceso } from "@/lib/acceso";
+import { FRASE_ALTA } from "@/lib/legal";
 import { isValidDni, normalizeDni } from "@/lib/contacto";
 import { ORDEN, esObligatorio } from "@/lib/consent/tipos";
 import { origenPeticion } from "@/lib/rate-limit";
@@ -37,8 +38,8 @@ export async function preAltaAction(formData: FormData) {
     `/panel/paciente/${r.patient.id}`,
     "ok",
     r.envio.ok
-      ? `Alta creada y WhatsApp enviado a ${quien}. También puede empezar escaneando el QR o escribiendo ALTA.`
-      : `Alta creada. Pide a ${quien} que escanee el QR o escriba ALTA a nuestro WhatsApp para empezar (el envío automático no salió: ${r.envio.error}).`
+      ? `Alta creada y WhatsApp enviado a ${quien}. También puede empezar escaneando el QR o escribiendo «${FRASE_ALTA}».`
+      : `Alta creada. Pide a ${quien} que escanee el QR o escriba «${FRASE_ALTA}» a nuestro WhatsApp para empezar (el envío automático no salió: ${r.envio.error}).`
   );
 }
 

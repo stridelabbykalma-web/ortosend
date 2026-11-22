@@ -21,4 +21,6 @@ export const CONSENT_VERSION = "v3";
 export const FECHA_TEXTOS = "septiembre de 2026";
 
 // Enlace que abre WhatsApp con «ALTA» ya escrito hacia el número de la empresa.
-export const enlaceAlta = () => `https://wa.me/${EMPRESA.whatsapp}?text=ALTA`;
+// Frase que dispara el flujo «Alta · Invitación» en ManyChat (debe coincidir con su palabra clave).
+export const FRASE_ALTA = "Vamos a empezar el alta!";
+export const enlaceAlta = () => `https://wa.me/${EMPRESA.whatsapp}?text=${encodeURIComponent(FRASE_ALTA)}`;
