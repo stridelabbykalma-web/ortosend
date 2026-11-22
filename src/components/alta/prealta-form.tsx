@@ -43,6 +43,10 @@ export function PreAltaForm({ action, declaracion }: { action: (f: FormData) => 
           <FechaNacimiento id="pa-nacimiento" name="fechaNacimiento" required value={nacimiento} onChange={setNacimiento} />
         </div>
         <div>
+          <label htmlFor="pa-dni">DNI/NIE del paciente (opcional)</label>
+          <input id="pa-dni" name="dni" autoComplete="off" />
+        </div>
+        <div>
           <label htmlFor="pa-telefono">Móvil del paciente{menor ? " (opcional)" : ""}</label>
           <input id="pa-telefono" name="telefono" type="tel" placeholder="+34 600 112 233" required={!menor} autoComplete="off" />
         </div>

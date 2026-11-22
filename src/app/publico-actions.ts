@@ -13,12 +13,16 @@ import { bookAppointment, TX_RESERVA } from "@/lib/agenda-db";
 import { sincronizarCaso } from "@/lib/conector";
 import { agendaErrorMessage, parseSlot, type SlotOk } from "@/lib/reserva-form";
 import { fechaTextoLarga, fmtdt } from "@/lib/format";
-import { isValidPhone, normalizeEmail, normalizePhone } from "@/lib/contacto";
+import { isValidDni, isValidPhone, normalizeDni, normalizeEmail, normalizePhone } from "@/lib/contacto";
 import { EDAD_MAYORIA_SALUD, esMenor, parseBirth } from "@/lib/edad";
 import { CONSENT_VERSION } from "@/lib/legal";
 import { enviarBienvenida } from "@/lib/cuenta";
 import { exigirTratamientoPermitido } from "@/lib/alta";
-import { permitirPublico } from "@/lib/rate-limit";
+import { origenPeticion, permitirPublico } from "@/lib/rate-limit";
+import { faltanObligatorios, leerConsentimientos, registrarConsentimientosWeb } from "@/lib/consent/web";
+import { estadoActual, obligatoriosEnVigor } from "@/lib/consent/registro";
+
+const FALTAN = "Para crear tu perfil debes aceptar los cuatro documentos obligatorios (privacidad, datos de salud, tratamiento y condiciones)";
 
 const reservaSchema = z.object({
   clinicId: z.string().min(1),
@@ -50,7 +54,8 @@ export async function reservaAction(formData: FormData) {
   const parsed = reservaSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) back(parsed.error.issues[0].message);
   const d = parsed.data!;
-  if (formData.get("consentSalud") !== "on") back("El consentimiento de datos de salud (RGPD) es necesario");
+  const marcas = leerConsentimientos(formData);
+  if (faltanObligatorios(marcas)) back(FALTAN);
 
   const clinic = await prisma.clinic.findUnique({ where: { id: d.clinicId } });
   if (!clinic || clinic.status !== "ACTIVA" || !clinic.onlineBooking) back("Esta clínica no admite reservas online");
@@ -61,19 +66,34 @@ export async function reservaAction(formData: FormData) {
   if (!isValidPhone(phone)) back("Móvil no válido");
   const birth = parseBirth(d.birth);
   if (d.birth && !birth) back("Fecha de nacimiento no válida");
+  const dni = normalizeDni(String(formData.get("dni") ?? "")) || null;
+  if (dni && !isValidDni(dni)) back("DNI/NIE no válido (revisa la letra)");
+  // Misma persona ya registrada (por DNI, o nombre + fecha de nacimiento): que entre a su cuenta.
+  const yaEsta = await prisma.patient.findFirst({
+    where: {
+      status: { in: ["PENDIENTE", "ACEPTADO"] },
+      OR: [
+        ...(dni ? [{ dni }] : []),
+        ...(birth ? [{ birthDate: birth, name: { equals: d.name.trim(), mode: "insensitive" as const } }] : []),
+      ],
+    },
+  });
+  if (yaEsta) back("Ya tienes perfil en Ortosend. Inicia sesión, o pide a tu clínica que te dé acceso, para reservar.");
   if (birth && esMenor(birth, now))
     back(
       `Si el paciente tiene menos de ${EDAD_MAYORIA_SALUD} años, la reserva debe hacerla su padre, madre o tutor: crea tu cuenta con tus datos y reserva para «otra persona a mi cargo», o inicia sesión si ya la tienes`
     );
-  const existing = await prisma.user.findFirst({ where: { OR: [{ email }, { phone }] } });
-  if (existing) back("Ya existe una cuenta con ese email o móvil. Inicia sesión para reservar.");
+  // La cuenta se identifica por email: el móvil puede compartirse (pareja, familia).
+  const existing = await prisma.user.findUnique({ where: { email } });
+  if (existing) back("Ya existe una cuenta con ese email. Inicia sesión para reservar.");
 
   const consentWhatsApp = formData.get("consentWhatsApp") === "on";
   const declara = declaraciones(formData);
   const consents = {
-    salud: { aceptado: true, fecha: now.toISOString(), version: CONSENT_VERSION, via: "web" },
+    salud: { aceptado: true, fecha: now.toISOString(), version: CONSENT_VERSION, via: "web_registro" },
     whatsapp: { aceptado: consentWhatsApp, fecha: now.toISOString(), version: CONSENT_VERSION },
   };
+  const origen = await origenPeticion();
   let result: { userId: string; caseId: string; startsAt: Date } | null = null;
   try {
     result = await prisma.$transaction(async (tx) => {
@@ -93,10 +113,12 @@ export async function reservaAction(formData: FormData) {
           ownerId: user.id,
           name: d.name.trim(),
           birthDate: birth,
+          dni,
           isMinor: false,
           consents,
         },
       });
+      await registrarConsentimientosWeb(tx, { patientId: patient.id, marcas, actor: "paciente", actorUserId: user.id, ...origen });
       const kase = await tx.case.create({
         data: {
           patientId: patient.id,
@@ -158,13 +180,16 @@ export async function reservaClienteAction(formData: FormData) {
   if (!user || user.role !== "CLIENTE") redirect(`/login?next=/reserva/${clinicId}`);
   const slot = parseSlot(formData);
   if (!slot.ok) back(slot.error);
-  if (formData.get("consentSalud") !== "on") back("El consentimiento de datos de salud (RGPD) es necesario");
+  const marcas = leerConsentimientos(formData);
   const clinic = await prisma.clinic.findUnique({ where: { id: clinicId } });
   if (!clinic || clinic.status !== "ACTIVA" || !clinic.onlineBooking) back("Esta clínica no admite reservas online");
 
   const patientId = String(formData.get("patientId") ?? "");
   const declara = declaraciones(formData);
   const now = new Date();
+  const origen = await origenPeticion();
+  let registrarConsent = false;
+  let tutor = false;
   let existente: { id: string; name: string } | null = null;
   let nuevo: { name: string; birth: Date | null; menor: boolean } | null = null;
   if (patientId && patientId !== "nuevo") {
@@ -182,7 +207,15 @@ export async function reservaClienteAction(formData: FormData) {
       },
     });
     if (abierto) back(`${existente!.name} ya tiene un estudio en marcha (caso #${abierto.number}). Cambia su cita desde el panel.`);
+    // Pacientes anteriores al registro legal: aceptan los documentos en esta reserva.
+    if (!obligatoriosEnVigor(await estadoActual(prisma, existente!.id))) {
+      if (faltanObligatorios(marcas)) back(FALTAN);
+      registrarConsent = true;
+      tutor = (await prisma.patient.findUnique({ where: { id: existente!.id } }))?.isMinor ?? false;
+    }
   } else {
+    if (faltanObligatorios(marcas)) back(FALTAN);
+    registrarConsent = true;
     const newName = String(formData.get("newName") ?? "").trim();
     if (newName.length < 3) back("Indica el nombre y apellidos del paciente");
     const birthRaw = String(formData.get("newBirth") ?? "").trim();
@@ -190,6 +223,7 @@ export async function reservaClienteAction(formData: FormData) {
     // Fecha escrita pero no válida: avisar, no tragársela (de esto depende isMinor).
     if (birthRaw && !newBirth) back("La fecha de nacimiento no es válida: escríbela como dd/mm/aaaa");
     nuevo = { name: newName, birth: newBirth, menor: esMenor(newBirth, now) };
+    tutor = nuevo.menor;
   }
 
   let result: { caseId: string; startsAt: Date; patientId: string; patientName: string } | null = null;
@@ -212,6 +246,14 @@ export async function reservaClienteAction(formData: FormData) {
               },
             },
           });
+      if (registrarConsent)
+        await registrarConsentimientosWeb(tx, {
+          patientId: patient.id,
+          marcas,
+          actor: tutor ? "tutor" : "paciente",
+          actorUserId: user!.id,
+          ...origen,
+        });
       const kase = await tx.case.create({
         data: { patientId: patient.id, clinicId, state: "CITA_RESERVADA", flow: "A", reason: declara },
       });
