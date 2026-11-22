@@ -12,11 +12,13 @@ import type { ConsentAction, ConsentInvitation, ConsentType, Patient, PatientSta
 import { prisma } from "./db";
 import { isValidDni, normalizeDni, isValidPhone, normalizeEmail, normalizePhone } from "./contacto";
 import { EDAD_MAYORIA_SALUD, esMenor, parseBirth } from "./edad";
-import { CAMPOS, ETIQUETAS, FLUJOS, aE164, manychat } from "./manychat";
+import { CAMPOS, ContactoExistente, ETIQUETAS, FLUJOS, aE164, manychat } from "./manychat";
+import { subscriberConocido } from "./contacto-manychat";
 import { ORDEN, OBLIGATORIOS, SLUG, ETIQUETA, esObligatorio } from "./consent/tipos";
 import { registrar, textosVigentes } from "./consent/registro";
 import { INVITACION_HORAS, hashSecreto, horasDesdeAhora, nuevoSecreto } from "./consent/tokens";
 import { notifyEmail } from "./cases";
+import { FRASE_ALTA } from "./legal";
 
 type Tx = Prisma.TransactionClient;
 type Profesional = Pick<User, "id" | "name" | "clinicId">;
@@ -222,12 +224,14 @@ export async function enviarInvitacion(patientId: string, actorUserId: string): 
 
   try {
     const mc = manychat();
-    const subscriberId = await mc.buscarOCrearContacto({
-      telefonoE164: aE164(dest.telefono),
-      nombre: dest.nombre.split(" ")[0] || dest.nombre,
-      apellidos: patient.isMinor ? null : patient.lastName,
-      fraseConsentimiento: DECLARACION_PROFESIONAL,
-    });
+    const subscriberId =
+      (await subscriberConocido(dest.telefono)) ??
+      (await mc.buscarOCrearContacto({
+        telefonoE164: aE164(dest.telefono),
+        nombre: dest.nombre.split(" ")[0] || dest.nombre,
+        apellidos: patient.isMinor ? null : patient.lastName,
+        fraseConsentimiento: DECLARACION_PROFESIONAL,
+      }));
     await mc.ponerCampos(subscriberId, { [CAMPOS.ref]: ref, [CAMPOS.paciente]: patient.name });
     const respuesta = await mc.lanzarFlujo(subscriberId, FLUJOS.invitacion());
     const ok = await prisma.consentInvitation.update({
@@ -242,7 +246,10 @@ export async function enviarInvitacion(patientId: string, actorUserId: string): 
     await prisma.patient.update({ where: { id: patientId }, data: { status: siguienteEstadoTrasEnvio(patient.status) } });
     return { ok: true, invitation: ok };
   } catch (e) {
-    const msg = (e as Error).message.slice(0, 500);
+    const msg =
+      e instanceof ContactoExistente
+        ? `Este móvil ya ha hablado con el WhatsApp de la empresa y no podemos enviarle el mensaje automático. Que escanee el QR o escriba «${FRASE_ALTA}» desde ese móvil.`
+        : (e as Error).message.slice(0, 500);
     const ko = await prisma.consentInvitation.update({
       where: { id: invitation.id },
       data: { sendStatus: "ERROR", sendError: msg, manychatResponse: { error: msg } },

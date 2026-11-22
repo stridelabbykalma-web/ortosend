@@ -1,5 +1,5 @@
 // ManyChat de mentira: guarda cada llamada para comprobar qué saldría hacia fuera.
-import { CAMPOS, ManyChatError, type Contacto, type ManyChat } from "@/lib/manychat";
+import { CAMPOS, ContactoExistente, ManyChatError, type Contacto, type ManyChat } from "@/lib/manychat";
 
 export type Llamada =
   | { op: "contacto"; contacto: Contacto }
@@ -14,12 +14,14 @@ export class FakeManyChat implements ManyChat {
   readonly simulado = true;
   llamadas: Llamada[] = [];
   fallar = false;
+  contactoYaExiste = false; // ManyChat dice «ya existe» y la API no sabe encontrarlo
 
   private check() {
     if (this.fallar) throw new ManyChatError("ManyChat caído (simulado)");
   }
   async buscarOCrearContacto(c: Contacto) {
     this.check();
+    if (this.contactoYaExiste) throw new ContactoExistente("ManyChat /fb/subscriber/createSubscriber: This WhatsApp ID already exists");
     this.llamadas.push({ op: "contacto", contacto: c });
     return `sub_${c.telefonoE164.replace(/\D/g, "")}`;
   }

@@ -2,6 +2,7 @@
 // pulsa «Enviar acceso». El paciente (o su tutor) entra en /acceso, escribe su
 // DNI y su móvil y recibe un código de 6 cifras por WhatsApp; con él crea su
 // contraseña. DNI y móvil no son secretos: el código prueba que tiene el móvil.
+import { subscriberConocido } from "./contacto-manychat";
 import type { Patient, User } from "@prisma/client";
 import { prisma } from "./db";
 import { hashPassword } from "./auth";
@@ -138,7 +139,7 @@ export async function solicitarCodigo(dniRaw: string, telefonoRaw: string): Prom
     where: { patientId: { in: lista.map((p) => p.id) }, manychatSubscriberId: { not: null } },
     orderBy: { createdAt: "desc" },
   });
-  const sub = inv?.manychatSubscriberId ?? (await manychat().buscarOCrearContacto({
+  const sub = inv?.manychatSubscriberId ?? (await subscriberConocido(telefono)) ?? (await manychat().buscarOCrearContacto({
     telefonoE164: aE164(telefono),
     nombre: destinatario(lista[0]).nombre,
     fraseConsentimiento: "Código de acceso solicitado por el titular en ortosend.es",

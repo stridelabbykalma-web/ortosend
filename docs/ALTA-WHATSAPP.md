@@ -319,3 +319,7 @@ Reglas comunes:
 - El pre-alta y el registro web rechazan duplicados por **persona**: mismo DNI/NIE (opcional en ambos formularios), o mismo nombre + apellidos + fecha de nacimiento que un paciente pendiente/aceptado. Email y móvil no cuentan: pareja y familia los comparten.
 - Un móvil solo puede tener **un alta por WhatsApp en curso** a la vez (ManyChat guarda un único `ref` por contacto).
 - En `/acceso`, un adulto con móvil compartido recibe su propia cuenta; un tutor con varios hijos reutiliza la suya.
+- **Contactos que ya habían escrito al WhatsApp de la empresa.** La API de ManyChat no tiene búsqueda por el WhatsApp ID
+  (`findBySystemField` solo admite `phone` —el de SMS— o `email`), así que crear su contacto da «WhatsApp ID already exists».
+  La web reutiliza el contacto que ya conoce de altas anteriores de ese móvil (`src/lib/contacto-manychat.ts`). Si el móvil
+  nunca pasó por un alta, el envío automático falla con un mensaje claro y el paciente empieza con el QR o la frase.

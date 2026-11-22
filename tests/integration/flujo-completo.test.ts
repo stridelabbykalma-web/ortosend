@@ -572,4 +572,28 @@ describe("dos vías de entrada: web y profesional", () => {
     await prisma.user.create({ data: { role: "CLIENTE", name: "Marido", phone, email: "marido@test.com" } });
     await expect(prisma.user.create({ data: { role: "CLIENTE", name: "Mujer", phone, email: "mujer@test.com" } })).resolves.toBeTruthy();
   });
+
+  it("si el móvil ya habló con la empresa, reutiliza su contacto de ManyChat en vez de crearlo", async () => {
+    const tel = nuevoTel();
+    const a = await crearPreAlta(pro, datos({ telefono: tel, fechaNacimiento: "1970-01-01" }));
+    expect(a.ok).toBe(true);
+    const subAntes = a.ok ? a.envio.invitation.manychatSubscriberId : null;
+    await prisma.consentInvitation.updateMany({ where: { patientId: a.ok ? a.patient.id : "" }, data: { completedAt: new Date() } });
+    mc.llamadas = [];
+    mc.contactoYaExiste = true; // crear daría «ya existe»: tiene que usar el que ya conocemos
+    const b = await crearPreAlta(pro, datos({ telefono: tel, fechaNacimiento: "1971-02-02" }));
+    mc.contactoYaExiste = false;
+    expect(b.ok && b.envio.ok).toBe(true);
+    expect(mc.llamadas.some((l) => l.op === "contacto")).toBe(false);
+    expect(mc.llamadas).toContainEqual(expect.objectContaining({ op: "flujo", sub: subAntes }));
+  });
+
+  it("si ManyChat ya tiene el contacto y no lo conocemos, el error explica qué hacer", async () => {
+    mc.contactoYaExiste = true;
+    const r = await crearPreAlta(pro, datos({ fechaNacimiento: "1965-03-03" }));
+    mc.contactoYaExiste = false;
+    expect(r.ok).toBe(true);
+    if (r.ok && !r.envio.ok) expect(r.envio.error).toMatch(/Vamos a empezar el alta/);
+    else throw new Error("debía fallar el envío con mensaje claro");
+  });
 });
