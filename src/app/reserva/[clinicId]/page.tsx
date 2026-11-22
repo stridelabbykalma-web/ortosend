@@ -8,6 +8,7 @@ import { getSessionUser } from "@/lib/auth";
 import { Flash } from "@/components/ui";
 import { FechaNacimiento } from "@/components/fecha-nacimiento";
 import { Calendario } from "@/components/reserva/calendario";
+import { CasillasConsentimiento } from "@/components/consent/casillas-web";
 import { reservaAction, reservaClienteAction } from "@/app/publico-actions";
 import { reprogramarCitaAction } from "@/app/panel/cliente-actions";
 import { activeAppointmentOf } from "@/lib/agenda-db";
@@ -159,12 +160,7 @@ export default async function ReservaPage({
               <input type="checkbox" name="declaraHerida" /> Tiene actualmente una herida o úlcera
               en los pies.
             </label>
-            <label className="chk">
-              <input type="checkbox" name="consentSalud" required /> Consiento de forma explícita el
-              tratamiento de los datos de salud del paciente para este estudio, incluida la grabación de
-              vídeos de la marcha y fotografías de los pies. Si es un menor, declaro ser su padre, madre o
-              tutor legal.
-            </label>
+            <CasillasConsentimiento menor exigir={false} />
           </div>
           <div className="sp" />
           <button type="submit" className="pri wfull">
@@ -213,6 +209,10 @@ export default async function ReservaPage({
               <FechaNacimiento name="birth" />
             </div>
             <div>
+              <label>DNI/NIE (opcional)</label>
+              <input name="dni" autoComplete="off" />
+            </div>
+            <div>
               <label>Motivo (opcional)</label>
               <select name="motivo" defaultValue="Dolor">
                 <option>Dolor</option>
@@ -235,13 +235,7 @@ export default async function ReservaPage({
             <input type="checkbox" name="declaraHerida" /> Tiene actualmente una herida o úlcera en
             los pies.
           </label>
-          <label className="chk">
-            <input type="checkbox" name="consentSalud" required /> Consiento de forma explícita el
-            tratamiento de mis datos de salud para la prestación del servicio, incluida la
-            grabación de vídeos de mi marcha y fotografías de mis pies durante el estudio. Si
-            reservo para un menor de edad, declaro ser su padre, madre o tutor legal y consentir
-            en su nombre.
-          </label>
+          <CasillasConsentimiento />
           <label className="chk">
             <input type="checkbox" name="consentWhatsApp" /> Acepto recibir los avisos del
             servicio por WhatsApp (solo avisos y enlaces, nunca contenido clínico).

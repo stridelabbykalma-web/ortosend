@@ -280,9 +280,9 @@ los campos indicados. `{{nombre}}` es el campo de sistema *First Name*.
 
 ## 11. Empezar escribiendo ALTA (sin plantilla)
 
-El paciente (o su tutor) puede empezar el alta escribiendo **ALTA** al WhatsApp de la empresa: por
+El paciente (o su tutor) puede empezar el alta escribiendo **«Vamos a empezar el alta»** (`FRASE_ALTA` en `src/lib/legal.ts`) al WhatsApp de la empresa: por
 ejemplo, escaneando en la consulta el QR que aparece en la ficha del paciente del panel
-(`https://wa.me/<número>?text=ALTA`). Como escribe él primero, se abre la ventana de 24 h de WhatsApp
+(`https://wa.me/<número>?text=Vamos%20a%20empezar%20el%20alta`). Como escribe él primero, se abre la ventana de 24 h de WhatsApp
 y todos los mensajes son libres: no hace falta la plantilla de bienvenida aprobada.
 
 - La web reconoce al paciente por el **móvil del contacto** (WhatsApp garantiza el número): busca su
@@ -293,7 +293,7 @@ y todos los mensajes son libres: no hace falta la plantilla de bienvenida aproba
   en cuanto escribe ALTA.
 
 **En ManyChat** (flujo «Alta · Invitación»):
-1. Disparador del flujo: palabra clave **ALTA** («El usuario envía un mensaje que contiene alta»).
+1. Disparador del flujo: frase **Vamos a empezar el alta** (sin «!»; «El mensaje es» o «contiene», tiene que coincidir con `FRASE_ALTA`).
 2. En **ER Empezar**, cuerpo con el teléfono del contacto (insertado con el selector de campos):
    ```json
    { "ref": "{{ortosend_ref}}", "subscriber_id": "{{Id de contacto}}", "telefono": "{{Teléfono}}", "accion": "empezar" }
@@ -303,3 +303,19 @@ y todos los mensajes son libres: no hace falta la plantilla de bienvenida aproba
 
 La web responde siempre a «empezar» con el ref vigente para que ManyChat lo guarde y lo usen los
 botones de los documentos.
+
+## 12. Dos vías de entrada
+
+1. **Desde la web**: el paciente reserva y se registra él mismo. Marca las mismas 5 casillas
+   (privacidad, datos de salud, tratamiento, condiciones obligatorias; marketing opcional), cada
+   una con enlace al texto vigente (`/legal/documento/<slug>`). Cada documento se guarda en
+   `consent_log` con canal `web_registro` y la versión exacta del texto. Llega con perfil y
+   consentimientos hechos.
+2. **Alta del profesional**: pre-alta en el panel y consentimientos por WhatsApp (resto de este documento).
+
+Reglas comunes:
+- La cuenta se identifica por **email**; el móvil solo sirve para avisos y **puede repetirse** entre
+  cuentas (pareja, familia). Ya no es único en `User`. Entrar con móvil solo funciona si es de una única cuenta.
+- El pre-alta y el registro web rechazan duplicados por **persona**: mismo DNI/NIE (opcional en ambos formularios), o mismo nombre + apellidos + fecha de nacimiento que un paciente pendiente/aceptado. Email y móvil no cuentan: pareja y familia los comparten.
+- Un móvil solo puede tener **un alta por WhatsApp en curso** a la vez (ManyChat guarda un único `ref` por contacto).
+- En `/acceso`, un adulto con móvil compartido recibe su propia cuenta; un tutor con varios hijos reutiliza la suya.

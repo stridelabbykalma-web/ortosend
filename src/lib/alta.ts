@@ -10,7 +10,7 @@
 import { nombreCompleto } from "./nombre";
 import type { ConsentAction, ConsentInvitation, ConsentType, Patient, PatientStatus, Prisma, User } from "@prisma/client";
 import { prisma } from "./db";
-import { isValidPhone, normalizeEmail, normalizePhone } from "./contacto";
+import { isValidDni, normalizeDni, isValidPhone, normalizeEmail, normalizePhone } from "./contacto";
 import { EDAD_MAYORIA_SALUD, esMenor, parseBirth } from "./edad";
 import { CAMPOS, ETIQUETAS, FLUJOS, aE164, manychat } from "./manychat";
 import { ORDEN, OBLIGATORIOS, SLUG, ETIQUETA, esObligatorio } from "./consent/tipos";
@@ -44,6 +44,7 @@ export type DatosPreAlta = {
   telefono: string;
   email: string;
   fechaNacimiento: string;
+  dni: string;
   declaracion: boolean;
   tutorNombre: string;
   tutorTelefono: string;
@@ -58,6 +59,7 @@ export function leerPreAlta(f: FormData): DatosPreAlta {
     telefono: s("telefono"),
     email: s("email"),
     fechaNacimiento: s("fechaNacimiento"),
+    dni: s("dni"),
     declaracion: f.get("declaracion") === "on",
     tutorNombre: s("tutorNombre"),
     tutorTelefono: s("tutorTelefono"),
@@ -88,7 +90,15 @@ export async function crearPreAlta(pro: Profesional, d: DatosPreAlta): Promise<R
     if (!isValidPhone(tutorTelefono)) return { ok: false, error: "Móvil del tutor no válido" };
     if (tutorEmail && !tutorEmail.includes("@")) return { ok: false, error: "Email del tutor no válido" };
   }
+  const dni = normalizeDni(d.dni) || null;
+  if (dni && !isValidDni(dni)) return { ok: false, error: "El DNI/NIE del paciente no es válido (revisa la letra)" };
   const toPhone = menor ? tutorTelefono : telefono;
+  const duplicado = await buscarDuplicado(d, birth, dni);
+  if (duplicado)
+    return {
+      ok: false,
+      error: `${nombreCompleto(duplicado)} ya tiene perfil en Ortosend${duplicado.status === "ACEPTADO" ? " con los consentimientos aceptados" : ""}. No hace falta darle de alta otra vez.`,
+    };
   // Un móvil solo puede tener un alta en curso: ManyChat guarda un único «ref»
   // por contacto. La comprobación y la creación van en la misma transacción con
   // un cerrojo por teléfono: un doble clic ya no crea dos pacientes.
@@ -98,7 +108,7 @@ export async function crearPreAlta(pro: Profesional, d: DatosPreAlta): Promise<R
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${"prealta:" + toPhone}))`;
       const enCurso = await invitacionActivaDelTelefono(toPhone, undefined, tx);
       if (enCurso) throw new AltaEnCurso(nombreCompleto(enCurso.patient));
-      return crearPacientePreAlta(tx, d, { birth, menor, telefono, email, tutorTelefono, tutorEmail, pro });
+      return crearPacientePreAlta(tx, d, { birth, menor, dni, telefono, email, tutorTelefono, tutorEmail, pro });
     });
   } catch (e) {
     if (e instanceof AltaEnCurso)
@@ -118,7 +128,7 @@ class AltaEnCurso extends Error {}
 function crearPacientePreAlta(
   tx: Tx,
   d: DatosPreAlta,
-  x: { birth: Date; menor: boolean; telefono: string; email: string | null; tutorTelefono: string; tutorEmail: string | null; pro: Profesional }
+  x: { birth: Date; menor: boolean; dni: string | null; telefono: string; email: string | null; tutorTelefono: string; tutorEmail: string | null; pro: Profesional }
 ) {
   return tx.patient.create({
     data: {
@@ -128,12 +138,34 @@ function crearPacientePreAlta(
       isMinor: x.menor,
       phone: x.telefono || null,
       email: x.email,
+      dni: x.dni,
       status: "PENDIENTE",
       professionalId: x.pro.id,
       clinicId: x.pro.clinicId,
       tutorName: x.menor ? d.tutorNombre : null,
       tutorPhone: x.menor ? x.tutorTelefono : null,
       tutorEmail: x.menor ? x.tutorEmail : null,
+    },
+  });
+}
+
+// La identidad es la persona (DNI/NIE; si no lo hay, nombre + apellidos + fecha de nacimiento),
+// nunca el móvil ni el email: pareja y familia comparten contacto.
+async function buscarDuplicado(d: DatosPreAlta, birth: Date, dni: string | null) {
+  const completo = `${d.nombre} ${d.apellidos}`;
+  return prisma.patient.findFirst({
+    where: {
+      status: { in: ["PENDIENTE", "ACEPTADO"] },
+      OR: [
+        ...(dni ? [{ dni }] : []),
+        {
+          birthDate: birth,
+          OR: [
+            { name: { equals: d.nombre, mode: "insensitive" as const }, lastName: { equals: d.apellidos, mode: "insensitive" as const } },
+            { name: { equals: completo, mode: "insensitive" as const } },
+          ],
+        },
+      ],
     },
   });
 }

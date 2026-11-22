@@ -26,7 +26,7 @@ enum Role {
 model User {
   id                     String                  @id @default(cuid())
   email                  String?                 @unique
-  phone                  String?                 @unique
+  phone                  String?
   passwordHash           String? // null hasta activar cuenta (invitación Flujo B)
   sessionEpoch Int     @default(0) // sube al cerrar sesión: revoca los tokens de todos los dispositivos
   role                   Role
@@ -47,6 +47,8 @@ model User {
   availabilityExceptions AvailabilityException[]
   appointments           Appointment[]
   calendarToken          String?                 @unique // suscripción iCal privada (/api/ical/<token>)
+
+  @@index([phone])
 }
 
 // Ficha obligatoria del profesional (las cuentas las crea Ortosend)

@@ -8,7 +8,7 @@ import { REENVIABLE, auditar, destinatario, nombreCompleto, puedeVerFicha, trata
 import { dniTitular } from "@/lib/acceso";
 import { ESTADO_PACIENTE } from "@/lib/consent/estados";
 import { fmtd, fmtdt } from "@/lib/format";
-import { enlaceAlta } from "@/lib/legal";
+import { enlaceAlta, FRASE_ALTA } from "@/lib/legal";
 import QRCode from "qrcode";
 import { abrirAceptacionAquiAction, enviarAccesoAction, guardarDniAction, reenviarAction, reenviarEmailAction, revocarEnNombreAction } from "@/app/panel/alta-actions";
 
@@ -79,9 +79,9 @@ export default async function PacientePage({
         <>
           <div className="card" style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "center" }}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={qr} alt="QR para escribir ALTA por WhatsApp" width={180} height={180} />
+            <img src={qr} alt="QR para empezar el alta por WhatsApp" width={180} height={180} />
             <div style={{ flex: 1, minWidth: 220 }}>
-              <b>Para empezar, {p.isMinor ? "el tutor" : "el paciente"} escribe ALTA por WhatsApp</b>
+              <b>Para empezar, {p.isMinor ? "el tutor" : "el paciente"} escribe «{FRASE_ALTA}» por WhatsApp</b>
               <div className="muted" style={{ margin: "6px 0" }}>
                 Que escanee este QR con la cámara de <b>su móvil ({dest.telefono})</b> y pulse enviar. Le llegarán los
                 documentos uno a uno. Tiene que ser desde ese número: así sabemos que es él.

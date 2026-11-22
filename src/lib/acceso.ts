@@ -78,6 +78,19 @@ export async function enviarAccesoSiProcede(patientId: string): Promise<string |
 // Pacientes que ese DNI + móvil pueden reclamar: aceptados y con acceso enviado.
 // Si ya tienen cuenta, el mismo código sirve para restablecer la contraseña
 // (única vía de recuperación para cuentas sin email).
+// Cuenta a la que pertenece este acceso. El móvil puede compartirse (pareja, familia),
+// así que NO identifica a nadie por sí solo: primero la cuenta dueña de alguna ficha;
+// si las fichas aún no tienen dueño, solo se reutiliza la cuenta de un tutor (madre
+// con varios hijos) cuando ese móvil pertenece a una única cuenta. Un adulto con móvil
+// compartido recibe su propia cuenta.
+async function cuentaDeAcceso(lista: { ownerId: string | null; isMinor: boolean }[], telefono: string) {
+  const dueno = lista.find((p) => p.ownerId)?.ownerId;
+  if (dueno) return prisma.user.findUnique({ where: { id: dueno } });
+  if (!lista[0]?.isMinor) return null;
+  const cuentas = await prisma.user.findMany({ where: { phone: telefono }, take: 2 });
+  return cuentas.length === 1 ? cuentas[0] : null;
+}
+
 async function candidatos(dni: string, telefono: string) {
   return prisma.patient.findMany({
     where: {
@@ -145,10 +158,14 @@ export async function solicitarCodigo(dniRaw: string, telefonoRaw: string): Prom
   // profesional y no está verificado — con él, un tercero podría recibir un
   // código capaz de tocar una cuenta ajena.
   if (!porWhatsApp) {
-    const cuenta = await prisma.user.findUnique({ where: { phone: telefono } });
-    const email = cuenta
-      ? normalizeEmail(cuenta.email) || null
-      : normalizeEmail(destinatario(lista[0]).email) || null;
+    // Con el móvil en varias cuentas no hay un email verificado al que mandarlo: solo WhatsApp.
+    const dueno = lista.find((p) => p.ownerId)?.ownerId;
+    const cuentas = dueno
+      ? await prisma.user.findMany({ where: { id: dueno } })
+      : await prisma.user.findMany({ where: { phone: telefono }, take: 2 });
+    const cuenta = cuentas.length === 1 ? cuentas[0] : null;
+    const email =
+      cuentas.length > 1 ? null : cuenta ? normalizeEmail(cuenta.email) || null : normalizeEmail(destinatario(lista[0]).email) || null;
     if (email)
       await notifyEmail(email, "codigo_acceso", {
         nombre: cuenta?.name ?? destinatario(lista[0]).nombre,
@@ -188,7 +205,7 @@ export async function crearCuentaConCodigo(dniRaw: string, telefonoRaw: string, 
   const used = await prisma.accessCode.updateMany({ where: { id: ac.id, usedAt: null }, data: { usedAt: new Date() } });
   if (!used.count) return generico;
 
-  const existente = await prisma.user.findUnique({ where: { phone: telefono } });
+  const existente = await cuentaDeAcceso(lista, telefono);
   if (existente) {
     if (existente.role !== "CLIENTE") return { ok: false, error: "Ese móvil pertenece a una cuenta profesional. Contacta con Ortosend." };
     // Ya tiene cuenta (p. ej. una madre con dos hijos): se le añaden los

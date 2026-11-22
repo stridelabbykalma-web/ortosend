@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { z } from "zod";
+import { buscarCuenta } from "@/lib/identificador";
 import { prisma } from "@/lib/db";
 import {
   createSession,
@@ -46,9 +47,7 @@ export async function loginAction(formData: FormData) {
   if (!origen.sinPeticion && !(await limitar(claveIp("login", origen.ip), 10, 60)))
     redirect(loginUrl("Demasiados intentos. Espera un minuto."));
   const id = normalizeIdentifier(parsed.data.identifier.slice(0, 200));
-  const user = await prisma.user.findFirst({
-    where: { OR: [{ email: id }, { phone: id }] },
-  });
+  const user = await buscarCuenta(id);
   if (!user || !user.active || !user.passwordHash || !(await verifyPassword(parsed.data.password, user.passwordHash))) {
     redirect(loginUrl("Credenciales incorrectas"));
   }
@@ -121,8 +120,8 @@ export async function activateAction(formData: FormData) {
   const esCliente = u.role === "CLIENTE";
   if (esCliente && formData.get("consentSalud") !== "on") back("Debes confirmar el consentimiento de datos de salud");
   const consentWhatsApp = formData.get("consentWhatsApp") === "on";
-  const dup = await prisma.user.findFirst({ where: { id: { not: u.id }, OR: [{ email }, { phone }] } });
-  if (dup) back("Ya existe otra cuenta con ese email o móvil");
+  const dup = await prisma.user.findFirst({ where: { id: { not: u.id }, email } });
+  if (dup) back("Ya existe otra cuenta con ese email");
   const now = new Date();
   const updated = await prisma.$transaction(async (tx) => {
     const updated = await tx.user.update({
@@ -183,10 +182,10 @@ export async function handoverAction(formData: FormData) {
   if (password.length < 8) back("La contraseña debe tener al menos 8 caracteres");
   const p = patient!;
   const anterior = titularDe(p);
-  if (email === anterior.email || phone === anterior.phone)
-    back("Tu email y tu móvil deben ser distintos de los de quien gestionaba tu cuenta: serás la única persona con acceso");
-  const dup = await prisma.user.findFirst({ where: { OR: [{ email }, { phone }] } });
-  if (dup) back("Ya existe otra cuenta con ese email o móvil");
+  if (email === anterior.email)
+    back("Tu email debe ser distinto del de quien gestionaba tu cuenta: serás la única persona con acceso");
+  const dup = await prisma.user.findFirst({ where: { email } });
+  if (dup) back("Ya existe otra cuenta con ese email");
   const now = new Date();
   const user = await prisma.$transaction(async (tx) => {
     const user = await tx.user.create({
@@ -240,7 +239,7 @@ export async function recoverAction(formData: FormData) {
     redirect("/recuperar?error=" + encodeURIComponent("Demasiadas peticiones. Espera unos minutos."));
   const id = normalizeIdentifier(String(formData.get("identifier") ?? "").slice(0, 200));
   if (id.length >= 3) {
-    const user = await prisma.user.findFirst({ where: { OR: [{ email: id }, { phone: id }] } });
+    const user = await buscarCuenta(id);
     if (user && user.active && user.email) await enviarRecuperacion(user);
   }
   redirect(
