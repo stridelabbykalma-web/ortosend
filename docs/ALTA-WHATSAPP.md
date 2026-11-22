@@ -280,9 +280,9 @@ los campos indicados. `{{nombre}}` es el campo de sistema *First Name*.
 
 ## 11. Empezar escribiendo ALTA (sin plantilla)
 
-El paciente (o su tutor) puede empezar el alta escribiendo **«Vamos a empezar el alta!»** (`FRASE_ALTA` en `src/lib/legal.ts`) al WhatsApp de la empresa: por
+El paciente (o su tutor) puede empezar el alta escribiendo **«Vamos a empezar el alta»** (`FRASE_ALTA` en `src/lib/legal.ts`) al WhatsApp de la empresa: por
 ejemplo, escaneando en la consulta el QR que aparece en la ficha del paciente del panel
-(`https://wa.me/<número>?text=Vamos%20a%20empezar%20el%20alta!`). Como escribe él primero, se abre la ventana de 24 h de WhatsApp
+(`https://wa.me/<número>?text=Vamos%20a%20empezar%20el%20alta`). Como escribe él primero, se abre la ventana de 24 h de WhatsApp
 y todos los mensajes son libres: no hace falta la plantilla de bienvenida aprobada.
 
 - La web reconoce al paciente por el **móvil del contacto** (WhatsApp garantiza el número): busca su
@@ -293,7 +293,7 @@ y todos los mensajes son libres: no hace falta la plantilla de bienvenida aproba
   en cuanto escribe ALTA.
 
 **En ManyChat** (flujo «Alta · Invitación»):
-1. Disparador del flujo: frase **Vamos a empezar el alta** («El mensaje contiene vamos a empezar el alta», sin el «!» para tolerar fallos al escribir).
+1. Disparador del flujo: frase **Vamos a empezar el alta** (sin «!»; «El mensaje es» o «contiene», tiene que coincidir con `FRASE_ALTA`).
 2. En **ER Empezar**, cuerpo con el teléfono del contacto (insertado con el selector de campos):
    ```json
    { "ref": "{{ortosend_ref}}", "subscriber_id": "{{Id de contacto}}", "telefono": "{{Teléfono}}", "accion": "empezar" }
