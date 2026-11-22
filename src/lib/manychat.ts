@@ -61,6 +61,10 @@ export class ManyChatError extends Error {
   }
 }
 
+// El contacto ya existe en ManyChat pero la API no sabe encontrarlo: no hay búsqueda por
+// el WhatsApp ID (findBySystemField solo admite «phone» —el de SMS— o «email»).
+export class ContactoExistente extends ManyChatError {}
+
 // Móviles guardados como 9 cifras (España) → +34…; extranjeros ya llevan «+».
 export function aE164(telefono: string) {
   const t = telefono.replace(/[^\d+]/g, "");
@@ -138,6 +142,7 @@ class ManyChatApi implements ManyChat {
       // WhatsApp antes del alta) y la búsqueda previa no lo vio: se reintenta.
       const otra = await this.buscarPorTelefono(c.telefonoE164);
       if (otra) return otra;
+      if (/already exists/i.test((e as Error).message)) throw new ContactoExistente((e as Error).message, (e as ManyChatError).detalle);
       throw e;
     }
   }
