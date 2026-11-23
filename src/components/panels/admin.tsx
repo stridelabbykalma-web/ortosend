@@ -27,7 +27,7 @@ export async function PanelAdmin({ tab }: { tab?: string }) {
   let body: React.ReactNode = null;
 
   if (t === "res") {
-    const [total, rx, pago, taller, entregados, clinicas, solicitudes, espera] = await Promise.all([
+    const [total, rx, pago, taller, entregados, clinicas, solicitudes, espera, contactosWa] = await Promise.all([
       prisma.case.count(),
       prisma.case.count({ where: { state: { in: ["EN_PRESCRIPCION", "EN_CONTACTO"] } } }),
       prisma.case.count({ where: { state: "PENDIENTE_PAGO" } }),
@@ -36,6 +36,7 @@ export async function PanelAdmin({ tab }: { tab?: string }) {
       prisma.clinic.count({ where: { status: "ACTIVA" } }),
       prisma.clinicApplication.count({ where: { status: "recibida" } }),
       prisma.waitlistEntry.count(),
+      prisma.manychatContacto.count(),
     ]);
     body = (
       <>
@@ -59,6 +60,20 @@ export async function PanelAdmin({ tab }: { tab?: string }) {
           </div>
           <form action={runJobsAction}>
             <button type="submit">Ejecutar mantenimiento ahora</button>
+          </form>
+        </div>
+        <div className="sp" />
+        <div className="card">
+          <h3>Contactos de WhatsApp (ManyChat)</h3>
+          <p className="muted">
+            ManyChat no deja buscar un contacto por su número de WhatsApp. Para enviar el alta automática a quien ya
+            había escrito al WhatsApp de la empresa, Ortosend guarda su ID de contacto. Directorio actual:{" "}
+            <b>{contactosWa}</b> contactos. Sube el CSV exportado desde ManyChat (Contacts → seleccionar todos → Export);
+            los que escriban a partir de ahora se añaden solos.
+          </p>
+          <form action="/api/admin/contactos-manychat" method="post" encType="multipart/form-data" className="row">
+            <input type="file" name="csv" accept=".csv,text/csv" required />
+            <button type="submit">Importar contactos</button>
           </form>
         </div>
       </>

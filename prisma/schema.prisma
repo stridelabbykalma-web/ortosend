@@ -873,3 +873,16 @@ model PatientExternalRef {
 
   @@unique([patientId, connectorId])
 }
+
+// Directorio móvil → contacto de ManyChat. La API de ManyChat no busca contactos de WhatsApp por
+// su número, así que se guarda aquí el ID de los que ya conocemos (CSV exportado de ManyChat,
+// aviso del «Default Reply» y webhook de alta). El móvil va como HMAC: el directorio incluye
+// contactos del WhatsApp de la empresa que no son pacientes de Ortosend.
+model ManychatContacto {
+  telefonoHash String   @id
+  subscriberId String
+  origen       String // csv | webhook | alta
+  updatedAt    DateTime @updatedAt
+
+  @@map("manychat_contactos")
+}

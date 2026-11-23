@@ -321,5 +321,23 @@ Reglas comunes:
 - En `/acceso`, un adulto con móvil compartido recibe su propia cuenta; un tutor con varios hijos reutiliza la suya.
 - **Contactos que ya habían escrito al WhatsApp de la empresa.** La API de ManyChat no tiene búsqueda por el WhatsApp ID
   (`findBySystemField` solo admite `phone` —el de SMS— o `email`), así que crear su contacto da «WhatsApp ID already exists».
-  La web reutiliza el contacto que ya conoce de altas anteriores de ese móvil (`src/lib/contacto-manychat.ts`). Si el móvil
-  nunca pasó por un alta, el envío automático falla con un mensaje claro y el paciente empieza con el QR o la frase.
+  La web reutiliza el contacto que ya conoce de altas anteriores de ese móvil y, si no, lo busca en su **directorio de
+  contactos** (`src/lib/contacto-manychat.ts`, tabla `manychat_contactos`). Si tampoco está, el envío automático falla con
+  un mensaje claro y el paciente empieza con el QR o la frase (desde ese momento sus envíos ya son automáticos).
+
+## 11. Directorio de contactos de WhatsApp (para quien ya había escrito a la empresa)
+
+El WhatsApp de Ortosend es el de la clínica, que ya tiene muchos contactos. Para poder enviarles el alta automática,
+Ortosend guarda el ID de contacto de ManyChat de cada móvil (el móvil va cifrado con HMAC, nunca en claro). Se llena así:
+
+1. **Importación inicial (una vez).** ManyChat → **Contacts** → seleccionar todos → **Bulk actions → Export** (CSV).
+   Subir el archivo en ortosend.es/panel (administración → Resumen → «Contactos de WhatsApp»). Se reconocen las columnas
+   del ID del contacto («Contact Id», «Subscriber ID», «id») y del teléfono de WhatsApp («Whatsapp Phone», «Phone»).
+2. **Mantenimiento automático.** ManyChat → **Automation → Default Reply** (y, si lo usas, el *Welcome Message*) →
+   añadir al principio una acción **External Request** que no envía nada al paciente:
+   - **Method**: POST · **URL**: `https://ortosend.es/api/manychat/contacto`
+   - **Header**: `X-Ortosend-Secret` = el mismo valor de `MANYCHAT_WEBHOOK_SECRET`
+   - **Body** (JSON): `{"subscriber_id": "{{Contact Id}}", "telefono": "{{WhatsApp Phone}}"}`
+3. **Automático por el alta.** Cada llamada al webhook de consentimiento con `subscriber_id` y `telefono` también lo guarda.
+
+Si se rota `MANYCHAT_WEBHOOK_SECRET`, los hashes del directorio dejan de coincidir: vuelve a importar el CSV.

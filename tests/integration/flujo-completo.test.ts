@@ -24,6 +24,8 @@ import {
 import { crearCuentaConCodigo, enviarAcceso, solicitarCodigo } from "@/lib/acceso";
 import { estadoActual } from "@/lib/consent/registro";
 import { POST as webhookPOST } from "@/app/api/manychat/consentimiento/route";
+import { POST as contactoPOST } from "@/app/api/manychat/contacto/route";
+import { guardarContacto, importarCsvContactos, leerCsvContactos, subscriberConocido } from "@/lib/contacto-manychat";
 import { FakeManyChat } from "../fake-manychat";
 
 let mc: FakeManyChat;
@@ -595,5 +597,52 @@ describe("dos vías de entrada: web y profesional", () => {
     expect(r.ok).toBe(true);
     if (r.ok && !r.envio.ok) expect(r.envio.error).toMatch(/Vamos a empezar el alta/);
     else throw new Error("debía fallar el envío con mensaje claro");
+  });
+
+  it("un contacto de WhatsApp de la empresa que está en el directorio recibe el alta automática", async () => {
+    const tel = nuevoTel();
+    await guardarContacto(tel, "880001", "csv");
+    mc.llamadas = [];
+    mc.contactoYaExiste = true; // nunca pasó por un alta de Ortosend: solo lo conoce el directorio
+    const r = await crearPreAlta(pro, datos({ telefono: tel, fechaNacimiento: "1966-04-04" }));
+    mc.contactoYaExiste = false;
+    expect(r.ok && r.envio.ok).toBe(true);
+    expect(mc.llamadas.some((l) => l.op === "contacto")).toBe(false);
+    expect(mc.llamadas).toContainEqual(expect.objectContaining({ op: "flujo", sub: "880001" }));
+  });
+
+  it("el directorio se llena con el CSV exportado de ManyChat (formato español o inglés)", async () => {
+    const t1 = nuevoTel();
+    const t2 = nuevoTel();
+    const csv = `\uFEFFContact Id;First Name;"Whatsapp Phone";Email\n880101;Ana;+34 ${t1};\n880102;"Gil, Pepe";34${t2};x@y.com\n;Sin id;+34600000000;\n`;
+    expect(leerCsvContactos(csv).contactos).toHaveLength(3);
+    const r = await importarCsvContactos(csv);
+    expect(r).toEqual({ ok: true, importados: 2, ignorados: 1 });
+    expect(await subscriberConocido(t1)).toBe("880101");
+    expect(await subscriberConocido(t2)).toBe("880102");
+    expect((await importarCsvContactos("nombre,apellidos\nA,B\n")).ok).toBe(false);
+    // Solo se guarda el hash del móvil, nunca el número.
+    const filas = await prisma.manychatContacto.findMany({ where: { subscriberId: { in: ["880101", "880102"] } } });
+    expect(filas.every((f) => !f.telefonoHash.includes(t1) && !f.telefonoHash.includes(t2))).toBe(true);
+  });
+
+  it("el aviso del Default Reply y el webhook de alta guardan el contacto", async () => {
+    const t1 = nuevoTel();
+    const sinFirma = await contactoPOST(
+      new Request("http://x/api/manychat/contacto", { method: "POST", body: JSON.stringify({ subscriber_id: "880201", telefono: `+34${t1}` }) })
+    );
+    expect(sinFirma.status).toBe(401);
+    const ok = await contactoPOST(
+      new Request("http://x/api/manychat/contacto", {
+        method: "POST",
+        headers: { "x-ortosend-secret": "webhook-secret", "content-type": "application/json" },
+        body: JSON.stringify({ subscriber_id: 880201, telefono: `+34${t1}` }),
+      })
+    );
+    expect(ok.status).toBe(200);
+    expect(await subscriberConocido(t1)).toBe("880201");
+    const t2 = nuevoTel();
+    await procesarWebhook({ ref: "", accion: "empezar", subscriberId: "880202", telefono: `+34${t2}` });
+    expect(await subscriberConocido(t2)).toBe("880202");
   });
 });

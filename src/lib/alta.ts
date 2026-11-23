@@ -13,7 +13,7 @@ import { prisma } from "./db";
 import { isValidDni, normalizeDni, isValidPhone, normalizeEmail, normalizePhone } from "./contacto";
 import { EDAD_MAYORIA_SALUD, esMenor, parseBirth } from "./edad";
 import { CAMPOS, ContactoExistente, ETIQUETAS, FLUJOS, aE164, manychat } from "./manychat";
-import { subscriberConocido } from "./contacto-manychat";
+import { guardarContacto, subscriberConocido } from "./contacto-manychat";
 import { ORDEN, OBLIGATORIOS, SLUG, ETIQUETA, esObligatorio } from "./consent/tipos";
 import { registrar, textosVigentes } from "./consent/registro";
 import { INVITACION_HORAS, hashSecreto, horasDesdeAhora, nuevoSecreto } from "./consent/tokens";
@@ -248,7 +248,7 @@ export async function enviarInvitacion(patientId: string, actorUserId: string): 
   } catch (e) {
     const msg =
       e instanceof ContactoExistente
-        ? `Este móvil ya ha hablado con el WhatsApp de la empresa y no podemos enviarle el mensaje automático. Que escanee el QR o escriba «${FRASE_ALTA}» desde ese móvil.`
+        ? `Este móvil ya había escrito al WhatsApp de la empresa y aún no tenemos su contacto para enviarle el mensaje automático. Que escanee el QR o escriba «${FRASE_ALTA}» desde ese móvil; a partir de entonces los envíos a ese móvil serán automáticos.${emailEnviado ? " También le hemos enviado el enlace por email." : ""}`
         : (e as Error).message.slice(0, 500);
     const ko = await prisma.consentInvitation.update({
       where: { id: invitation.id },
@@ -408,6 +408,11 @@ async function reclamarPorTelefono(telefonoRaw: string, subscriberId: string | n
 }
 
 export async function procesarWebhook(e: EntradaWebhook): Promise<SalidaWebhook> {
+  // Cada contacto que llega con su ID y su móvil queda en el directorio: el próximo alta a ese
+  // móvil sale automática aunque ManyChat no permita buscarlo por número.
+  const subWebhook = limpio(e.subscriberId);
+  const telWebhook = limpio(e.telefono);
+  if (subWebhook && telWebhook) await guardarContacto(telWebhook, subWebhook, "alta").catch(() => false);
   const ref = limpio(e.ref);
   let out = ref ? await procesarConRef({ ...e, ref }) : INVALIDO;
   if (e.accion !== "empezar") return out;
